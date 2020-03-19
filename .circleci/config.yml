@@ -1,0 +1,28 @@
+version: 2
+jobs:
+  test:
+    docker:
+      - image: rishabhpoddar/supertokens_postgresql_plugin_test
+    steps:
+      - add_ssh_keys:
+          fingerprints:
+            - "14:68:18:82:73:00:e4:fc:9e:f3:6f:ce:1d:5c:6d:c4"
+      - checkout
+      - run:
+          name: starting postgresql
+          command: |
+            (cd / && ./runPostgreSQL.sh)
+      - run:
+          name: running tests
+          command: (cd .circleci/ && ./doTests.sh)
+
+workflows:
+  version: 2
+  tagged-build:
+    jobs:
+      - test:
+          filters:
+            tags:
+              only: /dev-v[0-9]+(\.[0-9]+)*/
+            branches:
+              ignore: /.*/
