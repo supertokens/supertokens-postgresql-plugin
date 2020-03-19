@@ -20,7 +20,7 @@ postgresql_config_version: 0
 
 # (COMPULSORY) string value. The PostgreSQL user to use to query the database.
 # If the relevant tables are not already created by you, this user should have the
-# ability to create new tables. To see the tables needed, visit: https://supertokens.io/docs/pro/getting-started/database-setup/postgresql
+# ability to create new tables. To see the tables needed, visit: https://supertokens.io/docs/community/getting-started/database-setup/postgresql
 # postgresql_user:
 
 
