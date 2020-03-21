@@ -18,8 +18,6 @@
 package io.supertokens.storage.postgresql.test;
 
 import io.supertokens.Main;
-import io.supertokens.backendAPI.LicenseKeyLatest;
-import io.supertokens.httpRequest.HttpRequestMocking;
 import io.supertokens.storage.postgresql.Start;
 import org.apache.tomcat.util.http.fileupload.FileUtils;
 import org.junit.rules.TestRule;
@@ -29,14 +27,11 @@ import org.mockito.Mockito;
 
 import javax.net.ssl.HttpsURLConnection;
 import java.io.*;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLConnection;
-import java.net.URLStreamHandler;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
+
 
 abstract class Utils extends Mockito {
 
@@ -119,20 +114,6 @@ abstract class Utils extends Mockito {
                 }
             });
 
-            HttpRequestMocking.getInstance(process.getProcess()).setMockURL(
-                    LicenseKeyLatest.REQUEST_ID, new HttpRequestMocking.URLGetter() {
-
-                        @Override
-                        public URL getUrl(String url) throws MalformedURLException {
-                            URLStreamHandler stubURLStreamHandler = new URLStreamHandler() {
-                                @Override
-                                protected URLConnection openConnection(URL u) {
-                                    return mockCon;
-                                }
-                            };
-                            return new URL(null, url, stubURLStreamHandler);
-                        }
-                    });
         } catch (Exception ignored) {
 
         }

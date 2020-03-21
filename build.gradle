@@ -10,8 +10,8 @@ repositories {
 }
 
 dependencies {
-    compileOnly project(":com-plugin-interface")
-    testCompile project(":com-plugin-interface")
+    compileOnly project(":supertokens-plugin-interface")
+    testCompile project(":supertokens-plugin-interface")
 
     // https://mvnrepository.com/artifact/com.fasterxml.jackson.dataformat/jackson-dataformat-yaml
     compileOnly group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-yaml', version: '2.10.0'
@@ -37,7 +37,7 @@ dependencies {
     // https://mvnrepository.com/artifact/org.mockito/mockito-core
     testCompile group: 'org.mockito', name: 'mockito-core', version: '3.1.0'
 
-    testCompile project(":com-core")
+    testCompile project(":supertokens-core")
 }
 
 jar {

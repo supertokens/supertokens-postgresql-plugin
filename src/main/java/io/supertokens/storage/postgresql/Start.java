@@ -320,15 +320,6 @@ public class Start extends SQLStorage {
     }
 
     @Override
-    public boolean isSessionBlacklisted(String sessionHandle) throws StorageQueryException {
-        try {
-            return Queries.isSessionBlacklisted(this, sessionHandle);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
     public int getNumberOfSessions() throws StorageQueryException {
         try {
             return Queries.getNumberOfSessions(this);
