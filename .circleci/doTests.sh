@@ -41,7 +41,7 @@ responseStatus=`curl -s -o /dev/null -w "%{http_code}" -X PUT \
   -H 'api-version: 0' \
   -d "{
 	\"password\": \"$SUPERTOKENS_API_KEY\",
-	\"planType\":\"COMMERCIAL\",
+	\"planType\":\"FREE\",
 	\"version\":\"$pluginVersion\",
 	\"pluginInterfaces\": $pluginInterfaceArray,
 	\"name\": \"postgresql\"
@@ -71,7 +71,7 @@ do
     someTestsRan=true
     
     response=`curl -s -X GET \
-    "https://api.supertokens.io/0/plugin-interface/dependency/core/latest?password=$SUPERTOKENS_API_KEY&planType=COMMERCIAL&mode=DEV&version=$piVersion" \
+    "https://api.supertokens.io/0/plugin-interface/dependency/core/latest?password=$SUPERTOKENS_API_KEY&planType=FREE&mode=DEV&version=$piVersion" \
     -H 'api-version: 0'`
     if [[ `echo $response | jq .core` == "null" ]]
     then
@@ -81,7 +81,7 @@ do
     coreVersionX2=$(echo $response | jq .core | tr -d '"')
     
     response=`curl -s -X GET \
-    "https://api.supertokens.io/0/core/latest?password=$SUPERTOKENS_API_KEY&planType=COMMERCIAL&mode=DEV&version=$coreVersionX2" \
+    "https://api.supertokens.io/0/core/latest?password=$SUPERTOKENS_API_KEY&planType=FREE&mode=DEV&version=$coreVersionX2" \
     -H 'api-version: 0'`
     if [[ `echo $response | jq .tag` == "null" ]]
     then
@@ -128,7 +128,7 @@ then
         -H 'api-version: 0' \
         -d "{
             \"password\": \"$SUPERTOKENS_API_KEY\",
-            \"planType\":\"COMMERCIAL\",
+            \"planType\":\"FREE\",
             \"name\":\"postgresql\",
             \"version\":\"$pluginVersion\",
             \"testPassed\": true

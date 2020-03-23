@@ -32,7 +32,6 @@ import org.junit.rules.TestRule;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.util.List;
 import java.util.Scanner;
 
 import static org.junit.Assert.*;
@@ -160,10 +159,9 @@ public class LoggingTest {
 
         ch.qos.logback.classic.Logger hikariLogger = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
 
-        assertTrue(List.of(postgresqlError.iteratorForAppenders()).size() == 1 &&
-                List.of(postgresqlInfo.iteratorForAppenders())
-                        .size() == 1);
-        assertEquals(1, List.of(hikariLogger.iteratorForAppenders()).size());
+        assertTrue(postgresqlInfo.iteratorForAppenders().hasNext());
+        assertTrue(postgresqlError.iteratorForAppenders().hasNext());
+        assertTrue(hikariLogger.iteratorForAppenders().hasNext());
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
