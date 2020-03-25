@@ -50,6 +50,7 @@ class ConnectionPool extends ResourceDistributor.SingletonResource {
             config.setPassword(userConfig.getPassword());
         }
         config.setMaximumPoolSize(userConfig.getConnectionPoolSize());
+        config.setConnectionTimeout(5000);
         config.addDataSourceProperty("cachePrepStmts", "true");
         config.addDataSourceProperty("prepStmtCacheSize", "250");
         config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
