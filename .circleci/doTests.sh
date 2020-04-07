@@ -53,7 +53,7 @@ then
 fi
 
 someTestsRan=false
-while read line
+while read -u 10 line
 do
     if [[ $line = "" ]]; then
         continue
@@ -117,7 +117,7 @@ do
     cd ../
     rm -rf supertokens-root
     cd project/.circleci
-done <<< `cat pluginInterfaceExactVersionsOutput`
+done 10<pluginInterfaceExactVersionsOutput
 
 if [[ $someTestsRan = "true" ]]
 then
