@@ -108,7 +108,8 @@ class ConnectionPool extends ResourceDistributor.SingletonResource {
                     start.getResourceDistributor().setResource(RESOURCE_KEY, new ConnectionPool(start));
                     break;
                 } catch (Exception e) {
-                    if (e.getMessage().contains("Connection to") && e.getMessage().contains("refused")) {
+                    if (e.getMessage().contains("Connection to") && e.getMessage().contains("refused") ||
+                            e.getMessage().contains("the database system is starting up")) {
                         start.handleKillSignalForWhenItHappens();
                         if (System.currentTimeMillis() > maxTryTime) {
                             throw new QuitProgramFromPluginException(errorMessage);
