@@ -347,24 +347,6 @@ public class Start extends SQLStorage {
     }
 
     @Override
-    public JsonObject getSessionData(String sessionHandle) throws StorageQueryException {
-        try {
-            return Queries.getSessionData(this, sessionHandle);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public int updateSessionData(String sessionHandle, JsonObject updatedData) throws StorageQueryException {
-        try {
-            return Queries.updateSessionData(this, sessionHandle, updatedData);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
     public void deleteAllExpiredSessions() throws StorageQueryException {
         try {
             Queries.deleteAllExpiredSessions(this);
@@ -403,6 +385,25 @@ public class Start extends SQLStorage {
     @Override
     public void setStorageLayerEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    @Override
+    public SessionInfo getSession(String sessionHandle) throws StorageQueryException {
+        try {
+            return Queries.getSession(this, sessionHandle);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public int updateSession(String sessionHandle, JsonObject sessionData, JsonObject jwtPayload)
+            throws StorageQueryException {
+        try {
+            return Queries.updateSession(this, sessionHandle, sessionData, jwtPayload);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override

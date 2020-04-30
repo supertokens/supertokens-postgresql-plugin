@@ -2,7 +2,7 @@ plugins {
     id 'java-library'
 }
 
-version = "1.1.1"
+version = "1.2.0"
 
 repositories {
     jcenter()
@@ -38,6 +38,9 @@ dependencies {
     testCompile group: 'org.mockito', name: 'mockito-core', version: '3.1.0'
 
     testCompile project(":supertokens-core")
+
+    // https://mvnrepository.com/artifact/com.google.code.findbugs/jsr305
+    compileOnly group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.2'
 }
 
 jar {

@@ -24,6 +24,7 @@ import io.supertokens.pluginInterface.sqlStorage.SQLStorage.SessionInfo;
 import io.supertokens.pluginInterface.tokenInfo.PastTokenInfo;
 import io.supertokens.storage.postgresql.config.Config;
 
+import javax.annotation.Nullable;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -324,33 +325,6 @@ public class Queries {
         }
     }
 
-    static JsonObject getSessionData(Start start, String sessionHandle) throws SQLException {
-        String QUERY = "SELECT session_data FROM "
-                + Config.getConfig(start).getSessionInfoTable() + " WHERE session_handle = ?";
-
-        try (Connection con = ConnectionPool.getConnection(start);
-             PreparedStatement pst = con.prepareStatement(QUERY)) {
-            pst.setString(1, sessionHandle);
-            ResultSet result = pst.executeQuery();
-            if (result.next()) {
-                return new JsonParser().parse(result.getString("session_data")).getAsJsonObject();
-            }
-        }
-        return null;
-    }
-
-    static int updateSessionData(Start start, String sessionHandle, JsonObject updatedData) throws SQLException {
-        String QUERY = "UPDATE " + Config.getConfig(start).getSessionInfoTable() +
-                " SET session_data = ? WHERE session_handle = ?";
-
-        try (Connection con = ConnectionPool.getConnection(start);
-             PreparedStatement pst = con.prepareStatement(QUERY)) {
-            pst.setString(1, updatedData.toString());
-            pst.setString(2, sessionHandle);
-            return pst.executeUpdate();
-        }
-    }
-
     static void deleteAllExpiredSessions(Start start) throws SQLException {
         String QUERY = "DELETE FROM " + Config.getConfig(start).getSessionInfoTable() +
                 " WHERE expires_at <= ?";
@@ -374,5 +348,60 @@ public class Queries {
             pst.setLong(1, createdBefore);
             pst.executeUpdate();
         }
+    }
+
+    static int updateSession(Start start, String sessionHandle, @Nullable JsonObject sessionData,
+                             @Nullable JsonObject jwtPayload) throws SQLException {
+
+        if (sessionData == null && jwtPayload == null) {
+            throw new SQLException("sessionData and jwtPayload are null when updating session info");
+        }
+
+        String QUERY = "UPDATE " + Config.getConfig(start).getSessionInfoTable() + " SET";
+        boolean somethingBefore = false;
+        if (sessionData != null) {
+            QUERY += " session_data = ?";
+            somethingBefore = true;
+        }
+        if (jwtPayload != null) {
+            QUERY += (somethingBefore ? "," : "") + " jwt_user_payload = ?";
+        }
+        QUERY += " WHERE session_handle = ?";
+
+        int currIndex = 1;
+        try (Connection con = ConnectionPool.getConnection(start);
+             PreparedStatement pst = con.prepareStatement(QUERY)) {
+            if (sessionData != null) {
+                pst.setString(currIndex, sessionData.toString());
+                currIndex++;
+            }
+            if (jwtPayload != null) {
+                pst.setString(currIndex, jwtPayload.toString());
+                currIndex++;
+            }
+            pst.setString(currIndex, sessionHandle);
+            return pst.executeUpdate();
+        }
+    }
+
+    static SessionInfo getSession(Start start, String sessionHandle)
+            throws SQLException {
+        String QUERY = "SELECT session_handle, user_id, refresh_token_hash_2, session_data, expires_at, " +
+                "created_at_time, jwt_user_payload FROM "
+                + Config.getConfig(start).getSessionInfoTable() + " WHERE session_handle = ?";
+        try (Connection con = ConnectionPool.getConnection(start);
+             PreparedStatement pst = con.prepareStatement(QUERY)) {
+            pst.setString(1, sessionHandle);
+            ResultSet result = pst.executeQuery();
+            if (result.next()) {
+                return new SessionInfo(result.getString("session_handle"), result.getString("user_id"),
+                        result.getString("refresh_token_hash_2"),
+                        new JsonParser().parse(result.getString("session_data")).getAsJsonObject(),
+                        result.getLong("expires_at"),
+                        new JsonParser().parse(result.getString("jwt_user_payload")).getAsJsonObject(),
+                        result.getLong("created_at_time"));
+            }
+        }
+        return null;
     }
 }
