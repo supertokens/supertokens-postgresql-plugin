@@ -86,7 +86,7 @@ public class ConfigTest {
 
     @Test
     public void testThatInvalidConfigThrowsRightError() throws Exception {
-        String[] args = {"../", "DEV"};
+        String[] args = {"../", "PRODUCTION"};
 
         //'postgresql_user is not set properly in the config file
 
