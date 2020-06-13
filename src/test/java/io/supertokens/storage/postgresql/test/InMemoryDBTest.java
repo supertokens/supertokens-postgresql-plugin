@@ -67,8 +67,9 @@ public class InMemoryDBTest {
             StorageTransactionLogicException {
         {
             Utils.commentConfigValue("postgresql_user");
+            Utils.commentConfigValue("postgresql_password");
 
-            String[] args = {"../", "DEV"};
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -91,7 +92,7 @@ public class InMemoryDBTest {
         }
 
         {
-            String[] args = {"../", "DEV"};
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -109,7 +110,7 @@ public class InMemoryDBTest {
             UnsupportedEncodingException, InvalidKeySpecException, IllegalBlockSizeException,
             StorageTransactionLogicException {
         {
-            String[] args = {"../", "DEV"};
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -131,7 +132,7 @@ public class InMemoryDBTest {
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
         }
         {
-            String[] args = {"../", "DEV"};
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -149,7 +150,7 @@ public class InMemoryDBTest {
             UnsupportedEncodingException, InvalidKeySpecException, IllegalBlockSizeException,
             StorageTransactionLogicException {
         {
-            String[] args = {"../", "PRODUCTION"};
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -171,7 +172,7 @@ public class InMemoryDBTest {
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
         }
         {
-            String[] args = {"../", "DEV"};
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -184,7 +185,7 @@ public class InMemoryDBTest {
 
     @Test
     public void checkThatErrorIsThrownIfIncorrectConfigInProduction() throws IOException, InterruptedException {
-        String[] args = {"../", "PRODUCTION"};
+        String[] args = {"../"};
 
         Utils.commentConfigValue("postgresql_user");
 
@@ -201,7 +202,7 @@ public class InMemoryDBTest {
 
     @Test
     public void ifForceNoInMemoryThenDevShouldThrowError() throws IOException, InterruptedException {
-        String[] args = {"../", "DEV", "forceNoInMemDB=true"};
+        String[] args = {"../", "forceNoInMemDB=true"};
 
         Utils.commentConfigValue("postgresql_user");
 

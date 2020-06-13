@@ -69,10 +69,12 @@ public class Config extends ResourceDistributor.SingletonResource {
         return config;
     }
 
-    public static boolean canBeUsed(Start start, String configFilePath) {
+    public static boolean canBeUsed(String configFilePath) {
         try {
-            new Config(start, configFilePath);
-            return true;
+            final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+            PostgreSQLConfig config = mapper.readValue(new File(configFilePath), PostgreSQLConfig.class);
+            return config.getUser() != null ||
+                    config.getPassword() != null;    // OR since they put one, but forgot the other
         } catch (Exception e) {
             return false;
         }

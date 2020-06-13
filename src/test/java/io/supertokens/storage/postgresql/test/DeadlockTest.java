@@ -53,7 +53,7 @@ public class DeadlockTest {
     @Test
     public void transactionDeadlockTesting()
             throws InterruptedException, StorageQueryException, StorageTransactionLogicException {
-        String[] args = {"../", "DEV"};
+        String[] args = {"../"};
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 

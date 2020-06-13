@@ -52,7 +52,7 @@ public class ConfigTest {
 
     @Test
     public void testThatDefaultConfigLoadsCorrectly() throws Exception {
-        String[] args = {"../", "DEV"};
+        String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -68,7 +68,7 @@ public class ConfigTest {
 
     @Test
     public void testThatCustomConfigLoadsCorrectly() throws Exception {
-        String[] args = {"../", "DEV"};
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_connection_pool_size", "5");
         Utils.setValueInConfig("postgresql_past_tokens_table_name", "\"temp_name\"");
@@ -86,7 +86,7 @@ public class ConfigTest {
 
     @Test
     public void testThatInvalidConfigThrowsRightError() throws Exception {
-        String[] args = {"../", "PRODUCTION"};
+        String[] args = {"../"};
 
         //'postgresql_user is not set properly in the config file
 
@@ -142,7 +142,7 @@ public class ConfigTest {
 
     @Test
     public void testThatMissingConfigFileThrowsError() throws Exception {
-        String[] args = {"../", "DEV"};
+        String[] args = {"../"};
 
         ProcessBuilder pb = new ProcessBuilder("rm", "-r", "config.yaml");
         pb.directory(new File(args[0]));
@@ -164,7 +164,7 @@ public class ConfigTest {
 
     @Test
     public void testCustomLocationForConfigLoadsCorrectly() throws Exception {
-        String[] args = {"../", "DEV", "configFile=../temp/config.yaml"};
+        String[] args = {"../", "configFile=../temp/config.yaml"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
@@ -176,7 +176,7 @@ public class ConfigTest {
 
         //absolute path
         File f = new File("../temp/config.yaml");
-        args = new String[]{"../", "DEV", "configFile=" + f.getAbsolutePath()};
+        args = new String[]{"../", "configFile=" + f.getAbsolutePath()};
 
         process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -190,7 +190,7 @@ public class ConfigTest {
 
     @Test
     public void testBadPortInput() throws Exception {
-        String[] args = {"../", "DEV"};
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_port", "8989");
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -217,7 +217,7 @@ public class ConfigTest {
 
     @Test
     public void storageDisabledAndThenEnabled() throws Exception {
-        String[] args = {"../", "DEV"};
+        String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
         process.getProcess().waitToInitStorageModule();
@@ -242,7 +242,7 @@ public class ConfigTest {
 
     @Test
     public void testBadHostInput() throws Exception {
-        String[] args = {"../", "DEV"};
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_host", "random");
 
@@ -261,7 +261,7 @@ public class ConfigTest {
 
     @Test
     public void testThatChangeInTableNameIsCorrect() throws Exception {
-        String[] args = {"../", "DEV"};
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_key_value_table_name", "key_value_table");
         Utils.setValueInConfig("postgresql_session_info_table_name", "session_info_table");
