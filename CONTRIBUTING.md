@@ -29,7 +29,7 @@ We're so excited you're interested in helping with SuperTokens! We are happy to 
    // put module name like module name,branch name,github username(if contributing with a forked repository) and then call ./loadModules script        
    core,master
    plugin-interface,master
-   mysql-plugin,master,<your github username>
+   postgresql-plugin,master,<your github username>
    ```
 7. Run `./loadModules` in the `supertokens-root` directory. This will clone your forked `supertokens-postgresql-plugin` repo.
 8. Follow the [CONTRIBUTING.md](https://github.com/supertokens/supertokens-core/blob/master/CONTRIBUTING.md#modifying-code) guide from `supertokens-core` repo for modifying and testing.
