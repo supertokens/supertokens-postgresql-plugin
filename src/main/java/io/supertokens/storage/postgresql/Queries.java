@@ -21,7 +21,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.sqlStorage.SQLStorage.SessionInfo;
-import io.supertokens.pluginInterface.tokenInfo.PastTokenInfo;
 import io.supertokens.storage.postgresql.config.Config;
 
 import javax.annotation.Nullable;
@@ -61,14 +60,6 @@ public class Queries {
 
     }
 
-    private static String getQueryToCreatePastTokensTable(Start start) {
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getPastTokensTable() + " ("
-                + "refresh_token_hash_2 VARCHAR(128) NOT NULL," + "parent_refresh_token_hash_2 VARCHAR(128) NOT NULL,"
-                + "session_handle VARCHAR(255) NOT NULL," + "created_at_time BIGINT NOT NULL,"
-                + "PRIMARY KEY(refresh_token_hash_2)" + " );";
-
-    }
-
     static void createTablesIfNotExists(Start start) throws SQLException {
         if (!doesTableExists(start, Config.getConfig(start).getKeyValueTable())) {
             ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
@@ -85,20 +76,12 @@ public class Queries {
                 pst.executeUpdate();
             }
         }
-
-        if (!doesTableExists(start, Config.getConfig(start).getPastTokensTable())) {
-            ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
-            try (Connection con = ConnectionPool.getConnection(start);
-                 PreparedStatement pst = con.prepareStatement(getQueryToCreatePastTokensTable(start))) {
-                pst.executeUpdate();
-            }
-        }
     }
 
     // to be used in testing only
     static void deleteAllTables(Start start) throws SQLException {
         String DROP_QUERY = "DROP TABLE IF EXISTS " + Config.getConfig(start).getKeyValueTable() + "," +
-                Config.getConfig(start).getPastTokensTable() + "," + Config.getConfig(start).getSessionInfoTable();
+                Config.getConfig(start).getSessionInfoTable();
         try (Connection con = ConnectionPool.getConnection(start);
              PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
             drop.executeUpdate();
@@ -155,50 +138,6 @@ public class Queries {
             }
         }
         return null;
-    }
-
-    static PastTokenInfo getPastTokenInfo(Start start, String refreshTokenHash2) throws SQLException {
-        String QUERY = "SELECT parent_refresh_token_hash_2, session_handle, created_at_time FROM "
-                + Config.getConfig(start).getPastTokensTable() + " WHERE refresh_token_hash_2 = ? ";
-
-        try (Connection con = ConnectionPool.getConnection(start);
-             PreparedStatement pst = con.prepareStatement(QUERY)) {
-            pst.setString(1, refreshTokenHash2);
-            ResultSet result = pst.executeQuery();
-            if (result.next()) {
-                return new PastTokenInfo(refreshTokenHash2, result.getString("session_handle"),
-                        result.getString("parent_refresh_token_hash_2"), result.getLong("created_at_time"));
-            }
-            return null;
-        }
-    }
-
-    static void insertPastTokenInfo(Start start, PastTokenInfo info) throws SQLException {
-        String QUERY = "INSERT INTO " + Config.getConfig(start).getPastTokensTable()
-                + "(refresh_token_hash_2, parent_refresh_token_hash_2, session_handle, created_at_time)"
-                + " VALUES(?, ?, ?, ?)";
-
-        try (Connection con = ConnectionPool.getConnection(start);
-             PreparedStatement pst = con.prepareStatement(QUERY)) {
-            pst.setString(1, info.refreshTokenHash2);
-            pst.setString(2, info.parentRefreshTokenHash2);
-            pst.setString(3, info.sessionHandle);
-            pst.setLong(4, info.createdTime);
-            pst.executeUpdate();
-        }
-    }
-
-    static int getNumberOfPastTokens(Start start) throws SQLException {
-        String QUERY = "SELECT count(*) as num FROM " + Config.getConfig(start).getPastTokensTable();
-
-        try (Connection con = ConnectionPool.getConnection(start);
-             PreparedStatement pst = con.prepareStatement(QUERY)) {
-            ResultSet result = pst.executeQuery();
-            if (result.next()) {
-                return result.getInt("num");
-            }
-            throw new SQLException("Should not have come here.");
-        }
     }
 
     static void createNewSession(Start start, String sessionHandle, String userId, String refreshTokenHash2,
@@ -332,20 +271,6 @@ public class Queries {
         try (Connection con = ConnectionPool.getConnection(start);
              PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setLong(1, System.currentTimeMillis());
-            pst.executeUpdate();
-        }
-    }
-
-    static void deletePastOrphanedTokens(Start start, long createdBefore) throws SQLException {
-        String QUERY = "DELETE FROM " + Config.getConfig(start).getPastTokensTable() +
-                " WHERE created_at_time < ? AND parent_refresh_token_hash_2 NOT IN (" +
-                "SELECT refresh_token_hash_2 FROM " + Config.getConfig(start).getSessionInfoTable() + ") " +
-                "AND refresh_token_hash_2 NOT IN (" +
-                "SELECT refresh_token_hash_2 FROM " + Config.getConfig(start).getSessionInfoTable() + ")";
-
-        try (Connection con = ConnectionPool.getConnection(start);
-             PreparedStatement pst = con.prepareStatement(QUERY)) {
-            pst.setLong(1, createdBefore);
             pst.executeUpdate();
         }
     }

@@ -51,9 +51,6 @@ public class PostgreSQLConfig {
     @JsonProperty
     private String postgresql_session_info_table_name = "session_info";
 
-    @JsonProperty
-    private String postgresql_past_tokens_table_name = "past_tokens";
-
     public int getConnectionPoolSize() {
         return postgresql_connection_pool_size;
     }
@@ -84,10 +81,6 @@ public class PostgreSQLConfig {
 
     public String getSessionInfoTable() {
         return postgresql_session_info_table_name;
-    }
-
-    public String getPastTokensTable() {
-        return postgresql_past_tokens_table_name;
     }
 
     void validateAndInitialise() {

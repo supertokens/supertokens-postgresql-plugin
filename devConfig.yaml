@@ -41,8 +41,3 @@ postgresql_password: "root"
 # (OPTIONAL | Default: "session_info") string value. Specify the name of the table that will store the
 # session info for users.
 # postgresql_session_info_table_name:
-
-
-# (OPTIONAL | Default: "past_tokens") string name. Specify the name of the table that will store old tokens.
-# This table will only be used if your licenseKey has expired.
-# postgresql_past_tokens_table_name:
