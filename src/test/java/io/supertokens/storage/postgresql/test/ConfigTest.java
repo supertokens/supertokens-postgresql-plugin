@@ -71,14 +71,14 @@ public class ConfigTest {
         String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_connection_pool_size", "5");
-        Utils.setValueInConfig("postgresql_past_tokens_table_name", "\"temp_name\"");
+        Utils.setValueInConfig("postgresql_key_value_table_name", "\"temp_name\"");
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
         PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorageLayer(process.getProcess()));
         assertEquals(config.getConnectionPoolSize(), 5);
-        assertEquals(config.getPastTokensTable(), "temp_name");
+        assertEquals(config.getKeyValueTable(), "temp_name");
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -271,7 +271,6 @@ public class ConfigTest {
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
         PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorageLayer(process.getProcess()));
 
-        assertEquals("change in PastTokensTable name not reflected", config.getPastTokensTable(), "past_tokens_table");
         assertEquals("change in KeyValueTable name not reflected", config.getKeyValueTable(), "key_value_table");
         assertEquals("change in SessionInfoTable name not reflected", config.getSessionInfoTable(),
                 "session_info_table");
@@ -287,7 +286,6 @@ public class ConfigTest {
         assertEquals("Config keyValue table does not match default", config.getKeyValueTable(), "key_value");
         assertEquals("Config hostName does not match default ", config.getHostName(), "localhost");
         assertEquals("Config port does not match default", config.getPort(), 5432);
-        assertEquals("Config pastTokensTable does not match default", config.getPastTokensTable(), "past_tokens");
         assertEquals("Config sessionInfoTable does not match default", config.getSessionInfoTable(), "session_info");
         assertEquals("Config user does not match default", config.getUser(), "root");
         assertEquals("Config password does not match default", config.getPassword(), "root");

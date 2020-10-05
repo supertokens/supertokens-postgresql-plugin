@@ -26,7 +26,6 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.sqlStorage.SQLStorage;
 import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
-import io.supertokens.pluginInterface.tokenInfo.PastTokenInfo;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.output.Logging;
 import org.slf4j.LoggerFactory;
@@ -256,33 +255,6 @@ public class Start extends SQLStorage {
     }
 
     @Override
-    public PastTokenInfo getPastTokenInfo(String refreshTokenHash2) throws StorageQueryException {
-        try {
-            return Queries.getPastTokenInfo(this, refreshTokenHash2);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public void insertPastToken(PastTokenInfo info) throws StorageQueryException {
-        try {
-            Queries.insertPastTokenInfo(this, info);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public int getNumberOfPastTokens() throws StorageQueryException {
-        try {
-            return Queries.getNumberOfPastTokens(this);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
     public void createNewSession(String sessionHandle, String userId, String refreshTokenHash2,
                                  JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT,
                                  long createdAtTime)
@@ -326,15 +298,6 @@ public class Start extends SQLStorage {
     public void deleteAllExpiredSessions() throws StorageQueryException {
         try {
             Queries.deleteAllExpiredSessions(this);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public void deletePastOrphanedTokens(long createdBefore) throws StorageQueryException {
-        try {
-            Queries.deletePastOrphanedTokens(this, createdBefore);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
