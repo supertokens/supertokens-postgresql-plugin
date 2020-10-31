@@ -153,9 +153,15 @@ public class Start extends SQLStorage {
             try {
                 return startTransactionHelper(logic);
             } catch (SQLException | StorageQueryException e) {
+                // see: https://github.com/supertokens/supertokens-postgresql-plugin/pull/3
                 if ((e instanceof SQLTransactionRollbackException ||
-                        e.getMessage().toLowerCase().contains("deadlock")) &&
+                        e.getMessage().toLowerCase().contains("concurrent update") ||
+                        e.getMessage().toLowerCase().contains("the transaction might succeed if retried")) &&
                         tries < 3) {
+                    try {
+                        Thread.sleep((long) (10 + (Math.random() * 20)));
+                    } catch (InterruptedException ignored) {
+                    }
                     ProcessState.getInstance(this).addState(ProcessState.PROCESS_STATE.DEADLOCK_FOUND, e);
                     continue;   // this because deadlocks are not necessarily a result of faulty logic. They can happen
                 }
@@ -170,8 +176,11 @@ public class Start extends SQLStorage {
     private <T> T startTransactionHelper(TransactionLogic<T> logic)
             throws StorageQueryException, StorageTransactionLogicException, SQLException {
         Connection con = null;
+        Integer defaultTransactionIsolation = null;
         try {
             con = ConnectionPool.getConnection(this);
+            defaultTransactionIsolation = con.getTransactionIsolation();
+            con.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
             con.setAutoCommit(false);
             return logic.mainLogicAndCommit(new TransactionConnection(con));
         } catch (Exception e) {
@@ -182,6 +191,9 @@ public class Start extends SQLStorage {
         } finally {
             if (con != null) {
                 con.setAutoCommit(true);
+                if (defaultTransactionIsolation != null) {
+                    con.setTransactionIsolation(defaultTransactionIsolation);
+                }
                 con.close();
             }
         }
