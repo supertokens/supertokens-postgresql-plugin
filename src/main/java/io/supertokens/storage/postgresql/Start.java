@@ -156,7 +156,10 @@ public class Start extends SQLStorage {
                 // see: https://github.com/supertokens/supertokens-postgresql-plugin/pull/3
                 if ((e instanceof SQLTransactionRollbackException ||
                         e.getMessage().toLowerCase().contains("concurrent update") ||
-                        e.getMessage().toLowerCase().contains("the transaction might succeed if retried")) &&
+                        e.getMessage().toLowerCase().contains("the transaction might succeed if retried") ||
+
+                        // we have deadlock as well due to the DeadlockTest.java
+                        e.getMessage().toLowerCase().contains("deadlock")) &&
                         tries < 3) {
                     try {
                         Thread.sleep((long) (10 + (Math.random() * 20)));
