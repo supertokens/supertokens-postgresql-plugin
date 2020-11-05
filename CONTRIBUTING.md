@@ -22,7 +22,7 @@ We're so excited you're interested in helping with SuperTokens! We are happy to 
 1. Setup the `supertokens-core` by following [this guide](https://github.com/supertokens/supertokens-core/blob/master/CONTRIBUTING.md#development-setup). If you are not modifying the `supertokens-core` repo, then you do not need to fork that.
 2. Start PostgreSQL on port `5432`, listening to `locahost` or `0.0.0.0`.
 3. Create a PostgreSQL user (if not already exists) with username `root` and password `root`
-4. Create a database called `auth_session`.
+4. Create a database called `supertokens`.
 5. Fork the `supertokens-pstgresql-plugin` repository
 6. Open `modules.txt` in the `supertokens-root` directory and change it so that it looks like (the last line has changed):
    ```
