@@ -30,7 +30,7 @@ import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.Objects;
 
-class ConnectionPool extends ResourceDistributor.SingletonResource {
+public class ConnectionPool extends ResourceDistributor.SingletonResource {
 
     private static final String RESOURCE_KEY = "io.supertokens.storage.postgresql.ConnectionPool";
     private final HikariDataSource ds;
@@ -140,7 +140,7 @@ class ConnectionPool extends ResourceDistributor.SingletonResource {
         }
     }
 
-    static Connection getConnection(Start start) throws SQLException {
+    public static Connection getConnection(Start start) throws SQLException {
         if (getInstance(start) == null) {
             throw new QuitProgramFromPluginException("Please call initPool before getConnection");
         }

@@ -18,7 +18,7 @@ USER postgres
 RUN /etc/init.d/postgresql start \
     && psql --command "CREATE USER root WITH SUPERUSER PASSWORD 'root';" \
     && createdb -O root root \
-    && createdb -O root auth_session
+    && createdb -O root supertokens
 
 USER root
 
