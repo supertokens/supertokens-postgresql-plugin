@@ -42,10 +42,10 @@ postgresql_config_version: 0
 # session info for users.
 # postgresql_session_info_table_name:
 
-# (OPTIONAL | Default: "email_password_users") string value. Specify the name of the table that will store the
+# (OPTIONAL | Default: "emailpassword_users") string value. Specify the name of the table that will store the
 # user information, along with their email and hashed password.
-# postgresql_email_password_users_table_name:
+# postgresql_emailpassword_users_table_name:
 
-# (OPTIONAL | Default: "email_password_pswd_reset_tokens") string value. Specify the name of the table that will
+# (OPTIONAL | Default: "emailpassword_pswd_reset_tokens") string value. Specify the name of the table that will
 # store the password reset tokens for users.
-# postgresql_email_password_pswd_reset_tokens_table_name:
+# postgresql_emailpassword_pswd_reset_tokens_table_name:

@@ -52,10 +52,10 @@ public class PostgreSQLConfig {
     private String postgresql_session_info_table_name = "session_info";
 
     @JsonProperty
-    private String postgresql_email_password_users_table_name = "email_password_users";
+    private String postgresql_emailpassword_users_table_name = "emailpassword_users";
 
     @JsonProperty
-    private String postgresql_email_password_pswd_reset_tokens_table_name = "email_password_pswd_reset_tokens";
+    private String postgresql_emailpassword_pswd_reset_tokens_table_name = "emailpassword_pswd_reset_tokens";
 
     public int getConnectionPoolSize() {
         return postgresql_connection_pool_size;
@@ -90,11 +90,11 @@ public class PostgreSQLConfig {
     }
 
     public String getUsersTable() {
-        return postgresql_email_password_users_table_name;
+        return postgresql_emailpassword_users_table_name;
     }
 
     public String getPasswordResetTokensTable() {
-        return postgresql_email_password_pswd_reset_tokens_table_name;
+        return postgresql_emailpassword_pswd_reset_tokens_table_name;
     }
 
     void validateAndInitialise() {

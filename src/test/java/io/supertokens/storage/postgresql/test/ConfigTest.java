@@ -265,8 +265,8 @@ public class ConfigTest {
 
         Utils.setValueInConfig("postgresql_key_value_table_name", "key_value_table");
         Utils.setValueInConfig("postgresql_session_info_table_name", "session_info_table");
-        Utils.setValueInConfig("postgresql_email_password_users_table_name", "users");
-        Utils.setValueInConfig("postgresql_email_password_pswd_reset_tokens_table_name", "password_reset");
+        Utils.setValueInConfig("postgresql_emailpassword_users_table_name", "users");
+        Utils.setValueInConfig("postgresql_emailpassword_pswd_reset_tokens_table_name", "password_reset");
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -293,9 +293,9 @@ public class ConfigTest {
         assertEquals("Config sessionInfoTable does not match default", config.getSessionInfoTable(), "session_info");
         assertEquals("Config user does not match default", config.getUser(), "root");
         assertEquals("Config password does not match default", config.getPassword(), "root");
-        assertEquals("Config keyValue table does not match default", config.getUsersTable(), "email_password_users");
+        assertEquals("Config keyValue table does not match default", config.getUsersTable(), "emailpassword_users");
         assertEquals("Config keyValue table does not match default", config.getPasswordResetTokensTable(),
-                "email_password_pswd_reset_tokens");
+                "emailpassword_pswd_reset_tokens");
     }
 
 }
