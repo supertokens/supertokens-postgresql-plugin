@@ -60,8 +60,8 @@ public class LoggingTest {
         File infoLog = new File(Config.getConfig(process.getProcess()).getInfoLogPath(process.getProcess()));
         File errorLog = new File(Config.getConfig(process.getProcess()).getErrorLogPath(process.getProcess()));
 
-        Logging.error((Start) StorageLayer.getStorageLayer(process.getProcess()), "From Test", false);
-        Logging.info((Start) StorageLayer.getStorageLayer(process.getProcess()), "From Info");
+        Logging.error((Start) StorageLayer.getStorage(process.getProcess()), "From Test", false);
+        Logging.info((Start) StorageLayer.getStorage(process.getProcess()), "From Info");
 
         boolean infoFlag = false;
         boolean errorFlag = false;
@@ -103,8 +103,8 @@ public class LoggingTest {
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-            Logging.error((Start) StorageLayer.getStorageLayer(process.getProcess()), "From Test", false);
-            Logging.info((Start) StorageLayer.getStorageLayer(process.getProcess()), "From Info");
+            Logging.error((Start) StorageLayer.getStorage(process.getProcess()), "From Test", false);
+            Logging.info((Start) StorageLayer.getStorage(process.getProcess()), "From Info");
 
             boolean infoFlag = false;
             boolean errorFlag = false;
@@ -193,8 +193,8 @@ public class LoggingTest {
             process.startProcess();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-            Logging.debug((Start) StorageLayer.getStorageLayer(process.getProcess()), "outTest-adsvdavasdvas");
-            Logging.error((Start) StorageLayer.getStorageLayer(process.getProcess()), "errTest-dsavivilja", false);
+            Logging.debug((Start) StorageLayer.getStorage(process.getProcess()), "outTest-adsvdavasdvas");
+            Logging.error((Start) StorageLayer.getStorage(process.getProcess()), "errTest-dsavivilja", false);
 
             assertTrue(fileContainsString(stdOutput, "outTest-adsvdavasdvas"));
             assertTrue(fileContainsString(stdOutput, "errTest-dsavivilja"));
@@ -229,8 +229,8 @@ public class LoggingTest {
             process.startProcess();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-            Logging.debug((Start) StorageLayer.getStorageLayer(process.getProcess()), "outTest-adsvdavasdvas");
-            Logging.error((Start) StorageLayer.getStorageLayer(process.getProcess()), "errTest-dsavivilja", false);
+            Logging.debug((Start) StorageLayer.getStorage(process.getProcess()), "outTest-adsvdavasdvas");
+            Logging.error((Start) StorageLayer.getStorage(process.getProcess()), "errTest-dsavivilja", false);
 
             assertTrue(fileContainsString(stdOutput, "outTest-adsvdavasdvas"));
             assertTrue(fileContainsString(stdOutput, "errTest-dsavivilja"));

@@ -57,7 +57,7 @@ public class ConfigTest {
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-        PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorageLayer(process.getProcess()));
+        PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
 
         checkConfig(config);
 
@@ -76,7 +76,7 @@ public class ConfigTest {
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-        PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorageLayer(process.getProcess()));
+        PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
         assertEquals(config.getConnectionPoolSize(), 5);
         assertEquals(config.getKeyValueTable(), "temp_name");
 
@@ -181,7 +181,7 @@ public class ConfigTest {
         process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-        PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorageLayer(process.getProcess()));
+        PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
         checkConfig(config);
 
         process.kill();
@@ -198,9 +198,9 @@ public class ConfigTest {
         process.startProcess();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.WAITING_TO_INIT_STORAGE_MODULE));
 
-        ConnectionPoolTestContent.getInstance((Start) StorageLayer.getStorageLayer(process.getProcess()))
+        ConnectionPoolTestContent.getInstance((Start) StorageLayer.getStorage(process.getProcess()))
                 .setKeyValue(ConnectionPoolTestContent.TIME_TO_WAIT_TO_INIT, 5000);
-        ConnectionPoolTestContent.getInstance((Start) StorageLayer.getStorageLayer(process.getProcess()))
+        ConnectionPoolTestContent.getInstance((Start) StorageLayer.getStorage(process.getProcess()))
                 .setKeyValue(ConnectionPoolTestContent.RETRY_INTERVAL_IF_INIT_FAILS, 2000);
         process.getProcess().proceedWithInitingStorageModule();
 
@@ -224,15 +224,15 @@ public class ConfigTest {
         process.startProcess();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.WAITING_TO_INIT_STORAGE_MODULE));
 
-        StorageLayer.getStorageLayer(process.getProcess()).setStorageLayerEnabled(false);
-        ConnectionPoolTestContent.getInstance((Start) StorageLayer.getStorageLayer(process.getProcess()))
+        StorageLayer.getStorage(process.getProcess()).setStorageLayerEnabled(false);
+        ConnectionPoolTestContent.getInstance((Start) StorageLayer.getStorage(process.getProcess()))
                 .setKeyValue(ConnectionPoolTestContent.TIME_TO_WAIT_TO_INIT, 10000);
-        ConnectionPoolTestContent.getInstance((Start) StorageLayer.getStorageLayer(process.getProcess()))
+        ConnectionPoolTestContent.getInstance((Start) StorageLayer.getStorage(process.getProcess()))
                 .setKeyValue(ConnectionPoolTestContent.RETRY_INTERVAL_IF_INIT_FAILS, 2000);
         process.getProcess().proceedWithInitingStorageModule();
 
         Thread.sleep(5000);
-        StorageLayer.getStorageLayer(process.getProcess()).setStorageLayerEnabled(true);
+        StorageLayer.getStorage(process.getProcess()).setStorageLayerEnabled(true);
 
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -270,7 +270,7 @@ public class ConfigTest {
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
-        PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorageLayer(process.getProcess()));
+        PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
 
         assertEquals("change in KeyValueTable name not reflected", config.getKeyValueTable(), "key_value_table");
         assertEquals("change in SessionInfoTable name not reflected", config.getSessionInfoTable(),

@@ -165,7 +165,7 @@ class TestingProcessManager {
                 io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE state,
                 long timeToWaitMS)
                 throws InterruptedException {
-            Start start = (Start) StorageLayer.getStorageLayer(main);
+            Start start = (Start) StorageLayer.getStorage(main);
             io.supertokens.storage.postgresql.ProcessState.EventAndException e =
                     io.supertokens.storage.postgresql.ProcessState
                             .getInstance(start)

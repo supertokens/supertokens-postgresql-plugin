@@ -57,7 +57,7 @@ public class DeadlockTest {
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-        Storage storage = StorageLayer.getStorageLayer(process.getProcess());
+        Storage storage = StorageLayer.getStorage(process.getProcess());
         SQLStorage sqlStorage = (SQLStorage) storage;
         sqlStorage.startTransaction(con -> {
             sqlStorage.setKeyValue_Transaction(con, "Key", new KeyValueInfo("Value"));
