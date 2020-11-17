@@ -2,7 +2,7 @@ version: 2
 jobs:
   test:
     docker:
-      - image: rishabhpoddar/supertokens_postgresql_plugin_test_2
+      - image: rishabhpoddar/supertokens_postgresql_plugin_test
     steps:
       - add_ssh_keys:
           fingerprints:
@@ -11,7 +11,7 @@ jobs:
       - run:
           name: starting postgresql
           command: |
-            (cd / && ./runPostgreSQL.sh)
+            (cd / && ./runPostgreSQL.sh && psql --command "CREATE DATABASE supertokens;")
       - run:
           name: running tests
           command: (cd .circleci/ && ./doTests.sh)
