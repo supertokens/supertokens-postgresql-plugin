@@ -91,12 +91,21 @@ public class GeneralQueries {
 
     // to be used in testing only
     public static void deleteAllTables(Start start) throws SQLException {
-        String DROP_QUERY = "DROP TABLE IF EXISTS " + Config.getConfig(start).getKeyValueTable() + "," +
-                Config.getConfig(start).getSessionInfoTable() + "," + Config.getConfig(start).getUsersTable() + ","
-                + Config.getConfig(start).getPasswordResetTokensTable();
-        try (Connection con = ConnectionPool.getConnection(start);
-             PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
-            drop.executeUpdate();
+        {
+            String DROP_QUERY = "DROP INDEX IF EXISTS emailpassword_password_reset_token_expiry_index";
+            try (Connection con = ConnectionPool.getConnection(start);
+                 PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
+                drop.executeUpdate();
+            }
+        }
+        {
+            String DROP_QUERY = "DROP TABLE IF EXISTS " + Config.getConfig(start).getKeyValueTable() + "," +
+                    Config.getConfig(start).getSessionInfoTable() + "," + Config.getConfig(start).getUsersTable() + ","
+                    + Config.getConfig(start).getPasswordResetTokensTable();
+            try (Connection con = ConnectionPool.getConnection(start);
+                 PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
+                drop.executeUpdate();
+            }
         }
     }
 
