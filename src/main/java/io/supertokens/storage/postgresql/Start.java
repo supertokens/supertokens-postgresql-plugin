@@ -422,12 +422,10 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage {
         try {
             EmailPasswordQueries.signUp(this, userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined);
         } catch (SQLException e) {
-            if (e.getMessage().contains("ERROR: duplicate key value violates unique constraint " +
-                    "\"" + Config.getConfig(this).getUsersTable() + "_email_key\"") &&
+            if (e.getMessage().contains("ERROR: duplicate key") &&
                     e.getMessage().contains("Key (email)")) {
                 throw new DuplicateEmailException();
-            } else if (e.getMessage().contains("ERROR: duplicate key value violates unique constraint " +
-                    "\"" + Config.getConfig(this).getUsersTable() + "_pkey\"") &&
+            } else if (e.getMessage().contains("ERROR: duplicate key") &&
                     e.getMessage().contains("Key (user_id)")) {
                 throw new DuplicateUserIdException();
             }
@@ -465,8 +463,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage {
             EmailPasswordQueries.addPasswordResetToken(this, passwordResetTokenInfo.userId,
                     passwordResetTokenInfo.token, passwordResetTokenInfo.tokenExpiry);
         } catch (SQLException e) {
-            if (e.getMessage().contains("ERROR: duplicate key value violates unique constraint " +
-                    "\"" + Config.getConfig(this).getPasswordResetTokensTable() + "_pkey\"") &&
+            if (e.getMessage().contains("ERROR: duplicate key") &&
                     e.getMessage().contains("Key (user_id, token)")) {
                 throw new DuplicatePasswordResetTokenException();
             }
