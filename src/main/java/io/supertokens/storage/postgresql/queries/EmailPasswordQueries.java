@@ -18,6 +18,7 @@ package io.supertokens.storage.postgresql.queries;
 
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
 import io.supertokens.pluginInterface.emailpassword.UserInfo;
+import io.supertokens.pluginInterface.mapper.RowMapper;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -124,10 +125,9 @@ public class EmailPasswordQueries {
             pst.setString(1, userId);
             ResultSet result = pst.executeQuery();
             List<PasswordResetTokenInfo> temp = new ArrayList<>();
+            RowMapper<PasswordResetTokenInfo> mapper = RowMapper.getPasswordResetTokenInfoMapper();
             while (result.next()) {
-                temp.add(new PasswordResetTokenInfo(result.getString("user_id"),
-                        result.getString("token"),
-                        result.getLong("token_expiry")));
+                temp.add(mapper.map(result));
             }
             PasswordResetTokenInfo[] finalResult = new PasswordResetTokenInfo[temp.size()];
             for (int i = 0; i < temp.size(); i++) {
@@ -144,10 +144,9 @@ public class EmailPasswordQueries {
              PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setString(1, token);
             ResultSet result = pst.executeQuery();
+            RowMapper<PasswordResetTokenInfo> mapper = RowMapper.getPasswordResetTokenInfoMapper();
             if (result.next()) {
-                return new PasswordResetTokenInfo(result.getString("user_id"),
-                        result.getString("token"),
-                        result.getLong("token_expiry"));
+                return mapper.map(result);
             }
         }
         return null;
@@ -191,10 +190,9 @@ public class EmailPasswordQueries {
              PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setString(1, id);
             ResultSet result = pst.executeQuery();
+            RowMapper<UserInfo> mapper = RowMapper.getUserInfoMapper();
             if (result.next()) {
-                return new UserInfo(result.getString("user_id"), result.getString("email"),
-                        result.getString("password_hash"),
-                        result.getLong("time_joined"));
+                return mapper.map(result);
             }
         }
         return null;
@@ -207,10 +205,9 @@ public class EmailPasswordQueries {
              PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setString(1, email);
             ResultSet result = pst.executeQuery();
+            RowMapper<UserInfo> mapper = RowMapper.getUserInfoMapper();
             if (result.next()) {
-                return new UserInfo(result.getString("user_id"), result.getString("email"),
-                        result.getString("password_hash"),
-                        result.getLong("time_joined"));
+                return mapper.map(result);
             }
         }
         return null;

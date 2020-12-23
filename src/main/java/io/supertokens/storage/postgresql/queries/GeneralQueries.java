@@ -17,6 +17,7 @@
 package io.supertokens.storage.postgresql.queries;
 
 import io.supertokens.pluginInterface.KeyValueInfo;
+import io.supertokens.pluginInterface.mapper.RowMapper;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.ProcessState;
 import io.supertokens.storage.postgresql.Start;
@@ -140,8 +141,9 @@ public class GeneralQueries {
              PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setString(1, key);
             ResultSet result = pst.executeQuery();
+            RowMapper<KeyValueInfo> mapper = RowMapper.getKeyValueInfoMapper();
             if (result.next()) {
-                return new KeyValueInfo(result.getString("value"), result.getLong("created_at_time"));
+                return mapper.map(result);
             }
         }
         return null;
@@ -154,8 +156,9 @@ public class GeneralQueries {
         try (PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setString(1, key);
             ResultSet result = pst.executeQuery();
+            RowMapper<KeyValueInfo> mapper = RowMapper.getKeyValueInfoMapper();
             if (result.next()) {
-                return new KeyValueInfo(result.getString("value"), result.getLong("created_at_time"));
+                return mapper.map(result);
             }
         }
         return null;

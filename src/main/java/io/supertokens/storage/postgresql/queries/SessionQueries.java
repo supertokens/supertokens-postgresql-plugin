@@ -17,7 +17,7 @@
 package io.supertokens.storage.postgresql.queries;
 
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import io.supertokens.pluginInterface.mapper.RowMapper;
 import io.supertokens.pluginInterface.session.SessionInfo;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
@@ -84,13 +84,9 @@ public class SessionQueries {
         try (PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setString(1, sessionHandle);
             ResultSet result = pst.executeQuery();
+            RowMapper<SessionInfo> mapper = RowMapper.getSessionInfoMapper();
             if (result.next()) {
-                return new SessionInfo(result.getString("session_handle"), result.getString("user_id"),
-                        result.getString("refresh_token_hash_2"),
-                        new JsonParser().parse(result.getString("session_data")).getAsJsonObject(),
-                        result.getLong("expires_at"),
-                        new JsonParser().parse(result.getString("jwt_user_payload")).getAsJsonObject(),
-                        result.getLong("created_at_time"));
+                return mapper.map(result);
             }
         }
         return null;
@@ -220,13 +216,9 @@ public class SessionQueries {
              PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setString(1, sessionHandle);
             ResultSet result = pst.executeQuery();
+            RowMapper<SessionInfo> mapper = RowMapper.getSessionInfoMapper();
             if (result.next()) {
-                return new SessionInfo(result.getString("session_handle"), result.getString("user_id"),
-                        result.getString("refresh_token_hash_2"),
-                        new JsonParser().parse(result.getString("session_data")).getAsJsonObject(),
-                        result.getLong("expires_at"),
-                        new JsonParser().parse(result.getString("jwt_user_payload")).getAsJsonObject(),
-                        result.getLong("created_at_time"));
+                return mapper.map(result);
             }
         }
         return null;
