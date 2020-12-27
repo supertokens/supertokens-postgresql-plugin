@@ -17,6 +17,8 @@
 package io.supertokens.storage.postgresql.queries;
 
 import io.supertokens.pluginInterface.KeyValueInfo;
+import io.supertokens.pluginInterface.RowMapper;
+import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.ProcessState;
 import io.supertokens.storage.postgresql.Start;
@@ -132,7 +134,7 @@ public class GeneralQueries {
         }
     }
 
-    public static KeyValueInfo getKeyValue(Start start, String key) throws SQLException {
+    public static KeyValueInfo getKeyValue(Start start, String key) throws SQLException, StorageQueryException{
         String QUERY = "SELECT value, created_at_time FROM "
                 + Config.getConfig(start).getKeyValueTable() + " WHERE name = ?";
 
@@ -141,13 +143,13 @@ public class GeneralQueries {
             pst.setString(1, key);
             ResultSet result = pst.executeQuery();
             if (result.next()) {
-                return new KeyValueInfo(result.getString("value"), result.getLong("created_at_time"));
+                return KeyValueInfoRowMapper.getInstance().mapOrThrow(result);
             }
         }
         return null;
     }
 
-    public static KeyValueInfo getKeyValue_Transaction(Start start, Connection con, String key) throws SQLException {
+    public static KeyValueInfo getKeyValue_Transaction(Start start, Connection con, String key) throws SQLException, StorageQueryException {
         String QUERY = "SELECT value, created_at_time FROM "
                 + Config.getConfig(start).getKeyValueTable() + " WHERE name = ? FOR UPDATE";
 
@@ -155,9 +157,24 @@ public class GeneralQueries {
             pst.setString(1, key);
             ResultSet result = pst.executeQuery();
             if (result.next()) {
-                return new KeyValueInfo(result.getString("value"), result.getLong("created_at_time"));
+                return KeyValueInfoRowMapper.getInstance().mapOrThrow(result);
             }
         }
         return null;
+    }
+
+    private static class KeyValueInfoRowMapper implements RowMapper<KeyValueInfo, ResultSet> {
+        public static final KeyValueInfoRowMapper INSTANCE = new KeyValueInfoRowMapper();
+
+        private KeyValueInfoRowMapper() {}
+
+        private static KeyValueInfoRowMapper getInstance() {
+            return INSTANCE;
+        }
+
+        @Override
+        public KeyValueInfo map(ResultSet result) throws Exception {
+            return new KeyValueInfo(result.getString("value"), result.getLong("created_at_time"));
+        }
     }
 }
