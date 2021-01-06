@@ -21,12 +21,10 @@ import ch.qos.logback.classic.Logger;
 import com.google.gson.JsonObject;
 import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
+import io.supertokens.pluginInterface.emailpassword.EmailVerificationTokenInfo;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
 import io.supertokens.pluginInterface.emailpassword.UserInfo;
-import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
-import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicatePasswordResetTokenException;
-import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateUserIdException;
-import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
+import io.supertokens.pluginInterface.emailpassword.exceptions.*;
 import io.supertokens.pluginInterface.emailpassword.sqlStorage.EmailPasswordSQLStorage;
 import io.supertokens.pluginInterface.exceptions.QuitProgramFromPluginException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
@@ -455,11 +453,6 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage {
     public void addPasswordResetToken(PasswordResetTokenInfo passwordResetTokenInfo)
             throws StorageQueryException, UnknownUserIdException, DuplicatePasswordResetTokenException {
         try {
-            // SQLite is not compiled with foreign key constraint and so we must check for the userId manually
-            if (this.getUserInfoUsingId(passwordResetTokenInfo.userId) == null) {
-                throw new UnknownUserIdException();
-            }
-
             EmailPasswordQueries.addPasswordResetToken(this, passwordResetTokenInfo.userId,
                     passwordResetTokenInfo.token, passwordResetTokenInfo.tokenExpiry);
         } catch (SQLException e) {
@@ -467,6 +460,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage {
                     e.getMessage().contains("Key (user_id, token)")) {
                 throw new DuplicatePasswordResetTokenException();
             }
+            // TODO: catch foreign key constraint for user_id
             throw new StorageQueryException(e);
         }
     }
@@ -521,6 +515,57 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage {
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
+    }
+
+    @Override
+    public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser_Transaction(TransactionConnection con,
+                                                                                            String userId)
+            throws StorageQueryException {
+        // TODO:
+        return new EmailVerificationTokenInfo[0];
+    }
+
+    @Override
+    public void deleteAllEmailVerificationTokensForUser_Transaction(TransactionConnection con, String userId)
+            throws StorageQueryException {
+        // TODO:
+    }
+
+    @Override
+    public void updateUsersIsEmailVerified_Transaction(TransactionConnection con, String userId,
+                                                       boolean isEmailVerified) throws StorageQueryException {
+        // TODO:
+    }
+
+    @Override
+    public UserInfo getUserInfoUsingId_Transaction(TransactionConnection con, String userId)
+            throws StorageQueryException {
+        // TODO:
+        return null;
+    }
+
+    @Override
+    public void addEmailVerificationToken(EmailVerificationTokenInfo emailVerificationInfo)
+            throws StorageQueryException, UnknownUserIdException, DuplicateEmailVerificationTokenException {
+        // TODO:
+    }
+
+    @Override
+    public EmailVerificationTokenInfo getEmailVerificationTokenInfo(String token) throws StorageQueryException {
+        // TODO:
+        return null;
+    }
+
+    @Override
+    public void deleteExpiredEmailVerificationTokens() throws StorageQueryException {
+        // TODO:
+    }
+
+    @Override
+    public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser(String userId)
+            throws StorageQueryException {
+        // TODO:
+        return new EmailVerificationTokenInfo[0];
     }
 
     @Override
