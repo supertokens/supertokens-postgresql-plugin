@@ -459,8 +459,10 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage {
             if (e.getMessage().contains("ERROR: duplicate key") &&
                     e.getMessage().contains("Key (user_id, token)")) {
                 throw new DuplicatePasswordResetTokenException();
+            } else if (e.getMessage().contains("foreign key") &&
+                    e.getMessage().contains("user_id")) {
+                throw new UnknownUserIdException();
             }
-            // TODO: catch foreign key constraint for user_id
             throw new StorageQueryException(e);
         }
     }
