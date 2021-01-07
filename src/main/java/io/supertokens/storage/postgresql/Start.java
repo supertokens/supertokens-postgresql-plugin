@@ -418,7 +418,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage {
     public void signUp(UserInfo userInfo)
             throws StorageQueryException, DuplicateUserIdException, DuplicateEmailException {
         try {
-            EmailPasswordQueries.signUp(this, userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined);
+            EmailPasswordQueries.signUp(this, userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined,
+                    userInfo.isEmailVerified);
         } catch (SQLException e) {
             if (e.getMessage().contains("ERROR: duplicate key") &&
                     e.getMessage().contains("Key (email)")) {
