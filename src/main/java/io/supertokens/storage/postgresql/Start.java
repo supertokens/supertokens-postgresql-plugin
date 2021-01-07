@@ -524,51 +524,91 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage {
     public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser_Transaction(TransactionConnection con,
                                                                                             String userId)
             throws StorageQueryException {
-        // TODO:
-        return new EmailVerificationTokenInfo[0];
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return EmailPasswordQueries.getAllEmailVerificationTokenInfoForUser_Transaction(this, sqlCon, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
     public void deleteAllEmailVerificationTokensForUser_Transaction(TransactionConnection con, String userId)
             throws StorageQueryException {
-        // TODO:
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            EmailPasswordQueries.deleteAllEmailVerificationTokensForUser_Transaction(this, sqlCon, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
     public void updateUsersIsEmailVerified_Transaction(TransactionConnection con, String userId,
                                                        boolean isEmailVerified) throws StorageQueryException {
-        // TODO:
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            EmailPasswordQueries.updateUsersIsEmailVerified_Transaction(this, sqlCon, userId, isEmailVerified);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
     public UserInfo getUserInfoUsingId_Transaction(TransactionConnection con, String userId)
             throws StorageQueryException {
-        // TODO:
-        return null;
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return EmailPasswordQueries.getUserInfoUsingId_Transaction(this, sqlCon, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
     public void addEmailVerificationToken(EmailVerificationTokenInfo emailVerificationInfo)
             throws StorageQueryException, UnknownUserIdException, DuplicateEmailVerificationTokenException {
-        // TODO:
+        try {
+            EmailPasswordQueries.addEmailVerificationToken(this, emailVerificationInfo.userId,
+                    emailVerificationInfo.token, emailVerificationInfo.tokenExpiry, emailVerificationInfo.email);
+        } catch (SQLException e) {
+            if (e.getMessage().contains("ERROR: duplicate key") &&
+                    e.getMessage().contains("Key (user_id, token)")) {
+                throw new DuplicateEmailVerificationTokenException();
+            } else if (e.getMessage().contains("foreign key") &&
+                    e.getMessage().contains("user_id")) {
+                throw new UnknownUserIdException();
+            }
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
     public EmailVerificationTokenInfo getEmailVerificationTokenInfo(String token) throws StorageQueryException {
-        // TODO:
-        return null;
+        try {
+            return EmailPasswordQueries.getEmailVerificationTokenInfo(this, token);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
     public void deleteExpiredEmailVerificationTokens() throws StorageQueryException {
-        // TODO:
+        try {
+            EmailPasswordQueries.deleteExpiredEmailVerificationTokens(this);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
     public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser(String userId)
             throws StorageQueryException {
-        // TODO:
-        return new EmailVerificationTokenInfo[0];
+        try {
+            return EmailPasswordQueries.getAllEmailVerificationTokenInfoForUser(this, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
