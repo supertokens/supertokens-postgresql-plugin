@@ -49,3 +49,7 @@ postgresql_password: "root"
 # (OPTIONAL | Default: "emailpassword_pswd_reset_tokens") string value. Specify the name of the table that will
 # store the password reset tokens for users.
 # postgresql_emailpassword_pswd_reset_tokens_table_name:
+
+# (OPTIONAL | Default: "emailpassword_email_verification_tokens") string value. Specify the name of the table that will
+# store the email verification tokens for users.
+# postgresql_emailpassword_email_verification_tokens_table_name:

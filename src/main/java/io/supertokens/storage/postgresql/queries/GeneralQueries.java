@@ -89,6 +89,22 @@ public class GeneralQueries {
                 pstIndex.executeUpdate();
             }
         }
+
+        if (!doesTableExists(start, Config.getConfig(start).getEmailVerificationTokensTable())) {
+            ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
+            try (Connection con = ConnectionPool.getConnection(start);
+                 PreparedStatement pst = con
+                         .prepareStatement(EmailPasswordQueries.getQueryToCreateEmailVerificationTokensTable(start))) {
+                pst.executeUpdate();
+            }
+            // index
+            try (Connection con = ConnectionPool.getConnection(start);
+                 PreparedStatement pstIndex = con
+                         .prepareStatement(
+                                 EmailPasswordQueries.getQueryToCreateEmailVerificationTokenExpiryIndex(start))) {
+                pstIndex.executeUpdate();
+            }
+        }
     }
 
     // to be used in testing only
@@ -101,9 +117,17 @@ public class GeneralQueries {
             }
         }
         {
+            String DROP_QUERY = "DROP INDEX IF EXISTS emailpassword_email_verification_token_expiry_index";
+            try (Connection con = ConnectionPool.getConnection(start);
+                 PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
+                drop.executeUpdate();
+            }
+        }
+        {
             String DROP_QUERY = "DROP TABLE IF EXISTS " + Config.getConfig(start).getKeyValueTable() + "," +
                     Config.getConfig(start).getSessionInfoTable() + "," + Config.getConfig(start).getUsersTable() + ","
-                    + Config.getConfig(start).getPasswordResetTokensTable();
+                    + Config.getConfig(start).getPasswordResetTokensTable() + "," +
+                    Config.getConfig(start).getEmailVerificationTokensTable();
             try (Connection con = ConnectionPool.getConnection(start);
                  PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
                 drop.executeUpdate();
@@ -134,7 +158,7 @@ public class GeneralQueries {
         }
     }
 
-    public static KeyValueInfo getKeyValue(Start start, String key) throws SQLException, StorageQueryException{
+    public static KeyValueInfo getKeyValue(Start start, String key) throws SQLException, StorageQueryException {
         String QUERY = "SELECT value, created_at_time FROM "
                 + Config.getConfig(start).getKeyValueTable() + " WHERE name = ?";
 
@@ -149,7 +173,8 @@ public class GeneralQueries {
         return null;
     }
 
-    public static KeyValueInfo getKeyValue_Transaction(Start start, Connection con, String key) throws SQLException, StorageQueryException {
+    public static KeyValueInfo getKeyValue_Transaction(Start start, Connection con, String key)
+            throws SQLException, StorageQueryException {
         String QUERY = "SELECT value, created_at_time FROM "
                 + Config.getConfig(start).getKeyValueTable() + " WHERE name = ? FOR UPDATE";
 
@@ -166,7 +191,8 @@ public class GeneralQueries {
     private static class KeyValueInfoRowMapper implements RowMapper<KeyValueInfo, ResultSet> {
         public static final KeyValueInfoRowMapper INSTANCE = new KeyValueInfoRowMapper();
 
-        private KeyValueInfoRowMapper() {}
+        private KeyValueInfoRowMapper() {
+        }
 
         private static KeyValueInfoRowMapper getInstance() {
             return INSTANCE;

@@ -57,6 +57,10 @@ public class PostgreSQLConfig {
     @JsonProperty
     private String postgresql_emailpassword_pswd_reset_tokens_table_name = "emailpassword_pswd_reset_tokens";
 
+    @JsonProperty
+    private String postgresql_emailpassword_email_verificaion_tokens_table_name =
+            "emailpassword_email_verification_tokens";
+
     public int getConnectionPoolSize() {
         return postgresql_connection_pool_size;
     }
@@ -95,6 +99,10 @@ public class PostgreSQLConfig {
 
     public String getPasswordResetTokensTable() {
         return postgresql_emailpassword_pswd_reset_tokens_table_name;
+    }
+
+    public String getEmailVerificationTokensTable() {
+        return postgresql_emailpassword_email_verificaion_tokens_table_name;
     }
 
     void validateAndInitialise() {

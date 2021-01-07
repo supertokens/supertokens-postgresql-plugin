@@ -21,12 +21,10 @@ import ch.qos.logback.classic.Logger;
 import com.google.gson.JsonObject;
 import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
+import io.supertokens.pluginInterface.emailpassword.EmailVerificationTokenInfo;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
 import io.supertokens.pluginInterface.emailpassword.UserInfo;
-import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
-import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicatePasswordResetTokenException;
-import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateUserIdException;
-import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
+import io.supertokens.pluginInterface.emailpassword.exceptions.*;
 import io.supertokens.pluginInterface.emailpassword.sqlStorage.EmailPasswordSQLStorage;
 import io.supertokens.pluginInterface.exceptions.QuitProgramFromPluginException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
@@ -420,7 +418,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage {
     public void signUp(UserInfo userInfo)
             throws StorageQueryException, DuplicateUserIdException, DuplicateEmailException {
         try {
-            EmailPasswordQueries.signUp(this, userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined);
+            EmailPasswordQueries.signUp(this, userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined,
+                    userInfo.isEmailVerified);
         } catch (SQLException e) {
             if (e.getMessage().contains("ERROR: duplicate key") &&
                     e.getMessage().contains("Key (email)")) {
@@ -455,17 +454,15 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage {
     public void addPasswordResetToken(PasswordResetTokenInfo passwordResetTokenInfo)
             throws StorageQueryException, UnknownUserIdException, DuplicatePasswordResetTokenException {
         try {
-            // SQLite is not compiled with foreign key constraint and so we must check for the userId manually
-            if (this.getUserInfoUsingId(passwordResetTokenInfo.userId) == null) {
-                throw new UnknownUserIdException();
-            }
-
             EmailPasswordQueries.addPasswordResetToken(this, passwordResetTokenInfo.userId,
                     passwordResetTokenInfo.token, passwordResetTokenInfo.tokenExpiry);
         } catch (SQLException e) {
             if (e.getMessage().contains("ERROR: duplicate key") &&
                     e.getMessage().contains("Key (user_id, token)")) {
                 throw new DuplicatePasswordResetTokenException();
+            } else if (e.getMessage().contains("foreign key") &&
+                    e.getMessage().contains("user_id")) {
+                throw new UnknownUserIdException();
             }
             throw new StorageQueryException(e);
         }
@@ -518,6 +515,97 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             EmailPasswordQueries.updateUsersPassword_Transaction(this, sqlCon, userId, newPassword);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser_Transaction(TransactionConnection con,
+                                                                                            String userId)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return EmailPasswordQueries.getAllEmailVerificationTokenInfoForUser_Transaction(this, sqlCon, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void deleteAllEmailVerificationTokensForUser_Transaction(TransactionConnection con, String userId)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            EmailPasswordQueries.deleteAllEmailVerificationTokensForUser_Transaction(this, sqlCon, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void updateUsersIsEmailVerified_Transaction(TransactionConnection con, String userId,
+                                                       boolean isEmailVerified) throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            EmailPasswordQueries.updateUsersIsEmailVerified_Transaction(this, sqlCon, userId, isEmailVerified);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public UserInfo getUserInfoUsingId_Transaction(TransactionConnection con, String userId)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return EmailPasswordQueries.getUserInfoUsingId_Transaction(this, sqlCon, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void addEmailVerificationToken(EmailVerificationTokenInfo emailVerificationInfo)
+            throws StorageQueryException, UnknownUserIdException, DuplicateEmailVerificationTokenException {
+        try {
+            EmailPasswordQueries.addEmailVerificationToken(this, emailVerificationInfo.userId,
+                    emailVerificationInfo.token, emailVerificationInfo.tokenExpiry, emailVerificationInfo.email);
+        } catch (SQLException e) {
+            if (e.getMessage().contains("ERROR: duplicate key") &&
+                    e.getMessage().contains("Key (user_id, token)")) {
+                throw new DuplicateEmailVerificationTokenException();
+            } else if (e.getMessage().contains("foreign key") &&
+                    e.getMessage().contains("user_id")) {
+                throw new UnknownUserIdException();
+            }
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public EmailVerificationTokenInfo getEmailVerificationTokenInfo(String token) throws StorageQueryException {
+        try {
+            return EmailPasswordQueries.getEmailVerificationTokenInfo(this, token);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void deleteExpiredEmailVerificationTokens() throws StorageQueryException {
+        try {
+            EmailPasswordQueries.deleteExpiredEmailVerificationTokens(this);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser(String userId)
+            throws StorageQueryException {
+        try {
+            return EmailPasswordQueries.getAllEmailVerificationTokenInfoForUser(this, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
