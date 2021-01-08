@@ -72,6 +72,12 @@ public class GeneralQueries {
                  PreparedStatement pst = con.prepareStatement(EmailPasswordQueries.getQueryToCreateUsersTable(start))) {
                 pst.executeUpdate();
             }
+            // index
+            try (Connection con = ConnectionPool.getConnection(start);
+                 PreparedStatement pstIndex = con
+                         .prepareStatement(EmailPasswordQueries.getQueryToCreateUserPaginationIndex(start))) {
+                pstIndex.executeUpdate();
+            }
         }
 
         if (!doesTableExists(start, Config.getConfig(start).getPasswordResetTokensTable())) {
@@ -118,6 +124,13 @@ public class GeneralQueries {
         }
         {
             String DROP_QUERY = "DROP INDEX IF EXISTS emailpassword_email_verification_token_expiry_index";
+            try (Connection con = ConnectionPool.getConnection(start);
+                 PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
+                drop.executeUpdate();
+            }
+        }
+        {
+            String DROP_QUERY = "DROP INDEX IF EXISTS emailpassword_user_pagination_index";
             try (Connection con = ConnectionPool.getConnection(start);
                  PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
                 drop.executeUpdate();

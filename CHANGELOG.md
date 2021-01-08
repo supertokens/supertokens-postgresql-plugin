@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Used rowmapper interface
 - Adds email verification queries
+- User pagination queries
 
 ## [1.5.0] - 2020-11-06
 ### Added

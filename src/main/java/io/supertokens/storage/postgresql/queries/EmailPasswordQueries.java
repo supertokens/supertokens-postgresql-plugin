@@ -41,6 +41,12 @@ public class EmailPasswordQueries {
                 + "is_email_verified boolean NOT NULL," + "PRIMARY KEY (user_id));";
     }
 
+    static String getQueryToCreateUserPaginationIndex(Start start) {
+        return "CREATE INDEX emailpassword_user_pagination_index ON " +
+                Config.getConfig(start).getUsersTable() + "(time_joined DESC, user_id " +
+                "DESC);";
+    }
+
     static String getQueryToCreatePasswordResetTokensTable(Start start) {
         return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getPasswordResetTokensTable() + " ("
                 + "user_id CHAR(36) NOT NULL," + "token VARCHAR(128) NOT NULL UNIQUE,"
