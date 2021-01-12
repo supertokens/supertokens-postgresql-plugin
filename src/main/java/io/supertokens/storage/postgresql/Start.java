@@ -39,6 +39,7 @@ import io.supertokens.storage.postgresql.queries.GeneralQueries;
 import io.supertokens.storage.postgresql.queries.SessionQueries;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
@@ -606,6 +607,34 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage {
             throws StorageQueryException {
         try {
             return EmailPasswordQueries.getAllEmailVerificationTokenInfoForUser(this, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public UserInfo[] getUsers(@Nonnull String userId, @Nonnull Long timeJoined, @Nonnull Integer limit,
+                               @Nonnull String timeJoinedOrder) throws StorageQueryException {
+        try {
+            return EmailPasswordQueries.getUsersInfo(this, userId, timeJoined, limit, timeJoinedOrder);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public UserInfo[] getUsers(@Nonnull Integer limit, @Nonnull String timeJoinedOrder) throws StorageQueryException {
+        try {
+            return EmailPasswordQueries.getUsersInfo(this, limit, timeJoinedOrder);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public long getUsersCount() throws StorageQueryException {
+        try {
+            return EmailPasswordQueries.getUsersCount(this);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
