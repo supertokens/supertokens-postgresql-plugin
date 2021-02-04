@@ -96,18 +96,29 @@ public class GeneralQueries {
             }
         }
 
+        if (!doesTableExists(start, Config.getConfig(start).getEmailVerificationTable())) {
+            ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
+            try (Connection con = ConnectionPool.getConnection(start);
+                 PreparedStatement pst = con
+                         .prepareStatement(
+                                 EmailVerificationQueries.getQueryToCreateEmailVerificationTable(start))) {
+                pst.executeUpdate();
+            }
+        }
+
         if (!doesTableExists(start, Config.getConfig(start).getEmailVerificationTokensTable())) {
             ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
             try (Connection con = ConnectionPool.getConnection(start);
                  PreparedStatement pst = con
-                         .prepareStatement(EmailPasswordQueries.getQueryToCreateEmailVerificationTokensTable(start))) {
+                         .prepareStatement(
+                                 EmailVerificationQueries.getQueryToCreateEmailVerificationTokensTable(start))) {
                 pst.executeUpdate();
             }
             // index
             try (Connection con = ConnectionPool.getConnection(start);
                  PreparedStatement pstIndex = con
                          .prepareStatement(
-                                 EmailPasswordQueries.getQueryToCreateEmailVerificationTokenExpiryIndex(start))) {
+                                 EmailVerificationQueries.getQueryToCreateEmailVerificationTokenExpiryIndex(start))) {
                 pstIndex.executeUpdate();
             }
         }
@@ -123,7 +134,7 @@ public class GeneralQueries {
             }
         }
         {
-            String DROP_QUERY = "DROP INDEX IF EXISTS emailpassword_email_verification_token_expiry_index";
+            String DROP_QUERY = "DROP INDEX IF EXISTS emailverification_tokens_index";
             try (Connection con = ConnectionPool.getConnection(start);
                  PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
                 drop.executeUpdate();
@@ -140,7 +151,8 @@ public class GeneralQueries {
             String DROP_QUERY = "DROP TABLE IF EXISTS " + Config.getConfig(start).getKeyValueTable() + "," +
                     Config.getConfig(start).getSessionInfoTable() + "," + Config.getConfig(start).getUsersTable() + ","
                     + Config.getConfig(start).getPasswordResetTokensTable() + "," +
-                    Config.getConfig(start).getEmailVerificationTokensTable();
+                    Config.getConfig(start).getEmailVerificationTokensTable() + "," +
+                    Config.getConfig(start).getEmailVerificationTable();
             try (Connection con = ConnectionPool.getConnection(start);
                  PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
                 drop.executeUpdate();
