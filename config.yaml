@@ -57,3 +57,7 @@ postgresql_config_version: 0
 # (OPTIONAL | Default: "emailverification_verified_emails") string value. Specify the name of the table that will
 # store the verified email addresses.
 # postgresql_emailverification_verified_emails_table_name:
+
+# (OPTIONAL | Default: "thirdparty_users") string value. Specify the name of the table that will
+# store the thirdparty recipe users.
+# postgresql_thirdparty_users_table_name

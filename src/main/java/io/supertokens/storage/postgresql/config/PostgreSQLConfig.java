@@ -64,6 +64,13 @@ public class PostgreSQLConfig {
     @JsonProperty
     private String postgresql_emailverification_verified_emails_table_name = "emailverification_verified_emails";
 
+    @JsonProperty
+    private String postgresql_thirdparty_users_table_name = "thirdparty_users";
+
+    public String getThirdPartyUsersTable() {
+        return postgresql_thirdparty_users_table_name;
+    }
+
     public int getConnectionPoolSize() {
         return postgresql_connection_pool_size;
     }

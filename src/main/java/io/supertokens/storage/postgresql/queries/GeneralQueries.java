@@ -122,6 +122,23 @@ public class GeneralQueries {
                 pstIndex.executeUpdate();
             }
         }
+
+        if (!doesTableExists(start, Config.getConfig(start).getThirdPartyUsersTable())) {
+            ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
+            try (Connection con = ConnectionPool.getConnection(start);
+                 PreparedStatement pst = con
+                         .prepareStatement(
+                                 ThirdPartyQueries.getQueryToCreateUsersTable(start))) {
+                pst.executeUpdate();
+            }
+            // index
+            try (Connection con = ConnectionPool.getConnection(start);
+                 PreparedStatement pstIndex = con
+                         .prepareStatement(
+                                 ThirdPartyQueries.getQueryToCreateUserPaginationIndex(start))) {
+                pstIndex.executeUpdate();
+            }
+        }
     }
 
     // to be used in testing only
@@ -147,12 +164,22 @@ public class GeneralQueries {
                 drop.executeUpdate();
             }
         }
+
+        {
+            String DROP_QUERY = "DROP INDEX IF EXISTS thirdparty_users_pagination_index";
+            try (Connection con = ConnectionPool.getConnection(start);
+                 PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
+                drop.executeUpdate();
+            }
+        }
+
         {
             String DROP_QUERY = "DROP TABLE IF EXISTS " + Config.getConfig(start).getKeyValueTable() + "," +
                     Config.getConfig(start).getSessionInfoTable() + "," + Config.getConfig(start).getUsersTable() + ","
                     + Config.getConfig(start).getPasswordResetTokensTable() + "," +
                     Config.getConfig(start).getEmailVerificationTokensTable() + "," +
-                    Config.getConfig(start).getEmailVerificationTable();
+                    Config.getConfig(start).getEmailVerificationTable() + "," +
+                    Config.getConfig(start).getThirdPartyUsersTable();
             try (Connection con = ConnectionPool.getConnection(start);
                  PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
                 drop.executeUpdate();
