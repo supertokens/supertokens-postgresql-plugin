@@ -13,7 +13,7 @@ jobs:
       - run:
           name: starting postgresql
           command: |
-            (cd / && ./runPostgreSQL.sh && psql --command "CREATE DATABASE supertokens;")
+            (cd / && ./runPostgreSQL.sh)
       - run:
           name: running tests
           command: (cd .circleci/ && ./doTests.sh)
