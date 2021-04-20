@@ -46,30 +46,28 @@ public class PostgreSQLConfig {
     private String postgresql_database_name = "supertokens";
 
     @JsonProperty
-    private String postgresql_key_value_table_name = "key_value";
+    private String postgresql_key_value_table_name = null;
 
     @JsonProperty
-    private String postgresql_session_info_table_name = "session_info";
+    private String postgresql_session_info_table_name = null;
 
     @JsonProperty
-    private String postgresql_emailpassword_users_table_name = "emailpassword_users";
+    private String postgresql_emailpassword_users_table_name = null;
 
     @JsonProperty
-    private String postgresql_emailpassword_pswd_reset_tokens_table_name = "emailpassword_pswd_reset_tokens";
+    private String postgresql_emailpassword_pswd_reset_tokens_table_name = null;
 
     @JsonProperty
-    private String postgresql_emailverification_tokens_table_name =
-            "emailverification_tokens";
+    private String postgresql_emailverification_tokens_table_name = null;
 
     @JsonProperty
-    private String postgresql_emailverification_verified_emails_table_name = "emailverification_verified_emails";
+    private String postgresql_emailverification_verified_emails_table_name = null;
 
     @JsonProperty
-    private String postgresql_thirdparty_users_table_name = "thirdparty_users";
+    private String postgresql_thirdparty_users_table_name = null;
 
-    public String getThirdPartyUsersTable() {
-        return postgresql_thirdparty_users_table_name;
-    }
+    @JsonProperty
+    private String postgresql_table_names_prefix = "";
 
     public int getConnectionPoolSize() {
         return postgresql_connection_pool_size;
@@ -96,29 +94,67 @@ public class PostgreSQLConfig {
     }
 
     public String getKeyValueTable() {
-        return postgresql_key_value_table_name;
+        String tableName = "key_value";
+        if (postgresql_key_value_table_name != null) {
+            return postgresql_key_value_table_name;
+        }
+        return addPrefixToTableName(tableName);
     }
 
     public String getSessionInfoTable() {
-        return postgresql_session_info_table_name;
+        String tableName = "session_info";
+        if (postgresql_session_info_table_name != null) {
+            return postgresql_session_info_table_name;
+        }
+        return addPrefixToTableName(tableName);
     }
 
     public String getUsersTable() {
-        return postgresql_emailpassword_users_table_name;
+        String tableName = "emailpassword_users";
+        if (postgresql_emailpassword_users_table_name != null) {
+            return postgresql_emailpassword_users_table_name;
+        }
+        return addPrefixToTableName(tableName);
     }
 
     public String getPasswordResetTokensTable() {
-        return postgresql_emailpassword_pswd_reset_tokens_table_name;
+        String tableName = "emailpassword_pswd_reset_tokens";
+        if (postgresql_emailpassword_pswd_reset_tokens_table_name != null) {
+            return postgresql_emailpassword_pswd_reset_tokens_table_name;
+        }
+        return addPrefixToTableName(tableName);
     }
 
     public String getEmailVerificationTokensTable() {
-        return postgresql_emailverification_tokens_table_name;
+        String tableName = "emailverification_tokens";
+        if (postgresql_emailverification_tokens_table_name != null) {
+            return postgresql_emailverification_tokens_table_name;
+        }
+        return addPrefixToTableName(tableName);
     }
 
     public String getEmailVerificationTable() {
-        return postgresql_emailverification_verified_emails_table_name;
+        String tableName = "emailverification_verified_emails";
+        if (postgresql_emailverification_verified_emails_table_name != null) {
+            return postgresql_emailverification_verified_emails_table_name;
+        }
+        return addPrefixToTableName(tableName);
     }
 
+    public String getThirdPartyUsersTable() {
+        String tableName = "thirdparty_users";
+        if (postgresql_thirdparty_users_table_name != null) {
+            return postgresql_thirdparty_users_table_name;
+        }
+        return addPrefixToTableName(tableName);
+    }
+
+    private String addPrefixToTableName(String tableName) {
+        if (!postgresql_table_names_prefix.trim().equals("")) {
+            return postgresql_table_names_prefix.trim() + "_" + tableName;
+        }
+        return tableName;
+    }
 
     void validateAndInitialise() {
         if (getUser() == null) {

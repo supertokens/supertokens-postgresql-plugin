@@ -33,6 +33,11 @@ postgresql_config_version: 0
 # postgresql_database_name:
 
 
+# (OPTIONAL | Default: "") string value. A prefix to add to all table names managed by SuperTokens. An "_" will be
+# added between this prefix and the actual table name if the prefix is defined
+# postgresql_table_names_prefix:
+
+
 # (OPTIONAL | Default: "key_value") string value. Specify the name of the table that will store secret keys
 # and app info necessary for the functioning sessions.
 # postgresql_key_value_table_name:
