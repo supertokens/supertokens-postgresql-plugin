@@ -41,10 +41,16 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         }
         HikariConfig config = new HikariConfig();
         PostgreSQLConfig userConfig = Config.getConfig(start);
-
         config.setDriverClassName("org.postgresql.Driver");
-        config.setJdbcUrl("jdbc:postgresql://" + userConfig.getHostName() + ":" + userConfig.getPort() + "/"
-                + userConfig.getDatabaseName());
+
+
+        String scheme = userConfig.getConnectionScheme();
+        String hostName = userConfig.getHostName();
+        String port = userConfig.getPort() + "";
+        String databaseName = userConfig.getDatabaseName();
+        String attributes = userConfig.getConnectionAttributes();
+        config.setJdbcUrl("jdbc:" + scheme + "://" + hostName + ":" + port + "/" + databaseName + "?" + attributes);
+
         config.setUsername(userConfig.getUser());
         if (!userConfig.getPassword().equals("")) {
             config.setPassword(userConfig.getPassword());
@@ -100,8 +106,8 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         String errorMessage =
                 "Error connecting to PostgreSQL instance. Please make sure that PostgreSQL is running and that " +
                         "you have" +
-                        " specified the correct values for 'postgresql_host' and 'postgresql_port' in your " +
-                        "config file";
+                        " specified the correct values for ('postgresql_host' and 'postgresql_port') or for " +
+                        "'postgresql_connection_uri'";
         try {
             while (true) {
                 try {

@@ -208,8 +208,8 @@ public class ConfigTest {
         assertNotNull(e);
         assertEquals(e.exception.getMessage(),
                 "Error connecting to PostgreSQL instance. Please make sure that PostgreSQL is running and that you " +
-                        "have specified the correct values for 'postgresql_host' and 'postgresql_port' in your config" +
-                        " file");
+                        "have specified the correct values for ('postgresql_host' and 'postgresql_port') or for " +
+                        "'postgresql_connection_uri'");
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -305,8 +305,206 @@ public class ConfigTest {
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
 
-    public static void checkConfig(PostgreSQLConfig config) {
+    @Test
+    public void testValidConnectionURI() throws Exception {
+        {
+            String[] args = {"../"};
 
+            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@localhost:5432/supertokens");
+            Utils.commentConfigValue("postgresql_password");
+            Utils.commentConfigValue("postgresql_user");
+            Utils.commentConfigValue("postgresql_port");
+            Utils.commentConfigValue("postgresql_host");
+            Utils.commentConfigValue("postgresql_database_name");
+
+            TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+            PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
+            checkConfig(config);
+
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+
+        {
+            Utils.reset();
+            String[] args = {"../"};
+
+            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@localhost/supertokens");
+            Utils.commentConfigValue("postgresql_password");
+            Utils.commentConfigValue("postgresql_user");
+            Utils.commentConfigValue("postgresql_port");
+            Utils.commentConfigValue("postgresql_host");
+            Utils.commentConfigValue("postgresql_database_name");
+
+            TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+            PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
+            checkConfig(config);
+
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+
+        {
+            Utils.reset();
+            String[] args = {"../"};
+
+            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://localhost:5432/supertokens");
+            Utils.commentConfigValue("postgresql_port");
+            Utils.commentConfigValue("postgresql_host");
+            Utils.commentConfigValue("postgresql_database_name");
+
+            TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+            PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
+            checkConfig(config);
+
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+
+        {
+            Utils.reset();
+            String[] args = {"../"};
+
+            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root@localhost:5432/supertokens");
+            Utils.commentConfigValue("postgresql_user");
+            Utils.commentConfigValue("postgresql_port");
+            Utils.commentConfigValue("postgresql_host");
+            Utils.commentConfigValue("postgresql_database_name");
+
+            TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+            PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
+            checkConfig(config);
+
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+
+        {
+            Utils.reset();
+            String[] args = {"../"};
+
+            Utils.setValueInConfig("postgresql_connection_uri", "localhost:5432/supertokens");
+            Utils.commentConfigValue("postgresql_port");
+            Utils.commentConfigValue("postgresql_host");
+            Utils.commentConfigValue("postgresql_database_name");
+
+            TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+            PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
+            checkConfig(config);
+
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+
+        {
+            Utils.reset();
+            String[] args = {"../"};
+
+            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@localhost:5432");
+            Utils.commentConfigValue("postgresql_password");
+            Utils.commentConfigValue("postgresql_user");
+            Utils.commentConfigValue("postgresql_port");
+            Utils.commentConfigValue("postgresql_host");
+            Utils.commentConfigValue("postgresql_database_name");
+
+            TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+            PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
+            checkConfig(config);
+
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
+    @Test
+    public void testInvalidConnectionURI() throws Exception {
+        {
+            String[] args = {"../"};
+
+            Utils.setValueInConfig("postgresql_connection_uri", ":/localhost:5432/supertokens");
+
+            TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+            ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
+            assertNotNull(e);
+            assertEquals(
+                    "The provided postgresql connection URI has an incorrect format. Please use a format like " +
+                            "postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2...",
+                    e.exception.getMessage());
+
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+
+        {
+            Utils.reset();
+            String[] args = {"../"};
+
+            Utils.setValueInConfig("postgresql_connection_uri",
+                    "postgresql://root:wrongPassword@localhost:5432/supertokens");
+            Utils.commentConfigValue("postgresql_password");
+            Utils.commentConfigValue("postgresql_user");
+            Utils.commentConfigValue("postgresql_port");
+            Utils.commentConfigValue("postgresql_host");
+            Utils.commentConfigValue("postgresql_database_name");
+
+            TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+            ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
+            assertNotNull(e);
+
+            TestCase.assertTrue(e.exception.getMessage().contains("password authentication failed"));
+
+
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
+    @Test
+    public void testValidConnectionURIAttributes() throws Exception {
+        {
+            String[] args = {"../"};
+
+            Utils.setValueInConfig("postgresql_connection_uri",
+                    "postgresql://root:root@localhost:5432/supertokens?key1=value1");
+
+            TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+            PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
+            assertEquals(config.getConnectionAttributes(), "key1=value1&allowPublicKeyRetrieval=true");
+
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+
+        {
+            Utils.reset();
+            String[] args = {"../"};
+
+            Utils.setValueInConfig("postgresql_connection_uri",
+                    "postgresql://root:root@localhost:5432/supertokens?key1=value1&allowPublicKeyRetrieval=false&key2" +
+                            "=value2");
+
+            TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+            PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
+            assertEquals(config.getConnectionAttributes(), "key1=value1&allowPublicKeyRetrieval=false&key2=value2");
+
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
+    public static void checkConfig(PostgreSQLConfig config) {
+        assertEquals("Config getAttributes did not match default", config.getConnectionAttributes(),
+                "allowPublicKeyRetrieval=true");
+        assertEquals("Config getSchema did not match default", config.getConnectionScheme(),
+                "postgresql");
         assertEquals("Config connectionPoolSize did not match default", config.getConnectionPoolSize(), 10);
         assertEquals("Config databaseName does not match default", config.getDatabaseName(), "supertokens");
         assertEquals("Config keyValue table does not match default", config.getKeyValueTable(), "key_value");

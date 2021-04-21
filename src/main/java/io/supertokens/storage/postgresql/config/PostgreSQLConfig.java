@@ -21,6 +21,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.supertokens.pluginInterface.exceptions.QuitProgramFromPluginException;
 
+import java.net.URI;
+
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class PostgreSQLConfig {
 
@@ -31,10 +33,10 @@ public class PostgreSQLConfig {
     private int postgresql_connection_pool_size = 10;
 
     @JsonProperty
-    private String postgresql_host = "localhost";
+    private String postgresql_host = null;
 
     @JsonProperty
-    private int postgresql_port = 5432;
+    private int postgresql_port = -1;
 
     @JsonProperty
     private String postgresql_user = null;
@@ -43,7 +45,7 @@ public class PostgreSQLConfig {
     private String postgresql_password = null;
 
     @JsonProperty
-    private String postgresql_database_name = "supertokens";
+    private String postgresql_database_name = null;
 
     @JsonProperty
     private String postgresql_key_value_table_name = null;
@@ -69,27 +71,116 @@ public class PostgreSQLConfig {
     @JsonProperty
     private String postgresql_table_names_prefix = "";
 
+    @JsonProperty
+    private String postgresql_connection_uri = null;
+
+    public String getConnectionScheme() {
+        if (postgresql_connection_uri != null) {
+            URI uri = URI.create(postgresql_connection_uri);
+
+            // sometimes if the scheme is missing, the host is returned as the scheme. To prevent that,
+            // we have a check
+            String host = this.getHostName();
+            if (uri.getScheme() != null && !uri.getScheme().equals(host)) {
+                return uri.getScheme();
+            }
+        }
+        return "postgresql";
+    }
+
     public int getConnectionPoolSize() {
         return postgresql_connection_pool_size;
     }
 
+    public String getConnectionAttributes() {
+        if (postgresql_connection_uri != null) {
+            URI uri = URI.create(postgresql_connection_uri);
+            String query = uri.getQuery();
+            if (query != null) {
+                if (query.contains("allowPublicKeyRetrieval=")) {
+                    return query;
+                } else {
+                    return query + "&allowPublicKeyRetrieval=true";
+                }
+            }
+        }
+        return "allowPublicKeyRetrieval=true";
+    }
+
     public String getHostName() {
+        if (postgresql_host == null) {
+            if (postgresql_connection_uri != null) {
+                URI uri = URI.create(postgresql_connection_uri);
+                if (uri.getHost() != null) {
+                    return uri.getHost();
+                }
+            }
+            return "localhost";
+        }
         return postgresql_host;
     }
 
     public int getPort() {
+        if (postgresql_port == -1) {
+            if (postgresql_connection_uri != null) {
+                URI uri = URI.create(postgresql_connection_uri);
+                if (uri.getPort() != -1) {
+                    return uri.getPort();
+                }
+            }
+            return 5432;
+        }
         return postgresql_port;
     }
 
     public String getUser() {
+        if (postgresql_user == null) {
+            if (postgresql_connection_uri != null) {
+                URI uri = URI.create(postgresql_connection_uri);
+                String userInfo = uri.getUserInfo();
+                if (userInfo != null) {
+                    String[] userInfoArray = userInfo.split(":");
+                    if (userInfoArray.length > 0 && !userInfoArray[0].equals("")) {
+                        return userInfoArray[0];
+                    }
+                }
+            }
+            return null;
+        }
         return postgresql_user;
     }
 
     public String getPassword() {
+        if (postgresql_password == null) {
+            if (postgresql_connection_uri != null) {
+                URI uri = URI.create(postgresql_connection_uri);
+                String userInfo = uri.getUserInfo();
+                if (userInfo != null) {
+                    String[] userInfoArray = userInfo.split(":");
+                    if (userInfoArray.length > 1 && !userInfoArray[1].equals("")) {
+                        return userInfoArray[1];
+                    }
+                }
+            }
+            return null;
+        }
         return postgresql_password;
     }
 
     public String getDatabaseName() {
+        if (postgresql_database_name == null) {
+            if (postgresql_connection_uri != null) {
+                URI uri = URI.create(postgresql_connection_uri);
+                String path = uri.getPath();
+                if (path != null && !path.equals("") && !path.equals("/")) {
+                    if (path.startsWith("/")) {
+                        return path.substring(1);
+                    }
+                    return path;
+                }
+            }
+            return "supertokens";
+        }
         return postgresql_database_name;
     }
 
@@ -157,6 +248,16 @@ public class PostgreSQLConfig {
     }
 
     void validateAndInitialise() {
+        if (postgresql_connection_uri != null) {
+            try {
+                URI ignored = URI.create(postgresql_connection_uri);
+            } catch (Exception e) {
+                throw new QuitProgramFromPluginException(
+                        "The provided postgresql connection URI has an incorrect format. Please use a format like " +
+                                "postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2...");
+            }
+        }
+
         if (getUser() == null) {
             throw new QuitProgramFromPluginException(
                     "'postgresql_user' is not set in the config.yaml file. Please set this value and restart " +
