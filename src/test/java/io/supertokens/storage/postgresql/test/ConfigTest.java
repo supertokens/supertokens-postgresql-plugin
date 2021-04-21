@@ -88,48 +88,10 @@ public class ConfigTest {
     public void testThatInvalidConfigThrowsRightError() throws Exception {
         String[] args = {"../"};
 
-        //'postgresql_user is not set properly in the config file
-
-        Utils.commentConfigValue("postgresql_user");
-
+        Utils.setValueInConfig("postgresql_connection_pool_size", "-1");
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
 
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
-        assertNotNull(e);
-        System.out.println(e.exception.getMessage());
-        TestCase.assertEquals(e.exception.getMessage(),
-                "'postgresql_user' is not set in the config.yaml file. Please set this value and restart SuperTokens");
-
-        process.kill();
-        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
-
-        Utils.reset();
-
-
-        //'postgresql_password is not set properly in the config file
-
-        Utils.commentConfigValue("postgresql_password");
-        process = TestingProcessManager.start(args);
-
-        e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
-        assertNotNull(e);
-        TestCase.assertEquals(e.exception.getMessage(),
-                "'postgresql_password' is not set in the config.yaml file. Please set this value and restart " +
-                        "SuperTokens");
-
-        process.kill();
-        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
-
-
-        Utils.reset();
-
-
-        //postgresql_connection_pool_size is not set properly in the config file
-
-        Utils.setValueInConfig("postgresql_connection_pool_size", "-1");
-        process = TestingProcessManager.start(args);
-
-        e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
         assertNotNull(e);
         TestCase.assertEquals(e.exception.getMessage(),
                 "'postgresql_connection_pool_size' in the config.yaml file must be > 0");
@@ -340,7 +302,7 @@ public class ConfigTest {
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
             PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
-            checkConfig(config);
+            assertEquals(config.getPort(), -1);
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -370,24 +332,6 @@ public class ConfigTest {
 
             Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root@localhost:5432/supertokens");
             Utils.commentConfigValue("postgresql_user");
-            Utils.commentConfigValue("postgresql_port");
-            Utils.commentConfigValue("postgresql_host");
-            Utils.commentConfigValue("postgresql_database_name");
-
-            TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
-            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
-            PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
-            checkConfig(config);
-
-            process.kill();
-            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
-        }
-
-        {
-            Utils.reset();
-            String[] args = {"../"};
-
-            Utils.setValueInConfig("postgresql_connection_uri", "localhost:5432/supertokens");
             Utils.commentConfigValue("postgresql_port");
             Utils.commentConfigValue("postgresql_host");
             Utils.commentConfigValue("postgresql_database_name");

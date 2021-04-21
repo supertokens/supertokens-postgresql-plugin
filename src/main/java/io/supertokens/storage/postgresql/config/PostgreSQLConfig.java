@@ -74,6 +74,10 @@ public class PostgreSQLConfig {
     @JsonProperty
     private String postgresql_connection_uri = null;
 
+    public int getConnectionPoolSize() {
+        return postgresql_connection_pool_size;
+    }
+
     public String getConnectionScheme() {
         if (postgresql_connection_uri != null) {
             URI uri = URI.create(postgresql_connection_uri);
@@ -86,10 +90,6 @@ public class PostgreSQLConfig {
             }
         }
         return "postgresql";
-    }
-
-    public int getConnectionPoolSize() {
-        return postgresql_connection_pool_size;
     }
 
     public String getConnectionAttributes() {
@@ -124,9 +124,7 @@ public class PostgreSQLConfig {
         if (postgresql_port == -1) {
             if (postgresql_connection_uri != null) {
                 URI uri = URI.create(postgresql_connection_uri);
-                if (uri.getPort() != -1) {
-                    return uri.getPort();
-                }
+                return uri.getPort();
             }
             return 5432;
         }
@@ -182,6 +180,10 @@ public class PostgreSQLConfig {
             return "supertokens";
         }
         return postgresql_database_name;
+    }
+
+    public String getConnectionURI() {
+        return postgresql_connection_uri;
     }
 
     public String getKeyValueTable() {
@@ -256,18 +258,6 @@ public class PostgreSQLConfig {
                         "The provided postgresql connection URI has an incorrect format. Please use a format like " +
                                 "postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2...");
             }
-        }
-
-        if (getUser() == null) {
-            throw new QuitProgramFromPluginException(
-                    "'postgresql_user' is not set in the config.yaml file. Please set this value and restart " +
-                            "SuperTokens");
-        }
-
-        if (getPassword() == null) {
-            throw new QuitProgramFromPluginException(
-                    "'postgresql_password' is not set in the config.yaml file. Please set this value and restart " +
-                            "SuperTokens");
         }
         if (getConnectionPoolSize() <= 0) {
             throw new QuitProgramFromPluginException(

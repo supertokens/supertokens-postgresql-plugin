@@ -43,16 +43,31 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         PostgreSQLConfig userConfig = Config.getConfig(start);
         config.setDriverClassName("org.postgresql.Driver");
 
-
         String scheme = userConfig.getConnectionScheme();
-        String hostName = userConfig.getHostName();
-        String port = userConfig.getPort() + "";
-        String databaseName = userConfig.getDatabaseName();
-        String attributes = userConfig.getConnectionAttributes();
-        config.setJdbcUrl("jdbc:" + scheme + "://" + hostName + ":" + port + "/" + databaseName + "?" + attributes);
 
-        config.setUsername(userConfig.getUser());
-        if (!userConfig.getPassword().equals("")) {
+        String hostName = userConfig.getHostName();
+
+        String port = userConfig.getPort() + "";
+        if (!port.equals("-1")) {
+            port = ":" + port;
+        } else {
+            port = "";
+        }
+
+        String databaseName = userConfig.getDatabaseName();
+
+        String attributes = userConfig.getConnectionAttributes();
+        if (!attributes.equals("")) {
+            attributes = "?" + attributes;
+        }
+
+        config.setJdbcUrl("jdbc:" + scheme + "://" + hostName + port + "/" + databaseName + attributes);
+
+        if (userConfig.getUser() != null) {
+            config.setUsername(userConfig.getUser());
+        }
+
+        if (userConfig.getPassword() != null && !userConfig.getPassword().equals("")) {
             config.setPassword(userConfig.getPassword());
         }
         config.setMaximumPoolSize(userConfig.getConnectionPoolSize());

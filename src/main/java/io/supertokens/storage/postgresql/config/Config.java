@@ -74,7 +74,8 @@ public class Config extends ResourceDistributor.SingletonResource {
             final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
             PostgreSQLConfig config = mapper.readValue(new File(configFilePath), PostgreSQLConfig.class);
             return config.getUser() != null ||
-                    config.getPassword() != null;    // OR since they put one, but forgot the other
+                    config.getPassword() != null ||
+                    config.getConnectionURI() != null;
         } catch (Exception e) {
             return false;
         }
