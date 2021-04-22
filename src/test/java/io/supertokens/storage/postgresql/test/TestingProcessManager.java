@@ -31,13 +31,14 @@ class TestingProcessManager {
     private static final ArrayList<TestingProcess> alive = new ArrayList<>();
 
     static void deleteAllInformation() throws Exception {
-        System.out.println("----------DELETE ALL INFORMATION----------");
+        System.out.println("----------BEFORE DELETE ALL INFORMATION----------");
         String[] args = {"../"};
         TestingProcess process = TestingProcessManager.start(args);
         process.checkOrWaitForEvent(PROCESS_STATE.STARTED);
         process.main.deleteAllInformationForTesting();
         process.kill();
-        System.out.println("----------DELETE ALL INFORMATION----------");
+        process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED);
+        System.out.println("----------AFTER DELETE ALL INFORMATION----------");
     }
 
     static void killAll() {
