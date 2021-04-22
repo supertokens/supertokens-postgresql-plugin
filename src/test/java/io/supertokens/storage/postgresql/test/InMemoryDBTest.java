@@ -193,8 +193,7 @@ public class InMemoryDBTest {
 
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
         assertNotNull(e);
-        TestCase.assertEquals(e.exception.getMessage(),
-                "'postgresql_user' is not set in the config.yaml file. Please set this value and restart SuperTokens");
+        TestCase.assertTrue(e.exception.getMessage().contains("Failed to initialize pool"));
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -210,8 +209,7 @@ public class InMemoryDBTest {
 
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
         assertNotNull(e);
-        TestCase.assertEquals(e.exception.getMessage(),
-                "'postgresql_user' is not set in the config.yaml file. Please set this value and restart SuperTokens");
+        TestCase.assertTrue(e.exception.getMessage().contains("Failed to initialize pool"));
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
