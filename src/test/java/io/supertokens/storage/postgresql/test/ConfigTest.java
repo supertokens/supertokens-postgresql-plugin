@@ -243,6 +243,10 @@ public class ConfigTest {
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+        // we call this here so that the database is cleared with the modified table names
+        // since in postgres, we delete all dbs one by one
+        TestingProcessManager.deleteAllInformation();
     }
 
     @Test
@@ -265,6 +269,10 @@ public class ConfigTest {
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+        // we call this here so that the database is cleared with the modified table names
+        // since in postgres, we delete all dbs one by one
+        TestingProcessManager.deleteAllInformation();
     }
 
     @Test
