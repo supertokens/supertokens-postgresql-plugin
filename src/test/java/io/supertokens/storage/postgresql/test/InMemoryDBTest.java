@@ -191,7 +191,7 @@ public class InMemoryDBTest {
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
 
-        ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
+        ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE, 15000);
         assertNotNull(e);
         TestCase.assertTrue(e.exception.getMessage().contains("Failed to initialize pool"));
 
@@ -207,7 +207,7 @@ public class InMemoryDBTest {
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
 
-        ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
+        ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE, 15000);
         assertNotNull(e);
         TestCase.assertTrue(e.exception.getMessage().contains("Failed to initialize pool"));
 
