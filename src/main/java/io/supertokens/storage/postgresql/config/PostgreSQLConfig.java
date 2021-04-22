@@ -258,7 +258,14 @@ public class PostgreSQLConfig {
                         "The provided postgresql connection URI has an incorrect format. Please use a format like " +
                                 "postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2...");
             }
+        } else {
+            if (this.getUser() == null) {
+                throw new QuitProgramFromPluginException(
+                        "'postgresql_user' and 'postgresql_connection_uri' are not set. Please set at least one of " +
+                                "these values");
+            }
         }
+
         if (getConnectionPoolSize() <= 0) {
             throw new QuitProgramFromPluginException(
                     "'postgresql_connection_pool_size' in the config.yaml file must be > 0");

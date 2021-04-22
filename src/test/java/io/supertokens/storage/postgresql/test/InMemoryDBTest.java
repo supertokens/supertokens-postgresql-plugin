@@ -193,7 +193,9 @@ public class InMemoryDBTest {
 
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE, 15000);
         assertNotNull(e);
-        TestCase.assertTrue(e.exception.getMessage().contains("Failed to initialize pool"));
+        TestCase.assertEquals(e.exception.getMessage(),
+                "'postgresql_user' and 'postgresql_connection_uri' are not set. Please set at least one of " +
+                        "these values");
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -209,7 +211,9 @@ public class InMemoryDBTest {
 
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE, 15000);
         assertNotNull(e);
-        TestCase.assertTrue(e.exception.getMessage().contains("Failed to initialize pool"));
+        TestCase.assertEquals(e.exception.getMessage(),
+                "'postgresql_user' and 'postgresql_connection_uri' are not set. Please set at least one of " +
+                        "these values");
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
