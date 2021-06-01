@@ -72,6 +72,9 @@ public class PostgreSQLConfig {
     private String postgresql_table_names_prefix = "";
 
     @JsonProperty
+    private String postgresql_table_schema = "public";
+
+    @JsonProperty
     private String postgresql_connection_uri = null;
 
     public int getConnectionPoolSize() {
@@ -191,7 +194,7 @@ public class PostgreSQLConfig {
         if (postgresql_key_value_table_name != null) {
             return postgresql_key_value_table_name;
         }
-        return addPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName(tableName);
     }
 
     public String getSessionInfoTable() {
@@ -199,7 +202,7 @@ public class PostgreSQLConfig {
         if (postgresql_session_info_table_name != null) {
             return postgresql_session_info_table_name;
         }
-        return addPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName(tableName);
     }
 
     public String getUsersTable() {
@@ -207,7 +210,7 @@ public class PostgreSQLConfig {
         if (postgresql_emailpassword_users_table_name != null) {
             return postgresql_emailpassword_users_table_name;
         }
-        return addPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName(tableName);
     }
 
     public String getPasswordResetTokensTable() {
@@ -215,7 +218,7 @@ public class PostgreSQLConfig {
         if (postgresql_emailpassword_pswd_reset_tokens_table_name != null) {
             return postgresql_emailpassword_pswd_reset_tokens_table_name;
         }
-        return addPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName(tableName);
     }
 
     public String getEmailVerificationTokensTable() {
@@ -223,7 +226,7 @@ public class PostgreSQLConfig {
         if (postgresql_emailverification_tokens_table_name != null) {
             return postgresql_emailverification_tokens_table_name;
         }
-        return addPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName(tableName);
     }
 
     public String getEmailVerificationTable() {
@@ -231,7 +234,7 @@ public class PostgreSQLConfig {
         if (postgresql_emailverification_verified_emails_table_name != null) {
             return postgresql_emailverification_verified_emails_table_name;
         }
-        return addPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName(tableName);
     }
 
     public String getThirdPartyUsersTable() {
@@ -239,14 +242,18 @@ public class PostgreSQLConfig {
         if (postgresql_thirdparty_users_table_name != null) {
             return postgresql_thirdparty_users_table_name;
         }
-        return addPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName(tableName);
     }
 
-    private String addPrefixToTableName(String tableName) {
+    private String addSchemaAndPrefixToTableName(String tableName) {
+        String name = tableName;
         if (!postgresql_table_names_prefix.trim().equals("")) {
-            return postgresql_table_names_prefix.trim() + "_" + tableName;
+            name = postgresql_table_names_prefix.trim() + "_" + name;
         }
-        return tableName;
+        if (!postgresql_table_schema.trim().equals("")) {
+            name = postgresql_table_schema.trim() + "." + name;
+        }
+        return name;
     }
 
     void validateAndInitialise() {

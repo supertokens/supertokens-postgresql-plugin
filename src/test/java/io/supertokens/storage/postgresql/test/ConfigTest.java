@@ -255,6 +255,7 @@ public class ConfigTest {
 
         Utils.setValueInConfig("postgresql_key_value_table_name", "key_value_table");
         Utils.setValueInConfig("postgresql_table_names_prefix", "some_prefix");
+        Utils.setValueInConfig("postgresql_table_schema", "some_schema");
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
