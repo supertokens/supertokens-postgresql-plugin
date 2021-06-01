@@ -77,6 +77,10 @@ public class PostgreSQLConfig {
     @JsonProperty
     private String postgresql_connection_uri = null;
 
+    public String getTableSchema() {
+        return postgresql_table_schema;
+    }
+
     public int getConnectionPoolSize() {
         return postgresql_connection_pool_size;
     }
@@ -192,7 +196,7 @@ public class PostgreSQLConfig {
     public String getKeyValueTable() {
         String tableName = "key_value";
         if (postgresql_key_value_table_name != null) {
-            return postgresql_key_value_table_name;
+            return addSchemaToTableName(postgresql_key_value_table_name);
         }
         return addSchemaAndPrefixToTableName(tableName);
     }
@@ -200,7 +204,7 @@ public class PostgreSQLConfig {
     public String getSessionInfoTable() {
         String tableName = "session_info";
         if (postgresql_session_info_table_name != null) {
-            return postgresql_session_info_table_name;
+            return addSchemaToTableName(postgresql_session_info_table_name);
         }
         return addSchemaAndPrefixToTableName(tableName);
     }
@@ -208,7 +212,7 @@ public class PostgreSQLConfig {
     public String getUsersTable() {
         String tableName = "emailpassword_users";
         if (postgresql_emailpassword_users_table_name != null) {
-            return postgresql_emailpassword_users_table_name;
+            return addSchemaToTableName(postgresql_emailpassword_users_table_name);
         }
         return addSchemaAndPrefixToTableName(tableName);
     }
@@ -216,7 +220,7 @@ public class PostgreSQLConfig {
     public String getPasswordResetTokensTable() {
         String tableName = "emailpassword_pswd_reset_tokens";
         if (postgresql_emailpassword_pswd_reset_tokens_table_name != null) {
-            return postgresql_emailpassword_pswd_reset_tokens_table_name;
+            return addSchemaToTableName(postgresql_emailpassword_pswd_reset_tokens_table_name);
         }
         return addSchemaAndPrefixToTableName(tableName);
     }
@@ -224,7 +228,7 @@ public class PostgreSQLConfig {
     public String getEmailVerificationTokensTable() {
         String tableName = "emailverification_tokens";
         if (postgresql_emailverification_tokens_table_name != null) {
-            return postgresql_emailverification_tokens_table_name;
+            return addSchemaToTableName(postgresql_emailverification_tokens_table_name);
         }
         return addSchemaAndPrefixToTableName(tableName);
     }
@@ -232,7 +236,7 @@ public class PostgreSQLConfig {
     public String getEmailVerificationTable() {
         String tableName = "emailverification_verified_emails";
         if (postgresql_emailverification_verified_emails_table_name != null) {
-            return postgresql_emailverification_verified_emails_table_name;
+            return addSchemaToTableName(postgresql_emailverification_verified_emails_table_name);
         }
         return addSchemaAndPrefixToTableName(tableName);
     }
@@ -240,7 +244,7 @@ public class PostgreSQLConfig {
     public String getThirdPartyUsersTable() {
         String tableName = "thirdparty_users";
         if (postgresql_thirdparty_users_table_name != null) {
-            return postgresql_thirdparty_users_table_name;
+            return addSchemaToTableName(postgresql_thirdparty_users_table_name);
         }
         return addSchemaAndPrefixToTableName(tableName);
     }
@@ -250,7 +254,12 @@ public class PostgreSQLConfig {
         if (!postgresql_table_names_prefix.trim().equals("")) {
             name = postgresql_table_names_prefix.trim() + "_" + name;
         }
-        if (!postgresql_table_schema.trim().equals("")) {
+        return addSchemaToTableName(name);
+    }
+
+    private String addSchemaToTableName(String tableName) {
+        String name = tableName;
+        if (!postgresql_table_schema.trim().equals("public")) {
             name = postgresql_table_schema.trim() + "." + name;
         }
         return name;

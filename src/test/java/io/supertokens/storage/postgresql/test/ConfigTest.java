@@ -17,7 +17,10 @@
 
 package io.supertokens.storage.postgresql.test;
 
+import com.google.gson.JsonObject;
 import io.supertokens.ProcessState;
+import io.supertokens.session.Session;
+import io.supertokens.session.info.SessionInformationHolder;
 import io.supertokens.storage.postgresql.ConnectionPoolTestContent;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -255,7 +258,6 @@ public class ConfigTest {
 
         Utils.setValueInConfig("postgresql_key_value_table_name", "key_value_table");
         Utils.setValueInConfig("postgresql_table_names_prefix", "some_prefix");
-        Utils.setValueInConfig("postgresql_table_schema", "some_schema");
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -267,6 +269,48 @@ public class ConfigTest {
         assertEquals("change in table name not reflected", config.getUsersTable(), "some_prefix_emailpassword_users");
         assertEquals("change in table name not reflected", config.getPasswordResetTokensTable(),
                 "some_prefix_emailpassword_pswd_reset_tokens");
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+        // we call this here so that the database is cleared with the modified table names
+        // since in postgres, we delete all dbs one by one
+        TestingProcessManager.deleteAllInformation();
+    }
+
+    @Test
+    public void testAddingSchemaWorks() throws Exception {
+        String[] args = {"../"};
+
+        Utils.setValueInConfig("postgresql_table_schema", "myschema");
+        Utils.setValueInConfig("postgresql_table_names_prefix", "some_prefix");
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+        PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
+
+        assertEquals("change in KeyValueTable name not reflected", config.getKeyValueTable(),
+                "myschema.some_prefix_key_value");
+        assertEquals("change in SessionInfoTable name not reflected", config.getSessionInfoTable(),
+                "myschema.some_prefix_session_info");
+        assertEquals("change in table name not reflected", config.getUsersTable(),
+                "myschema.some_prefix_emailpassword_users");
+        assertEquals("change in table name not reflected", config.getPasswordResetTokensTable(),
+                "myschema.some_prefix_emailpassword_pswd_reset_tokens");
+
+        String userId = "userId";
+        JsonObject userDataInJWT = new JsonObject();
+        userDataInJWT.addProperty("key", "value");
+        JsonObject userDataInDatabase = new JsonObject();
+        userDataInDatabase.addProperty("key", "value");
+
+        SessionInformationHolder sessionInfo = Session.createNewSession(process.getProcess(), userId, userDataInJWT,
+                userDataInDatabase);
+
+        assert sessionInfo.accessToken != null;
+        assert sessionInfo.refreshToken != null;
+
+        TestCase.assertEquals(StorageLayer.getSessionStorage(process.getProcess()).getNumberOfSessions(), 1);
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
