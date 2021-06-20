@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] - 2021-06-20
+### Changed
+- Fixes https://github.com/supertokens/supertokens-core/issues/258
+
 ## [1.9.0] - 2021-06-01
 ### Added
 - Added ability to specify a table schema: https://github.com/supertokens/supertokens-core/issues/251
