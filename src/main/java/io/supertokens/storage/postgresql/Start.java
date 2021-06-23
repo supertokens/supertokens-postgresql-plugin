@@ -20,7 +20,9 @@ package io.supertokens.storage.postgresql;
 import ch.qos.logback.classic.Logger;
 import com.google.gson.JsonObject;
 import io.supertokens.pluginInterface.KeyValueInfo;
+import io.supertokens.pluginInterface.RECIPE_ID;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
+import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
 import io.supertokens.pluginInterface.emailpassword.UserInfo;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
@@ -43,6 +45,7 @@ import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.output.Logging;
 import io.supertokens.storage.postgresql.queries.*;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
@@ -427,7 +430,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
             throws StorageQueryException, DuplicateUserIdException, DuplicateEmailException {
         try {
             EmailPasswordQueries.signUp(this, userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined);
-        } catch (SQLException e) {
+        } catch (StorageTransactionLogicException eTemp) {
+            Exception e = eTemp.actualException;
             if (e.getMessage().contains("ERROR: duplicate key") &&
                     e.getMessage().contains("Key (email)")) {
                 throw new DuplicateEmailException();
@@ -632,6 +636,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     }
 
     @Override
+    @Deprecated
     public UserInfo[] getUsers(@Nonnull String userId, @Nonnull Long timeJoined, @Nonnull Integer limit,
                                @Nonnull String timeJoinedOrder) throws StorageQueryException {
         try {
@@ -642,6 +647,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     }
 
     @Override
+    @Deprecated
     public UserInfo[] getUsers(@Nonnull Integer limit, @Nonnull String timeJoinedOrder) throws StorageQueryException {
         try {
             return EmailPasswordQueries.getUsersInfo(this, limit, timeJoinedOrder);
@@ -651,6 +657,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     }
 
     @Override
+    @Deprecated
     public long getUsersCount() throws StorageQueryException {
         try {
             return EmailPasswordQueries.getUsersCount(this);
@@ -701,7 +708,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
             DuplicateThirdPartyUserException {
         try {
             ThirdPartyQueries.signUp(this, userInfo);
-        } catch (SQLException e) {
+        } catch (StorageTransactionLogicException eTemp) {
+            Exception e = eTemp.actualException;
             if (e.getMessage().contains("ERROR: duplicate key") &&
                     e.getMessage().contains("Key (third_party_id, third_party_user_id)")) {
                 throw new DuplicateThirdPartyUserException();
@@ -735,6 +743,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     }
 
     @Override
+    @Deprecated
     public io.supertokens.pluginInterface.thirdparty.UserInfo[] getThirdPartyUsers(@NotNull String userId,
                                                                                    @NotNull Long timeJoined,
                                                                                    @NotNull Integer limit,
@@ -748,6 +757,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     }
 
     @Override
+    @Deprecated
     public io.supertokens.pluginInterface.thirdparty.UserInfo[] getThirdPartyUsers(@NotNull Integer limit,
                                                                                    @NotNull String timeJoinedOrder)
             throws StorageQueryException {
@@ -759,9 +769,32 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     }
 
     @Override
+    @Deprecated
     public long getThirdPartyUsersCount() throws StorageQueryException {
         try {
             return ThirdPartyQueries.getUsersCount(this);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public long getUsersCount(RECIPE_ID[] includeRecipeIds) throws StorageQueryException {
+        try {
+            return GeneralQueries.getUsersCount(this, includeRecipeIds);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public AuthRecipeUserInfo[] getUsers(@NotNull Integer limit, @NotNull String timeJoinedOrder,
+                                         @Nullable RECIPE_ID[] includeRecipeIds,
+                                         @Nullable String userId,
+                                         @Nullable Long timeJoined)
+            throws StorageQueryException {
+        try {
+            return GeneralQueries.getUsers(this, limit, timeJoinedOrder, includeRecipeIds, userId, timeJoined);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

@@ -240,7 +240,7 @@ public class ConfigTest {
         assertEquals("change in KeyValueTable name not reflected", config.getKeyValueTable(), "key_value_table");
         assertEquals("change in SessionInfoTable name not reflected", config.getSessionInfoTable(),
                 "session_info_table");
-        assertEquals("change in table name not reflected", config.getUsersTable(), "users");
+        assertEquals("change in table name not reflected", config.getEmailPasswordUsersTable(), "users");
         assertEquals("change in table name not reflected", config.getPasswordResetTokensTable(),
                 "password_reset");
 
@@ -266,7 +266,8 @@ public class ConfigTest {
         assertEquals("change in KeyValueTable name not reflected", config.getKeyValueTable(), "key_value_table");
         assertEquals("change in SessionInfoTable name not reflected", config.getSessionInfoTable(),
                 "some_prefix_session_info");
-        assertEquals("change in table name not reflected", config.getUsersTable(), "some_prefix_emailpassword_users");
+        assertEquals("change in table name not reflected", config.getEmailPasswordUsersTable(),
+                "some_prefix_emailpassword_users");
         assertEquals("change in table name not reflected", config.getPasswordResetTokensTable(),
                 "some_prefix_emailpassword_pswd_reset_tokens");
 
@@ -293,7 +294,7 @@ public class ConfigTest {
                 "myschema.some_prefix_key_value");
         assertEquals("change in SessionInfoTable name not reflected", config.getSessionInfoTable(),
                 "myschema.some_prefix_session_info");
-        assertEquals("change in table name not reflected", config.getUsersTable(),
+        assertEquals("change in table name not reflected", config.getEmailPasswordUsersTable(),
                 "myschema.some_prefix_emailpassword_users");
         assertEquals("change in table name not reflected", config.getPasswordResetTokensTable(),
                 "myschema.some_prefix_emailpassword_pswd_reset_tokens");
@@ -510,7 +511,8 @@ public class ConfigTest {
         assertEquals("Config sessionInfoTable does not match default", config.getSessionInfoTable(), "session_info");
         assertEquals("Config user does not match default", config.getUser(), "root");
         assertEquals("Config password does not match default", config.getPassword(), "root");
-        assertEquals("Config keyValue table does not match default", config.getUsersTable(), "emailpassword_users");
+        assertEquals("Config keyValue table does not match default", config.getEmailPasswordUsersTable(),
+                "emailpassword_users");
         assertEquals("Config keyValue table does not match default", config.getPasswordResetTokensTable(),
                 "emailpassword_pswd_reset_tokens");
     }

@@ -17,17 +17,26 @@
 package io.supertokens.storage.postgresql.queries;
 
 import io.supertokens.pluginInterface.KeyValueInfo;
+import io.supertokens.pluginInterface.RECIPE_ID;
 import io.supertokens.pluginInterface.RowMapper;
+import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.ProcessState;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class GeneralQueries {
 
@@ -42,6 +51,17 @@ public class GeneralQueries {
         } catch (SQLException e) {
             return false;
         }
+    }
+
+    static String getQueryToCreateUsersTable(Start start) {
+        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getUsersTable() + " ("
+                + "user_id CHAR(36) NOT NULL," + "recipe_id VARCHAR(128) NOT NULL,"
+                + "time_joined BIGINT NOT NULL," + "PRIMARY KEY (user_id));";
+    }
+
+    static String getQueryToCreateUserPaginationIndex(Start start) {
+        return "CREATE INDEX all_auth_recipe_users_pagination_index ON " + Config.getConfig(start).getUsersTable()
+                + "(time_joined DESC, user_id " + "DESC);";
     }
 
     private static String getQueryToCreateKeyValueTable(Start start) {
@@ -63,6 +83,21 @@ public class GeneralQueries {
                     }
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getUsersTable())) {
+                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
+                    try (Connection con = ConnectionPool.getConnection(start);
+                         PreparedStatement pst = con.prepareStatement(getQueryToCreateUsersTable(start))) {
+                        pst.executeUpdate();
+                    }
+
+                    // index
+                    try (Connection con = ConnectionPool.getConnection(start);
+                         PreparedStatement pstIndex = con
+                                 .prepareStatement(getQueryToCreateUserPaginationIndex(start))) {
+                        pstIndex.executeUpdate();
+                    }
+                }
+
                 if (!doesTableExists(start, Config.getConfig(start).getSessionInfoTable())) {
                     ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
                     try (Connection con = ConnectionPool.getConnection(start);
@@ -72,18 +107,12 @@ public class GeneralQueries {
                     }
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getUsersTable())) {
+                if (!doesTableExists(start, Config.getConfig(start).getEmailPasswordUsersTable())) {
                     ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
                     try (Connection con = ConnectionPool.getConnection(start);
                          PreparedStatement pst = con
                                  .prepareStatement(EmailPasswordQueries.getQueryToCreateUsersTable(start))) {
                         pst.executeUpdate();
-                    }
-                    // index
-                    try (Connection con = ConnectionPool.getConnection(start);
-                         PreparedStatement pstIndex = con
-                                 .prepareStatement(EmailPasswordQueries.getQueryToCreateUserPaginationIndex(start))) {
-                        pstIndex.executeUpdate();
                     }
                 }
 
@@ -141,13 +170,6 @@ public class GeneralQueries {
                                          ThirdPartyQueries.getQueryToCreateUsersTable(start))) {
                         pst.executeUpdate();
                     }
-                    // index
-                    try (Connection con = ConnectionPool.getConnection(start);
-                         PreparedStatement pstIndex = con
-                                 .prepareStatement(
-                                         ThirdPartyQueries.getQueryToCreateUserPaginationIndex(start))) {
-                        pstIndex.executeUpdate();
-                    }
                 }
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist") &&
@@ -170,7 +192,7 @@ public class GeneralQueries {
         }
     }
 
-    // to be used in testing only
+    @TestOnly
     public static void deleteAllTables(Start start) throws SQLException {
         {
             String DROP_QUERY = "DROP INDEX IF EXISTS emailpassword_password_reset_token_expiry_index";
@@ -187,15 +209,7 @@ public class GeneralQueries {
             }
         }
         {
-            String DROP_QUERY = "DROP INDEX IF EXISTS emailpassword_user_pagination_index";
-            try (Connection con = ConnectionPool.getConnection(start);
-                 PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
-                drop.executeUpdate();
-            }
-        }
-
-        {
-            String DROP_QUERY = "DROP INDEX IF EXISTS thirdparty_users_pagination_index";
+            String DROP_QUERY = "DROP INDEX IF EXISTS all_auth_recipe_users_pagination_index";
             try (Connection con = ConnectionPool.getConnection(start);
                  PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
                 drop.executeUpdate();
@@ -204,7 +218,9 @@ public class GeneralQueries {
 
         {
             String DROP_QUERY = "DROP TABLE IF EXISTS " + Config.getConfig(start).getKeyValueTable() + "," +
-                    Config.getConfig(start).getSessionInfoTable() + "," + Config.getConfig(start).getUsersTable() + ","
+                    Config.getConfig(start).getUsersTable() + "," +
+                    Config.getConfig(start).getSessionInfoTable() + "," +
+                    Config.getConfig(start).getEmailPasswordUsersTable() + ","
                     + Config.getConfig(start).getPasswordResetTokensTable() + "," +
                     Config.getConfig(start).getEmailVerificationTokensTable() + "," +
                     Config.getConfig(start).getEmailVerificationTable() + "," +
@@ -267,6 +283,162 @@ public class GeneralQueries {
             }
         }
         return null;
+    }
+
+    public static long getUsersCount(Start start, RECIPE_ID[] includeRecipeIds) throws SQLException {
+        StringBuilder QUERY =
+                new StringBuilder("SELECT COUNT(*) as total FROM " +
+                        Config.getConfig(start).getUsersTable());
+        if (includeRecipeIds != null && includeRecipeIds.length > 0) {
+            QUERY.append(" WHERE recipe_id IN (");
+            for (int i = 0; i < includeRecipeIds.length; i++) {
+                String recipeId = includeRecipeIds[i].toString();
+                QUERY.append("'").append(recipeId).append("'");
+                if (i != includeRecipeIds.length - 1) {
+                    // not the last element
+                    QUERY.append(",");
+                }
+            }
+            QUERY.append(")");
+        }
+
+        try (Connection con = ConnectionPool.getConnection(start);
+             PreparedStatement pst = con.prepareStatement(QUERY.toString())) {
+            ResultSet result = pst.executeQuery();
+            if (result.next()) {
+                return result.getLong("total");
+            }
+            return 0;
+        }
+    }
+
+    public static AuthRecipeUserInfo[] getUsers(Start start, @NotNull Integer limit, @NotNull String timeJoinedOrder,
+                                                @Nullable RECIPE_ID[] includeRecipeIds,
+                                                @Nullable String userId,
+                                                @Nullable Long timeJoined) throws SQLException, StorageQueryException {
+
+        // This list will be used to keep track of the result's order from the db
+        List<UserInfoPaginationResultHolder> usersFromQuery = new ArrayList<>();
+
+        {
+            StringBuilder RECIPE_ID_CONDITION = new StringBuilder();
+            if (includeRecipeIds != null && includeRecipeIds.length > 0) {
+                RECIPE_ID_CONDITION.append("recipe_id IN (");
+                for (int i = 0; i < includeRecipeIds.length; i++) {
+                    String recipeId = includeRecipeIds[i].toString();
+                    RECIPE_ID_CONDITION.append("'").append(recipeId).append("'");
+                    if (i != includeRecipeIds.length - 1) {
+                        // not the last element
+                        RECIPE_ID_CONDITION.append(",");
+                    }
+                }
+                RECIPE_ID_CONDITION.append(")");
+            }
+
+            ResultSet result;
+            if (timeJoined != null && userId != null) {
+                String recipeIdCondition = RECIPE_ID_CONDITION.toString();
+                if (!recipeIdCondition.equals("")) {
+                    recipeIdCondition = recipeIdCondition + " AND";
+                }
+                String timeJoinedOrderSymbol = timeJoinedOrder.equals("ASC") ? ">" : "<";
+                String QUERY =
+                        "SELECT user_id, recipe_id FROM " +
+                                Config.getConfig(start).getUsersTable() +
+                                " WHERE " + recipeIdCondition + " (time_joined " + timeJoinedOrderSymbol +
+                                " ? OR (time_joined = ? AND user_id <= ?)) ORDER BY time_joined " + timeJoinedOrder +
+                                ", user_id DESC LIMIT ?";
+                try (Connection con = ConnectionPool.getConnection(start);
+                     PreparedStatement pst = con.prepareStatement(QUERY)) {
+                    pst.setLong(1, timeJoined);
+                    pst.setLong(2, timeJoined);
+                    pst.setString(3, userId);
+                    pst.setInt(4, limit);
+                    result = pst.executeQuery();
+                    while (result.next()) {
+                        usersFromQuery.add(new UserInfoPaginationResultHolder(
+                                result.getString("user_id"), result.getString("recipe_id")));
+                    }
+                }
+            } else {
+                String recipeIdCondition = RECIPE_ID_CONDITION.toString();
+                if (!recipeIdCondition.equals("")) {
+                    recipeIdCondition = " WHERE " + recipeIdCondition;
+                }
+                String QUERY =
+                        "SELECT user_id, recipe_id FROM " +
+                                Config.getConfig(start).getUsersTable() +
+                                recipeIdCondition + " ORDER BY time_joined " + timeJoinedOrder +
+                                ", user_id DESC LIMIT ?";
+                try (Connection con = ConnectionPool.getConnection(start);
+                     PreparedStatement pst = con.prepareStatement(QUERY)) {
+                    pst.setInt(1, limit);
+                    result = pst.executeQuery();
+                    while (result.next()) {
+                        usersFromQuery.add(new UserInfoPaginationResultHolder(
+                                result.getString("user_id"), result.getString("recipe_id")));
+                    }
+                }
+            }
+        }
+
+        // we create a map from recipe ID -> userId[]
+        Map<RECIPE_ID, List<String>> recipeIdToUserIdListMap = new HashMap<>();
+        for (UserInfoPaginationResultHolder user : usersFromQuery) {
+            RECIPE_ID recipeId = RECIPE_ID.getEnumFromString(user.recipeId);
+            if (recipeId == null) {
+                throw new SQLException("Unrecognised recipe ID in database: " + user.recipeId);
+            }
+            List<String> userIdList = recipeIdToUserIdListMap.get(recipeId);
+            if (userIdList == null) {
+                userIdList = new ArrayList<>();
+            }
+            userIdList.add(user.userId);
+            recipeIdToUserIdListMap.put(recipeId, userIdList);
+        }
+
+        AuthRecipeUserInfo[] finalResult = new AuthRecipeUserInfo[usersFromQuery.size()];
+
+        // we give the userId[] for each recipe to fetch all those user's details
+        for (RECIPE_ID recipeId : recipeIdToUserIdListMap.keySet()) {
+            List<? extends AuthRecipeUserInfo> users = getUserInfoForRecipeIdFromUserIds(start, recipeId,
+                    recipeIdToUserIdListMap.get(recipeId));
+
+            // we fill in all the slots in finalResult based on their position in usersFromQuery
+            Map<String, AuthRecipeUserInfo> userIdToInfoMap = new HashMap<>();
+            for (AuthRecipeUserInfo user : users) {
+                userIdToInfoMap.put(user.id, user);
+            }
+            for (int i = 0; i < usersFromQuery.size(); i++) {
+                if (finalResult[i] == null) {
+                    finalResult[i] = userIdToInfoMap.get(usersFromQuery.get(i).userId);
+                }
+            }
+        }
+
+        return finalResult;
+    }
+
+    private static List<? extends AuthRecipeUserInfo> getUserInfoForRecipeIdFromUserIds(Start start, RECIPE_ID recipeId,
+                                                                                        List<String> userIds)
+            throws StorageQueryException, SQLException {
+        if (recipeId == RECIPE_ID.EMAIL_PASSWORD) {
+            return EmailPasswordQueries.getUsersInfoUsingIdList(start, userIds);
+        } else if (recipeId == RECIPE_ID.THIRD_PARTY) {
+            return ThirdPartyQueries.getUsersInfoUsingIdList(start, userIds);
+        } else {
+            throw new IllegalArgumentException("No implementation of get users for recipe: " + recipeId.toString());
+        }
+    }
+
+    private static class UserInfoPaginationResultHolder {
+        String userId;
+        String recipeId;
+
+        UserInfoPaginationResultHolder(String userId, String recipeId) {
+            this.userId = userId;
+            this.recipeId = recipeId;
+        }
     }
 
     private static class KeyValueInfoRowMapper implements RowMapper<KeyValueInfo, ResultSet> {

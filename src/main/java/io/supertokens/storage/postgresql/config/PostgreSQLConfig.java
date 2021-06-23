@@ -193,6 +193,10 @@ public class PostgreSQLConfig {
         return postgresql_connection_uri;
     }
 
+    public String getUsersTable() {
+        return addSchemaAndPrefixToTableName("all_auth_recipe_users");
+    }
+
     public String getKeyValueTable() {
         String tableName = "key_value";
         if (postgresql_key_value_table_name != null) {
@@ -209,7 +213,7 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName(tableName);
     }
 
-    public String getUsersTable() {
+    public String getEmailPasswordUsersTable() {
         String tableName = "emailpassword_users";
         if (postgresql_emailpassword_users_table_name != null) {
             return addSchemaToTableName(postgresql_emailpassword_users_table_name);
