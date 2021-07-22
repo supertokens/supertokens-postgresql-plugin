@@ -247,6 +247,28 @@ public class ThirdPartyQueries {
         }
     }
 
+    public static UserInfo[] getThirdPartyUsersByEmail(Start start, @NotNull String email) throws SQLException, StorageQueryException {
+        String sqlQuery = "SELECT user_id, third_party_id, third_party_user_id, email, time_joined FROM " +
+                Config.getConfig(start).getThirdPartyUsersTable() +
+                " WHERE email = ?";
+
+        try (Connection conn = ConnectionPool.getConnection(start); PreparedStatement statement = conn.prepareStatement(sqlQuery)) {
+            statement.setString(1, email);
+
+            return getUsersFromResult(statement.executeQuery());
+        }
+    }
+
+    private static UserInfo[] getUsersFromResult(ResultSet resultSet) throws SQLException, StorageQueryException {
+        List<UserInfo> users = new ArrayList<>();
+
+        while (resultSet.next()) {
+            users.add(UserInfoRowMapper.getInstance().mapOrThrow(resultSet));
+        }
+
+        return users.toArray(UserInfo[]::new);
+    }
+
     private static class UserInfoRowMapper implements RowMapper<UserInfo, ResultSet> {
         private static final UserInfoRowMapper INSTANCE = new UserInfoRowMapper();
 
