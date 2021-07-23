@@ -213,22 +213,14 @@ public class ThirdPartyQueries {
                         " WHERE time_joined " + timeJoinedOrderSymbol +
                         " ? OR (time_joined = ? AND user_id <= ?) ORDER BY time_joined " + timeJoinedOrder +
                         ", user_id DESC LIMIT ?";
+
         try (Connection con = ConnectionPool.getConnection(start);
              PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setLong(1, timeJoined);
             pst.setLong(2, timeJoined);
             pst.setString(3, userId);
             pst.setInt(4, limit);
-            ResultSet result = pst.executeQuery();
-            List<UserInfo> temp = new ArrayList<>();
-            while (result.next()) {
-                temp.add(UserInfoRowMapper.getInstance().mapOrThrow(result));
-            }
-            UserInfo[] finalResult = new UserInfo[temp.size()];
-            for (int i = 0; i < temp.size(); i++) {
-                finalResult[i] = temp.get(i);
-            }
-            return finalResult;
+            return getUsersFromResult(pst.executeQuery());
         }
     }
 
@@ -245,6 +237,28 @@ public class ThirdPartyQueries {
             }
             return 0;
         }
+    }
+
+    public static UserInfo[] getThirdPartyUsersByEmail(Start start, @NotNull String email) throws SQLException, StorageQueryException {
+        String sqlQuery = "SELECT user_id, third_party_id, third_party_user_id, email, time_joined FROM " +
+                Config.getConfig(start).getThirdPartyUsersTable() +
+                " WHERE email = ?";
+
+        try (Connection conn = ConnectionPool.getConnection(start); PreparedStatement statement = conn.prepareStatement(sqlQuery)) {
+            statement.setString(1, email);
+
+            return getUsersFromResult(statement.executeQuery());
+        }
+    }
+
+    private static UserInfo[] getUsersFromResult(ResultSet resultSet) throws SQLException, StorageQueryException {
+        List<UserInfo> users = new ArrayList<>();
+
+        while (resultSet.next()) {
+            users.add(UserInfoRowMapper.getInstance().mapOrThrow(resultSet));
+        }
+
+        return users.toArray(UserInfo[]::new);
     }
 
     private static class UserInfoRowMapper implements RowMapper<UserInfo, ResultSet> {

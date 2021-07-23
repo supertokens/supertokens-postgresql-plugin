@@ -779,6 +779,16 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     }
 
     @Override
+    public io.supertokens.pluginInterface.thirdparty.UserInfo[] getThirdPartyUsersByEmail(@NotNull String email)
+            throws StorageQueryException {
+        try {
+            return ThirdPartyQueries.getThirdPartyUsersByEmail(this, email);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public long getUsersCount(RECIPE_ID[] includeRecipeIds) throws StorageQueryException {
         try {
             return GeneralQueries.getUsersCount(this, includeRecipeIds);
