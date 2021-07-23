@@ -213,22 +213,14 @@ public class ThirdPartyQueries {
                         " WHERE time_joined " + timeJoinedOrderSymbol +
                         " ? OR (time_joined = ? AND user_id <= ?) ORDER BY time_joined " + timeJoinedOrder +
                         ", user_id DESC LIMIT ?";
+
         try (Connection con = ConnectionPool.getConnection(start);
              PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setLong(1, timeJoined);
             pst.setLong(2, timeJoined);
             pst.setString(3, userId);
             pst.setInt(4, limit);
-            ResultSet result = pst.executeQuery();
-            List<UserInfo> temp = new ArrayList<>();
-            while (result.next()) {
-                temp.add(UserInfoRowMapper.getInstance().mapOrThrow(result));
-            }
-            UserInfo[] finalResult = new UserInfo[temp.size()];
-            for (int i = 0; i < temp.size(); i++) {
-                finalResult[i] = temp.get(i);
-            }
-            return finalResult;
+            return getUsersFromResult(pst.executeQuery());
         }
     }
 
