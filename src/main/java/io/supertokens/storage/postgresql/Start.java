@@ -809,4 +809,13 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
             throw new StorageQueryException(e);
         }
     }
+
+    @Override
+    public boolean deleteUser(@NotNull String userId) throws StorageQueryException {
+        try {
+            return GeneralQueries.deleteUser(this, userId);
+        } catch (StorageTransactionLogicException e) {
+            throw new StorageQueryException(e);
+        }
+    }
 }
