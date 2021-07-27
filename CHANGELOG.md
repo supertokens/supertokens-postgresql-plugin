@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixes https://github.com/supertokens/supertokens-core/issues/258
 - Changes for pagination and count queries: https://github.com/supertokens/supertokens-core/issues/259
 - Add GetThirdPartyUsersByEmail query: https://github.com/supertokens/supertokens-core/issues/277
+- Add DeleteUser query: https://github.com/supertokens/supertokens-core/issues/273 
 
 ## [1.9.0] - 2021-06-01
 ### Added
