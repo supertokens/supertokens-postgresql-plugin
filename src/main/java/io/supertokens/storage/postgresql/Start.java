@@ -41,6 +41,7 @@ import io.supertokens.pluginInterface.session.sqlStorage.SessionSQLStorage;
 import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.pluginInterface.thirdparty.sqlStorage.ThirdPartySQLStorage;
+import io.supertokens.pluginInterface.users.DeleteUserResult;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.output.Logging;
 import io.supertokens.storage.postgresql.queries.*;
@@ -811,7 +812,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     }
 
     @Override
-    public boolean deleteUser(@NotNull String userId) throws StorageQueryException {
+    public DeleteUserResult deleteUser(@NotNull String userId) throws StorageQueryException {
         try {
             return GeneralQueries.deleteUser(this, userId);
         } catch (StorageTransactionLogicException e) {

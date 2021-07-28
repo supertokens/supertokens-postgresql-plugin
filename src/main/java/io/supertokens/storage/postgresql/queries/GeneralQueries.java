@@ -22,6 +22,7 @@ import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
+import io.supertokens.pluginInterface.users.DeleteUserResult;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.ProcessState;
 import io.supertokens.storage.postgresql.Start;
@@ -313,7 +314,7 @@ public class GeneralQueries {
         }
     }
 
-    public static boolean deleteUser(Start start, @NotNull String userId) throws StorageQueryException,
+    public static DeleteUserResult deleteUser(Start start, @NotNull String userId) throws StorageQueryException,
             StorageTransactionLogicException {
         DeleteUserQuery query = new DeleteUserQuery(start);
 

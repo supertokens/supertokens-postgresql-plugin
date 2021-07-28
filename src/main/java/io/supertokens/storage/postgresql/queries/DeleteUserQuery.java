@@ -18,6 +18,7 @@ package io.supertokens.storage.postgresql.queries;
 
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
+import io.supertokens.pluginInterface.users.DeleteUserResult;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 
@@ -35,13 +36,13 @@ public class DeleteUserQuery {
         this.start = start;
     }
 
-    public boolean execute(@Nonnull String userId) throws StorageQueryException, StorageTransactionLogicException {
+    public DeleteUserResult execute(@Nonnull String userId) throws StorageQueryException, StorageTransactionLogicException {
         return start.startTransaction(transaction -> {
             Connection conn = (Connection) transaction.getConnection();
 
             try {
                 if (!doesUserExist(conn, userId)) {
-                    return false;
+                    return DeleteUserResult.failure(DeleteUserResult.FailureReason.UNKNOWN_USER_ID);
                 }
 
                 deleteUserSessionHandles(conn, userId);
@@ -53,7 +54,7 @@ public class DeleteUserQuery {
 
                 conn.commit();
 
-                return true;
+                return DeleteUserResult.success();
             } catch (SQLException e) {
                 throw new StorageQueryException(e);
             }
@@ -88,20 +89,6 @@ public class DeleteUserQuery {
         }
     }
 
-    private String getUserRecipeId(Connection conn, @Nonnull String userId) throws SQLException {
-        String query = "SELECT recipe_id FROM " + Config.getConfig(start).getUsersTable() + " WHERE user_id = ?";
-
-        try (PreparedStatement pst = conn.prepareStatement(query)) {
-            pst.setString(1, userId);
-
-            ResultSet result = pst.executeQuery();
-
-            result.next();
-
-            return result.getString("recipe_id");
-        }
-    }
-
     private boolean doesUserExist(Connection conn, @Nonnull String userId) throws SQLException {
         String query = "SELECT user_id FROM " + Config.getConfig(start).getUsersTable() + " WHERE user_id = ?";
 
@@ -133,17 +120,21 @@ public class DeleteUserQuery {
     private void deleteUserSessionHandles(Connection conn, @Nonnull String userId) throws SQLException {
         String[] sessionHandles = getUserSessionHandles(conn, userId);
 
-        StringBuilder query = new StringBuilder("DELETE FROM " + Config.getConfig(start).getSessionInfoTable() + "WHERE session_handle IN ");
+        System.out.println(String.join(", ", sessionHandles));
 
-        query.append("(");
-        query.append(
+        StringBuilder queryBuilder = new StringBuilder("DELETE FROM " + Config.getConfig(start).getSessionInfoTable() + "WHERE session_handle IN ");
+
+        queryBuilder.append("(");
+        queryBuilder.append(
                 Arrays.stream(sessionHandles)
                     .map(sessionHandle -> "?")
                     .collect(Collectors.joining(", "))
         );
-        query.append(")");
+        queryBuilder.append(")");
 
-        try (PreparedStatement pst = conn.prepareStatement(query.toString())) {
+        String query = queryBuilder.toString();
+
+        try (PreparedStatement pst = conn.prepareStatement(query)) {
             for (int i = 0; i < sessionHandles.length; i++) {
                 // Prepared statements index from 1
                 int pstIndex = i + 1;
