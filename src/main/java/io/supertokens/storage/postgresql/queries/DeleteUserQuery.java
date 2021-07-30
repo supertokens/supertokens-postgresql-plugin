@@ -122,7 +122,7 @@ public class DeleteUserQuery {
 
         System.out.println(String.join(", ", sessionHandles));
 
-        StringBuilder queryBuilder = new StringBuilder("DELETE FROM " + Config.getConfig(start).getSessionInfoTable() + "WHERE session_handle IN ");
+        StringBuilder queryBuilder = new StringBuilder("DELETE FROM " + Config.getConfig(start).getSessionInfoTable() + " WHERE session_handle IN ");
 
         queryBuilder.append("(");
         queryBuilder.append(
