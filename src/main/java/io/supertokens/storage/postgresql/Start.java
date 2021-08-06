@@ -31,6 +31,7 @@ import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateUserIdEx
 import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.emailpassword.sqlStorage.EmailPasswordSQLStorage;
 import io.supertokens.pluginInterface.emailverification.EmailVerificationTokenInfo;
+import io.supertokens.pluginInterface.emailverification.User;
 import io.supertokens.pluginInterface.emailverification.exception.DuplicateEmailVerificationTokenException;
 import io.supertokens.pluginInterface.emailverification.sqlStorage.EmailVerificationSQLStorage;
 import io.supertokens.pluginInterface.exceptions.QuitProgramFromPluginException;
@@ -52,6 +53,7 @@ import javax.annotation.Nonnull;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
+import java.util.Optional;
 
 public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
         EmailVerificationSQLStorage, ThirdPartySQLStorage {
@@ -611,6 +613,33 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     public EmailVerificationTokenInfo getEmailVerificationTokenInfo(String token) throws StorageQueryException {
         try {
             return EmailVerificationQueries.getEmailVerificationTokenInfo(this, token);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public Optional<User> getUserFromToken(String token) throws StorageQueryException {
+        try {
+            return EmailVerificationQueries.getUserFromToken(this, token);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void revokeToken(String token) throws StorageQueryException {
+        try {
+            EmailVerificationQueries.revokeToken(this, token);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void unverifyEmail(String email) throws StorageQueryException {
+        try {
+            EmailVerificationQueries.unverifyEmail(this, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
