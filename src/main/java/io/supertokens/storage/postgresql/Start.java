@@ -532,6 +532,21 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     }
 
     @Override
+    public void updateUsersEmail_Transaction(TransactionConnection conn, String userId, String email)
+            throws StorageQueryException, DuplicateEmailException {
+        Connection sqlCon = (Connection) conn.getConnection();
+        try {
+            EmailPasswordQueries.updateUsersEmail_Transaction(this, sqlCon, userId, email);
+        } catch (SQLException e) {
+            if (e.getMessage().contains("ERROR: duplicate key") &&
+                    e.getMessage().contains("Key (email)")) {
+                throw new DuplicateEmailException();
+            }
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public UserInfo getUserInfoUsingId_Transaction(TransactionConnection con, String userId)
             throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();

@@ -80,6 +80,19 @@ public class EmailPasswordQueries {
         }
     }
 
+    public static void updateUsersEmail_Transaction(Start start, Connection con,
+                                                    String userId, String newEmail)
+            throws SQLException {
+        String QUERY = "UPDATE " + Config.getConfig(start).getEmailPasswordUsersTable()
+                + " SET email = ? WHERE user_id = ?";
+
+        try (PreparedStatement pst = con.prepareStatement(QUERY)) {
+            pst.setString(1, newEmail);
+            pst.setString(2, userId);
+            pst.executeUpdate();
+        }
+    }
+
     public static void deleteAllPasswordResetTokensForUser_Transaction(Start start,
                                                                        Connection con, String userId)
             throws SQLException {
