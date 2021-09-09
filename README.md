@@ -12,7 +12,7 @@ This plugin is responsible for interfacing between SuperTokens Community version
 Learn more at https://supertokens.io
 
 ## Documentation
-To see documentation, please click [here](https://supertokens.io/docs/community/tech-stack).
+To see documentation, please click [here](https://supertokens.io/docs/community/introduction).
 
 ## Contributing
 Please refer to the [CONTRIBUTING.md](https://github.com/supertokens/supertokens-postgresql-plugin/blob/master/CONTRIBUTING.md) file in this repo.
