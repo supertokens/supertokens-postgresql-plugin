@@ -171,6 +171,14 @@ public class GeneralQueries {
                         pst.executeUpdate();
                     }
                 }
+
+                if (!doesTableExists(start, Config.getConfig(start).getJWTSigningKeysTable())) {
+                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
+                    try (Connection con = ConnectionPool.getConnection(start);
+                         PreparedStatement pst = con.prepareStatement(JWTSigningQueries.getQueryToCreateJWTSigningTable(start))) {
+                        pst.executeUpdate();
+                    }
+                }
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist") &&
                         numberOfRetries < 1) {
@@ -224,7 +232,8 @@ public class GeneralQueries {
                     + Config.getConfig(start).getPasswordResetTokensTable() + "," +
                     Config.getConfig(start).getEmailVerificationTokensTable() + "," +
                     Config.getConfig(start).getEmailVerificationTable() + "," +
-                    Config.getConfig(start).getThirdPartyUsersTable();
+                    Config.getConfig(start).getThirdPartyUsersTable() + "," +
+                    Config.getConfig(start).getJWTSigningKeysTable();
             try (Connection con = ConnectionPool.getConnection(start);
                  PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
                 drop.executeUpdate();
