@@ -7,6 +7,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.11.0] - 2021-09-12
+
+### Breaking change:
+
+- Changed email verification table to have user_id with max length 128
+
 ## [1.10.0] - 2021-06-20
 
 ### Changed
