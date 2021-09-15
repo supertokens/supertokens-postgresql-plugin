@@ -18,6 +18,8 @@ package io.supertokens.storage.postgresql.queries;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+
+import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.session.SessionInfo;
@@ -42,6 +44,11 @@ public class SessionQueries {
                 + "expires_at BIGINT  NOT NULL," + "created_at_time BIGINT NOT NULL," +
                 "jwt_user_payload TEXT," + "PRIMARY KEY(session_handle)" + " );";
 
+    }
+
+    static String getQueryToCreateAccessTokenSigningKeysTable(Start start) {
+        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getAccessTokenSigningKeysTable() + " ("
+                + "created_at_time BIGINT NOT NULL," + "value TEXT," + "PRIMARY KEY(created_at_time)" + " );";
     }
 
     public static void createNewSession(Start start, String sessionHandle, String userId, String refreshTokenHash2,
@@ -224,6 +231,47 @@ public class SessionQueries {
         return null;
     }
 
+    public static void addAccessTokenSigningKey_Transaction(Start start, Connection con, long createdAtTime, String value)
+            throws SQLException {
+        String QUERY = "INSERT INTO " + Config.getConfig(start).getAccessTokenSigningKeysTable()
+                + "(created_at_time, value)"
+                + " VALUES(?, ?)";
+
+        try (PreparedStatement pst = con.prepareStatement(QUERY)) {
+            pst.setLong(1, createdAtTime);
+            pst.setString(2, value);
+            pst.executeUpdate();
+        }
+    }
+
+    public static KeyValueInfo[] getAccessTokenSigningKeys_Transaction(Start start, Connection con) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT * FROM " + Config.getConfig(start).getAccessTokenSigningKeysTable() + " FOR UPDATE";
+
+        try (PreparedStatement pst = con.prepareStatement(QUERY)) {
+            ResultSet result = pst.executeQuery();
+            List<KeyValueInfo> temp = new ArrayList<>();
+            while (result.next()) {
+                temp.add(AccessTokenSigningKeyRowMapper.getInstance().mapOrThrow(result));
+            }
+            KeyValueInfo[] finalResult = new KeyValueInfo[temp.size()];
+            for (int i = 0; i < temp.size(); i++) {
+                finalResult[i] = temp.get(i);
+            }
+            return finalResult;
+        }
+    }
+
+    public static void removeAccessTokenSigningKeysBefore(Start start, long time) throws SQLException {
+        String QUERY = "DELETE FROM " + Config.getConfig(start).getAccessTokenSigningKeysTable() +
+                " WHERE created_at_time < ?";
+
+        try (Connection con = ConnectionPool.getConnection(start);
+             PreparedStatement pst = con.prepareStatement(QUERY)) {
+            pst.setLong(1, time);
+            pst.executeUpdate();
+        }
+    }
+
     static class SessionInfoRowMapper implements RowMapper<SessionInfo, ResultSet> {
         public static final SessionInfoRowMapper INSTANCE = new SessionInfoRowMapper();
 
@@ -242,6 +290,22 @@ public class SessionQueries {
                 result.getLong("expires_at"),
                 jp.parse(result.getString("jwt_user_payload")).getAsJsonObject(),
                 result.getLong("created_at_time"));
+        }
+    }
+
+    private static class AccessTokenSigningKeyRowMapper implements RowMapper<KeyValueInfo, ResultSet> {
+        private static final AccessTokenSigningKeyRowMapper INSTANCE = new AccessTokenSigningKeyRowMapper();
+
+        private AccessTokenSigningKeyRowMapper() {
+        }
+
+        private static AccessTokenSigningKeyRowMapper getInstance() {
+            return INSTANCE;
+        }
+
+        @Override
+        public KeyValueInfo map(ResultSet result) throws Exception {
+            return new KeyValueInfo(result.getString("value"), result.getLong("created_at_time"));
         }
     }
 }
