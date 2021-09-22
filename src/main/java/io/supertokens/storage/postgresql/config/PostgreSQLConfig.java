@@ -205,6 +205,10 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName(tableName);
     }
 
+    public String getAccessTokenSigningKeysTable() {
+        return addSchemaAndPrefixToTableName("session_access_token_signing_keys");
+    }
+
     public String getSessionInfoTable() {
         String tableName = "session_info";
         if (postgresql_session_info_table_name != null) {
