@@ -9,14 +9,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.11.0] - 2021-09-12
 
+### Changed
+
+- Added functions and other changes for the JWT recipe
+- Updated to match 2.9 plugin interface to support multiple access token signing keys: https://github.com/supertokens/supertokens-core/issues/305
+- Added new table to store access token signing keys (session_access_token_signing_keys)
 ### Breaking change:
 
 - Changed email verification table to have user_id with max length 128
-
-### Changed
-
-- Updated to match 2.9 plugin interface to support multiple access token signing keys: https://github.com/supertokens/supertokens-core/issues/305
-- Added new table to store access token signing keys (session_access_token_signing_keys)
 
 ## [1.10.0] - 2021-06-20
 
