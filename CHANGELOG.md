@@ -9,6 +9,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.11.0] - 2021-09-12
 
+### Changed
+
+- Added functions and other changes for the JWT recipe
 ### Breaking change:
 
 - Changed email verification table to have user_id with max length 128
