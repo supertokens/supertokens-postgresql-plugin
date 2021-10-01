@@ -34,13 +34,13 @@ public class Logging extends ResourceDistributor.SingletonResource {
     private final Logger errorLogger;
 
     private Logging(Start start, String infoLogPath, String errorLogPath) {
-        this.infoLogger = infoLogPath.equals("null") ?
-                createLoggerForConsole(start, "io.supertokens.storage.postgresql.Info." + start.getProcessId()) :
-                createLoggerForFile(start, infoLogPath,
+        this.infoLogger = infoLogPath.equals("null")
+                ? createLoggerForConsole(start, "io.supertokens.storage.postgresql.Info." + start.getProcessId())
+                : createLoggerForFile(start, infoLogPath,
                         "io.supertokens.storage.postgresql.Info." + start.getProcessId());
-        this.errorLogger = errorLogPath.equals("null") ?
-                createLoggerForConsole(start, "io.supertokens.storage.postgresql.Error." + start.getProcessId()) :
-                createLoggerForFile(start, errorLogPath,
+        this.errorLogger = errorLogPath.equals("null")
+                ? createLoggerForConsole(start, "io.supertokens.storage.postgresql.Error." + start.getProcessId())
+                : createLoggerForFile(start, errorLogPath,
                         "io.supertokens.storage.postgresql.Error." + start.getProcessId());
     }
 

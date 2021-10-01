@@ -44,7 +44,7 @@ public class GeneralQueries {
         try {
             String QUERY = "SELECT 1 FROM " + tableName + " LIMIT 1";
             try (Connection con = ConnectionPool.getConnection(start);
-                 PreparedStatement pst = con.prepareStatement(QUERY)) {
+                    PreparedStatement pst = con.prepareStatement(QUERY)) {
                 pst.executeQuery();
             }
             return true;
@@ -55,8 +55,8 @@ public class GeneralQueries {
 
     static String getQueryToCreateUsersTable(Start start) {
         return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getUsersTable() + " ("
-                + "user_id CHAR(36) NOT NULL," + "recipe_id VARCHAR(128) NOT NULL,"
-                + "time_joined BIGINT NOT NULL," + "PRIMARY KEY (user_id));";
+                + "user_id CHAR(36) NOT NULL," + "recipe_id VARCHAR(128) NOT NULL," + "time_joined BIGINT NOT NULL,"
+                + "PRIMARY KEY (user_id));";
     }
 
     static String getQueryToCreateUserPaginationIndex(Start start) {
@@ -78,7 +78,7 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getKeyValueTable())) {
                     ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
                     try (Connection con = ConnectionPool.getConnection(start);
-                         PreparedStatement pst = con.prepareStatement(getQueryToCreateKeyValueTable(start))) {
+                            PreparedStatement pst = con.prepareStatement(getQueryToCreateKeyValueTable(start))) {
                         pst.executeUpdate();
                     }
                 }
@@ -86,14 +86,14 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getUsersTable())) {
                     ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
                     try (Connection con = ConnectionPool.getConnection(start);
-                         PreparedStatement pst = con.prepareStatement(getQueryToCreateUsersTable(start))) {
+                            PreparedStatement pst = con.prepareStatement(getQueryToCreateUsersTable(start))) {
                         pst.executeUpdate();
                     }
 
                     // index
                     try (Connection con = ConnectionPool.getConnection(start);
-                         PreparedStatement pstIndex = con
-                                 .prepareStatement(getQueryToCreateUserPaginationIndex(start))) {
+                            PreparedStatement pstIndex = con
+                                    .prepareStatement(getQueryToCreateUserPaginationIndex(start))) {
                         pstIndex.executeUpdate();
                     }
                 }
@@ -101,8 +101,8 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
                     ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
                     try (Connection con = ConnectionPool.getConnection(start);
-                         PreparedStatement pst = con
-                                 .prepareStatement(SessionQueries.getQueryToCreateAccessTokenSigningKeysTable(start))) {
+                            PreparedStatement pst = con.prepareStatement(
+                                    SessionQueries.getQueryToCreateAccessTokenSigningKeysTable(start))) {
                         pst.executeUpdate();
                     }
                 }
@@ -110,8 +110,8 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getSessionInfoTable())) {
                     ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
                     try (Connection con = ConnectionPool.getConnection(start);
-                         PreparedStatement pst = con
-                                 .prepareStatement(SessionQueries.getQueryToCreateSessionInfoTable(start))) {
+                            PreparedStatement pst = con
+                                    .prepareStatement(SessionQueries.getQueryToCreateSessionInfoTable(start))) {
                         pst.executeUpdate();
                     }
                 }
@@ -119,8 +119,8 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getEmailPasswordUsersTable())) {
                     ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
                     try (Connection con = ConnectionPool.getConnection(start);
-                         PreparedStatement pst = con
-                                 .prepareStatement(EmailPasswordQueries.getQueryToCreateUsersTable(start))) {
+                            PreparedStatement pst = con
+                                    .prepareStatement(EmailPasswordQueries.getQueryToCreateUsersTable(start))) {
                         pst.executeUpdate();
                     }
                 }
@@ -128,16 +128,14 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordResetTokensTable())) {
                     ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
                     try (Connection con = ConnectionPool.getConnection(start);
-                         PreparedStatement pst = con
-                                 .prepareStatement(
-                                         EmailPasswordQueries.getQueryToCreatePasswordResetTokensTable(start))) {
+                            PreparedStatement pst = con.prepareStatement(
+                                    EmailPasswordQueries.getQueryToCreatePasswordResetTokensTable(start))) {
                         pst.executeUpdate();
                     }
                     // index
                     try (Connection con = ConnectionPool.getConnection(start);
-                         PreparedStatement pstIndex = con
-                                 .prepareStatement(
-                                         EmailPasswordQueries.getQueryToCreatePasswordResetTokenExpiryIndex(start))) {
+                            PreparedStatement pstIndex = con.prepareStatement(
+                                    EmailPasswordQueries.getQueryToCreatePasswordResetTokenExpiryIndex(start))) {
                         pstIndex.executeUpdate();
                     }
                 }
@@ -145,9 +143,8 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getEmailVerificationTable())) {
                     ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
                     try (Connection con = ConnectionPool.getConnection(start);
-                         PreparedStatement pst = con
-                                 .prepareStatement(
-                                         EmailVerificationQueries.getQueryToCreateEmailVerificationTable(start))) {
+                            PreparedStatement pst = con.prepareStatement(
+                                    EmailVerificationQueries.getQueryToCreateEmailVerificationTable(start))) {
                         pst.executeUpdate();
                     }
                 }
@@ -155,18 +152,14 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getEmailVerificationTokensTable())) {
                     ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
                     try (Connection con = ConnectionPool.getConnection(start);
-                         PreparedStatement pst = con
-                                 .prepareStatement(
-                                         EmailVerificationQueries
-                                                 .getQueryToCreateEmailVerificationTokensTable(start))) {
+                            PreparedStatement pst = con.prepareStatement(
+                                    EmailVerificationQueries.getQueryToCreateEmailVerificationTokensTable(start))) {
                         pst.executeUpdate();
                     }
                     // index
                     try (Connection con = ConnectionPool.getConnection(start);
-                         PreparedStatement pstIndex = con
-                                 .prepareStatement(
-                                         EmailVerificationQueries
-                                                 .getQueryToCreateEmailVerificationTokenExpiryIndex(start))) {
+                            PreparedStatement pstIndex = con.prepareStatement(EmailVerificationQueries
+                                    .getQueryToCreateEmailVerificationTokenExpiryIndex(start))) {
                         pstIndex.executeUpdate();
                     }
                 }
@@ -174,9 +167,8 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getThirdPartyUsersTable())) {
                     ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
                     try (Connection con = ConnectionPool.getConnection(start);
-                         PreparedStatement pst = con
-                                 .prepareStatement(
-                                         ThirdPartyQueries.getQueryToCreateUsersTable(start))) {
+                            PreparedStatement pst = con
+                                    .prepareStatement(ThirdPartyQueries.getQueryToCreateUsersTable(start))) {
                         pst.executeUpdate();
                     }
                 }
@@ -184,19 +176,20 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getJWTSigningKeysTable())) {
                     ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
                     try (Connection con = ConnectionPool.getConnection(start);
-                         PreparedStatement pst = con.prepareStatement(JWTSigningQueries.getQueryToCreateJWTSigningTable(start))) {
+                            PreparedStatement pst = con
+                                    .prepareStatement(JWTSigningQueries.getQueryToCreateJWTSigningTable(start))) {
                         pst.executeUpdate();
                     }
                 }
             } catch (Exception e) {
-                if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist") &&
-                        numberOfRetries < 1) {
+                if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
+                        && numberOfRetries < 1) {
                     // we must create the schema and try again.
                     String schema = Config.getConfig(start).getTableSchema();
                     if (!schema.equals("public")) {
                         String query = "CREATE SCHEMA " + schema;
                         try (Connection con = ConnectionPool.getConnection(start);
-                             PreparedStatement drop = con.prepareStatement(query)) {
+                                PreparedStatement drop = con.prepareStatement(query)) {
                             drop.executeUpdate();
                         }
                         numberOfRetries++;
@@ -214,38 +207,38 @@ public class GeneralQueries {
         {
             String DROP_QUERY = "DROP INDEX IF EXISTS emailpassword_password_reset_token_expiry_index";
             try (Connection con = ConnectionPool.getConnection(start);
-                 PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
+                    PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
                 drop.executeUpdate();
             }
         }
         {
             String DROP_QUERY = "DROP INDEX IF EXISTS emailverification_tokens_index";
             try (Connection con = ConnectionPool.getConnection(start);
-                 PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
+                    PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
                 drop.executeUpdate();
             }
         }
         {
             String DROP_QUERY = "DROP INDEX IF EXISTS all_auth_recipe_users_pagination_index";
             try (Connection con = ConnectionPool.getConnection(start);
-                 PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
+                    PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
                 drop.executeUpdate();
             }
         }
 
         {
-            String DROP_QUERY = "DROP TABLE IF EXISTS " + Config.getConfig(start).getKeyValueTable() + "," +
-                    Config.getConfig(start).getUsersTable() + "," +
-                    Config.getConfig(start).getAccessTokenSigningKeysTable() + "," +
-                    Config.getConfig(start).getSessionInfoTable() + "," +
-                    Config.getConfig(start).getEmailPasswordUsersTable() + ","
-                    + Config.getConfig(start).getPasswordResetTokensTable() + "," +
-                    Config.getConfig(start).getEmailVerificationTokensTable() + "," +
-                    Config.getConfig(start).getEmailVerificationTable() + "," +
-                    Config.getConfig(start).getThirdPartyUsersTable() + "," +
-                    Config.getConfig(start).getJWTSigningKeysTable();
+            String DROP_QUERY = "DROP TABLE IF EXISTS " + Config.getConfig(start).getKeyValueTable() + ","
+                    + Config.getConfig(start).getUsersTable() + ","
+                    + Config.getConfig(start).getAccessTokenSigningKeysTable() + ","
+                    + Config.getConfig(start).getSessionInfoTable() + ","
+                    + Config.getConfig(start).getEmailPasswordUsersTable() + ","
+                    + Config.getConfig(start).getPasswordResetTokensTable() + ","
+                    + Config.getConfig(start).getEmailVerificationTokensTable() + ","
+                    + Config.getConfig(start).getEmailVerificationTable() + ","
+                    + Config.getConfig(start).getThirdPartyUsersTable() + ","
+                    + Config.getConfig(start).getJWTSigningKeysTable();
             try (Connection con = ConnectionPool.getConnection(start);
-                 PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
+                    PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
                 drop.executeUpdate();
             }
         }
@@ -267,19 +260,18 @@ public class GeneralQueries {
         }
     }
 
-    public static void setKeyValue(Start start, String key, KeyValueInfo info)
-            throws SQLException {
+    public static void setKeyValue(Start start, String key, KeyValueInfo info) throws SQLException {
         try (Connection con = ConnectionPool.getConnection(start)) {
             setKeyValue_Transaction(start, con, key, info);
         }
     }
 
     public static KeyValueInfo getKeyValue(Start start, String key) throws SQLException, StorageQueryException {
-        String QUERY = "SELECT value, created_at_time FROM "
-                + Config.getConfig(start).getKeyValueTable() + " WHERE name = ?";
+        String QUERY = "SELECT value, created_at_time FROM " + Config.getConfig(start).getKeyValueTable()
+                + " WHERE name = ?";
 
         try (Connection con = ConnectionPool.getConnection(start);
-             PreparedStatement pst = con.prepareStatement(QUERY)) {
+                PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setString(1, key);
             ResultSet result = pst.executeQuery();
             if (result.next()) {
@@ -291,8 +283,8 @@ public class GeneralQueries {
 
     public static KeyValueInfo getKeyValue_Transaction(Start start, Connection con, String key)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT value, created_at_time FROM "
-                + Config.getConfig(start).getKeyValueTable() + " WHERE name = ? FOR UPDATE";
+        String QUERY = "SELECT value, created_at_time FROM " + Config.getConfig(start).getKeyValueTable()
+                + " WHERE name = ? FOR UPDATE";
 
         try (PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setString(1, key);
@@ -315,9 +307,8 @@ public class GeneralQueries {
     }
 
     public static long getUsersCount(Start start, RECIPE_ID[] includeRecipeIds) throws SQLException {
-        StringBuilder QUERY =
-                new StringBuilder("SELECT COUNT(*) as total FROM " +
-                        Config.getConfig(start).getUsersTable());
+        StringBuilder QUERY = new StringBuilder(
+                "SELECT COUNT(*) as total FROM " + Config.getConfig(start).getUsersTable());
         if (includeRecipeIds != null && includeRecipeIds.length > 0) {
             QUERY.append(" WHERE recipe_id IN (");
             for (int i = 0; i < includeRecipeIds.length; i++) {
@@ -332,7 +323,7 @@ public class GeneralQueries {
         }
 
         try (Connection con = ConnectionPool.getConnection(start);
-             PreparedStatement pst = con.prepareStatement(QUERY.toString())) {
+                PreparedStatement pst = con.prepareStatement(QUERY.toString())) {
             ResultSet result = pst.executeQuery();
             if (result.next()) {
                 return result.getLong("total");
@@ -342,9 +333,8 @@ public class GeneralQueries {
     }
 
     public static AuthRecipeUserInfo[] getUsers(Start start, @NotNull Integer limit, @NotNull String timeJoinedOrder,
-                                                @Nullable RECIPE_ID[] includeRecipeIds,
-                                                @Nullable String userId,
-                                                @Nullable Long timeJoined) throws SQLException, StorageQueryException {
+            @Nullable RECIPE_ID[] includeRecipeIds, @Nullable String userId, @Nullable Long timeJoined)
+            throws SQLException, StorageQueryException {
 
         // This list will be used to keep track of the result's order from the db
         List<UserInfoPaginationResultHolder> usersFromQuery = new ArrayList<>();
@@ -371,22 +361,20 @@ public class GeneralQueries {
                     recipeIdCondition = recipeIdCondition + " AND";
                 }
                 String timeJoinedOrderSymbol = timeJoinedOrder.equals("ASC") ? ">" : "<";
-                String QUERY =
-                        "SELECT user_id, recipe_id FROM " +
-                                Config.getConfig(start).getUsersTable() +
-                                " WHERE " + recipeIdCondition + " (time_joined " + timeJoinedOrderSymbol +
-                                " ? OR (time_joined = ? AND user_id <= ?)) ORDER BY time_joined " + timeJoinedOrder +
-                                ", user_id DESC LIMIT ?";
+                String QUERY = "SELECT user_id, recipe_id FROM " + Config.getConfig(start).getUsersTable() + " WHERE "
+                        + recipeIdCondition + " (time_joined " + timeJoinedOrderSymbol
+                        + " ? OR (time_joined = ? AND user_id <= ?)) ORDER BY time_joined " + timeJoinedOrder
+                        + ", user_id DESC LIMIT ?";
                 try (Connection con = ConnectionPool.getConnection(start);
-                     PreparedStatement pst = con.prepareStatement(QUERY)) {
+                        PreparedStatement pst = con.prepareStatement(QUERY)) {
                     pst.setLong(1, timeJoined);
                     pst.setLong(2, timeJoined);
                     pst.setString(3, userId);
                     pst.setInt(4, limit);
                     result = pst.executeQuery();
                     while (result.next()) {
-                        usersFromQuery.add(new UserInfoPaginationResultHolder(
-                                result.getString("user_id"), result.getString("recipe_id")));
+                        usersFromQuery.add(new UserInfoPaginationResultHolder(result.getString("user_id"),
+                                result.getString("recipe_id")));
                     }
                 }
             } else {
@@ -394,18 +382,15 @@ public class GeneralQueries {
                 if (!recipeIdCondition.equals("")) {
                     recipeIdCondition = " WHERE " + recipeIdCondition;
                 }
-                String QUERY =
-                        "SELECT user_id, recipe_id FROM " +
-                                Config.getConfig(start).getUsersTable() +
-                                recipeIdCondition + " ORDER BY time_joined " + timeJoinedOrder +
-                                ", user_id DESC LIMIT ?";
+                String QUERY = "SELECT user_id, recipe_id FROM " + Config.getConfig(start).getUsersTable()
+                        + recipeIdCondition + " ORDER BY time_joined " + timeJoinedOrder + ", user_id DESC LIMIT ?";
                 try (Connection con = ConnectionPool.getConnection(start);
-                     PreparedStatement pst = con.prepareStatement(QUERY)) {
+                        PreparedStatement pst = con.prepareStatement(QUERY)) {
                     pst.setInt(1, limit);
                     result = pst.executeQuery();
                     while (result.next()) {
-                        usersFromQuery.add(new UserInfoPaginationResultHolder(
-                                result.getString("user_id"), result.getString("recipe_id")));
+                        usersFromQuery.add(new UserInfoPaginationResultHolder(result.getString("user_id"),
+                                result.getString("recipe_id")));
                     }
                 }
             }
@@ -449,8 +434,7 @@ public class GeneralQueries {
     }
 
     private static List<? extends AuthRecipeUserInfo> getUserInfoForRecipeIdFromUserIds(Start start, RECIPE_ID recipeId,
-                                                                                        List<String> userIds)
-            throws StorageQueryException, SQLException {
+            List<String> userIds) throws StorageQueryException, SQLException {
         if (recipeId == RECIPE_ID.EMAIL_PASSWORD) {
             return EmailPasswordQueries.getUsersInfoUsingIdList(start, userIds);
         } else if (recipeId == RECIPE_ID.THIRD_PARTY) {
