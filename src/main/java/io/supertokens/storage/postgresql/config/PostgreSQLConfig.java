@@ -283,14 +283,14 @@ public class PostgreSQLConfig {
                 URI ignored = URI.create(postgresql_connection_uri);
             } catch (Exception e) {
                 throw new QuitProgramFromPluginException(
-                        "The provided postgresql connection URI has an incorrect format. Please use a format like " +
-                                "postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2...");
+                        "The provided postgresql connection URI has an incorrect format. Please use a format like "
+                                + "postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2...");
             }
         } else {
             if (this.getUser() == null) {
                 throw new QuitProgramFromPluginException(
-                        "'postgresql_user' and 'postgresql_connection_uri' are not set. Please set at least one of " +
-                                "these values");
+                        "'postgresql_user' and 'postgresql_connection_uri' are not set. Please set at least one of "
+                                + "these values");
             }
         }
 

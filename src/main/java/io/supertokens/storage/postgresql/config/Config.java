@@ -27,7 +27,6 @@ import io.supertokens.storage.postgresql.output.Logging;
 import java.io.File;
 import java.io.IOException;
 
-
 public class Config extends ResourceDistributor.SingletonResource {
 
     private static final String RESOURCE_KEY = "io.supertokens.storage.postgresql.config.Config";
@@ -73,9 +72,7 @@ public class Config extends ResourceDistributor.SingletonResource {
         try {
             final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
             PostgreSQLConfig config = mapper.readValue(new File(configFilePath), PostgreSQLConfig.class);
-            return config.getUser() != null ||
-                    config.getPassword() != null ||
-                    config.getConnectionURI() != null;
+            return config.getUser() != null || config.getPassword() != null || config.getConnectionURI() != null;
         } catch (Exception e) {
             return false;
         }

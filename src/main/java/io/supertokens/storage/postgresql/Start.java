@@ -57,8 +57,8 @@ import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
 import java.util.List;
 
-public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
-        EmailVerificationSQLStorage, ThirdPartySQLStorage, JWTRecipeSQLStorage {
+public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage,
+        ThirdPartySQLStorage, JWTRecipeSQLStorage {
 
     private static final Object appenderLock = new Object();
     public static boolean silent = false;
@@ -155,19 +155,18 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
                 return startTransactionHelper(logic);
             } catch (SQLException | StorageQueryException e) {
                 // see: https://github.com/supertokens/supertokens-postgresql-plugin/pull/3
-                if ((e instanceof SQLTransactionRollbackException ||
-                        e.getMessage().toLowerCase().contains("concurrent update") ||
-                        e.getMessage().toLowerCase().contains("the transaction might succeed if retried") ||
+                if ((e instanceof SQLTransactionRollbackException
+                        || e.getMessage().toLowerCase().contains("concurrent update")
+                        || e.getMessage().toLowerCase().contains("the transaction might succeed if retried") ||
 
                         // we have deadlock as well due to the DeadlockTest.java
-                        e.getMessage().toLowerCase().contains("deadlock")) &&
-                        tries < 3) {
+                        e.getMessage().toLowerCase().contains("deadlock")) && tries < 3) {
                     try {
                         Thread.sleep((long) (10 + (Math.random() * 20)));
                     } catch (InterruptedException ignored) {
                     }
                     ProcessState.getInstance(this).addState(ProcessState.PROCESS_STATE.DEADLOCK_FOUND, e);
-                    continue;   // this because deadlocks are not necessarily a result of faulty logic. They can happen
+                    continue; // this because deadlocks are not necessarily a result of faulty logic. They can happen
                 }
                 if (e instanceof StorageQueryException) {
                     throw (StorageQueryException) e;
@@ -215,7 +214,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     }
 
     @Override
-    public KeyValueInfo getLegacyAccessTokenSigningKey_Transaction(TransactionConnection con) throws StorageQueryException {
+    public KeyValueInfo getLegacyAccessTokenSigningKey_Transaction(TransactionConnection con)
+            throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return GeneralQueries.getKeyValue_Transaction(this, sqlCon, ACCESS_TOKEN_SIGNING_KEY_NAME);
@@ -235,7 +235,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     }
 
     @Override
-    public KeyValueInfo[] getAccessTokenSigningKeys_Transaction(TransactionConnection con) throws StorageQueryException {
+    public KeyValueInfo[] getAccessTokenSigningKeys_Transaction(TransactionConnection con)
+            throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return SessionQueries.getAccessTokenSigningKeys_Transaction(this, sqlCon);
@@ -256,8 +257,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     }
 
     @Override
-    public void removeAccessTokenSigningKeysBefore(long time)
-            throws StorageQueryException {
+    public void removeAccessTokenSigningKeysBefore(long time) throws StorageQueryException {
         try {
             SessionQueries.removeAccessTokenSigningKeysBefore(this, time);
         } catch (SQLException e) {
@@ -302,8 +302,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
 
     @Override
     public void createNewSession(String sessionHandle, String userId, String refreshTokenHash2,
-                                 JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT,
-                                 long createdAtTime)
+            JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT, long createdAtTime)
             throws StorageQueryException {
         try {
             SessionQueries.createNewSession(this, sessionHandle, userId, refreshTokenHash2, userDataInDatabase, expiry,
@@ -403,8 +402,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     }
 
     @Override
-    public void updateSessionInfo_Transaction(TransactionConnection con, String sessionHandle,
-                                              String refreshTokenHash2, long expiry) throws StorageQueryException {
+    public void updateSessionInfo_Transaction(TransactionConnection con, String sessionHandle, String refreshTokenHash2,
+            long expiry) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             SessionQueries.updateSessionInfo_Transaction(this, sqlCon, sessionHandle, refreshTokenHash2, expiry);
@@ -466,11 +465,9 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
             EmailPasswordQueries.signUp(this, userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined);
         } catch (StorageTransactionLogicException eTemp) {
             Exception e = eTemp.actualException;
-            if (e.getMessage().contains("ERROR: duplicate key") &&
-                    e.getMessage().contains("Key (email)")) {
+            if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (email)")) {
                 throw new DuplicateEmailException();
-            } else if (e.getMessage().contains("ERROR: duplicate key") &&
-                    e.getMessage().contains("Key (user_id)")) {
+            } else if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (user_id)")) {
                 throw new DuplicateUserIdException();
             }
             throw new StorageQueryException(e);
@@ -502,11 +499,9 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
             EmailPasswordQueries.addPasswordResetToken(this, passwordResetTokenInfo.userId,
                     passwordResetTokenInfo.token, passwordResetTokenInfo.tokenExpiry);
         } catch (SQLException e) {
-            if (e.getMessage().contains("ERROR: duplicate key") &&
-                    e.getMessage().contains("Key (user_id, token)")) {
+            if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (user_id, token)")) {
                 throw new DuplicatePasswordResetTokenException();
-            } else if (e.getMessage().contains("foreign key") &&
-                    e.getMessage().contains("user_id")) {
+            } else if (e.getMessage().contains("foreign key") && e.getMessage().contains("user_id")) {
                 throw new UnknownUserIdException();
             }
             throw new StorageQueryException(e);
@@ -533,8 +528,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
 
     @Override
     public PasswordResetTokenInfo[] getAllPasswordResetTokenInfoForUser_Transaction(TransactionConnection con,
-                                                                                    String userId)
-            throws StorageQueryException {
+            String userId) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return EmailPasswordQueries.getAllPasswordResetTokenInfoForUser_Transaction(this, sqlCon, userId);
@@ -572,8 +566,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
         try {
             EmailPasswordQueries.updateUsersEmail_Transaction(this, sqlCon, userId, email);
         } catch (SQLException e) {
-            if (e.getMessage().contains("ERROR: duplicate key") &&
-                    e.getMessage().contains("Key (email)")) {
+            if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (email)")) {
                 throw new DuplicateEmailException();
             }
             throw new StorageQueryException(e);
@@ -602,12 +595,11 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
 
     @Override
     public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser_Transaction(TransactionConnection con,
-                                                                                            String userId, String email)
-            throws StorageQueryException {
+            String userId, String email) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return EmailVerificationQueries
-                    .getAllEmailVerificationTokenInfoForUser_Transaction(this, sqlCon, userId, email);
+            return EmailVerificationQueries.getAllEmailVerificationTokenInfoForUser_Transaction(this, sqlCon, userId,
+                    email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -615,8 +607,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
 
     @Override
     public void deleteAllEmailVerificationTokensForUser_Transaction(TransactionConnection con, String userId,
-                                                                    String email)
-            throws StorageQueryException {
+            String email) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             EmailVerificationQueries.deleteAllEmailVerificationTokensForUser_Transaction(this, sqlCon, userId, email);
@@ -627,14 +618,14 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
 
     @Override
     public void updateIsEmailVerified_Transaction(TransactionConnection con, String userId, String email,
-                                                  boolean isEmailVerified) throws StorageQueryException {
+            boolean isEmailVerified) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            EmailVerificationQueries
-                    .updateUsersIsEmailVerified_Transaction(this, sqlCon, userId, email, isEmailVerified);
+            EmailVerificationQueries.updateUsersIsEmailVerified_Transaction(this, sqlCon, userId, email,
+                    isEmailVerified);
         } catch (SQLException e) {
-            if (!isEmailVerified || !(e.getMessage().contains("ERROR: duplicate key") &&
-                    e.getMessage().contains("Key (user_id, email)"))) {
+            if (!isEmailVerified || !(e.getMessage().contains("ERROR: duplicate key")
+                    && e.getMessage().contains("Key (user_id, email)"))) {
                 throw new StorageQueryException(e);
             }
             // we do not throw an error since the email is already verified
@@ -648,8 +639,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
             EmailVerificationQueries.addEmailVerificationToken(this, emailVerificationInfo.userId,
                     emailVerificationInfo.token, emailVerificationInfo.tokenExpiry, emailVerificationInfo.email);
         } catch (SQLException e) {
-            if (e.getMessage().contains("ERROR: duplicate key") &&
-                    e.getMessage().contains("Key (user_id, email, token)")) {
+            if (e.getMessage().contains("ERROR: duplicate key")
+                    && e.getMessage().contains("Key (user_id, email, token)")) {
                 throw new DuplicateEmailVerificationTokenException();
             }
             throw new StorageQueryException(e);
@@ -673,7 +664,6 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
             throw new StorageQueryException(e);
         }
     }
-
 
     @Override
     public void unverifyEmail(String userId, String email) throws StorageQueryException {
@@ -706,7 +696,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     @Override
     @Deprecated
     public UserInfo[] getUsers(@Nonnull String userId, @Nonnull Long timeJoined, @Nonnull Integer limit,
-                               @Nonnull String timeJoinedOrder) throws StorageQueryException {
+            @Nonnull String timeJoinedOrder) throws StorageQueryException {
         try {
             return EmailPasswordQueries.getUsersInfo(this, userId, timeJoined, limit, timeJoinedOrder);
         } catch (SQLException e) {
@@ -745,26 +735,21 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
 
     @Override
     public io.supertokens.pluginInterface.thirdparty.UserInfo getUserInfoUsingId_Transaction(TransactionConnection con,
-                                                                                             String thirdPartyId,
-                                                                                             String thirdPartyUserId)
-            throws StorageQueryException {
+            String thirdPartyId, String thirdPartyUserId) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return ThirdPartyQueries.getUserInfoUsingId_Transaction(this, sqlCon,
-                    thirdPartyId, thirdPartyUserId);
+            return ThirdPartyQueries.getUserInfoUsingId_Transaction(this, sqlCon, thirdPartyId, thirdPartyUserId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
 
-
     @Override
     public void updateUserEmail_Transaction(TransactionConnection con, String thirdPartyId, String thirdPartyUserId,
-                                            String newEmail) throws StorageQueryException {
+            String newEmail) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            ThirdPartyQueries.updateUserEmail_Transaction(this, sqlCon,
-                    thirdPartyId, thirdPartyUserId, newEmail);
+            ThirdPartyQueries.updateUserEmail_Transaction(this, sqlCon, thirdPartyId, thirdPartyUserId, newEmail);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -778,11 +763,10 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
             ThirdPartyQueries.signUp(this, userInfo);
         } catch (StorageTransactionLogicException eTemp) {
             Exception e = eTemp.actualException;
-            if (e.getMessage().contains("ERROR: duplicate key") &&
-                    e.getMessage().contains("Key (third_party_id, third_party_user_id)")) {
+            if (e.getMessage().contains("ERROR: duplicate key")
+                    && e.getMessage().contains("Key (third_party_id, third_party_user_id)")) {
                 throw new DuplicateThirdPartyUserException();
-            } else if (e.getMessage().contains("ERROR: duplicate key") &&
-                    e.getMessage().contains("Key (user_id)")) {
+            } else if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (user_id)")) {
                 throw new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException();
             }
             throw new StorageQueryException(e);
@@ -791,8 +775,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
 
     @Override
     public io.supertokens.pluginInterface.thirdparty.UserInfo getThirdPartyUserInfoUsingId(String thirdPartyId,
-                                                                                           String thirdPartyUserId)
-            throws StorageQueryException {
+            String thirdPartyUserId) throws StorageQueryException {
         try {
             return ThirdPartyQueries.getThirdPartyUserInfoUsingId(this, thirdPartyId, thirdPartyUserId);
         } catch (SQLException e) {
@@ -813,9 +796,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     @Override
     @Deprecated
     public io.supertokens.pluginInterface.thirdparty.UserInfo[] getThirdPartyUsers(@NotNull String userId,
-                                                                                   @NotNull Long timeJoined,
-                                                                                   @NotNull Integer limit,
-                                                                                   @NotNull String timeJoinedOrder)
+            @NotNull Long timeJoined, @NotNull Integer limit, @NotNull String timeJoinedOrder)
             throws StorageQueryException {
         try {
             return ThirdPartyQueries.getThirdPartyUsers(this, userId, timeJoined, limit, timeJoinedOrder);
@@ -827,8 +808,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
     @Override
     @Deprecated
     public io.supertokens.pluginInterface.thirdparty.UserInfo[] getThirdPartyUsers(@NotNull Integer limit,
-                                                                                   @NotNull String timeJoinedOrder)
-            throws StorageQueryException {
+            @NotNull String timeJoinedOrder) throws StorageQueryException {
         try {
             return ThirdPartyQueries.getThirdPartyUsers(this, limit, timeJoinedOrder);
         } catch (SQLException e) {
@@ -867,9 +847,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage,
 
     @Override
     public AuthRecipeUserInfo[] getUsers(@NotNull Integer limit, @NotNull String timeJoinedOrder,
-                                         @Nullable RECIPE_ID[] includeRecipeIds,
-                                         @Nullable String userId,
-                                         @Nullable Long timeJoined)
+            @Nullable RECIPE_ID[] includeRecipeIds, @Nullable String userId, @Nullable Long timeJoined)
             throws StorageQueryException {
         try {
             return GeneralQueries.getUsers(this, limit, timeJoinedOrder, includeRecipeIds, userId, timeJoined);

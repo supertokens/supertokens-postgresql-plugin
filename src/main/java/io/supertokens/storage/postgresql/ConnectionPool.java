@@ -37,7 +37,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
 
     private ConnectionPool(Start start) {
         if (!start.enabled) {
-            throw new RuntimeException("Connection to refused");   // emulates exception thrown by Hikari
+            throw new RuntimeException("Connection to refused"); // emulates exception thrown by Hikari
         }
         HikariConfig config = new HikariConfig();
         PostgreSQLConfig userConfig = Config.getConfig(start);
@@ -118,19 +118,17 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         Logging.info(start, "Setting up PostgreSQL connection pool.");
         boolean longMessagePrinted = false;
         long maxTryTime = System.currentTimeMillis() + getTimeToWaitToInit(start);
-        String errorMessage =
-                "Error connecting to PostgreSQL instance. Please make sure that PostgreSQL is running and that " +
-                        "you have" +
-                        " specified the correct values for ('postgresql_host' and 'postgresql_port') or for " +
-                        "'postgresql_connection_uri'";
+        String errorMessage = "Error connecting to PostgreSQL instance. Please make sure that PostgreSQL is running and that "
+                + "you have" + " specified the correct values for ('postgresql_host' and 'postgresql_port') or for "
+                + "'postgresql_connection_uri'";
         try {
             while (true) {
                 try {
                     start.getResourceDistributor().setResource(RESOURCE_KEY, new ConnectionPool(start));
                     break;
                 } catch (Exception e) {
-                    if (e.getMessage().contains("Connection to") && e.getMessage().contains("refused") ||
-                            e.getMessage().contains("the database system is starting up")) {
+                    if (e.getMessage().contains("Connection to") && e.getMessage().contains("refused")
+                            || e.getMessage().contains("the database system is starting up")) {
                         start.handleKillSignalForWhenItHappens();
                         if (System.currentTimeMillis() > maxTryTime) {
                             throw new QuitProgramFromPluginException(errorMessage);

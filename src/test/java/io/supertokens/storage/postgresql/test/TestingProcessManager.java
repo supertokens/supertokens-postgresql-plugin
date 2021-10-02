@@ -32,7 +32,7 @@ class TestingProcessManager {
 
     static void deleteAllInformation() throws Exception {
         System.out.println("----------DELETE ALL INFORMATION----------");
-        String[] args = {"../"};
+        String[] args = { "../" };
         TestingProcess process = TestingProcessManager.start(args);
         process.checkOrWaitForEvent(PROCESS_STATE.STARTED);
         process.main.deleteAllInformationForTesting();
@@ -141,8 +141,7 @@ class TestingProcessManager {
             return checkOrWaitForEvent(state, 15000);
         }
 
-        EventAndException checkOrWaitForEvent(PROCESS_STATE state, long timeToWaitMS)
-                throws InterruptedException {
+        EventAndException checkOrWaitForEvent(PROCESS_STATE state, long timeToWaitMS) throws InterruptedException {
             EventAndException e = ProcessState.getInstance(main).getLastEventByName(state);
             if (e == null) {
                 // we shall now wait until some time as passed.
@@ -156,20 +155,16 @@ class TestingProcessManager {
         }
 
         io.supertokens.storage.postgresql.ProcessState.EventAndException checkOrWaitForEventInPlugin(
-                io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE state)
-                throws InterruptedException {
+                io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE state) throws InterruptedException {
             return checkOrWaitForEventInPlugin(state, 15000);
         }
 
         io.supertokens.storage.postgresql.ProcessState.EventAndException checkOrWaitForEventInPlugin(
-                io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE state,
-                long timeToWaitMS)
+                io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE state, long timeToWaitMS)
                 throws InterruptedException {
             Start start = (Start) StorageLayer.getStorage(main);
-            io.supertokens.storage.postgresql.ProcessState.EventAndException e =
-                    io.supertokens.storage.postgresql.ProcessState
-                            .getInstance(start)
-                            .getLastEventByName(state);
+            io.supertokens.storage.postgresql.ProcessState.EventAndException e = io.supertokens.storage.postgresql.ProcessState
+                    .getInstance(start).getLastEventByName(state);
             if (e == null) {
                 // we shall now wait until some time as passed.
                 final long startTime = System.currentTimeMillis();

@@ -53,7 +53,7 @@ public class DeadlockTest {
     @Test
     public void transactionDeadlockTesting()
             throws InterruptedException, StorageQueryException, StorageTransactionLogicException {
-        String[] args = {"../"};
+        String[] args = { "../" };
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -149,57 +149,65 @@ public class DeadlockTest {
 }
 
 /*
-* TODO: check later about this error
-------------------------
-LATEST DETECTED DEADLOCK
-------------------------
-2020-01-15 06:07:36 0x7f546846a700
-*** (1) TRANSACTION:
-TRANSACTION 196679, ACTIVE 0 sec starting index read
-mysql tables in use 1, locked 1
-LOCK WAIT 2 lock struct(s), heap size 1136, 1 row lock(s)
-MySQL thread id 15926, OS thread handle 140000503174912, query id 335354 172.31.0.253 executionMaster statistics
-SELECT value, created_at_time FROM key_value WHERE name = 'access_token_signing_key' FOR UPDATE
-*** (1) WAITING FOR THIS LOCK TO BE GRANTED:
-RECORD LOCKS space id 61 page no 3 n bits 80 index PRIMARY of table `supertokens`.`key_value` trx id 196679 lock_mode
-*  X locks rec but not gap waiting
-Record lock, heap no 8 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
- 0: len 24; hex 6163636573735f746f6b656e5f7369676e696e675f6b6579; asc access_token_signing_key;;
- 1: len 6; hex 000000030003; asc       ;;
- 2: len 7; hex 39000001dd08b4; asc 9      ;;
- 3: len 30; hex 4d494942496a414e42676b71686b6947397730424151454641414f434151; asc MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ;
+ * TODO: check later about this error
+ * ------------------------
+ * LATEST DETECTED DEADLOCK
+ * ------------------------
+ * 2020-01-15 06:07:36 0x7f546846a700
+ *** (1) TRANSACTION:
+ * TRANSACTION 196679, ACTIVE 0 sec starting index read
+ * mysql tables in use 1, locked 1
+ * LOCK WAIT 2 lock struct(s), heap size 1136, 1 row lock(s)
+ * MySQL thread id 15926, OS thread handle 140000503174912, query id 335354 172.31.0.253 executionMaster statistics
+ * SELECT value, created_at_time FROM key_value WHERE name = 'access_token_signing_key' FOR UPDATE
+ *** (1) WAITING FOR THIS LOCK TO BE GRANTED:
+ * RECORD LOCKS space id 61 page no 3 n bits 80 index PRIMARY of table `supertokens`.`key_value` trx id 196679 lock_mode
+ * X locks rec but not gap waiting
+ * Record lock, heap no 8 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+ * 0: len 24; hex 6163636573735f746f6b656e5f7369676e696e675f6b6579; asc access_token_signing_key;;
+ * 1: len 6; hex 000000030003; asc ;;
+ * 2: len 7; hex 39000001dd08b4; asc 9 ;;
+ * 3: len 30; hex 4d494942496a414e42676b71686b6947397730424151454641414f434151; asc MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ;
  * (total 2017 bytes);
- 4: len 8; hex 0000016fa2a3229a; asc    o  " ;;
-
-*** (2) TRANSACTION:
-TRANSACTION 196680, ACTIVE 0 sec inserting
-mysql tables in use 1, locked 1
-3 lock struct(s), heap size 1136, 2 row lock(s)
-MySQL thread id 15927, OS thread handle 140000503441152, query id 335358 172.31.0.253 executionMaster update
-INSERT INTO key_value(name, value, created_at_time) VALUES('access_token_signing_key',
-* 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApm557QfYLxLc6HmqBMnd3Uz5mKyXpgZr0li1YkIZf8MfIbcVl7l7qlffZmjhgtkIGGVi1yXNFyItM+2N2sOsF9c4qks3BoIkrW0ACltcmqc3wxGEQMfsPYsxRuRMlWnC0nZCzO5MEyVcV7JciSBKc00HzwNrHXsC231Qlh5cJo5/Yun/faW715MaHwLCrvAKXF2/yI2BFAtSBcsgVTv/ZNPuEbadPdg5utN3qSHOmK/hsrQIpZYVhghNFm0q1f90D4cOtFYpJbtUAaHJ+D46kh6RDk1ua6XunpUpbnGhEwtFa8BuEKq+Au5YWcxddxb/xE7h7oIzzE0SCao01ANlFwIDAQAB;MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCmbnntB9gvEtzoeaoEyd3dTPmYrJemBmvSWLViQhl/wx8htxWXuXuqV99maOGC2QgYZWLXJc0XIi0z7Y3aw6wX1ziqSzcGgiStbQAKW1yapzfDEYRAx+w9izFG5EyVacLSdkLM7kwTJVxXslyJIEpzTQfPA2sdewLbfVCWHlwmjn9i6f99pbvXkxofAsKu8ApcXb/IjYEUC1IFyyBVO/9k0+4Rtp092Dm603epIc6Yr+GytAillhWGCE0WbSrV/3QPhw60Viklu1QBocn4PjqSHpEOTW5rpe6elSlucaETC0VrwG4Qqr4C7lhZzF13Fv/ETuHugjPMTRIJqjTUA2UXAgMBAAECggEBAJD8RPMcllPL1u4eruIlCUY0PGuoT
-*** (2) HOLDS THE LOCK(S):
-RECORD LOCKS space id 61 page no 3 n bits 80 index PRIMARY of table `supertokens`.`key_value` trx id 196680 lock_mode
-*  X locks rec but not gap
-Record lock, heap no 8 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
- 0: len 24; hex 6163636573735f746f6b656e5f7369676e696e675f6b6579; asc access_token_signing_key;;
- 1: len 6; hex 000000030003; asc       ;;
- 2: len 7; hex 39000001dd08b4; asc 9      ;;
- 3: len 30; hex 4d494942496a414e42676b71686b6947397730424151454641414f434151; asc MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ;
+ * 4: len 8; hex 0000016fa2a3229a; asc o " ;;
+ *** 
+ * (2) TRANSACTION:
+ * TRANSACTION 196680, ACTIVE 0 sec inserting
+ * mysql tables in use 1, locked 1
+ * 3 lock struct(s), heap size 1136, 2 row lock(s)
+ * MySQL thread id 15927, OS thread handle 140000503441152, query id 335358 172.31.0.253 executionMaster update
+ * INSERT INTO key_value(name, value, created_at_time) VALUES('access_token_signing_key',
+ * 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApm557QfYLxLc6HmqBMnd3Uz5mKyXpgZr0li1YkIZf8MfIbcVl7l7qlffZmjhgtkIGGVi1yXNFyItM
+ * +2N2sOsF9c4qks3BoIkrW0ACltcmqc3wxGEQMfsPYsxRuRMlWnC0nZCzO5MEyVcV7JciSBKc00HzwNrHXsC231Qlh5cJo5/Yun/
+ * faW715MaHwLCrvAKXF2/yI2BFAtSBcsgVTv/ZNPuEbadPdg5utN3qSHOmK/hsrQIpZYVhghNFm0q1f90D4cOtFYpJbtUAaHJ+
+ * D46kh6RDk1ua6XunpUpbnGhEwtFa8BuEKq+Au5YWcxddxb/xE7h7oIzzE0SCao01ANlFwIDAQAB;
+ * MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCmbnntB9gvEtzoeaoEyd3dTPmYrJemBmvSWLViQhl/
+ * wx8htxWXuXuqV99maOGC2QgYZWLXJc0XIi0z7Y3aw6wX1ziqSzcGgiStbQAKW1yapzfDEYRAx+
+ * w9izFG5EyVacLSdkLM7kwTJVxXslyJIEpzTQfPA2sdewLbfVCWHlwmjn9i6f99pbvXkxofAsKu8ApcXb/IjYEUC1IFyyBVO/9k0+
+ * 4Rtp092Dm603epIc6Yr+GytAillhWGCE0WbSrV/3QPhw60Viklu1QBocn4PjqSHpEOTW5rpe6elSlucaETC0VrwG4Qqr4C7lhZzF13Fv/
+ * ETuHugjPMTRIJqjTUA2UXAgMBAAECggEBAJD8RPMcllPL1u4eruIlCUY0PGuoT
+ *** (2) HOLDS THE LOCK(S):
+ * RECORD LOCKS space id 61 page no 3 n bits 80 index PRIMARY of table `supertokens`.`key_value` trx id 196680 lock_mode
+ * X locks rec but not gap
+ * Record lock, heap no 8 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+ * 0: len 24; hex 6163636573735f746f6b656e5f7369676e696e675f6b6579; asc access_token_signing_key;;
+ * 1: len 6; hex 000000030003; asc ;;
+ * 2: len 7; hex 39000001dd08b4; asc 9 ;;
+ * 3: len 30; hex 4d494942496a414e42676b71686b6947397730424151454641414f434151; asc MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ;
  * (total 2017 bytes);
- 4: len 8; hex 0000016fa2a3229a; asc    o  " ;;
-
-*** (2) WAITING FOR THIS LOCK TO BE GRANTED:
-RECORD LOCKS space id 61 page no 3 n bits 80 index PRIMARY of table `supertokens`.`key_value` trx id 196680 lock_mode
-*  X waiting
-Record lock, heap no 8 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
- 0: len 24; hex 6163636573735f746f6b656e5f7369676e696e675f6b6579; asc access_token_signing_key;;
- 1: len 6; hex 000000030003; asc       ;;
- 2: len 7; hex 39000001dd08b4; asc 9      ;;
- 3: len 30; hex 4d494942496a414e42676b71686b6947397730424151454641414f434151; asc MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ;
+ * 4: len 8; hex 0000016fa2a3229a; asc o " ;;
+ *** 
+ * (2) WAITING FOR THIS LOCK TO BE GRANTED:
+ * RECORD LOCKS space id 61 page no 3 n bits 80 index PRIMARY of table `supertokens`.`key_value` trx id 196680 lock_mode
+ * X waiting
+ * Record lock, heap no 8 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+ * 0: len 24; hex 6163636573735f746f6b656e5f7369676e696e675f6b6579; asc access_token_signing_key;;
+ * 1: len 6; hex 000000030003; asc ;;
+ * 2: len 7; hex 39000001dd08b4; asc 9 ;;
+ * 3: len 30; hex 4d494942496a414e42676b71686b6947397730424151454641414f434151; asc MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ;
  * (total 2017 bytes);
- 4: len 8; hex 0000016fa2a3229a; asc    o  " ;;
-
-*** WE ROLL BACK TRANSACTION (1)
-*
-* */
+ * 4: len 8; hex 0000016fa2a3229a; asc o " ;;
+ *** 
+ * WE ROLL BACK TRANSACTION (1)
+ *
+ */

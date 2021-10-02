@@ -33,7 +33,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
 
-
 abstract class Utils extends Mockito {
 
     private static ByteArrayOutputStream byteArrayOutputStream;
@@ -155,7 +154,6 @@ abstract class Utils extends Mockito {
                 writer.write(modifiedFileContent);
             }
         }
-
 
     }
 
