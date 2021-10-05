@@ -54,9 +54,13 @@ public class GeneralQueries {
     }
 
     static String getQueryToCreateUsersTable(Start start) {
+        // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getUsersTable() + " ("
-                + "user_id CHAR(36) NOT NULL," + "recipe_id VARCHAR(128) NOT NULL," + "time_joined BIGINT NOT NULL,"
-                + "PRIMARY KEY (user_id));";
+                + "user_id CHAR(36) NOT NULL," 
+                + "recipe_id VARCHAR(128) NOT NULL," 
+                + "time_joined BIGINT NOT NULL,"
+                + "CONSTRAINT " + Config.getConfig(start).getUsersTable() + "_pkey PRIMARY KEY (user_id));";
+        // @formatter:on
     }
 
     static String getQueryToCreateUserPaginationIndex(Start start) {
@@ -65,8 +69,13 @@ public class GeneralQueries {
     }
 
     private static String getQueryToCreateKeyValueTable(Start start) {
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getKeyValueTable() + " (" + "name VARCHAR(128),"
-                + "value TEXT," + "created_at_time BIGINT ," + "PRIMARY KEY(name)" + " );";
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getKeyValueTable() + " (" 
+                + "name VARCHAR(128),"
+                + "value TEXT," 
+                + "created_at_time BIGINT ," 
+                + "CONSTRAINT " + Config.getConfig(start).getKeyValueTable() + "_pkey PRIMARY KEY(name)" + " );";
+        // @formatter:on
     }
 
     public static void createTablesIfNotExists(Start start) throws SQLException {

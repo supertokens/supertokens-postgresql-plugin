@@ -40,9 +40,14 @@ public class JWTSigningQueries {
          * defined
          * keys in the future.
          */
+        // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getJWTSigningKeysTable() + " ("
-                + "key_id VARCHAR(255) NOT NULL," + "key_string TEXT NOT NULL," + "algorithm VARCHAR(10) NOT NULL,"
-                + "created_at BIGINT," + "PRIMARY KEY(key_id));";
+                + "key_id VARCHAR(255) NOT NULL," 
+                + "key_string TEXT NOT NULL," 
+                + "algorithm VARCHAR(10) NOT NULL,"
+                + "created_at BIGINT," 
+                + "CONSTRAINT " + Config.getConfig(start).getJWTSigningKeysTable() + "_pkey PRIMARY KEY(key_id));";
+        // @formatter:on
     }
 
     public static List<JWTSigningKeyInfo> getJWTSigningKeys_Transaction(Start start, Connection con)

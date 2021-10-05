@@ -33,15 +33,25 @@ import java.util.List;
 public class EmailVerificationQueries {
 
     static String getQueryToCreateEmailVerificationTable(Start start) {
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getEmailVerificationTable() + " ("
-                + "user_id VARCHAR(128) NOT NULL," + "email VARCHAR(256) NOT NULL," + "PRIMARY KEY (user_id, email));";
+        // @formatter:off
+        String emailVerificationTable = Config.getConfig(start).getEmailVerificationTable();
+        return "CREATE TABLE IF NOT EXISTS " + emailVerificationTable + " ("
+                + "user_id VARCHAR(128) NOT NULL," 
+                + "email VARCHAR(256) NOT NULL," 
+                + "CONSTRAINT " + emailVerificationTable + "_pkey PRIMARY KEY (user_id, email));";
+        // @formatter:on
     }
 
     static String getQueryToCreateEmailVerificationTokensTable(Start start) {
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getEmailVerificationTokensTable() + " ("
-                + "user_id VARCHAR(128) NOT NULL," + "email VARCHAR(256) NOT NULL,"
-                + "token VARCHAR(128) NOT NULL UNIQUE," + "token_expiry BIGINT NOT NULL,"
-                + "PRIMARY KEY (user_id, email, token))";
+        // @formatter:off
+        String emailVerificationTokensTable = Config.getConfig(start).getEmailVerificationTokensTable();
+        return "CREATE TABLE IF NOT EXISTS " + emailVerificationTokensTable + " ("
+                + "user_id VARCHAR(128) NOT NULL," 
+                + "email VARCHAR(256) NOT NULL,"
+                + "token VARCHAR(128) NOT NULL CONSTRAINT " + emailVerificationTokensTable + "_token_key UNIQUE,"
+                + "token_expiry BIGINT NOT NULL,"
+                + "CONSTRAINT " + emailVerificationTokensTable + "_pkey PRIMARY KEY (user_id, email, token))";
+        // @formatter:on
     }
 
     static String getQueryToCreateEmailVerificationTokenExpiryIndex(Start start) {

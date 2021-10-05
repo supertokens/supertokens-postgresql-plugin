@@ -36,10 +36,16 @@ import java.util.List;
 public class ThirdPartyQueries {
 
     static String getQueryToCreateUsersTable(Start start) {
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getThirdPartyUsersTable() + " ("
-                + "third_party_id VARCHAR(28) NOT NULL," + "third_party_user_id VARCHAR(128) NOT NULL,"
-                + "user_id CHAR(36) NOT NULL UNIQUE," + "email VARCHAR(256) NOT NULL," + "time_joined BIGINT NOT NULL,"
-                + "PRIMARY KEY (third_party_id, third_party_user_id));";
+        // @formatter:off
+        String thirdPartyUsersTable = Config.getConfig(start).getThirdPartyUsersTable();
+        return "CREATE TABLE IF NOT EXISTS " + thirdPartyUsersTable + " ("
+                + "third_party_id VARCHAR(28) NOT NULL," 
+                + "third_party_user_id VARCHAR(128) NOT NULL,"
+                + "user_id CHAR(36) NOT NULL CONSTRAINT " + thirdPartyUsersTable + "_user_id_key UNIQUE,"
+                + "email VARCHAR(256) NOT NULL," 
+                + "time_joined BIGINT NOT NULL," 
+                + "CONSTRAINT " + thirdPartyUsersTable + "_pkey PRIMARY KEY (third_party_id, third_party_user_id));";
+        // @formatter:on
     }
 
     public static void signUp(Start start, io.supertokens.pluginInterface.thirdparty.UserInfo userInfo)

@@ -36,17 +36,29 @@ import java.util.List;
 public class EmailPasswordQueries {
 
     static String getQueryToCreateUsersTable(Start start) {
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getEmailPasswordUsersTable() + " ("
-                + "user_id CHAR(36) NOT NULL," + "email VARCHAR(256) NOT NULL UNIQUE,"
-                + "password_hash VARCHAR(128) NOT NULL," + "time_joined BIGINT NOT NULL," + "PRIMARY KEY (user_id));";
+        // @formatter:off
+        String emailPasswordUsersTable = Config.getConfig(start).getEmailPasswordUsersTable();
+        return "CREATE TABLE IF NOT EXISTS " + emailPasswordUsersTable + " ("
+                + "user_id CHAR(36) NOT NULL,"
+                + "email VARCHAR(256) NOT NULL CONSTRAINT " + emailPasswordUsersTable + "_email_key UNIQUE,"
+                + "password_hash VARCHAR(128) NOT NULL," + "time_joined BIGINT NOT NULL," 
+                + "CONSTRAINT " + emailPasswordUsersTable + "_pkey PRIMARY KEY (user_id));";
+        // @formatter:on
     }
 
     static String getQueryToCreatePasswordResetTokensTable(Start start) {
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getPasswordResetTokensTable() + " ("
-                + "user_id CHAR(36) NOT NULL," + "token VARCHAR(128) NOT NULL UNIQUE," + "token_expiry BIGINT NOT NULL,"
-                + "PRIMARY KEY (user_id, token)," + "FOREIGN KEY (user_id) REFERENCES "
-                + Config.getConfig(start).getEmailPasswordUsersTable()
-                + "(user_id) ON DELETE CASCADE ON UPDATE CASCADE);";
+        // @formatter:off
+        String 
+        passwordResetTokensTable = Config.getConfig(start).getPasswordResetTokensTable();
+        return "CREATE TABLE IF NOT EXISTS " + passwordResetTokensTable + " ("
+                + "user_id CHAR(36) NOT NULL,"
+                + "token VARCHAR(128) NOT NULL CONSTRAINT " + passwordResetTokensTable + "_token_key UNIQUE,"
+                + "token_expiry BIGINT NOT NULL,"
+                + "CONSTRAINT " + passwordResetTokensTable + "_pkey PRIMARY KEY (user_id, token),"
+                + ("CONSTRAINT " + passwordResetTokensTable + "_user_id_fkey FOREIGN KEY (user_id)" 
+                    + " REFERENCES " + Config.getConfig(start).getEmailPasswordUsersTable() + "(user_id)" 
+                    + " ON DELETE CASCADE ON UPDATE CASCADE);");
+        // @formatter:on
     }
 
     static String getQueryToCreatePasswordResetTokenExpiryIndex(Start start) {
