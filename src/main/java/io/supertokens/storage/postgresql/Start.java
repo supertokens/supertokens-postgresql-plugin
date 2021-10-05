@@ -45,11 +45,14 @@ import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.pluginInterface.thirdparty.sqlStorage.ThirdPartySQLStorage;
 import io.supertokens.storage.postgresql.config.Config;
+import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storage.postgresql.output.Logging;
 import io.supertokens.storage.postgresql.queries.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.LoggerFactory;
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.ServerErrorMessage;
 
 import javax.annotation.Nonnull;
 import java.sql.Connection;
@@ -464,13 +467,19 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         try {
             EmailPasswordQueries.signUp(this, userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined);
         } catch (StorageTransactionLogicException eTemp) {
-            Exception e = eTemp.actualException;
-            if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (email)")) {
-                throw new DuplicateEmailException();
-            } else if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (user_id)")) {
-                throw new DuplicateUserIdException();
+            if (eTemp.actualException instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                PSQLException e = (PSQLException) eTemp.actualException;
+                ServerErrorMessage serverMessage = e.getServerErrorMessage();
+
+                if (isUniqueConstraintError(serverMessage, config.getEmailPasswordUsersTable(), "email")) {
+                    throw new DuplicateEmailException();
+                } else if (isPrimaryKeyError(serverMessage, config.getEmailPasswordUsersTable())
+                        || isPrimaryKeyError(serverMessage, config.getUsersTable())) {
+                    throw new DuplicateUserIdException();
+                }
             }
-            throw new StorageQueryException(e);
+            throw new StorageQueryException(eTemp.actualException);
         }
     }
 
@@ -498,12 +507,17 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         try {
             EmailPasswordQueries.addPasswordResetToken(this, passwordResetTokenInfo.userId,
                     passwordResetTokenInfo.token, passwordResetTokenInfo.tokenExpiry);
-        } catch (SQLException e) {
-            if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (user_id, token)")) {
+        } catch (PSQLException e) {
+            ServerErrorMessage serverMessage = e.getServerErrorMessage();
+
+            if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getPasswordResetTokensTable())) {
                 throw new DuplicatePasswordResetTokenException();
-            } else if (e.getMessage().contains("foreign key") && e.getMessage().contains("user_id")) {
+            } else if (isForeignKeyConstraintError(serverMessage, Config.getConfig(this).getPasswordResetTokensTable(),
+                    "user_id")) {
                 throw new UnknownUserIdException();
             }
+            throw new StorageQueryException(e);
+        } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
@@ -565,10 +579,13 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         Connection sqlCon = (Connection) conn.getConnection();
         try {
             EmailPasswordQueries.updateUsersEmail_Transaction(this, sqlCon, userId, email);
-        } catch (SQLException e) {
-            if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (email)")) {
+        } catch (PSQLException e) {
+            if (isUniqueConstraintError(e.getServerErrorMessage(), Config.getConfig(this).getEmailPasswordUsersTable(),
+                    "email")) {
                 throw new DuplicateEmailException();
             }
+            throw new StorageQueryException(e);
+        } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
@@ -623,9 +640,14 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         try {
             EmailVerificationQueries.updateUsersIsEmailVerified_Transaction(this, sqlCon, userId, email,
                     isEmailVerified);
+        } catch (PSQLException e) {
+            if (!isEmailVerified || !isPrimaryKeyError(e.getServerErrorMessage(),
+                    Config.getConfig(this).getEmailVerificationTable())) {
+                throw new StorageQueryException(e);
+            }
+            // we do not throw an error since the email is already verified
         } catch (SQLException e) {
-            if (!isEmailVerified || !(e.getMessage().contains("ERROR: duplicate key")
-                    && e.getMessage().contains("Key (user_id, email)"))) {
+            if (!isEmailVerified) {
                 throw new StorageQueryException(e);
             }
             // we do not throw an error since the email is already verified
@@ -638,11 +660,13 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         try {
             EmailVerificationQueries.addEmailVerificationToken(this, emailVerificationInfo.userId,
                     emailVerificationInfo.token, emailVerificationInfo.tokenExpiry, emailVerificationInfo.email);
-        } catch (SQLException e) {
-            if (e.getMessage().contains("ERROR: duplicate key")
-                    && e.getMessage().contains("Key (user_id, email, token)")) {
+        } catch (PSQLException e) {
+            if (isPrimaryKeyError(e.getServerErrorMessage(),
+                    Config.getConfig(this).getEmailVerificationTokensTable())) {
                 throw new DuplicateEmailVerificationTokenException();
             }
+            throw new StorageQueryException(e);
+        } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
@@ -762,14 +786,16 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         try {
             ThirdPartyQueries.signUp(this, userInfo);
         } catch (StorageTransactionLogicException eTemp) {
-            Exception e = eTemp.actualException;
-            if (e.getMessage().contains("ERROR: duplicate key")
-                    && e.getMessage().contains("Key (third_party_id, third_party_user_id)")) {
-                throw new DuplicateThirdPartyUserException();
-            } else if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (user_id)")) {
-                throw new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException();
+            if (eTemp.actualException instanceof PSQLException) {
+                PSQLException e = (PSQLException) eTemp.actualException;
+                ServerErrorMessage serverMessage = e.getServerErrorMessage();
+                if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getThirdPartyUsersTable())) {
+                    throw new DuplicateThirdPartyUserException();
+                } else if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getUsersTable())) {
+                    throw new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException();
+                }
             }
-            throw new StorageQueryException(e);
+            throw new StorageQueryException(eTemp.actualException);
         }
     }
 
@@ -873,13 +899,28 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         Connection sqlCon = (Connection) con.getConnection();
         try {
             JWTSigningQueries.setJWTSigningKeyInfo_Transaction(this, sqlCon, info);
-        } catch (SQLException e) {
-
-            if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (key_id)")) {
+        } catch (PSQLException e) {
+            if (isPrimaryKeyError(e.getServerErrorMessage(), Config.getConfig(this).getJWTSigningKeysTable())) {
                 throw new DuplicateKeyIdException();
             }
 
             throw new StorageQueryException(e);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
         }
+    }
+
+    private boolean isUniqueConstraintError(ServerErrorMessage serverMessage, String tableName, String columnName) {
+        return serverMessage.getSQLState().equals("23505") && serverMessage.getTable().equals(tableName)
+                && serverMessage.getConstraint().equals(tableName + "_" + columnName + "_key");
+    }
+
+    private boolean isForeignKeyConstraintError(ServerErrorMessage serverMessage, String tableName, String columnName) {
+        return serverMessage.getSQLState().equals("23503") && serverMessage.getTable().equals(tableName)
+                && serverMessage.getConstraint().equals(tableName + "_" + columnName + "_fkey");
+    }
+
+    private boolean isPrimaryKeyError(ServerErrorMessage serverMessage, String tableName) {
+        return serverMessage.getSQLState().equals("23505") && serverMessage.getConstraint().equals(tableName + "_pkey");
     }
 }
