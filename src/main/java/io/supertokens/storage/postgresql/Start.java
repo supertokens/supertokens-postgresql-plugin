@@ -467,10 +467,10 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         try {
             EmailPasswordQueries.signUp(this, userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined);
         } catch (StorageTransactionLogicException eTemp) {
-            if (eTemp.actualException instanceof PSQLException) {
+            Exception e = eTemp.actualException;
+            if (e instanceof PSQLException) {
                 PostgreSQLConfig config = Config.getConfig(this);
-                PSQLException e = (PSQLException) eTemp.actualException;
-                ServerErrorMessage serverMessage = e.getServerErrorMessage();
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
 
                 if (isUniqueConstraintError(serverMessage, config.getEmailPasswordUsersTable(), "email")) {
                     throw new DuplicateEmailException();
@@ -478,8 +478,15 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                         || isPrimaryKeyError(serverMessage, config.getUsersTable())) {
                     throw new DuplicateUserIdException();
                 }
+            } else {
+                if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (email)")) {
+                    throw new DuplicateEmailException();
+                } else if (e.getMessage().contains("ERROR: duplicate key")
+                        && e.getMessage().contains("Key (user_id)")) {
+                    throw new DuplicateUserIdException();
+                }
             }
-            throw new StorageQueryException(eTemp.actualException);
+            throw new StorageQueryException(e);
         }
     }
 
@@ -518,6 +525,11 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             }
             throw new StorageQueryException(e);
         } catch (SQLException e) {
+            if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (user_id, token)")) {
+                throw new DuplicatePasswordResetTokenException();
+            } else if (e.getMessage().contains("foreign key") && e.getMessage().contains("user_id")) {
+                throw new UnknownUserIdException();
+            }
             throw new StorageQueryException(e);
         }
     }
@@ -586,6 +598,9 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             }
             throw new StorageQueryException(e);
         } catch (SQLException e) {
+            if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (email)")) {
+                throw new DuplicateEmailException();
+            }
             throw new StorageQueryException(e);
         }
     }
@@ -647,7 +662,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             }
             // we do not throw an error since the email is already verified
         } catch (SQLException e) {
-            if (!isEmailVerified) {
+            if (!isEmailVerified || !(e.getMessage().contains("ERROR: duplicate key")
+                    && e.getMessage().contains("Key (user_id, email)"))) {
                 throw new StorageQueryException(e);
             }
             // we do not throw an error since the email is already verified
@@ -667,6 +683,10 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             }
             throw new StorageQueryException(e);
         } catch (SQLException e) {
+            if (e.getMessage().contains("ERROR: duplicate key")
+                    && e.getMessage().contains("Key (user_id, email, token)")) {
+                throw new DuplicateEmailVerificationTokenException();
+            }
             throw new StorageQueryException(e);
         }
     }
@@ -794,6 +814,15 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                 } else if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getUsersTable())) {
                     throw new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException();
                 }
+            } else {
+                Exception e = eTemp.actualException;
+                if (e.getMessage().contains("ERROR: duplicate key")
+                        && e.getMessage().contains("Key (third_party_id, third_party_user_id)")) {
+                    throw new DuplicateThirdPartyUserException();
+                } else if (e.getMessage().contains("ERROR: duplicate key")
+                        && e.getMessage().contains("Key (user_id)")) {
+                    throw new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException();
+                }
             }
             throw new StorageQueryException(eTemp.actualException);
         }
@@ -906,6 +935,10 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
 
             throw new StorageQueryException(e);
         } catch (SQLException e) {
+            if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (key_id)")) {
+                throw new DuplicateKeyIdException();
+            }
+
             throw new StorageQueryException(e);
         }
     }

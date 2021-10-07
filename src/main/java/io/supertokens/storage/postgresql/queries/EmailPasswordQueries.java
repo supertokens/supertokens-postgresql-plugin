@@ -48,8 +48,7 @@ public class EmailPasswordQueries {
 
     static String getQueryToCreatePasswordResetTokensTable(Start start) {
         // @formatter:off
-        String 
-        passwordResetTokensTable = Config.getConfig(start).getPasswordResetTokensTable();
+        String passwordResetTokensTable = Config.getConfig(start).getPasswordResetTokensTable();
         return "CREATE TABLE IF NOT EXISTS " + passwordResetTokensTable + " ("
                 + "user_id CHAR(36) NOT NULL,"
                 + "token VARCHAR(128) NOT NULL CONSTRAINT " + passwordResetTokensTable + "_token_key UNIQUE,"
