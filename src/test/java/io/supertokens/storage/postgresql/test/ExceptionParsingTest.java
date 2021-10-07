@@ -70,11 +70,7 @@ public class ExceptionParsingTest {
     }
 
     @Test
-    public void thirdPartySignupExceptions() throws InterruptedException, StorageQueryException,
-            NoSuchAlgorithmException, InvalidKeyException, SignatureException, InvalidAlgorithmParameterException,
-            NoSuchPaddingException, BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException,
-            IllegalBlockSizeException, StorageTransactionLogicException, DuplicateThirdPartyUserException,
-            io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException {
+    public void thirdPartySignupExceptions() throws Exception {
         {
             String[] args = { "../" };
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -94,6 +90,7 @@ public class ExceptionParsingTest {
             storage.signUp(info);
             try {
                 storage.signUp(info);
+                throw new Exception("This should throw");
             } catch (io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException ex) {
                 // expected
             }
@@ -102,6 +99,7 @@ public class ExceptionParsingTest {
 
             try {
                 storage.signUp(info2);
+                throw new Exception("This should throw");
             } catch (DuplicateThirdPartyUserException ex) {
                 // expected
             }
@@ -114,11 +112,7 @@ public class ExceptionParsingTest {
     }
 
     @Test
-    public void emailPasswordSignupExceptions()
-            throws InterruptedException, StorageQueryException, NoSuchAlgorithmException, InvalidKeyException,
-            SignatureException, InvalidAlgorithmParameterException, NoSuchPaddingException, BadPaddingException,
-            UnsupportedEncodingException, InvalidKeySpecException, IllegalBlockSizeException,
-            StorageTransactionLogicException, DuplicateUserIdException, DuplicateEmailException {
+    public void emailPasswordSignupExceptions() throws Exception {
         {
             String[] args = { "../" };
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -135,6 +129,7 @@ public class ExceptionParsingTest {
             storage.signUp(info);
             try {
                 storage.signUp(info);
+                throw new Exception("This should throw");
             } catch (DuplicateUserIdException ex) {
                 // expected
             }
@@ -142,6 +137,7 @@ public class ExceptionParsingTest {
 
             try {
                 storage.signUp(info2);
+                throw new Exception("This should throw");
             } catch (DuplicateEmailException ex) {
                 // expected
             }
@@ -257,11 +253,7 @@ public class ExceptionParsingTest {
     }
 
     @Test
-    public void addPasswordResetTokenExceptions() throws InterruptedException, StorageQueryException,
-            NoSuchAlgorithmException, InvalidKeyException, SignatureException, InvalidAlgorithmParameterException,
-            NoSuchPaddingException, BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException,
-            IllegalBlockSizeException, StorageTransactionLogicException, DuplicatePasswordResetTokenException,
-            UnknownUserIdException, DuplicateUserIdException, DuplicateEmailException {
+    public void addPasswordResetTokenExceptions() throws Exception {
         {
             String[] args = { "../" };
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -284,6 +276,7 @@ public class ExceptionParsingTest {
             storage.addPasswordResetToken(info);
             try {
                 storage.addPasswordResetToken(info);
+                throw new Exception("This should throw");
             } catch (DuplicatePasswordResetTokenException ex) {
                 // expected
             }
@@ -294,10 +287,7 @@ public class ExceptionParsingTest {
     }
 
     @Test
-    public void addEmailVerificationTokenExceptions() throws InterruptedException, StorageQueryException,
-            NoSuchAlgorithmException, InvalidKeyException, SignatureException, InvalidAlgorithmParameterException,
-            NoSuchPaddingException, BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException,
-            IllegalBlockSizeException, StorageTransactionLogicException, DuplicateEmailVerificationTokenException {
+    public void addEmailVerificationTokenExceptions() throws Exception {
         {
             String[] args = { "../" };
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -313,6 +303,7 @@ public class ExceptionParsingTest {
             storage.addEmailVerificationToken(info);
             try {
                 storage.addEmailVerificationToken(info);
+                throw new Exception("This should throw");
             } catch (DuplicateEmailVerificationTokenException ex) {
                 // expected
             }
@@ -323,10 +314,7 @@ public class ExceptionParsingTest {
     }
 
     @Test
-    public void verifyEmailExceptions() throws InterruptedException, StorageQueryException, NoSuchAlgorithmException,
-            InvalidKeyException, SignatureException, InvalidAlgorithmParameterException, NoSuchPaddingException,
-            BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException, IllegalBlockSizeException,
-            StorageTransactionLogicException, DuplicateUserIdException, DuplicateEmailException {
+    public void verifyEmailExceptions() throws Exception {
         {
             String[] args = { "../" };
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -343,6 +331,7 @@ public class ExceptionParsingTest {
             storage.signUp(info);
             try {
                 storage.signUp(info);
+                throw new Exception("This should throw");
             } catch (DuplicateUserIdException ex) {
                 // expected
             }
@@ -350,6 +339,7 @@ public class ExceptionParsingTest {
 
             try {
                 storage.signUp(info2);
+                throw new Exception("This should throw");
             } catch (DuplicateEmailException ex) {
                 // expected
             }
