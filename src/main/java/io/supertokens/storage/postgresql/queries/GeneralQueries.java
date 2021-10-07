@@ -25,6 +25,8 @@ import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.ProcessState;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
+import io.supertokens.storage.postgresql.utils.Utils;
+
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -54,12 +56,14 @@ public class GeneralQueries {
     }
 
     static String getQueryToCreateUsersTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String usersTable = Config.getConfig(start).getUsersTable();
         // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getUsersTable() + " ("
+        return "CREATE TABLE IF NOT EXISTS " + usersTable + " ("
                 + "user_id CHAR(36) NOT NULL," 
                 + "recipe_id VARCHAR(128) NOT NULL," 
                 + "time_joined BIGINT NOT NULL,"
-                + "CONSTRAINT " + Config.getConfig(start).getUsersTable() + "_pkey PRIMARY KEY (user_id));";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, null, "pkey") + " PRIMARY KEY (user_id));";
         // @formatter:on
     }
 
@@ -69,12 +73,14 @@ public class GeneralQueries {
     }
 
     private static String getQueryToCreateKeyValueTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String keyValueTable = Config.getConfig(start).getKeyValueTable();
         // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getKeyValueTable() + " (" 
+        return "CREATE TABLE IF NOT EXISTS " + keyValueTable + " (" 
                 + "name VARCHAR(128),"
                 + "value TEXT," 
                 + "created_at_time BIGINT ," 
-                + "CONSTRAINT " + Config.getConfig(start).getKeyValueTable() + "_pkey PRIMARY KEY(name)" + " );";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, keyValueTable, null, "pkey") + " PRIMARY KEY(name)" + " );";
         // @formatter:on
     }
 

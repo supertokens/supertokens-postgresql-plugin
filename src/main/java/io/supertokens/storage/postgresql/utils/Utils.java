@@ -28,4 +28,20 @@ public class Utils {
         ps.close();
         return baos.toString();
     }
+
+    public static String getConstraintName(String schema, String prefixedTableName, String column, String typeSuffix) {
+        StringBuilder constraintName = new StringBuilder(prefixedTableName);
+        if (prefixedTableName.startsWith(schema)) {
+            // We also have to delete the . after the schema name
+            constraintName.delete(0, schema.length() + 1);
+        }
+
+        if (column != null) {
+            constraintName.append('_').append(column);
+        }
+        constraintName.append('_').append(typeSuffix);
+        System.out.println(schema);
+        System.out.println(constraintName.toString());
+        return constraintName.toString();
+    }
 }

@@ -25,6 +25,7 @@ import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicExceptio
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -36,25 +37,27 @@ import java.util.List;
 public class EmailPasswordQueries {
 
     static String getQueryToCreateUsersTable(Start start) {
-        // @formatter:off
+        String schema = Config.getConfig(start).getTableSchema();
         String emailPasswordUsersTable = Config.getConfig(start).getEmailPasswordUsersTable();
+        // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + emailPasswordUsersTable + " ("
                 + "user_id CHAR(36) NOT NULL,"
-                + "email VARCHAR(256) NOT NULL CONSTRAINT " + emailPasswordUsersTable + "_email_key UNIQUE,"
+                + "email VARCHAR(256) NOT NULL CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUsersTable, "email", "key") + " UNIQUE,"
                 + "password_hash VARCHAR(128) NOT NULL," + "time_joined BIGINT NOT NULL," 
-                + "CONSTRAINT " + emailPasswordUsersTable + "_pkey PRIMARY KEY (user_id));";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUsersTable, null, "pkey") + " PRIMARY KEY (user_id));";
         // @formatter:on
     }
 
     static String getQueryToCreatePasswordResetTokensTable(Start start) {
-        // @formatter:off
+        String schema = Config.getConfig(start).getTableSchema();
         String passwordResetTokensTable = Config.getConfig(start).getPasswordResetTokensTable();
+        // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + passwordResetTokensTable + " ("
                 + "user_id CHAR(36) NOT NULL,"
-                + "token VARCHAR(128) NOT NULL CONSTRAINT " + passwordResetTokensTable + "_token_key UNIQUE,"
+                + "token VARCHAR(128) NOT NULL CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, "token", "key") + " UNIQUE,"
                 + "token_expiry BIGINT NOT NULL,"
-                + "CONSTRAINT " + passwordResetTokensTable + "_pkey PRIMARY KEY (user_id, token),"
-                + ("CONSTRAINT " + passwordResetTokensTable + "_user_id_fkey FOREIGN KEY (user_id)" 
+                + "CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, null, "pkey") + " PRIMARY KEY (user_id, token),"
+                + ("CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, "user_id", "fkey") + " FOREIGN KEY (user_id)" 
                     + " REFERENCES " + Config.getConfig(start).getEmailPasswordUsersTable() + "(user_id)" 
                     + " ON DELETE CASCADE ON UPDATE CASCADE);");
         // @formatter:on

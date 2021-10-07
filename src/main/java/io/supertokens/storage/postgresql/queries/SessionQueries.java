@@ -26,6 +26,7 @@ import io.supertokens.pluginInterface.session.SessionInfo;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 import javax.annotation.Nullable;
 import java.sql.Connection;
@@ -38,8 +39,10 @@ import java.util.List;
 public class SessionQueries {
 
     public static String getQueryToCreateSessionInfoTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String sessionInfoTable = Config.getConfig(start).getSessionInfoTable();
         // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getSessionInfoTable() + " ("
+        return "CREATE TABLE IF NOT EXISTS " + sessionInfoTable + " ("
                 + "session_handle VARCHAR(255) NOT NULL," 
                 + "user_id VARCHAR(128) NOT NULL,"
                 + "refresh_token_hash_2 VARCHAR(128) NOT NULL," 
@@ -47,17 +50,19 @@ public class SessionQueries {
                 + "expires_at BIGINT NOT NULL,"
                 + "created_at_time BIGINT NOT NULL," 
                 + "jwt_user_payload TEXT," 
-                + "CONSTRAINT " + Config.getConfig(start).getSessionInfoTable() + "_pkey PRIMARY KEY(session_handle)" + " );";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, sessionInfoTable, null, "pkey") + " PRIMARY KEY(session_handle)" + " );";
         // @formatter:on
 
     }
 
     static String getQueryToCreateAccessTokenSigningKeysTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String accessTokenSigningKeysTable = Config.getConfig(start).getAccessTokenSigningKeysTable();
         // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getAccessTokenSigningKeysTable() + " ("
+        return "CREATE TABLE IF NOT EXISTS " + accessTokenSigningKeysTable + " ("
                 + "created_at_time BIGINT NOT NULL," 
                 + "value TEXT," 
-                + "CONSTRAINT " + Config.getConfig(start).getAccessTokenSigningKeysTable() + "_pkey PRIMARY KEY(created_at_time)" + " );";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, accessTokenSigningKeysTable, null, "pkey") + " PRIMARY KEY(created_at_time)" + " );";
         // @formatter:on
     }
 
