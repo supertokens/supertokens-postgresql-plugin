@@ -158,12 +158,19 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                 return startTransactionHelper(logic);
             } catch (SQLException | StorageQueryException e) {
                 // see: https://github.com/supertokens/supertokens-postgresql-plugin/pull/3
-                if ((e instanceof SQLTransactionRollbackException
+                PSQLException psqlException = e instanceof PSQLException ? (PSQLException) e
+                        : e.getCause() instanceof PSQLException ? (PSQLException) e.getCause() : null;
+                // PSQL error class 40 is transaction rollback. See:
+                // https://www.postgresql.org/docs/12/errcodes-appendix.html
+                boolean isPSQLRollbackException = psqlException != null
+                        && psqlException.getServerErrorMessage().getSQLState().startsWith("40");
+                boolean isDeadlockException = e instanceof SQLTransactionRollbackException
                         || e.getMessage().toLowerCase().contains("concurrent update")
                         || e.getMessage().toLowerCase().contains("the transaction might succeed if retried") ||
 
                         // we have deadlock as well due to the DeadlockTest.java
-                        e.getMessage().toLowerCase().contains("deadlock")) && tries < 3) {
+                        e.getMessage().toLowerCase().contains("deadlock");
+                if ((isPSQLRollbackException || isDeadlockException) && tries < 3) {
                     try {
                         Thread.sleep((long) (10 + (Math.random() * 20)));
                     } catch (InterruptedException ignored) {
