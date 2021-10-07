@@ -40,8 +40,6 @@ public class Utils {
             constraintName.append('_').append(column);
         }
         constraintName.append('_').append(typeSuffix);
-        System.out.println(schema);
-        System.out.println(constraintName.toString());
         return constraintName.toString();
     }
 }
