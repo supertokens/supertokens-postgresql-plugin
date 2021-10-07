@@ -524,7 +524,6 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                         Config.getConfig(this).getPasswordResetTokensTable(), "user_id")) {
                     throw new UnknownUserIdException();
                 }
-                throw new StorageQueryException(e);
             }
 
             if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (user_id, token)")) {
@@ -940,16 +939,17 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
     }
 
     private boolean isUniqueConstraintError(ServerErrorMessage serverMessage, String tableName, String columnName) {
-        return serverMessage.getSQLState().equals("23505") && serverMessage.getTable().equals(tableName)
+        return serverMessage.getSQLState().equals("23505") && serverMessage.getConstraint() != null
                 && serverMessage.getConstraint().equals(tableName + "_" + columnName + "_key");
     }
 
     private boolean isForeignKeyConstraintError(ServerErrorMessage serverMessage, String tableName, String columnName) {
-        return serverMessage.getSQLState().equals("23503") && serverMessage.getTable().equals(tableName)
+        return serverMessage.getSQLState().equals("23503") && serverMessage.getConstraint() != null
                 && serverMessage.getConstraint().equals(tableName + "_" + columnName + "_fkey");
     }
 
     private boolean isPrimaryKeyError(ServerErrorMessage serverMessage, String tableName) {
-        return serverMessage.getSQLState().equals("23505") && serverMessage.getConstraint().equals(tableName + "_pkey");
+        return serverMessage.getSQLState().equals("23505") && serverMessage.getConstraint() != null
+                && serverMessage.getConstraint().equals(tableName + "_pkey");
     }
 }
