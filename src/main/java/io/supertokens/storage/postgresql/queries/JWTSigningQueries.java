@@ -23,6 +23,7 @@ import io.supertokens.pluginInterface.jwt.JWTSigningKeyInfo;
 import io.supertokens.pluginInterface.jwt.JWTSymmetricSigningKeyInfo;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -40,9 +41,16 @@ public class JWTSigningQueries {
          * defined
          * keys in the future.
          */
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getJWTSigningKeysTable() + " ("
-                + "key_id VARCHAR(255) NOT NULL," + "key_string TEXT NOT NULL," + "algorithm VARCHAR(10) NOT NULL,"
-                + "created_at BIGINT," + "PRIMARY KEY(key_id));";
+        String schema = Config.getConfig(start).getTableSchema();
+        String jwtSigningKeysTable = Config.getConfig(start).getJWTSigningKeysTable();
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + jwtSigningKeysTable + " ("
+                + "key_id VARCHAR(255) NOT NULL," 
+                + "key_string TEXT NOT NULL," 
+                + "algorithm VARCHAR(10) NOT NULL,"
+                + "created_at BIGINT," 
+                + "CONSTRAINT " + Utils.getConstraintName(schema, jwtSigningKeysTable, null, "pkey") + " PRIMARY KEY(key_id));";
+        // @formatter:on
     }
 
     public static List<JWTSigningKeyInfo> getJWTSigningKeys_Transaction(Start start, Connection con)

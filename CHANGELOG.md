@@ -7,6 +7,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.11.1] - 2021-10-07
+
+### Changed
+
+- Explicitly naming table constraints on creation (using the default Postgres names, so we don't break existing DBs)
+- Using PSQLException to parse exception messages
+
 ## [1.11.0] - 2021-09-12
 
 ### Changed

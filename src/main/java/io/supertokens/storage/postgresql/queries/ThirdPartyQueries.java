@@ -24,6 +24,8 @@ import io.supertokens.pluginInterface.thirdparty.UserInfo;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
+import io.supertokens.storage.postgresql.utils.Utils;
+
 import org.jetbrains.annotations.NotNull;
 
 import java.sql.Connection;
@@ -36,10 +38,17 @@ import java.util.List;
 public class ThirdPartyQueries {
 
     static String getQueryToCreateUsersTable(Start start) {
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getThirdPartyUsersTable() + " ("
-                + "third_party_id VARCHAR(28) NOT NULL," + "third_party_user_id VARCHAR(128) NOT NULL,"
-                + "user_id CHAR(36) NOT NULL UNIQUE," + "email VARCHAR(256) NOT NULL," + "time_joined BIGINT NOT NULL,"
-                + "PRIMARY KEY (third_party_id, third_party_user_id));";
+        String schema = Config.getConfig(start).getTableSchema();
+        String thirdPartyUsersTable = Config.getConfig(start).getThirdPartyUsersTable();
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + thirdPartyUsersTable + " ("
+                + "third_party_id VARCHAR(28) NOT NULL," 
+                + "third_party_user_id VARCHAR(128) NOT NULL,"
+                + "user_id CHAR(36) NOT NULL CONSTRAINT " + Utils.getConstraintName(schema, thirdPartyUsersTable, "user_id", "key") + " UNIQUE,"
+                + "email VARCHAR(256) NOT NULL," 
+                + "time_joined BIGINT NOT NULL," 
+                + "CONSTRAINT " + Utils.getConstraintName(schema, thirdPartyUsersTable, null, "pkey") + " PRIMARY KEY (third_party_id, third_party_user_id));";
+        // @formatter:on
     }
 
     public static void signUp(Start start, io.supertokens.pluginInterface.thirdparty.UserInfo userInfo)

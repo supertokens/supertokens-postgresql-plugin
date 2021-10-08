@@ -22,6 +22,7 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -33,15 +34,27 @@ import java.util.List;
 public class EmailVerificationQueries {
 
     static String getQueryToCreateEmailVerificationTable(Start start) {
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getEmailVerificationTable() + " ("
-                + "user_id VARCHAR(128) NOT NULL," + "email VARCHAR(256) NOT NULL," + "PRIMARY KEY (user_id, email));";
+        String schema = Config.getConfig(start).getTableSchema();
+        String emailVerificationTable = Config.getConfig(start).getEmailVerificationTable();
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + emailVerificationTable + " ("
+                + "user_id VARCHAR(128) NOT NULL," 
+                + "email VARCHAR(256) NOT NULL," 
+                + "CONSTRAINT " + Utils.getConstraintName(schema, emailVerificationTable, null, "pkey") + " PRIMARY KEY (user_id, email));";
+        // @formatter:on
     }
 
     static String getQueryToCreateEmailVerificationTokensTable(Start start) {
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getEmailVerificationTokensTable() + " ("
-                + "user_id VARCHAR(128) NOT NULL," + "email VARCHAR(256) NOT NULL,"
-                + "token VARCHAR(128) NOT NULL UNIQUE," + "token_expiry BIGINT NOT NULL,"
-                + "PRIMARY KEY (user_id, email, token))";
+        String schema = Config.getConfig(start).getTableSchema();
+        String emailVerificationTokensTable = Config.getConfig(start).getEmailVerificationTokensTable();
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + emailVerificationTokensTable + " ("
+                + "user_id VARCHAR(128) NOT NULL," 
+                + "email VARCHAR(256) NOT NULL,"
+                + "token VARCHAR(128) NOT NULL CONSTRAINT " + Utils.getConstraintName(schema, emailVerificationTokensTable, "token", "key") + " UNIQUE,"
+                + "token_expiry BIGINT NOT NULL,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, emailVerificationTokensTable, null, "pkey") + " PRIMARY KEY (user_id, email, token))";
+        // @formatter:on
     }
 
     static String getQueryToCreateEmailVerificationTokenExpiryIndex(Start start) {

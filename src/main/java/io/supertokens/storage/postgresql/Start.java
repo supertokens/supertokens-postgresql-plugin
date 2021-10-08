@@ -45,11 +45,14 @@ import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.pluginInterface.thirdparty.sqlStorage.ThirdPartySQLStorage;
 import io.supertokens.storage.postgresql.config.Config;
+import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storage.postgresql.output.Logging;
 import io.supertokens.storage.postgresql.queries.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.LoggerFactory;
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.ServerErrorMessage;
 
 import javax.annotation.Nonnull;
 import java.sql.Connection;
@@ -155,12 +158,28 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                 return startTransactionHelper(logic);
             } catch (SQLException | StorageQueryException e) {
                 // see: https://github.com/supertokens/supertokens-postgresql-plugin/pull/3
-                if ((e instanceof SQLTransactionRollbackException
+
+                // We set this variable to the current (or cause) exception casted to PSQLException if we can safely
+                // cast it
+                PSQLException psqlException = e instanceof PSQLException ? (PSQLException) e
+                        : e.getCause() instanceof PSQLException ? (PSQLException) e.getCause() : null;
+
+                // PSQL error class 40 is transaction rollback. See:
+                // https://www.postgresql.org/docs/12/errcodes-appendix.html
+                boolean isPSQLRollbackException = psqlException != null
+                        && psqlException.getServerErrorMessage().getSQLState().startsWith("40");
+
+                // We keep the old exception detection logic to ensure backwards compatibility.
+                // We could get here if the new logic hits a false negative, e.g., in case someone renamed
+                // constraints/tables
+                boolean isDeadlockException = e instanceof SQLTransactionRollbackException
                         || e.getMessage().toLowerCase().contains("concurrent update")
                         || e.getMessage().toLowerCase().contains("the transaction might succeed if retried") ||
 
                         // we have deadlock as well due to the DeadlockTest.java
-                        e.getMessage().toLowerCase().contains("deadlock")) && tries < 3) {
+                        e.getMessage().toLowerCase().contains("deadlock");
+
+                if ((isPSQLRollbackException || isDeadlockException) && tries < 3) {
                     try {
                         Thread.sleep((long) (10 + (Math.random() * 20)));
                     } catch (InterruptedException ignored) {
@@ -465,11 +484,27 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             EmailPasswordQueries.signUp(this, userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined);
         } catch (StorageTransactionLogicException eTemp) {
             Exception e = eTemp.actualException;
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isUniqueConstraintError(serverMessage, config.getEmailPasswordUsersTable(), "email")) {
+                    throw new DuplicateEmailException();
+                } else if (isPrimaryKeyError(serverMessage, config.getEmailPasswordUsersTable())
+                        || isPrimaryKeyError(serverMessage, config.getUsersTable())) {
+                    throw new DuplicateUserIdException();
+                }
+            }
+
+            // We keep the old exception detection logic to ensure backwards compatibility.
+            // We could get here if the new logic hits a false negative, e.g., in case someone renamed
+            // constraints/tables
             if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (email)")) {
                 throw new DuplicateEmailException();
             } else if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (user_id)")) {
                 throw new DuplicateUserIdException();
             }
+
             throw new StorageQueryException(e);
         }
     }
@@ -499,6 +534,20 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             EmailPasswordQueries.addPasswordResetToken(this, passwordResetTokenInfo.userId,
                     passwordResetTokenInfo.token, passwordResetTokenInfo.tokenExpiry);
         } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getPasswordResetTokensTable())) {
+                    throw new DuplicatePasswordResetTokenException();
+                } else if (isForeignKeyConstraintError(serverMessage,
+                        Config.getConfig(this).getPasswordResetTokensTable(), "user_id")) {
+                    throw new UnknownUserIdException();
+                }
+            }
+
+            // We keep the old exception detection logic to ensure backwards compatibility.
+            // We could get here if the new logic hits a false negative, e.g., in case someone renamed
+            // constraints/tables
             if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (user_id, token)")) {
                 throw new DuplicatePasswordResetTokenException();
             } else if (e.getMessage().contains("foreign key") && e.getMessage().contains("user_id")) {
@@ -566,6 +615,14 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         try {
             EmailPasswordQueries.updateUsersEmail_Transaction(this, sqlCon, userId, email);
         } catch (SQLException e) {
+            if (e instanceof PSQLException && isUniqueConstraintError(((PSQLException) e).getServerErrorMessage(),
+                    Config.getConfig(this).getEmailPasswordUsersTable(), "email")) {
+                throw new DuplicateEmailException();
+            }
+
+            // We keep the old exception detection logic to ensure backwards compatibility.
+            // We could get here if the new logic hits a false negative, e.g., in case someone renamed
+            // constraints/tables
             if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (email)")) {
                 throw new DuplicateEmailException();
             }
@@ -624,8 +681,16 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             EmailVerificationQueries.updateUsersIsEmailVerified_Transaction(this, sqlCon, userId, email,
                     isEmailVerified);
         } catch (SQLException e) {
-            if (!isEmailVerified || !(e.getMessage().contains("ERROR: duplicate key")
-                    && e.getMessage().contains("Key (user_id, email)"))) {
+            boolean isPSQLPrimKeyError = e instanceof PSQLException && isPrimaryKeyError(
+                    ((PSQLException) e).getServerErrorMessage(), Config.getConfig(this).getEmailVerificationTable());
+
+            // We keep the old exception detection logic to ensure backwards compatibility.
+            // We could get here if the new logic hits a false negative, e.g., in case someone renamed
+            // constraints/tables
+            boolean isDuplicateKeyError = e.getMessage().contains("ERROR: duplicate key")
+                    && e.getMessage().contains("Key (user_id, email)");
+
+            if (!isEmailVerified || (!isPSQLPrimKeyError && !isDuplicateKeyError)) {
                 throw new StorageQueryException(e);
             }
             // we do not throw an error since the email is already verified
@@ -639,6 +704,14 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             EmailVerificationQueries.addEmailVerificationToken(this, emailVerificationInfo.userId,
                     emailVerificationInfo.token, emailVerificationInfo.tokenExpiry, emailVerificationInfo.email);
         } catch (SQLException e) {
+            if (e instanceof PSQLException && isPrimaryKeyError(((PSQLException) e).getServerErrorMessage(),
+                    Config.getConfig(this).getEmailVerificationTokensTable())) {
+                throw new DuplicateEmailVerificationTokenException();
+            }
+
+            // We keep the old exception detection logic to ensure backwards compatibility.
+            // We could get here if the new logic hits a false negative, e.g., in case someone renamed
+            // constraints/tables
             if (e.getMessage().contains("ERROR: duplicate key")
                     && e.getMessage().contains("Key (user_id, email, token)")) {
                 throw new DuplicateEmailVerificationTokenException();
@@ -763,13 +836,26 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             ThirdPartyQueries.signUp(this, userInfo);
         } catch (StorageTransactionLogicException eTemp) {
             Exception e = eTemp.actualException;
+            if (e instanceof PSQLException) {
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+                if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getThirdPartyUsersTable())) {
+                    throw new DuplicateThirdPartyUserException();
+                } else if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getUsersTable())) {
+                    throw new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException();
+                }
+            }
+
+            // We keep the old exception detection logic to ensure backwards compatibility.
+            // We could get here if the new logic hits a false negative, e.g., in case someone renamed
+            // constraints/tables
             if (e.getMessage().contains("ERROR: duplicate key")
                     && e.getMessage().contains("Key (third_party_id, third_party_user_id)")) {
                 throw new DuplicateThirdPartyUserException();
             } else if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (user_id)")) {
                 throw new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException();
             }
-            throw new StorageQueryException(e);
+
+            throw new StorageQueryException(eTemp.actualException);
         }
     }
 
@@ -874,12 +960,34 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         try {
             JWTSigningQueries.setJWTSigningKeyInfo_Transaction(this, sqlCon, info);
         } catch (SQLException e) {
+            if (e instanceof PSQLException && isPrimaryKeyError(((PSQLException) e).getServerErrorMessage(),
+                    Config.getConfig(this).getJWTSigningKeysTable())) {
+                throw new DuplicateKeyIdException();
+            }
 
+            // We keep the old exception detection logic to ensure backwards compatibility.
+            // We could get here if the new logic hits a false negative, e.g., in case someone renamed
+            // constraints/tables
             if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (key_id)")) {
                 throw new DuplicateKeyIdException();
             }
 
             throw new StorageQueryException(e);
         }
+    }
+
+    private boolean isUniqueConstraintError(ServerErrorMessage serverMessage, String tableName, String columnName) {
+        return serverMessage.getSQLState().equals("23505") && serverMessage.getConstraint() != null
+                && serverMessage.getConstraint().equals(tableName + "_" + columnName + "_key");
+    }
+
+    private boolean isForeignKeyConstraintError(ServerErrorMessage serverMessage, String tableName, String columnName) {
+        return serverMessage.getSQLState().equals("23503") && serverMessage.getConstraint() != null
+                && serverMessage.getConstraint().equals(tableName + "_" + columnName + "_fkey");
+    }
+
+    private boolean isPrimaryKeyError(ServerErrorMessage serverMessage, String tableName) {
+        return serverMessage.getSQLState().equals("23505") && serverMessage.getConstraint() != null
+                && serverMessage.getConstraint().equals(tableName + "_pkey");
     }
 }
