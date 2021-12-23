@@ -257,6 +257,22 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName(tableName);
     }
 
+    public String getPasswordlessUsersTable() {
+        String tableName = "passwordless_users";
+        return addSchemaAndPrefixToTableName(tableName);
+
+    }
+
+    public String getPasswordlessDevicesTable() {
+        String tableName = "passwordless_devices";
+        return addSchemaAndPrefixToTableName(tableName);
+    }
+
+    public String getPasswordlessCodesTable() {
+        String tableName = "passwordless_codes";
+        return addSchemaAndPrefixToTableName(tableName);
+    }
+
     public String getJWTSigningKeysTable() {
         return addSchemaAndPrefixToTableName("jwt_signing_keys");
     }

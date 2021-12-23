@@ -196,6 +196,51 @@ public class GeneralQueries {
                         pst.executeUpdate();
                     }
                 }
+
+                if (!doesTableExists(start, Config.getConfig(start).getPasswordlessUsersTable())) {
+                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
+                    try (Connection con = ConnectionPool.getConnection(start);
+                            PreparedStatement pst = con
+                                    .prepareStatement(PasswordlessQueries.getQueryToCreateUsersTable(start))) {
+                        pst.executeUpdate();
+                    }
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getPasswordlessDevicesTable())) {
+                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
+                    try (Connection con = ConnectionPool.getConnection(start);
+                            PreparedStatement pst = con
+                                    .prepareStatement(PasswordlessQueries.getQueryToCreateDevicesTable(start))) {
+                        pst.executeUpdate();
+                    }
+                    // index
+                    try (Connection con = ConnectionPool.getConnection(start);
+                            PreparedStatement pstIndex = con
+                                    .prepareStatement(PasswordlessQueries.getQueryToCreateDeviceEmailIndex(start))) {
+                        pstIndex.executeUpdate();
+                    }
+                    try (Connection con = ConnectionPool.getConnection(start);
+                            PreparedStatement pstIndex = con.prepareStatement(
+                                    PasswordlessQueries.getQueryToCreateDevicePhoneNumberIndex(start))) {
+                        pstIndex.executeUpdate();
+                    }
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getPasswordlessCodesTable())) {
+                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
+                    try (Connection con = ConnectionPool.getConnection(start);
+                            PreparedStatement pst = con
+                                    .prepareStatement(PasswordlessQueries.getQueryToCreateCodesTable(start))) {
+                        pst.executeUpdate();
+                    }
+                    // index
+                    try (Connection con = ConnectionPool.getConnection(start);
+                            PreparedStatement pstIndex = con
+                                    .prepareStatement(PasswordlessQueries.getQueryToCreateCodeCreatedAtIndex(start))) {
+                        pstIndex.executeUpdate();
+                    }
+                }
+
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
@@ -251,7 +296,10 @@ public class GeneralQueries {
                     + Config.getConfig(start).getEmailVerificationTokensTable() + ","
                     + Config.getConfig(start).getEmailVerificationTable() + ","
                     + Config.getConfig(start).getThirdPartyUsersTable() + ","
-                    + Config.getConfig(start).getJWTSigningKeysTable();
+                    + Config.getConfig(start).getJWTSigningKeysTable() + ","
+                    + Config.getConfig(start).getPasswordlessCodesTable() + ","
+                    + Config.getConfig(start).getPasswordlessDevicesTable() + ","
+                    + Config.getConfig(start).getPasswordlessUsersTable();
             try (Connection con = ConnectionPool.getConnection(start);
                     PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
                 drop.executeUpdate();
