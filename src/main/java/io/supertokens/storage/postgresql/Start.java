@@ -1132,9 +1132,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             }
         } catch (SQLException e) {
 
-            String message = e.getMessage();
-            if (message.contains("duplicate key value violates unique constraint")
-                    && message.contains(Config.getConfig(this).getPasswordlessUsersTable() + "_email_key")) {
+            if (e.getMessage().contains("duplicate key value violates unique constraint")
+                    && e.getMessage().contains(Config.getConfig(this).getPasswordlessUsersTable() + "_email_key")) {
                 throw new DuplicateEmailException();
             }
             throw new StorageQueryException(e);
@@ -1155,9 +1154,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
 
         } catch (SQLException e) {
 
-            String message = e.getMessage();
-            if (message.contains("duplicate key value violates unique constraint")
-                    && message.contains(Config.getConfig(this).getPasswordlessUsersTable() + "_phone_number_key")) {
+            if (e.getMessage().contains("duplicate key value violates unique constraint") && e.getMessage()
+                    .contains(Config.getConfig(this).getPasswordlessUsersTable() + "_phone_number_key")) {
                 throw new DuplicatePhoneNumberException();
             }
 

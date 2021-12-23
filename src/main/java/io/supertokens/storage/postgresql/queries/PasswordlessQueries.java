@@ -181,11 +181,10 @@ public class PasswordlessQueries {
                 sqlCon.commit();
             } catch (SQLException e) {
 
-                String message = e.getMessage();
-                if (message
+                if (e.getMessage()
                         .contains("insert or update on table \"" + Config.getConfig(start).getPasswordlessCodesTable()
                                 + "\" violates foreign key ")
-                        && message.contains(
+                        && e.getMessage().contains(
                                 Config.getConfig(start).getPasswordlessCodesTable() + "_device_id_hash_fkey")) {
                     throw new StorageTransactionLogicException(new UnknownDeviceIdHash());
                 }
