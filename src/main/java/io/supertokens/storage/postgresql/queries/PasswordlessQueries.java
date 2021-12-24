@@ -28,6 +28,7 @@ import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.UserInfo;
 import io.supertokens.pluginInterface.passwordless.exception.UnknownDeviceIdHash;
+import io.supertokens.storage.postgresql.utils.Utils;
 import org.postgresql.util.PSQLException;
 
 import javax.annotation.Nonnull;
@@ -40,24 +41,37 @@ import java.util.List;
 
 public class PasswordlessQueries {
     public static String getQueryToCreateUsersTable(Start start) {
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getPasswordlessUsersTable() + " ("
-                + "user_id CHAR(36) NOT NULL," + "email VARCHAR(256) UNIQUE," + "phone_number VARCHAR(256) UNIQUE,"
-                + "time_joined BIGINT CHECK (time_joined > -1) NOT NULL," + "PRIMARY KEY (user_id));";
+        String schema = Config.getConfig(start).getTableSchema();
+        String usersTable = Config.getConfig(start).getPasswordlessUsersTable();
+
+        return "CREATE TABLE IF NOT EXISTS " + usersTable + " (" + "user_id CHAR(36) NOT NULL,"
+                + "email VARCHAR(256) UNIQUE," + "phone_number VARCHAR(256) UNIQUE,"
+                + "time_joined BIGINT CHECK (time_joined > -1) NOT NULL," + "CONSTRAINT "
+                + Utils.getConstraintName(schema, usersTable, null, "pkey") + " PRIMARY KEY (user_id));";
     }
 
     public static String getQueryToCreateDevicesTable(Start start) {
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getPasswordlessDevicesTable() + " ("
-                + "device_id_hash CHAR(44) NOT NULL," + "email VARCHAR(256)," + "phone_number VARCHAR(256),"
-                + "link_code_salt CHAR(44) NOT NULL," + "failed_attempts INT CHECK (failed_attempts > -1) NOT NULL,"
-                + "PRIMARY KEY (device_id_hash));";
+        String schema = Config.getConfig(start).getTableSchema();
+        String devicesTable = Config.getConfig(start).getPasswordlessDevicesTable();
+
+        return "CREATE TABLE IF NOT EXISTS " + devicesTable + " (" + "device_id_hash CHAR(44) NOT NULL,"
+                + "email VARCHAR(256)," + "phone_number VARCHAR(256)," + "link_code_salt CHAR(44) NOT NULL,"
+                + "failed_attempts INT CHECK (failed_attempts > -1) NOT NULL," + "CONSTRAINT "
+                + Utils.getConstraintName(schema, devicesTable, null, "pkey") + " PRIMARY KEY (device_id_hash));";
     }
 
     public static String getQueryToCreateCodesTable(Start start) {
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getPasswordlessCodesTable() + " ("
-                + "code_id CHAR(36) NOT NULL," + "device_id_hash CHAR(44) NOT NULL,"
-                + "link_code_hash CHAR(44) NOT NULL UNIQUE," + "created_at BIGINT CHECK (created_at > -1) NOT NULL,"
-                + "PRIMARY KEY (code_id),"
-                + "FOREIGN KEY (device_id_hash) REFERENCES passwordless_devices(device_id_hash) ON DELETE CASCADE ON UPDATE CASCADE);";
+        String schema = Config.getConfig(start).getTableSchema();
+        String codesTable = Config.getConfig(start).getPasswordlessCodesTable();
+
+        return "CREATE TABLE IF NOT EXISTS " + codesTable + " (" + "code_id CHAR(36) NOT NULL,"
+                + "device_id_hash CHAR(44) NOT NULL," + "link_code_hash CHAR(44) NOT NULL UNIQUE,"
+                + "created_at BIGINT CHECK (created_at > -1) NOT NULL," + "CONSTRAINT "
+                + Utils.getConstraintName(schema, codesTable, null, "pkey") + " PRIMARY KEY (code_id)," + "CONSTRAINT "
+                + Utils.getConstraintName(schema, codesTable, "device_id_hash", "fkey")
+                + " FOREIGN KEY (device_id_hash) " + "REFERENCES "
+                + Config.getConfig(start).getPasswordlessDevicesTable()
+                + "(device_id_hash) ON DELETE CASCADE ON UPDATE CASCADE);";
     }
 
     public static String getQueryToCreateDeviceEmailIndex(Start start) {
@@ -180,14 +194,6 @@ public class PasswordlessQueries {
                 PasswordlessQueries.createCode_Transaction(start, sqlCon, code);
                 sqlCon.commit();
             } catch (SQLException e) {
-
-                if (e.getMessage()
-                        .contains("insert or update on table \"" + Config.getConfig(start).getPasswordlessCodesTable()
-                                + "\" violates foreign key ")
-                        && e.getMessage().contains(
-                                Config.getConfig(start).getPasswordlessCodesTable() + "_device_id_hash_fkey")) {
-                    throw new StorageTransactionLogicException(new UnknownDeviceIdHash());
-                }
                 throw new StorageTransactionLogicException(e);
             }
             return null;

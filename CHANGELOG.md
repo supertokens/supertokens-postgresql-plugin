@@ -7,12 +7,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.13.0] - 2021-12-24
+
+- added passwordless support
+
 ## [1.12.0] - 2021-12-19
 
 ### Added
 
 - Delete user functionality
-- passwordless support
 
 ## [1.11.1] - 2021-10-07
 

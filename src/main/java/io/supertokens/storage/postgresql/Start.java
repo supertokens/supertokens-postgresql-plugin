@@ -1132,9 +1132,12 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             }
         } catch (SQLException e) {
 
-            if (e.getMessage().contains("ERROR: duplicate key value violates unique constraint")
-                    && e.getMessage().contains(Config.getConfig(this).getPasswordlessUsersTable() + "_email_key")) {
-                throw new DuplicateEmailException();
+            if (e instanceof PSQLException) {
+                if (isUniqueConstraintError(((PSQLException) e).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessUsersTable(), "email")) {
+                    throw new DuplicateEmailException();
+
+                }
             }
             throw new StorageQueryException(e);
 
@@ -1154,9 +1157,12 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
 
         } catch (SQLException e) {
 
-            if (e.getMessage().contains("ERROR: duplicate key value violates unique constraint") && e.getMessage()
-                    .contains(Config.getConfig(this).getPasswordlessUsersTable() + "_phone_number_key")) {
-                throw new DuplicatePhoneNumberException();
+            if (e instanceof PSQLException) {
+                if (isUniqueConstraintError(((PSQLException) e).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessUsersTable(), "phone_number")) {
+                    throw new DuplicatePhoneNumberException();
+
+                }
             }
 
             throw new StorageQueryException(e);
@@ -1175,17 +1181,21 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         } catch (StorageTransactionLogicException e) {
             String message = e.actualException.getMessage();
 
-            if (message.contains("ERROR: duplicate key value violates unique constraint")) {
+            Exception actualException = e.actualException;
 
-                if (message.contains(Config.getConfig(this).getPasswordlessDevicesTable() + "_pkey")) {
+            if (actualException instanceof PSQLException) {
+                if (isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessDevicesTable())) {
                     throw new DuplicateDeviceIdHashException();
                 }
-                if (message.contains(Config.getConfig(this).getPasswordlessCodesTable() + "_pkey")) {
+                if (isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessCodesTable())) {
                     throw new DuplicateCodeIdException();
                 }
-
-                if (message.contains(Config.getConfig(this).getPasswordlessCodesTable() + "_link_code_hash_key")) {
+                if (isUniqueConstraintError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessCodesTable(), "link_code_hash")) {
                     throw new DuplicateLinkCodeHashException();
+
                 }
             }
 
@@ -1200,21 +1210,23 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         try {
             PasswordlessQueries.createCode(this, code);
         } catch (StorageTransactionLogicException e) {
-            String message = e.actualException.getMessage();
 
-            if (e.actualException instanceof UnknownDeviceIdHash) {
-                throw (UnknownDeviceIdHash) e.actualException;
-            }
-            if (message.contains("ERROR: duplicate key value violates unique constraint")) {
+            Exception actualException = e.actualException;
 
-                if (message.contains(Config.getConfig(this).getPasswordlessCodesTable() + "_pkey")) {
+            if (actualException instanceof PSQLException) {
+                if (isForeignKeyConstraintError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessCodesTable(), "device_id_hash")) {
+                    throw new UnknownDeviceIdHash();
+                }
+                if (isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessCodesTable())) {
                     throw new DuplicateCodeIdException();
                 }
-
-                if (message.contains(Config.getConfig(this).getPasswordlessCodesTable() + "_link_code_hash_key")) {
+                if (isUniqueConstraintError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessCodesTable(), "link_code_hash")) {
                     throw new DuplicateLinkCodeHashException();
-                }
 
+                }
             }
             throw new StorageQueryException(e.actualException);
         }
@@ -1226,20 +1238,25 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         try {
             PasswordlessQueries.createUser(this, user);
         } catch (StorageTransactionLogicException e) {
-            String message = e.actualException.getMessage();
-            if (message.contains("ERROR: duplicate key value violates unique constraint")) {
-                if (message.contains(Config.getConfig(this).getPasswordlessUsersTable() + "_pkey")
-                        || message.contains(Config.getConfig(this).getUsersTable() + "_pkey")
 
-                ) {
+            String message = e.actualException.getMessage();
+            Exception actualException = e.actualException;
+
+            if (actualException instanceof PSQLException) {
+                if (isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessUsersTable())
+                        || isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
+                                Config.getConfig(this).getUsersTable())) {
                     throw new DuplicateUserIdException();
                 }
 
-                if (message.contains(Config.getConfig(this).getPasswordlessUsersTable() + "_email_key")) {
+                if (isUniqueConstraintError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessUsersTable(), "email")) {
                     throw new DuplicateEmailException();
                 }
 
-                if (message.contains(Config.getConfig(this).getPasswordlessUsersTable() + "_phone_number_key")) {
+                if (isUniqueConstraintError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessUsersTable(), "phone_number")) {
                     throw new DuplicatePhoneNumberException();
                 }
 
