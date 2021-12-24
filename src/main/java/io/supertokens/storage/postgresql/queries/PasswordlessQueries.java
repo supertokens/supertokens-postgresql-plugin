@@ -58,7 +58,7 @@ public class PasswordlessQueries {
 
         return "CREATE TABLE IF NOT EXISTS " + devicesTable + " (" + "device_id_hash CHAR(44) NOT NULL,"
                 + "email VARCHAR(256), " + "phone_number VARCHAR(256)," + "link_code_salt CHAR(44) NOT NULL,"
-                + "failed_attempts INT CHECK (failed_attempts > -1) NOT NULL," + "CONSTRAINT "
+                + "failed_attempts INT NOT NULL," + "CONSTRAINT "
                 + Utils.getConstraintName(schema, devicesTable, null, "pkey") + " PRIMARY KEY (device_id_hash));";
     }
 
