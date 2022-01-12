@@ -284,6 +284,53 @@ public class PasswordlessQueries {
         });
     }
 
+    public static void deleteUser(Start start, String userId)
+            throws StorageQueryException, StorageTransactionLogicException {
+        start.startTransaction(con -> {
+            Connection sqlCon = (Connection) con.getConnection();
+            try {
+                {
+                    String QUERY = "DELETE FROM " + Config.getConfig(start).getUsersTable()
+                            + " WHERE user_id = ? AND recipe_id = ?";
+
+                    try (PreparedStatement pst = sqlCon.prepareStatement(QUERY)) {
+                        pst.setString(1, userId);
+                        pst.setString(2, RECIPE_ID.PASSWORDLESS.toString());
+                        pst.executeUpdate();
+                    }
+                }
+
+                UserInfo user = null;
+                {
+                    String QUERY = "DELETE FROM " + Config.getConfig(start).getPasswordlessUsersTable()
+                            + " WHERE user_id = ? RETURNING user_id, email, phone_number, time_joined";
+
+                    try (PreparedStatement pst = sqlCon.prepareStatement(QUERY)) {
+                        pst.setString(1, userId);
+                        ResultSet result = pst.executeQuery();
+                        if (result.next()) {
+                            user = UserInfoRowMapper.getInstance().mapOrThrow(result);
+                        }
+                    }
+                }
+
+                if (user != null) {
+                    if (user.email != null) {
+                        deleteDevicesByEmail_Transaction(start, sqlCon, user.email);
+                    }
+                    if (user.phoneNumber != null) {
+                        deleteDevicesByPhoneNumber_Transaction(start, sqlCon, user.phoneNumber);
+                    }
+                }
+
+                sqlCon.commit();
+            } catch (SQLException throwables) {
+                throw new StorageTransactionLogicException(throwables);
+            }
+            return null;
+        });
+    }
+
     public static int updateUserEmail_Transaction(Start start, Connection con, String userId, String email)
             throws SQLException {
         String QUERY = "UPDATE " + Config.getConfig(start).getPasswordlessUsersTable()

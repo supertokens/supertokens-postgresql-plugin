@@ -1266,6 +1266,15 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
     }
 
     @Override
+    public void deletePasswordlessUser(String userId) throws StorageQueryException {
+        try {
+            PasswordlessQueries.deleteUser(this, userId);
+        } catch (StorageTransactionLogicException e) {
+            throw new StorageQueryException(e.actualException);
+        }
+    }
+
+    @Override
     public PasswordlessDevice getDevice(String deviceIdHash) throws StorageQueryException {
         try {
             return PasswordlessQueries.getDevice(this, deviceIdHash);
