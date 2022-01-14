@@ -26,7 +26,6 @@ import io.supertokens.storage.postgresql.ProcessState;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
-
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -60,10 +59,11 @@ public class GeneralQueries {
         String usersTable = Config.getConfig(start).getUsersTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + usersTable + " ("
-                + "user_id CHAR(36) NOT NULL," 
-                + "recipe_id VARCHAR(128) NOT NULL," 
+                + "user_id CHAR(36) NOT NULL,"
+                + "recipe_id VARCHAR(128) NOT NULL,"
                 + "time_joined BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, null, "pkey") + " PRIMARY KEY (user_id));";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, null, "pkey") +
+                " PRIMARY KEY (user_id));";
         // @formatter:on
     }
 
@@ -76,11 +76,12 @@ public class GeneralQueries {
         String schema = Config.getConfig(start).getTableSchema();
         String keyValueTable = Config.getConfig(start).getKeyValueTable();
         // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + keyValueTable + " (" 
+        return "CREATE TABLE IF NOT EXISTS " + keyValueTable + " ("
                 + "name VARCHAR(128),"
-                + "value TEXT," 
-                + "created_at_time BIGINT ," 
-                + "CONSTRAINT " + Utils.getConstraintName(schema, keyValueTable, null, "pkey") + " PRIMARY KEY(name)" + " );";
+                + "value TEXT,"
+                + "created_at_time BIGINT ,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, keyValueTable, null, "pkey") + " PRIMARY KEY(name)" +
+                " );";
         // @formatter:on
     }
 
@@ -502,6 +503,8 @@ public class GeneralQueries {
             return EmailPasswordQueries.getUsersInfoUsingIdList(start, userIds);
         } else if (recipeId == RECIPE_ID.THIRD_PARTY) {
             return ThirdPartyQueries.getUsersInfoUsingIdList(start, userIds);
+        } else if (recipeId == RECIPE_ID.PASSWORDLESS) {
+            return PasswordlessQueries.getUsersByIdList(start, userIds);
         } else {
             throw new IllegalArgumentException("No implementation of get users for recipe: " + recipeId.toString());
         }
