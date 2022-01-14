@@ -39,6 +39,10 @@ import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicExceptio
 import io.supertokens.pluginInterface.jwt.JWTSigningKeyInfo;
 import io.supertokens.pluginInterface.jwt.exceptions.DuplicateKeyIdException;
 import io.supertokens.pluginInterface.jwt.sqlstorage.JWTRecipeSQLStorage;
+import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
+import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
+import io.supertokens.pluginInterface.passwordless.exception.*;
+import io.supertokens.pluginInterface.passwordless.sqlStorage.PasswordlessSQLStorage;
 import io.supertokens.pluginInterface.session.SessionInfo;
 import io.supertokens.pluginInterface.session.sqlStorage.SessionSQLStorage;
 import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
@@ -50,6 +54,7 @@ import io.supertokens.storage.postgresql.output.Logging;
 import io.supertokens.storage.postgresql.queries.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
 import org.slf4j.LoggerFactory;
 import org.postgresql.util.PSQLException;
 import org.postgresql.util.ServerErrorMessage;
@@ -61,7 +66,7 @@ import java.sql.SQLTransactionRollbackException;
 import java.util.List;
 
 public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage,
-        ThirdPartySQLStorage, JWTRecipeSQLStorage {
+        ThirdPartySQLStorage, JWTRecipeSQLStorage, PasswordlessSQLStorage {
 
     private static final Object appenderLock = new Object();
     public static boolean silent = false;
@@ -305,6 +310,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         }
     }
 
+    @TestOnly
     @Override
     public void deleteAllInformation() throws StorageQueryException {
         try {
@@ -1025,5 +1031,339 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
     private boolean isPrimaryKeyError(ServerErrorMessage serverMessage, String tableName) {
         return serverMessage.getSQLState().equals("23505") && serverMessage.getConstraint() != null
                 && serverMessage.getConstraint().equals(tableName + "_pkey");
+    }
+
+    @Override
+    public PasswordlessDevice getDevice_Transaction(TransactionConnection con, String deviceIdHash)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return PasswordlessQueries.getDevice_Transaction(this, sqlCon, deviceIdHash);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void incrementDeviceFailedAttemptCount_Transaction(TransactionConnection con, String deviceIdHash)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            PasswordlessQueries.incrementDeviceFailedAttemptCount_Transaction(this, sqlCon, deviceIdHash);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+
+    }
+
+    @Override
+    public PasswordlessCode[] getCodesOfDevice_Transaction(TransactionConnection con, String deviceIdHash)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return PasswordlessQueries.getCodesOfDevice_Transaction(this, sqlCon, deviceIdHash);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void deleteDevice_Transaction(TransactionConnection con, String deviceIdHash) throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            PasswordlessQueries.deleteDevice_Transaction(this, sqlCon, deviceIdHash);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+
+    }
+
+    @Override
+    public void deleteDevicesByPhoneNumber_Transaction(TransactionConnection con, @Nonnull String phoneNumber)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            PasswordlessQueries.deleteDevicesByPhoneNumber_Transaction(this, sqlCon, phoneNumber);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void deleteDevicesByEmail_Transaction(TransactionConnection con, @Nonnull String email)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            PasswordlessQueries.deleteDevicesByEmail_Transaction(this, sqlCon, email);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public PasswordlessCode getCodeByLinkCodeHash_Transaction(TransactionConnection con, String linkCodeHash)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return PasswordlessQueries.getCodeByLinkCodeHash_Transaction(this, sqlCon, linkCodeHash);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void deleteCode_Transaction(TransactionConnection con, String deviceIdHash) throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            PasswordlessQueries.deleteCode_Transaction(this, sqlCon, deviceIdHash);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void updateUserEmail_Transaction(TransactionConnection con, String userId, String email)
+            throws StorageQueryException, UnknownUserIdException, DuplicateEmailException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            int updated_rows = PasswordlessQueries.updateUserEmail_Transaction(this, sqlCon, userId, email);
+            if (updated_rows != 1) {
+                throw new UnknownUserIdException();
+            }
+        } catch (SQLException e) {
+
+            if (e instanceof PSQLException) {
+                if (isUniqueConstraintError(((PSQLException) e).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessUsersTable(), "email")) {
+                    throw new DuplicateEmailException();
+
+                }
+            }
+            throw new StorageQueryException(e);
+
+        }
+    }
+
+    @Override
+    public void updateUserPhoneNumber_Transaction(TransactionConnection con, String userId, String phoneNumber)
+            throws StorageQueryException, UnknownUserIdException, DuplicatePhoneNumberException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            int updated_rows = PasswordlessQueries.updateUserPhoneNumber_Transaction(this, sqlCon, userId, phoneNumber);
+
+            if (updated_rows != 1) {
+                throw new UnknownUserIdException();
+            }
+
+        } catch (SQLException e) {
+
+            if (e instanceof PSQLException) {
+                if (isUniqueConstraintError(((PSQLException) e).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessUsersTable(), "phone_number")) {
+                    throw new DuplicatePhoneNumberException();
+
+                }
+            }
+
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void createDeviceWithCode(@Nullable String email, @Nullable String phoneNumber, @NotNull String linkCodeSalt,
+            PasswordlessCode code) throws StorageQueryException, DuplicateDeviceIdHashException,
+            DuplicateCodeIdException, DuplicateLinkCodeHashException {
+        if (email == null && phoneNumber == null) {
+            throw new IllegalArgumentException("Both email and phoneNumber can't be null");
+        }
+        try {
+            PasswordlessQueries.createDeviceWithCode(this, email, phoneNumber, linkCodeSalt, code);
+        } catch (StorageTransactionLogicException e) {
+            String message = e.actualException.getMessage();
+
+            Exception actualException = e.actualException;
+
+            if (actualException instanceof PSQLException) {
+                if (isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessDevicesTable())) {
+                    throw new DuplicateDeviceIdHashException();
+                }
+                if (isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessCodesTable())) {
+                    throw new DuplicateCodeIdException();
+                }
+                if (isUniqueConstraintError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessCodesTable(), "link_code_hash")) {
+                    throw new DuplicateLinkCodeHashException();
+
+                }
+            }
+
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void createCode(PasswordlessCode code) throws StorageQueryException, UnknownDeviceIdHash,
+            DuplicateCodeIdException, DuplicateLinkCodeHashException {
+
+        try {
+            PasswordlessQueries.createCode(this, code);
+        } catch (StorageTransactionLogicException e) {
+
+            Exception actualException = e.actualException;
+
+            if (actualException instanceof PSQLException) {
+                if (isForeignKeyConstraintError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessCodesTable(), "device_id_hash")) {
+                    throw new UnknownDeviceIdHash();
+                }
+                if (isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessCodesTable())) {
+                    throw new DuplicateCodeIdException();
+                }
+                if (isUniqueConstraintError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessCodesTable(), "link_code_hash")) {
+                    throw new DuplicateLinkCodeHashException();
+
+                }
+            }
+            throw new StorageQueryException(e.actualException);
+        }
+    }
+
+    @Override
+    public void createUser(io.supertokens.pluginInterface.passwordless.UserInfo user) throws StorageQueryException,
+            DuplicateEmailException, DuplicatePhoneNumberException, DuplicateUserIdException {
+        try {
+            PasswordlessQueries.createUser(this, user);
+        } catch (StorageTransactionLogicException e) {
+
+            String message = e.actualException.getMessage();
+            Exception actualException = e.actualException;
+
+            if (actualException instanceof PSQLException) {
+                if (isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessUsersTable())
+                        || isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
+                                Config.getConfig(this).getUsersTable())) {
+                    throw new DuplicateUserIdException();
+                }
+
+                if (isUniqueConstraintError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessUsersTable(), "email")) {
+                    throw new DuplicateEmailException();
+                }
+
+                if (isUniqueConstraintError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessUsersTable(), "phone_number")) {
+                    throw new DuplicatePhoneNumberException();
+                }
+
+            }
+            throw new StorageQueryException(e.actualException);
+        }
+    }
+
+    @Override
+    public void deletePasswordlessUser(String userId) throws StorageQueryException {
+        try {
+            PasswordlessQueries.deleteUser(this, userId);
+        } catch (StorageTransactionLogicException e) {
+            throw new StorageQueryException(e.actualException);
+        }
+    }
+
+    @Override
+    public PasswordlessDevice getDevice(String deviceIdHash) throws StorageQueryException {
+        try {
+            return PasswordlessQueries.getDevice(this, deviceIdHash);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public PasswordlessDevice[] getDevicesByEmail(String email) throws StorageQueryException {
+        try {
+            return PasswordlessQueries.getDevicesByEmail(this, email);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public PasswordlessDevice[] getDevicesByPhoneNumber(String phoneNumber) throws StorageQueryException {
+        try {
+            return PasswordlessQueries.getDevicesByPhoneNumber(this, phoneNumber);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public PasswordlessCode[] getCodesOfDevice(String deviceIdHash) throws StorageQueryException {
+        try {
+            return PasswordlessQueries.getCodesOfDevice(this, deviceIdHash);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public PasswordlessCode[] getCodesBefore(long time) throws StorageQueryException {
+        try {
+            return PasswordlessQueries.getCodesBefore(this, time);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public PasswordlessCode getCode(String codeId) throws StorageQueryException {
+        try {
+            return PasswordlessQueries.getCode(this, codeId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public PasswordlessCode getCodeByLinkCodeHash(String linkCodeHash) throws StorageQueryException {
+        try {
+            return PasswordlessQueries.getCodeByLinkCodeHash(this, linkCodeHash);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public io.supertokens.pluginInterface.passwordless.UserInfo getUserById(String userId)
+            throws StorageQueryException {
+        try {
+            return PasswordlessQueries.getUserById(this, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public io.supertokens.pluginInterface.passwordless.UserInfo getUserByEmail(String email)
+            throws StorageQueryException {
+        try {
+            return PasswordlessQueries.getUserByEmail(this, email);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public io.supertokens.pluginInterface.passwordless.UserInfo getUserByPhoneNumber(String phoneNumber)
+            throws StorageQueryException {
+        try {
+            return PasswordlessQueries.getUserByPhoneNumber(this, phoneNumber);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 }
