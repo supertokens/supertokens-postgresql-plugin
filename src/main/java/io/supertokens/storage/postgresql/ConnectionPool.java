@@ -135,7 +135,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
                         }
                         if (!longMessagePrinted) {
                             longMessagePrinted = true;
-                            Logging.info(start, errorMessage);
+                            Logging.error(start, errorMessage, true);
                         }
                         double minsRemaining = (maxTryTime - System.currentTimeMillis()) / (1000.0 * 60);
                         NumberFormat formatter = new DecimalFormat("#0.0");
