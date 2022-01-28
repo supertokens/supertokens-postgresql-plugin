@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- add workflow to verify if pr title follows conventional commits
+
 ## [1.13.0] - 2021-12-24
 
 - added passwordless support
