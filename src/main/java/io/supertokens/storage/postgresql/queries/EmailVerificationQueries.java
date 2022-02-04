@@ -118,9 +118,10 @@ public class EmailVerificationQueries {
         try (Connection con = ConnectionPool.getConnection(start);
                 PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setString(1, token);
-            ResultSet result = pst.executeQuery();
-            if (result.next()) {
-                return EmailVerificationTokenInfoRowMapper.getInstance().mapOrThrow(result);
+            try (ResultSet result = pst.executeQuery()) {
+                if (result.next()) {
+                    return EmailVerificationTokenInfoRowMapper.getInstance().mapOrThrow(result);
+                }
             }
         }
         return null;
@@ -151,16 +152,17 @@ public class EmailVerificationQueries {
         try (PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setString(1, userId);
             pst.setString(2, email);
-            ResultSet result = pst.executeQuery();
-            List<EmailVerificationTokenInfo> temp = new ArrayList<>();
-            while (result.next()) {
-                temp.add(EmailVerificationTokenInfoRowMapper.getInstance().mapOrThrow(result));
+            try (ResultSet result = pst.executeQuery()) {
+                List<EmailVerificationTokenInfo> temp = new ArrayList<>();
+                while (result.next()) {
+                    temp.add(EmailVerificationTokenInfoRowMapper.getInstance().mapOrThrow(result));
+                }
+                EmailVerificationTokenInfo[] finalResult = new EmailVerificationTokenInfo[temp.size()];
+                for (int i = 0; i < temp.size(); i++) {
+                    finalResult[i] = temp.get(i);
+                }
+                return finalResult;
             }
-            EmailVerificationTokenInfo[] finalResult = new EmailVerificationTokenInfo[temp.size()];
-            for (int i = 0; i < temp.size(); i++) {
-                finalResult[i] = temp.get(i);
-            }
-            return finalResult;
         }
     }
 
@@ -173,16 +175,17 @@ public class EmailVerificationQueries {
                 PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setString(1, userId);
             pst.setString(2, email);
-            ResultSet result = pst.executeQuery();
-            List<EmailVerificationTokenInfo> temp = new ArrayList<>();
-            while (result.next()) {
-                temp.add(EmailVerificationTokenInfoRowMapper.getInstance().mapOrThrow(result));
+            try (ResultSet result = pst.executeQuery()) {
+                List<EmailVerificationTokenInfo> temp = new ArrayList<>();
+                while (result.next()) {
+                    temp.add(EmailVerificationTokenInfoRowMapper.getInstance().mapOrThrow(result));
+                }
+                EmailVerificationTokenInfo[] finalResult = new EmailVerificationTokenInfo[temp.size()];
+                for (int i = 0; i < temp.size(); i++) {
+                    finalResult[i] = temp.get(i);
+                }
+                return finalResult;
             }
-            EmailVerificationTokenInfo[] finalResult = new EmailVerificationTokenInfo[temp.size()];
-            for (int i = 0; i < temp.size(); i++) {
-                finalResult[i] = temp.get(i);
-            }
-            return finalResult;
         }
     }
 
@@ -195,9 +198,9 @@ public class EmailVerificationQueries {
                 PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setString(1, userId);
             pst.setString(2, email);
-            ResultSet result = pst.executeQuery();
-
-            return result.next();
+            try (ResultSet result = pst.executeQuery()) {
+                return result.next();
+            }
         }
     }
 

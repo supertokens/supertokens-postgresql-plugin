@@ -337,9 +337,10 @@ public class GeneralQueries {
         try (Connection con = ConnectionPool.getConnection(start);
                 PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setString(1, key);
-            ResultSet result = pst.executeQuery();
-            if (result.next()) {
-                return KeyValueInfoRowMapper.getInstance().mapOrThrow(result);
+            try (ResultSet result = pst.executeQuery()) {
+                if (result.next()) {
+                    return KeyValueInfoRowMapper.getInstance().mapOrThrow(result);
+                }
             }
         }
         return null;
@@ -352,9 +353,10 @@ public class GeneralQueries {
 
         try (PreparedStatement pst = con.prepareStatement(QUERY)) {
             pst.setString(1, key);
-            ResultSet result = pst.executeQuery();
-            if (result.next()) {
-                return KeyValueInfoRowMapper.getInstance().mapOrThrow(result);
+            try (ResultSet result = pst.executeQuery()) {
+                if (result.next()) {
+                    return KeyValueInfoRowMapper.getInstance().mapOrThrow(result);
+                }
             }
         }
         return null;
@@ -388,11 +390,12 @@ public class GeneralQueries {
 
         try (Connection con = ConnectionPool.getConnection(start);
                 PreparedStatement pst = con.prepareStatement(QUERY.toString())) {
-            ResultSet result = pst.executeQuery();
-            if (result.next()) {
-                return result.getLong("total");
+            try (ResultSet result = pst.executeQuery()) {
+                if (result.next()) {
+                    return result.getLong("total");
+                }
+                return 0;
             }
-            return 0;
         }
     }
 
@@ -418,7 +421,6 @@ public class GeneralQueries {
                 RECIPE_ID_CONDITION.append(")");
             }
 
-            ResultSet result;
             if (timeJoined != null && userId != null) {
                 String recipeIdCondition = RECIPE_ID_CONDITION.toString();
                 if (!recipeIdCondition.equals("")) {
@@ -435,10 +437,11 @@ public class GeneralQueries {
                     pst.setLong(2, timeJoined);
                     pst.setString(3, userId);
                     pst.setInt(4, limit);
-                    result = pst.executeQuery();
-                    while (result.next()) {
-                        usersFromQuery.add(new UserInfoPaginationResultHolder(result.getString("user_id"),
-                                result.getString("recipe_id")));
+                    try (ResultSet result = pst.executeQuery()) {
+                        while (result.next()) {
+                            usersFromQuery.add(new UserInfoPaginationResultHolder(result.getString("user_id"),
+                                    result.getString("recipe_id")));
+                        }
                     }
                 }
             } else {
@@ -451,10 +454,11 @@ public class GeneralQueries {
                 try (Connection con = ConnectionPool.getConnection(start);
                         PreparedStatement pst = con.prepareStatement(QUERY)) {
                     pst.setInt(1, limit);
-                    result = pst.executeQuery();
-                    while (result.next()) {
-                        usersFromQuery.add(new UserInfoPaginationResultHolder(result.getString("user_id"),
-                                result.getString("recipe_id")));
+                    try (ResultSet result = pst.executeQuery()) {
+                        while (result.next()) {
+                            usersFromQuery.add(new UserInfoPaginationResultHolder(result.getString("user_id"),
+                                    result.getString("recipe_id")));
+                        }
                     }
                 }
             }
