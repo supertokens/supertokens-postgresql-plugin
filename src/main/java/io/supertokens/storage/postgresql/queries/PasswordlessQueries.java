@@ -16,21 +16,17 @@
 
 package io.supertokens.storage.postgresql.queries;
 
-import io.supertokens.storage.postgresql.ConnectionPool;
-import io.supertokens.storage.postgresql.QueryExecutorTemplate;
-import io.supertokens.storage.postgresql.Start;
-import io.supertokens.storage.postgresql.config.Config;
-import io.supertokens.pluginInterface.RECIPE_ID;
 import io.supertokens.pluginInterface.RowMapper;
-import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.UserInfo;
-import io.supertokens.pluginInterface.passwordless.exception.UnknownDeviceIdHash;
+import io.supertokens.storage.postgresql.ConnectionPool;
+import io.supertokens.storage.postgresql.QueryExecutorTemplate;
+import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
-import org.postgresql.util.PSQLException;
 
 import javax.annotation.Nonnull;
 import java.sql.Connection;
@@ -38,10 +34,12 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static io.supertokens.pluginInterface.RECIPE_ID.PASSWORDLESS;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class PasswordlessQueries {
@@ -375,45 +373,41 @@ public class PasswordlessQueries {
     public static PasswordlessDevice[] getDevicesByEmail(Start start, @Nonnull String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT device_id_hash, email, phone_number, link_code_salt, failed_attempts FROM "
-                + Config.getConfig(start).getPasswordlessDevicesTable() + " WHERE email = ?";
+                + getConfig(start).getPasswordlessDevicesTable() + " WHERE email = ?";
 
-        try (Connection con = ConnectionPool.getConnection(start);
-                PreparedStatement pst = con.prepareStatement(QUERY)) {
+        return execute(start, QUERY, pst -> {
             pst.setString(1, email);
-            try (ResultSet result = pst.executeQuery()) {
-                List<PasswordlessDevice> temp = new ArrayList<>();
-                while (result.next()) {
-                    temp.add(PasswordlessDeviceRowMapper.getInstance().mapOrThrow(result));
-                }
-                PasswordlessDevice[] finalResult = new PasswordlessDevice[temp.size()];
-                for (int i = 0; i < temp.size(); i++) {
-                    finalResult[i] = temp.get(i);
-                }
-                return finalResult;
+        }, result -> {
+            List<PasswordlessDevice> temp = new ArrayList<>();
+            while (result.next()) {
+                temp.add(PasswordlessDeviceRowMapper.getInstance().mapOrThrow(result));
             }
-        }
+            PasswordlessDevice[] finalResult = new PasswordlessDevice[temp.size()];
+            for (int i = 0; i < temp.size(); i++) {
+                finalResult[i] = temp.get(i);
+            }
+            return finalResult;
+        });
     }
 
     public static PasswordlessDevice[] getDevicesByPhoneNumber(Start start, @Nonnull String phoneNumber)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT device_id_hash, email, phone_number, link_code_salt, failed_attempts FROM "
-                + Config.getConfig(start).getPasswordlessDevicesTable() + " WHERE phone_number = ?";
+                + getConfig(start).getPasswordlessDevicesTable() + " WHERE phone_number = ?";
 
-        try (Connection con = ConnectionPool.getConnection(start);
-                PreparedStatement pst = con.prepareStatement(QUERY)) {
+        return execute(start, QUERY, pst -> {
             pst.setString(1, phoneNumber);
-            try (ResultSet result = pst.executeQuery()) {
-                List<PasswordlessDevice> temp = new ArrayList<>();
-                while (result.next()) {
-                    temp.add(PasswordlessDeviceRowMapper.getInstance().mapOrThrow(result));
-                }
-                PasswordlessDevice[] finalResult = new PasswordlessDevice[temp.size()];
-                for (int i = 0; i < temp.size(); i++) {
-                    finalResult[i] = temp.get(i);
-                }
-                return finalResult;
+        }, result -> {
+            List<PasswordlessDevice> temp = new ArrayList<>();
+            while (result.next()) {
+                temp.add(PasswordlessDeviceRowMapper.getInstance().mapOrThrow(result));
             }
-        }
+            PasswordlessDevice[] finalResult = new PasswordlessDevice[temp.size()];
+            for (int i = 0; i < temp.size(); i++) {
+                finalResult[i] = temp.get(i);
+            }
+            return finalResult;
+        });
     }
 
     public static PasswordlessCode[] getCodesOfDevice(Start start, String deviceIdHash)
@@ -426,39 +420,35 @@ public class PasswordlessQueries {
 
     public static PasswordlessCode[] getCodesBefore(Start start, long time) throws StorageQueryException, SQLException {
         String QUERY = "SELECT code_id, device_id_hash, link_code_hash, created_at FROM "
-                + Config.getConfig(start).getPasswordlessCodesTable() + " WHERE created_at < ?";
+                + getConfig(start).getPasswordlessCodesTable() + " WHERE created_at < ?";
 
-        try (Connection con = ConnectionPool.getConnection(start);
-                PreparedStatement pst = con.prepareStatement(QUERY)) {
+        return execute(start, QUERY, pst -> {
             pst.setLong(1, time);
-            try (ResultSet result = pst.executeQuery()) {
-                List<PasswordlessCode> temp = new ArrayList<>();
-                while (result.next()) {
-                    temp.add(PasswordlessCodeRowMapper.getInstance().mapOrThrow(result));
-                }
-                PasswordlessCode[] finalResult = new PasswordlessCode[temp.size()];
-                for (int i = 0; i < temp.size(); i++) {
-                    finalResult[i] = temp.get(i);
-                }
-                return finalResult;
+        }, result -> {
+            List<PasswordlessCode> temp = new ArrayList<>();
+            while (result.next()) {
+                temp.add(PasswordlessCodeRowMapper.getInstance().mapOrThrow(result));
             }
-        }
+            PasswordlessCode[] finalResult = new PasswordlessCode[temp.size()];
+            for (int i = 0; i < temp.size(); i++) {
+                finalResult[i] = temp.get(i);
+            }
+            return finalResult;
+        });
     }
 
     public static PasswordlessCode getCode(Start start, String codeId) throws StorageQueryException, SQLException {
         String QUERY = "SELECT code_id, device_id_hash, link_code_hash, created_at FROM "
-                + Config.getConfig(start).getPasswordlessCodesTable() + " WHERE code_id = ?";
+                + getConfig(start).getPasswordlessCodesTable() + " WHERE code_id = ?";
 
-        try (Connection con = ConnectionPool.getConnection(start);
-                PreparedStatement pst = con.prepareStatement(QUERY)) {
+        return execute(start, QUERY, pst -> {
             pst.setString(1, codeId);
-            try (ResultSet result = pst.executeQuery()) {
-                if (result.next()) {
-                    return PasswordlessCodeRowMapper.getInstance().mapOrThrow(result);
-                }
+        }, result -> {
+            if (result.next()) {
+                return PasswordlessCodeRowMapper.getInstance().mapOrThrow(result);
             }
-        }
-        return null;
+            return null;
+        });
     }
 
     public static PasswordlessCode getCodeByLinkCodeHash(Start start, String linkCodeHash)
@@ -471,10 +461,9 @@ public class PasswordlessQueries {
 
     public static List<UserInfo> getUsersByIdList(Start start, List<String> ids)
             throws SQLException, StorageQueryException {
-        List<UserInfo> finalResult = new ArrayList<>();
         if (ids.size() > 0) {
             StringBuilder QUERY = new StringBuilder("SELECT user_id, email, phone_number, time_joined FROM "
-                    + Config.getConfig(start).getPasswordlessUsersTable());
+                    + getConfig(start).getPasswordlessUsersTable());
             QUERY.append(" WHERE user_id IN (");
             for (int i = 0; i < ids.size(); i++) {
 
@@ -486,20 +475,20 @@ public class PasswordlessQueries {
             }
             QUERY.append(")");
 
-            try (Connection con = ConnectionPool.getConnection(start);
-                    PreparedStatement pst = con.prepareStatement(QUERY.toString())) {
+            return execute(start, QUERY.toString(), pst -> {
                 for (int i = 0; i < ids.size(); i++) {
                     // i+1 cause this starts with 1 and not 0
                     pst.setString(i + 1, ids.get(i));
                 }
-                try (ResultSet result = pst.executeQuery()) {
-                    while (result.next()) {
-                        finalResult.add(UserInfoRowMapper.getInstance().mapOrThrow(result));
-                    }
+            }, result -> {
+                List<UserInfo> finalResult = new ArrayList<>();
+                while (result.next()) {
+                    finalResult.add(UserInfoRowMapper.getInstance().mapOrThrow(result));
                 }
-            }
+                return finalResult;
+            });
         }
-        return finalResult;
+        return Collections.emptyList();
     }
 
     public static UserInfo getUserById(Start start, String userId) throws StorageQueryException, SQLException {
@@ -515,35 +504,31 @@ public class PasswordlessQueries {
     public static UserInfo getUserByEmail(Start start, @Nonnull String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT user_id, email, phone_number, time_joined FROM "
-                + Config.getConfig(start).getPasswordlessUsersTable() + " WHERE email = ?";
+                + getConfig(start).getPasswordlessUsersTable() + " WHERE email = ?";
 
-        try (Connection con = ConnectionPool.getConnection(start);
-                PreparedStatement pst = con.prepareStatement(QUERY)) {
+        return execute(start, QUERY, pst -> {
             pst.setString(1, email);
-            try (ResultSet result = pst.executeQuery()) {
-                if (result.next()) {
-                    return UserInfoRowMapper.getInstance().mapOrThrow(result);
-                }
+        }, result -> {
+            if (result.next()) {
+                return UserInfoRowMapper.getInstance().mapOrThrow(result);
             }
-        }
-        return null;
+            return null;
+        });
     }
 
     public static UserInfo getUserByPhoneNumber(Start start, @Nonnull String phoneNumber)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT user_id, email, phone_number, time_joined FROM "
-                + Config.getConfig(start).getPasswordlessUsersTable() + " WHERE phone_number = ?";
+                + getConfig(start).getPasswordlessUsersTable() + " WHERE phone_number = ?";
 
-        try (Connection con = ConnectionPool.getConnection(start);
-                PreparedStatement pst = con.prepareStatement(QUERY)) {
+        return execute(start, QUERY, pst -> {
             pst.setString(1, phoneNumber);
-            try (ResultSet result = pst.executeQuery()) {
-                if (result.next()) {
-                    return UserInfoRowMapper.getInstance().mapOrThrow(result);
-                }
+        }, result -> {
+            if (result.next()) {
+                return UserInfoRowMapper.getInstance().mapOrThrow(result);
             }
-        }
-        return null;
+            return null;
+        });
     }
 
     private static class PasswordlessDeviceRowMapper implements RowMapper<PasswordlessDevice, ResultSet> {

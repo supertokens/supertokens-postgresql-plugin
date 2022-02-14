@@ -23,6 +23,7 @@ import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.session.SessionInfo;
 import io.supertokens.storage.postgresql.ConnectionPool;
+import io.supertokens.storage.postgresql.QueryExecutorTemplate;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -35,6 +36,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import static java.lang.System.currentTimeMillis;
@@ -87,17 +89,16 @@ public class SessionQueries {
         });
     }
 
-    static boolean isSessionBlacklisted(Start start, String sessionHandle) throws SQLException {
-        String QUERY = "SELECT session_handle FROM " + Config.getConfig(start).getSessionInfoTable()
+    static boolean isSessionBlacklisted(Start start, String sessionHandle) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT session_handle FROM " + getConfig(start).getSessionInfoTable()
                 + " WHERE session_handle = ?";
 
-        try (Connection con = ConnectionPool.getConnection(start);
-                PreparedStatement pst = con.prepareStatement(QUERY)) {
+        return execute(start, QUERY, pst -> {
             pst.setString(1, sessionHandle);
-            try (ResultSet result = pst.executeQuery()) {
-                return !result.next();
-            }
-        }
+        }, result -> {
+
+            return !result.next();
+        });
     }
 
     public static SessionInfo getSessionInfo_Transaction(Start start, Connection con, String sessionHandle)
@@ -128,18 +129,16 @@ public class SessionQueries {
         });
     }
 
-    public static int getNumberOfSessions(Start start) throws SQLException {
-        String QUERY = "SELECT count(*) as num FROM " + Config.getConfig(start).getSessionInfoTable();
+    public static int getNumberOfSessions(Start start) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT count(*) as num FROM " + getConfig(start).getSessionInfoTable();
 
-        try (Connection con = ConnectionPool.getConnection(start);
-                PreparedStatement pst = con.prepareStatement(QUERY)) {
-            try (ResultSet result = pst.executeQuery()) {
-                if (result.next()) {
-                    return result.getInt("num");
-                }
-                throw new SQLException("Should not have come here.");
+        return execute(start, QUERY, pst -> {
+        }, result -> {
+            if (result.next()) {
+                return result.getInt("num");
             }
-        }
+            throw new SQLException("Should not have come here.");
+        });
     }
 
     public static int deleteSession(Start start, String[] sessionHandles) throws SQLException {
@@ -173,25 +172,23 @@ public class SessionQueries {
         });
     }
 
-    public static String[] getAllSessionHandlesForUser(Start start, String userId) throws SQLException {
-        String QUERY = "SELECT session_handle FROM " + Config.getConfig(start).getSessionInfoTable()
-                + " WHERE user_id = ?";
+    public static String[] getAllSessionHandlesForUser(Start start, String userId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT session_handle FROM " + getConfig(start).getSessionInfoTable() + " WHERE user_id = ?";
 
-        try (Connection con = ConnectionPool.getConnection(start);
-                PreparedStatement pst = con.prepareStatement(QUERY)) {
+        return execute(start, QUERY, pst -> {
             pst.setString(1, userId);
-            try (ResultSet result = pst.executeQuery()) {
-                List<String> temp = new ArrayList<>();
-                while (result.next()) {
-                    temp.add(result.getString("session_handle"));
-                }
-                String[] finalResult = new String[temp.size()];
-                for (int i = 0; i < temp.size(); i++) {
-                    finalResult[i] = temp.get(i);
-                }
-                return finalResult;
+        }, result -> {
+            List<String> temp = new ArrayList<>();
+            while (result.next()) {
+                temp.add(result.getString("session_handle"));
             }
-        }
+            String[] finalResult = new String[temp.size()];
+            for (int i = 0; i < temp.size(); i++) {
+                finalResult[i] = temp.get(i);
+            }
+            return finalResult;
+        });
     }
 
     public static void deleteAllExpiredSessions(Start start) throws SQLException, StorageQueryException {
@@ -238,18 +235,16 @@ public class SessionQueries {
 
     public static SessionInfo getSession(Start start, String sessionHandle) throws SQLException, StorageQueryException {
         String QUERY = "SELECT session_handle, user_id, refresh_token_hash_2, session_data, expires_at, "
-                + "created_at_time, jwt_user_payload FROM " + Config.getConfig(start).getSessionInfoTable()
+                + "created_at_time, jwt_user_payload FROM " + getConfig(start).getSessionInfoTable()
                 + " WHERE session_handle = ?";
-        try (Connection con = ConnectionPool.getConnection(start);
-                PreparedStatement pst = con.prepareStatement(QUERY)) {
+        return execute(start, QUERY, pst -> {
             pst.setString(1, sessionHandle);
-            try (ResultSet result = pst.executeQuery()) {
-                if (result.next()) {
-                    return SessionInfoRowMapper.getInstance().mapOrThrow(result);
-                }
+        }, result -> {
+            if (result.next()) {
+                return SessionInfoRowMapper.getInstance().mapOrThrow(result);
             }
-        }
-        return null;
+            return null;
+        });
     }
 
     public static void addAccessTokenSigningKey_Transaction(Start start, Connection con, long createdAtTime,
