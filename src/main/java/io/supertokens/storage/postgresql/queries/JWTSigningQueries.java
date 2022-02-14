@@ -21,6 +21,7 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.jwt.JWTAsymmetricSigningKeyInfo;
 import io.supertokens.pluginInterface.jwt.JWTSigningKeyInfo;
 import io.supertokens.pluginInterface.jwt.JWTSymmetricSigningKeyInfo;
+import io.supertokens.storage.postgresql.QueryExecutorTemplate;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -31,6 +32,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
+import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class JWTSigningQueries {
     static String getQueryToCreateJWTSigningTable(Start start) {
@@ -97,17 +101,16 @@ public class JWTSigningQueries {
     }
 
     public static void setJWTSigningKeyInfo_Transaction(Start start, Connection con, JWTSigningKeyInfo info)
-            throws SQLException {
+            throws SQLException, StorageQueryException {
 
-        String QUERY = "INSERT INTO " + Config.getConfig(start).getJWTSigningKeysTable()
+        String QUERY = "INSERT INTO " + getConfig(start).getJWTSigningKeysTable()
                 + "(key_id, key_string, created_at, algorithm) VALUES(?, ?, ?, ?)";
 
-        try (PreparedStatement pst = con.prepareStatement(QUERY)) {
+        update(start, QUERY, pst -> {
             pst.setString(1, info.keyId);
             pst.setString(2, info.keyString);
             pst.setLong(3, info.createdAtTime);
             pst.setString(4, info.algorithm);
-            pst.executeUpdate();
-        }
+        });
     }
 }

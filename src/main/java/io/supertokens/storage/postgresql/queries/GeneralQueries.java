@@ -23,6 +23,7 @@ import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.ProcessState;
+import io.supertokens.storage.postgresql.QueryExecutorTemplate;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -38,6 +39,26 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static io.supertokens.storage.postgresql.ConnectionPool.getConnection;
+import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE;
+import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.CREATING_NEW_TABLE;
+import static io.supertokens.storage.postgresql.ProcessState.getInstance;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static io.supertokens.storage.postgresql.config.Config.getConfig;
+import static io.supertokens.storage.postgresql.queries.EmailPasswordQueries.getQueryToCreatePasswordResetTokenExpiryIndex;
+import static io.supertokens.storage.postgresql.queries.EmailPasswordQueries.getQueryToCreatePasswordResetTokensTable;
+import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.getQueryToCreateEmailVerificationTable;
+import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.getQueryToCreateEmailVerificationTokenExpiryIndex;
+import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.getQueryToCreateEmailVerificationTokensTable;
+import static io.supertokens.storage.postgresql.queries.JWTSigningQueries.getQueryToCreateJWTSigningTable;
+import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateCodeCreatedAtIndex;
+import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateCodesTable;
+import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateDeviceEmailIndex;
+import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateDevicePhoneNumberIndex;
+import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateDevicesTable;
+import static io.supertokens.storage.postgresql.queries.SessionQueries.getQueryToCreateAccessTokenSigningKeysTable;
+import static io.supertokens.storage.postgresql.queries.SessionQueries.getQueryToCreateSessionInfoTable;
 
 public class GeneralQueries {
 
@@ -85,29 +106,25 @@ public class GeneralQueries {
         // @formatter:on
     }
 
-    public static void createTablesIfNotExists(Start start) throws SQLException {
+    public static void createTablesIfNotExists(Start start) throws SQLException, StorageQueryException {
         int numberOfRetries = 0;
         boolean retry = true;
         while (retry) {
             retry = false;
             try {
                 if (!doesTableExists(start, Config.getConfig(start).getKeyValueTable())) {
-                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
-                    try (Connection con = ConnectionPool.getConnection(start);
-                            PreparedStatement pst = con.prepareStatement(getQueryToCreateKeyValueTable(start))) {
-                        pst.executeUpdate();
-                    }
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreateKeyValueTable(start), pst -> {
+                    });
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getUsersTable())) {
-                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
-                    try (Connection con = ConnectionPool.getConnection(start);
-                            PreparedStatement pst = con.prepareStatement(getQueryToCreateUsersTable(start))) {
-                        pst.executeUpdate();
-                    }
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreateUsersTable(start), pst -> {
+                    });
 
                     // index
-                    try (Connection con = ConnectionPool.getConnection(start);
+                    try (Connection con = getConnection(start);
                             PreparedStatement pstIndex = con
                                     .prepareStatement(getQueryToCreateUserPaginationIndex(start))) {
                         pstIndex.executeUpdate();
@@ -115,129 +132,96 @@ public class GeneralQueries {
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
-                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
-                    try (Connection con = ConnectionPool.getConnection(start);
-                            PreparedStatement pst = con.prepareStatement(
-                                    SessionQueries.getQueryToCreateAccessTokenSigningKeysTable(start))) {
-                        pst.executeUpdate();
-                    }
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreateAccessTokenSigningKeysTable(start), pst -> {
+                    });
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getSessionInfoTable())) {
-                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
-                    try (Connection con = ConnectionPool.getConnection(start);
-                            PreparedStatement pst = con
-                                    .prepareStatement(SessionQueries.getQueryToCreateSessionInfoTable(start))) {
-                        pst.executeUpdate();
-                    }
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreateSessionInfoTable(start), pst -> {
+                    });
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getEmailPasswordUsersTable())) {
-                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
-                    try (Connection con = ConnectionPool.getConnection(start);
-                            PreparedStatement pst = con
-                                    .prepareStatement(EmailPasswordQueries.getQueryToCreateUsersTable(start))) {
-                        pst.executeUpdate();
-                    }
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, EmailPasswordQueries.getQueryToCreateUsersTable(start), pst -> {
+                    });
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordResetTokensTable())) {
-                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
-                    try (Connection con = ConnectionPool.getConnection(start);
-                            PreparedStatement pst = con.prepareStatement(
-                                    EmailPasswordQueries.getQueryToCreatePasswordResetTokensTable(start))) {
-                        pst.executeUpdate();
-                    }
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreatePasswordResetTokensTable(start), pst -> {
+                    });
                     // index
-                    try (Connection con = ConnectionPool.getConnection(start);
-                            PreparedStatement pstIndex = con.prepareStatement(
-                                    EmailPasswordQueries.getQueryToCreatePasswordResetTokenExpiryIndex(start))) {
+                    try (Connection con = getConnection(start);
+                            PreparedStatement pstIndex = con
+                                    .prepareStatement(getQueryToCreatePasswordResetTokenExpiryIndex(start))) {
                         pstIndex.executeUpdate();
                     }
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getEmailVerificationTable())) {
-                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
-                    try (Connection con = ConnectionPool.getConnection(start);
-                            PreparedStatement pst = con.prepareStatement(
-                                    EmailVerificationQueries.getQueryToCreateEmailVerificationTable(start))) {
-                        pst.executeUpdate();
-                    }
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreateEmailVerificationTable(start), pst -> {
+                    });
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getEmailVerificationTokensTable())) {
-                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
-                    try (Connection con = ConnectionPool.getConnection(start);
-                            PreparedStatement pst = con.prepareStatement(
-                                    EmailVerificationQueries.getQueryToCreateEmailVerificationTokensTable(start))) {
-                        pst.executeUpdate();
-                    }
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreateEmailVerificationTokensTable(start), pst -> {
+                    });
                     // index
-                    try (Connection con = ConnectionPool.getConnection(start);
-                            PreparedStatement pstIndex = con.prepareStatement(EmailVerificationQueries
-                                    .getQueryToCreateEmailVerificationTokenExpiryIndex(start))) {
+                    try (Connection con = getConnection(start);
+                            PreparedStatement pstIndex = con
+                                    .prepareStatement(getQueryToCreateEmailVerificationTokenExpiryIndex(start))) {
                         pstIndex.executeUpdate();
                     }
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getThirdPartyUsersTable())) {
-                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
-                    try (Connection con = ConnectionPool.getConnection(start);
-                            PreparedStatement pst = con
-                                    .prepareStatement(ThirdPartyQueries.getQueryToCreateUsersTable(start))) {
-                        pst.executeUpdate();
-                    }
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, ThirdPartyQueries.getQueryToCreateUsersTable(start), pst -> {
+                    });
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getJWTSigningKeysTable())) {
-                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
-                    try (Connection con = ConnectionPool.getConnection(start);
-                            PreparedStatement pst = con
-                                    .prepareStatement(JWTSigningQueries.getQueryToCreateJWTSigningTable(start))) {
-                        pst.executeUpdate();
-                    }
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreateJWTSigningTable(start), pst -> {
+                    });
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessUsersTable())) {
-                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
-                    try (Connection con = ConnectionPool.getConnection(start);
-                            PreparedStatement pst = con
-                                    .prepareStatement(PasswordlessQueries.getQueryToCreateUsersTable(start))) {
-                        pst.executeUpdate();
-                    }
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, PasswordlessQueries.getQueryToCreateUsersTable(start), pst -> {
+                    });
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessDevicesTable())) {
-                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
-                    try (Connection con = ConnectionPool.getConnection(start);
-                            PreparedStatement pst = con
-                                    .prepareStatement(PasswordlessQueries.getQueryToCreateDevicesTable(start))) {
-                        pst.executeUpdate();
-                    }
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreateDevicesTable(start), pst -> {
+                    });
                     // index
-                    try (Connection con = ConnectionPool.getConnection(start);
+                    try (Connection con = getConnection(start);
                             PreparedStatement pstIndex = con
-                                    .prepareStatement(PasswordlessQueries.getQueryToCreateDeviceEmailIndex(start))) {
+                                    .prepareStatement(getQueryToCreateDeviceEmailIndex(start))) {
                         pstIndex.executeUpdate();
                     }
-                    try (Connection con = ConnectionPool.getConnection(start);
-                            PreparedStatement pstIndex = con.prepareStatement(
-                                    PasswordlessQueries.getQueryToCreateDevicePhoneNumberIndex(start))) {
+                    try (Connection con = getConnection(start);
+                            PreparedStatement pstIndex = con
+                                    .prepareStatement(getQueryToCreateDevicePhoneNumberIndex(start))) {
                         pstIndex.executeUpdate();
                     }
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessCodesTable())) {
-                    ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, null);
-                    try (Connection con = ConnectionPool.getConnection(start);
-                            PreparedStatement pst = con
-                                    .prepareStatement(PasswordlessQueries.getQueryToCreateCodesTable(start))) {
-                        pst.executeUpdate();
-                    }
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreateCodesTable(start), pst -> {
+                    });
                     // index
-                    try (Connection con = ConnectionPool.getConnection(start);
+                    try (Connection con = getConnection(start);
                             PreparedStatement pstIndex = con
-                                    .prepareStatement(PasswordlessQueries.getQueryToCreateCodeCreatedAtIndex(start))) {
+                                    .prepareStatement(getQueryToCreateCodeCreatedAtIndex(start))) {
                         pstIndex.executeUpdate();
                     }
                 }
@@ -309,22 +293,22 @@ public class GeneralQueries {
     }
 
     public static void setKeyValue_Transaction(Start start, Connection con, String key, KeyValueInfo info)
-            throws SQLException {
-        String QUERY = "INSERT INTO " + Config.getConfig(start).getKeyValueTable()
+            throws SQLException, StorageQueryException {
+        String QUERY = "INSERT INTO " + getConfig(start).getKeyValueTable()
                 + "(name, value, created_at_time) VALUES(?, ?, ?) "
                 + "ON CONFLICT (name) DO UPDATE SET value = ?, created_at_time = ?";
 
-        try (PreparedStatement pst = con.prepareStatement(QUERY)) {
+        update(start, QUERY, pst -> {
             pst.setString(1, key);
             pst.setString(2, info.value);
             pst.setLong(3, info.createdAtTime);
             pst.setString(4, info.value);
             pst.setLong(5, info.createdAtTime);
-            pst.executeUpdate();
-        }
+        });
     }
 
-    public static void setKeyValue(Start start, String key, KeyValueInfo info) throws SQLException {
+    public static void setKeyValue(Start start, String key, KeyValueInfo info)
+            throws SQLException, StorageQueryException {
         try (Connection con = ConnectionPool.getConnection(start)) {
             setKeyValue_Transaction(start, con, key, info);
         }
@@ -364,12 +348,11 @@ public class GeneralQueries {
 
     public static void deleteKeyValue_Transaction(Start start, Connection con, String key)
             throws SQLException, StorageQueryException {
-        String QUERY = "DELETE FROM " + Config.getConfig(start).getKeyValueTable() + " WHERE name = ?";
+        String QUERY = "DELETE FROM " + getConfig(start).getKeyValueTable() + " WHERE name = ?";
 
-        try (PreparedStatement pst = con.prepareStatement(QUERY)) {
+        update(start, QUERY, pst -> {
             pst.setString(1, key);
-            pst.executeUpdate();
-        }
+        });
     }
 
     public static long getUsersCount(Start start, RECIPE_ID[] includeRecipeIds) throws SQLException {

@@ -16,7 +16,6 @@
 
 package io.supertokens.storage.postgresql.queries;
 
-import io.supertokens.pluginInterface.RECIPE_ID;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
 import io.supertokens.pluginInterface.emailpassword.UserInfo;
@@ -34,6 +33,11 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
+import static io.supertokens.pluginInterface.RECIPE_ID.EMAIL_PASSWORD;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static io.supertokens.storage.postgresql.config.Config.getConfig;
+import static java.lang.System.currentTimeMillis;
+
 public class EmailPasswordQueries {
 
     static String getQueryToCreateUsersTable(Start start) {
@@ -42,9 +46,11 @@ public class EmailPasswordQueries {
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + emailPasswordUsersTable + " ("
                 + "user_id CHAR(36) NOT NULL,"
-                + "email VARCHAR(256) NOT NULL CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUsersTable, "email", "key") + " UNIQUE,"
-                + "password_hash VARCHAR(128) NOT NULL," + "time_joined BIGINT NOT NULL," 
-                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUsersTable, null, "pkey") + " PRIMARY KEY (user_id));";
+                + "email VARCHAR(256) NOT NULL CONSTRAINT " +
+                Utils.getConstraintName(schema, emailPasswordUsersTable, "email", "key") + " UNIQUE,"
+                + "password_hash VARCHAR(128) NOT NULL," + "time_joined BIGINT NOT NULL,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUsersTable, null, "pkey") +
+                " PRIMARY KEY (user_id));";
         // @formatter:on
     }
 
@@ -57,9 +63,9 @@ public class EmailPasswordQueries {
                 + "token VARCHAR(128) NOT NULL CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, "token", "key") + " UNIQUE,"
                 + "token_expiry BIGINT NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, null, "pkey") + " PRIMARY KEY (user_id, token),"
-                + ("CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, "user_id", "fkey") + " FOREIGN KEY (user_id)" 
-                    + " REFERENCES " + Config.getConfig(start).getEmailPasswordUsersTable() + "(user_id)" 
-                    + " ON DELETE CASCADE ON UPDATE CASCADE);");
+                + ("CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, "user_id", "fkey") + " FOREIGN KEY (user_id)"
+                + " REFERENCES " + Config.getConfig(start).getEmailPasswordUsersTable() + "(user_id)"
+                + " ON DELETE CASCADE ON UPDATE CASCADE);");
         // @formatter:on
     }
 
@@ -68,49 +74,42 @@ public class EmailPasswordQueries {
                 + Config.getConfig(start).getPasswordResetTokensTable() + "(token_expiry);";
     }
 
-    public static void deleteExpiredPasswordResetTokens(Start start) throws SQLException {
-        String QUERY = "DELETE FROM " + Config.getConfig(start).getPasswordResetTokensTable()
-                + " WHERE token_expiry < ?";
+    public static void deleteExpiredPasswordResetTokens(Start start) throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + getConfig(start).getPasswordResetTokensTable() + " WHERE token_expiry < ?";
 
-        try (Connection con = ConnectionPool.getConnection(start);
-                PreparedStatement pst = con.prepareStatement(QUERY)) {
-            pst.setLong(1, System.currentTimeMillis());
-            pst.executeUpdate();
-        }
+        update(start, QUERY, pst -> {
+            pst.setLong(1, currentTimeMillis());
+        });
     }
 
     public static void updateUsersPassword_Transaction(Start start, Connection con, String userId, String newPassword)
-            throws SQLException {
-        String QUERY = "UPDATE " + Config.getConfig(start).getEmailPasswordUsersTable()
+            throws SQLException, StorageQueryException {
+        String QUERY = "UPDATE " + getConfig(start).getEmailPasswordUsersTable()
                 + " SET password_hash = ? WHERE user_id = ?";
 
-        try (PreparedStatement pst = con.prepareStatement(QUERY)) {
+        update(start, QUERY, pst -> {
             pst.setString(1, newPassword);
             pst.setString(2, userId);
-            pst.executeUpdate();
-        }
+        });
     }
 
     public static void updateUsersEmail_Transaction(Start start, Connection con, String userId, String newEmail)
-            throws SQLException {
-        String QUERY = "UPDATE " + Config.getConfig(start).getEmailPasswordUsersTable()
-                + " SET email = ? WHERE user_id = ?";
+            throws SQLException, StorageQueryException {
+        String QUERY = "UPDATE " + getConfig(start).getEmailPasswordUsersTable() + " SET email = ? WHERE user_id = ?";
 
-        try (PreparedStatement pst = con.prepareStatement(QUERY)) {
+        update(start, QUERY, pst -> {
             pst.setString(1, newEmail);
             pst.setString(2, userId);
-            pst.executeUpdate();
-        }
+        });
     }
 
     public static void deleteAllPasswordResetTokensForUser_Transaction(Start start, Connection con, String userId)
-            throws SQLException {
-        String QUERY = "DELETE FROM " + Config.getConfig(start).getPasswordResetTokensTable() + " WHERE user_id = ?";
+            throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + getConfig(start).getPasswordResetTokensTable() + " WHERE user_id = ?";
 
-        try (PreparedStatement pst = con.prepareStatement(QUERY)) {
+        update(start, QUERY, pst -> {
             pst.setString(1, userId);
-            pst.executeUpdate();
-        }
+        });
     }
 
     public static PasswordResetTokenInfo[] getAllPasswordResetTokenInfoForUser(Start start, String userId)
@@ -254,17 +253,15 @@ public class EmailPasswordQueries {
     }
 
     public static void addPasswordResetToken(Start start, String userId, String tokenHash, long expiry)
-            throws SQLException {
-        String QUERY = "INSERT INTO " + Config.getConfig(start).getPasswordResetTokensTable()
+            throws SQLException, StorageQueryException {
+        String QUERY = "INSERT INTO " + getConfig(start).getPasswordResetTokensTable()
                 + "(user_id, token, token_expiry)" + " VALUES(?, ?, ?)";
 
-        try (Connection con = ConnectionPool.getConnection(start);
-                PreparedStatement pst = con.prepareStatement(QUERY)) {
+        update(start, QUERY, pst -> {
             pst.setString(1, userId);
             pst.setString(2, tokenHash);
             pst.setLong(3, expiry);
-            pst.executeUpdate();
-        }
+        });
     }
 
     public static void signUp(Start start, String userId, String email, String passwordHash, long timeJoined)
@@ -273,27 +270,25 @@ public class EmailPasswordQueries {
             Connection sqlCon = (Connection) con.getConnection();
             try {
                 {
-                    String QUERY = "INSERT INTO " + Config.getConfig(start).getUsersTable()
+                    String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
                             + "(user_id, recipe_id, time_joined)" + " VALUES(?, ?, ?)";
-                    try (PreparedStatement pst = sqlCon.prepareStatement(QUERY)) {
+                    update(start, QUERY, pst -> {
                         pst.setString(1, userId);
-                        pst.setString(2, RECIPE_ID.EMAIL_PASSWORD.toString());
+                        pst.setString(2, EMAIL_PASSWORD.toString());
                         pst.setLong(3, timeJoined);
-                        pst.executeUpdate();
-                    }
+                    });
                 }
 
                 {
-                    String QUERY = "INSERT INTO " + Config.getConfig(start).getEmailPasswordUsersTable()
+                    String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUsersTable()
                             + "(user_id, email, password_hash, time_joined)" + " VALUES(?, ?, ?, ?)";
 
-                    try (PreparedStatement pst = sqlCon.prepareStatement(QUERY)) {
+                    update(start, QUERY, pst -> {
                         pst.setString(1, userId);
                         pst.setString(2, email);
                         pst.setString(3, passwordHash);
                         pst.setLong(4, timeJoined);
-                        pst.executeUpdate();
-                    }
+                    });
                 }
 
                 sqlCon.commit();
@@ -310,24 +305,22 @@ public class EmailPasswordQueries {
             Connection sqlCon = (Connection) con.getConnection();
             try {
                 {
-                    String QUERY = "DELETE FROM " + Config.getConfig(start).getUsersTable()
+                    String QUERY = "DELETE FROM " + getConfig(start).getUsersTable()
                             + " WHERE user_id = ? AND recipe_id = ?";
 
-                    try (PreparedStatement pst = sqlCon.prepareStatement(QUERY)) {
+                    update(start, QUERY, pst -> {
                         pst.setString(1, userId);
-                        pst.setString(2, RECIPE_ID.EMAIL_PASSWORD.toString());
-                        pst.executeUpdate();
-                    }
+                        pst.setString(2, EMAIL_PASSWORD.toString());
+                    });
                 }
 
                 {
-                    String QUERY = "DELETE FROM " + Config.getConfig(start).getEmailPasswordUsersTable()
+                    String QUERY = "DELETE FROM " + getConfig(start).getEmailPasswordUsersTable()
                             + " WHERE user_id = ?";
 
-                    try (PreparedStatement pst = sqlCon.prepareStatement(QUERY)) {
+                    update(start, QUERY, pst -> {
                         pst.setString(1, userId);
-                        pst.executeUpdate();
-                    }
+                    });
                 }
                 sqlCon.commit();
             } catch (SQLException throwables) {
