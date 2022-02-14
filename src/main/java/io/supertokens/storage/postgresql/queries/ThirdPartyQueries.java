@@ -33,6 +33,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static io.supertokens.pluginInterface.RECIPE_ID.THIRD_PARTY;
+import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
@@ -107,9 +108,7 @@ public class ThirdPartyQueries {
 
                 {
                     String QUERY = "DELETE FROM " + getConfig(start).getThirdPartyUsersTable() + " WHERE user_id = ? ";
-                    update(start, QUERY, pst -> {
-                        pst.setString(1, userId);
-                    });
+                    update(start, QUERY, pst -> pst.setString(1, userId));
                 }
 
                 sqlCon.commit();
@@ -215,9 +214,7 @@ public class ThirdPartyQueries {
         String QUERY = "SELECT user_id, third_party_id, third_party_user_id, email, time_joined FROM "
                 + getConfig(start).getThirdPartyUsersTable() + " ORDER BY time_joined " + timeJoinedOrder
                 + ", user_id DESC LIMIT ?";
-        return execute(start, QUERY, pst -> {
-            pst.setInt(1, limit);
-        }, result -> {
+        return execute(start, QUERY, pst -> pst.setInt(1, limit), result -> {
             List<UserInfo> temp = new ArrayList<>();
             while (result.next()) {
                 temp.add(UserInfoRowMapper.getInstance().mapOrThrow(result));
@@ -254,8 +251,7 @@ public class ThirdPartyQueries {
     @Deprecated
     public static long getUsersCount(Start start) throws SQLException, StorageQueryException {
         String QUERY = "SELECT COUNT(*) as total FROM " + getConfig(start).getThirdPartyUsersTable();
-        return execute(start, QUERY, pst -> {
-        }, result -> {
+        return execute(start, QUERY, NO_OP_SETTER, result -> {
             if (result.next()) {
                 return result.getLong("total");
             }

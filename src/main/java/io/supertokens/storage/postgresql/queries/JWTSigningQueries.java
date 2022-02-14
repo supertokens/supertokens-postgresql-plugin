@@ -31,6 +31,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
+import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
@@ -61,8 +62,7 @@ public class JWTSigningQueries {
         String QUERY = "SELECT * FROM " + getConfig(start).getJWTSigningKeysTable()
                 + " ORDER BY created_at DESC FOR UPDATE";
 
-        return execute(con, QUERY, pst -> {
-        }, result -> {
+        return execute(con, QUERY, NO_OP_SETTER, result -> {
             List<JWTSigningKeyInfo> keys = new ArrayList<>();
 
             while (result.next()) {

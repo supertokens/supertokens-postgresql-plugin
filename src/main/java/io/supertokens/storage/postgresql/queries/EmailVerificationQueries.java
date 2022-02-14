@@ -70,9 +70,7 @@ public class EmailVerificationQueries {
     public static void deleteExpiredEmailVerificationTokens(Start start) throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTokensTable() + " WHERE token_expiry < ?";
 
-        update(start, QUERY, pst -> {
-            pst.setLong(1, currentTimeMillis());
-        });
+        update(start, QUERY, pst -> pst.setLong(1, currentTimeMillis()));
     }
 
     public static void updateUsersIsEmailVerified_Transaction(Start start, Connection con, String userId, String email,
@@ -112,9 +110,7 @@ public class EmailVerificationQueries {
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT user_id, token, token_expiry, email FROM "
                 + getConfig(start).getEmailVerificationTokensTable() + " WHERE token = ?";
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, token);
-        }, result -> {
+        return execute(start, QUERY, pst -> pst.setString(1, token), result -> {
             if (result.next()) {
                 return EmailVerificationTokenInfoRowMapper.getInstance().mapOrThrow(result);
             }
@@ -186,10 +182,7 @@ public class EmailVerificationQueries {
         return execute(start, QUERY, pst -> {
             pst.setString(1, userId);
             pst.setString(2, email);
-        }, result -> {
-
-            return result.next();
-        });
+        }, result -> result.next());
     }
 
     public static void deleteUserInfo(Start start, String userId)
@@ -199,18 +192,14 @@ public class EmailVerificationQueries {
             try {
                 {
                     String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTable() + " WHERE user_id = ?";
-                    update(start, QUERY, pst -> {
-                        pst.setString(1, userId);
-                    });
+                    update(start, QUERY, pst -> pst.setString(1, userId));
                 }
 
                 {
                     String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTokensTable()
                             + " WHERE user_id = ?";
 
-                    update(start, QUERY, pst -> {
-                        pst.setString(1, userId);
-                    });
+                    update(start, QUERY, pst -> pst.setString(1, userId));
                 }
 
                 sqlCon.commit();

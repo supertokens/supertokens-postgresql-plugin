@@ -33,6 +33,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static io.supertokens.pluginInterface.RECIPE_ID.EMAIL_PASSWORD;
+import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
@@ -77,9 +78,7 @@ public class EmailPasswordQueries {
     public static void deleteExpiredPasswordResetTokens(Start start) throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getPasswordResetTokensTable() + " WHERE token_expiry < ?";
 
-        update(start, QUERY, pst -> {
-            pst.setLong(1, currentTimeMillis());
-        });
+        update(start, QUERY, pst -> pst.setLong(1, currentTimeMillis()));
     }
 
     public static void updateUsersPassword_Transaction(Start start, Connection con, String userId, String newPassword)
@@ -107,9 +106,7 @@ public class EmailPasswordQueries {
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getPasswordResetTokensTable() + " WHERE user_id = ?";
 
-        update(start, QUERY, pst -> {
-            pst.setString(1, userId);
-        });
+        update(start, QUERY, pst -> pst.setString(1, userId));
     }
 
     public static PasswordResetTokenInfo[] getAllPasswordResetTokenInfoForUser(Start start, String userId)
@@ -117,9 +114,7 @@ public class EmailPasswordQueries {
         String QUERY = "SELECT user_id, token, token_expiry FROM " + getConfig(start).getPasswordResetTokensTable()
                 + " WHERE user_id = ?";
 
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, userId);
-        }, result -> {
+        return execute(start, QUERY, pst -> pst.setString(1, userId), result -> {
             List<PasswordResetTokenInfo> temp = new ArrayList<>();
             while (result.next()) {
                 temp.add(PasswordResetRowMapper.getInstance().mapOrThrow(result));
@@ -138,9 +133,7 @@ public class EmailPasswordQueries {
         String QUERY = "SELECT user_id, token, token_expiry FROM " + getConfig(start).getPasswordResetTokensTable()
                 + " WHERE user_id = ? FOR UPDATE";
 
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, userId);
-        }, result -> {
+        return execute(con, QUERY, pst -> pst.setString(1, userId), result -> {
             List<PasswordResetTokenInfo> temp = new ArrayList<>();
             while (result.next()) {
                 temp.add(PasswordResetRowMapper.getInstance().mapOrThrow(result));
@@ -157,9 +150,7 @@ public class EmailPasswordQueries {
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT user_id, email, password_hash, time_joined FROM "
                 + getConfig(start).getEmailPasswordUsersTable() + " WHERE user_id = ? FOR UPDATE";
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, id);
-        }, result -> {
+        return execute(con, QUERY, pst -> pst.setString(1, id), result -> {
             if (result.next()) {
                 return UserInfoRowMapper.getInstance().mapOrThrow(result);
             }
@@ -173,9 +164,7 @@ public class EmailPasswordQueries {
         String QUERY = "SELECT user_id, email, password_hash, time_joined FROM "
                 + getConfig(start).getEmailPasswordUsersTable() + " ORDER BY time_joined " + timeJoinedOrder
                 + ", user_id DESC LIMIT ?";
-        return execute(start, QUERY, pst -> {
-            pst.setInt(1, limit);
-        }, result -> {
+        return execute(start, QUERY, pst -> pst.setInt(1, limit), result -> {
             List<UserInfo> temp = new ArrayList<>();
             while (result.next()) {
                 temp.add(UserInfoRowMapper.getInstance().mapOrThrow(result));
@@ -217,8 +206,7 @@ public class EmailPasswordQueries {
     @Deprecated
     public static long getUsersCount(Start start) throws SQLException, StorageQueryException {
         String QUERY = "SELECT COUNT(*) as total FROM " + getConfig(start).getEmailPasswordUsersTable();
-        return execute(start, QUERY, pst -> {
-        }, result -> {
+        return execute(start, QUERY, NO_OP_SETTER, result -> {
             if (result.next()) {
                 return result.getLong("total");
             }
@@ -230,9 +218,7 @@ public class EmailPasswordQueries {
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT user_id, token, token_expiry FROM " + getConfig(start).getPasswordResetTokensTable()
                 + " WHERE token = ?";
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, token);
-        }, result -> {
+        return execute(start, QUERY, pst -> pst.setString(1, token), result -> {
             if (result.next()) {
                 return PasswordResetRowMapper.getInstance().mapOrThrow(result);
             }
@@ -306,9 +292,7 @@ public class EmailPasswordQueries {
                     String QUERY = "DELETE FROM " + getConfig(start).getEmailPasswordUsersTable()
                             + " WHERE user_id = ?";
 
-                    update(start, QUERY, pst -> {
-                        pst.setString(1, userId);
-                    });
+                    update(start, QUERY, pst -> pst.setString(1, userId));
                 }
                 sqlCon.commit();
             } catch (SQLException throwables) {
@@ -363,9 +347,7 @@ public class EmailPasswordQueries {
     public static UserInfo getUserInfoUsingEmail(Start start, String email) throws StorageQueryException, SQLException {
         String QUERY = "SELECT user_id, email, password_hash, time_joined FROM "
                 + getConfig(start).getEmailPasswordUsersTable() + " WHERE email = ?";
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, email);
-        }, result -> {
+        return execute(start, QUERY, pst -> pst.setString(1, email), result -> {
             if (result.next()) {
                 return UserInfoRowMapper.getInstance().mapOrThrow(result);
             }

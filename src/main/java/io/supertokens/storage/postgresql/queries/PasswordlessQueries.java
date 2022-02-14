@@ -122,9 +122,7 @@ public class PasswordlessQueries {
 
         String QUERY = "SELECT device_id_hash, email, phone_number, link_code_salt, failed_attempts FROM "
                 + getConfig(start).getPasswordlessDevicesTable() + " WHERE device_id_hash = ? FOR UPDATE";
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, deviceIdHash);
-        }, result -> {
+        return execute(con, QUERY, pst -> pst.setString(1, deviceIdHash), result -> {
             if (result.next()) {
                 return PasswordlessDeviceRowMapper.getInstance().mapOrThrow(result);
             }
@@ -137,17 +135,13 @@ public class PasswordlessQueries {
         String QUERY = "UPDATE " + getConfig(start).getPasswordlessDevicesTable()
                 + " SET failed_attempts = failed_attempts + 1 WHERE device_id_hash = ?";
 
-        update(start, QUERY, pst -> {
-            pst.setString(1, deviceIdHash);
-        });
+        update(start, QUERY, pst -> pst.setString(1, deviceIdHash));
     }
 
     public static void deleteDevice_Transaction(Start start, Connection con, String deviceIdHash)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable() + " WHERE device_id_hash = ?";
-        update(start, QUERY, pst -> {
-            pst.setString(1, deviceIdHash);
-        });
+        update(start, QUERY, pst -> pst.setString(1, deviceIdHash));
     }
 
     public static void deleteDevicesByPhoneNumber_Transaction(Start start, Connection con, @Nonnull String phoneNumber)
@@ -155,9 +149,7 @@ public class PasswordlessQueries {
 
         String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable() + " WHERE phone_number = ?";
 
-        update(start, QUERY, pst -> {
-            pst.setString(1, phoneNumber);
-        });
+        update(start, QUERY, pst -> pst.setString(1, phoneNumber));
     }
 
     public static void deleteDevicesByEmail_Transaction(Start start, Connection con, @Nonnull String email)
@@ -165,9 +157,7 @@ public class PasswordlessQueries {
 
         String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable() + " WHERE email = ?";
 
-        update(start, QUERY, pst -> {
-            pst.setString(1, email);
-        });
+        update(start, QUERY, pst -> pst.setString(1, email));
     }
 
     private static void createCode_Transaction(Start start, Connection con, PasswordlessCode code)
@@ -203,9 +193,7 @@ public class PasswordlessQueries {
         String QUERY = "SELECT code_id, device_id_hash, link_code_hash, created_at FROM "
                 + getConfig(start).getPasswordlessCodesTable() + " WHERE device_id_hash = ?";
 
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, deviceIdHash);
-        }, result -> {
+        return execute(con, QUERY, pst -> pst.setString(1, deviceIdHash), result -> {
             List<PasswordlessCode> temp = new ArrayList<>();
             while (result.next()) {
                 temp.add(PasswordlessCodeRowMapper.getInstance().mapOrThrow(result));
@@ -224,9 +212,7 @@ public class PasswordlessQueries {
         String QUERY = "SELECT code_id, device_id_hash, link_code_hash, created_at FROM "
                 + getConfig(start).getPasswordlessCodesTable() + " WHERE link_code_hash = ?";
 
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, linkCodeHash);
-        }, result -> {
+        return execute(con, QUERY, pst -> pst.setString(1, linkCodeHash), result -> {
             if (result.next()) {
                 return PasswordlessCodeRowMapper.getInstance().mapOrThrow(result);
             }
@@ -238,9 +224,7 @@ public class PasswordlessQueries {
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessCodesTable() + " WHERE code_id = ?";
 
-        update(start, QUERY, pst -> {
-            pst.setString(1, codeId);
-        });
+        update(start, QUERY, pst -> pst.setString(1, codeId));
     }
 
     public static void createUser(Start start, UserInfo user)
@@ -344,9 +328,7 @@ public class PasswordlessQueries {
         try (Connection con = ConnectionPool.getConnection(start)) {
             String QUERY = "SELECT device_id_hash, email, phone_number, link_code_salt, failed_attempts FROM "
                     + getConfig(start).getPasswordlessDevicesTable() + " WHERE device_id_hash = ?";
-            return execute(con, QUERY, pst -> {
-                pst.setString(1, deviceIdHash);
-            }, result -> {
+            return execute(con, QUERY, pst -> pst.setString(1, deviceIdHash), result -> {
                 if (result.next()) {
                     return PasswordlessDeviceRowMapper.getInstance().mapOrThrow(result);
                 }
@@ -360,9 +342,7 @@ public class PasswordlessQueries {
         String QUERY = "SELECT device_id_hash, email, phone_number, link_code_salt, failed_attempts FROM "
                 + getConfig(start).getPasswordlessDevicesTable() + " WHERE email = ?";
 
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, email);
-        }, result -> {
+        return execute(start, QUERY, pst -> pst.setString(1, email), result -> {
             List<PasswordlessDevice> temp = new ArrayList<>();
             while (result.next()) {
                 temp.add(PasswordlessDeviceRowMapper.getInstance().mapOrThrow(result));
@@ -380,9 +360,7 @@ public class PasswordlessQueries {
         String QUERY = "SELECT device_id_hash, email, phone_number, link_code_salt, failed_attempts FROM "
                 + getConfig(start).getPasswordlessDevicesTable() + " WHERE phone_number = ?";
 
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, phoneNumber);
-        }, result -> {
+        return execute(start, QUERY, pst -> pst.setString(1, phoneNumber), result -> {
             List<PasswordlessDevice> temp = new ArrayList<>();
             while (result.next()) {
                 temp.add(PasswordlessDeviceRowMapper.getInstance().mapOrThrow(result));
@@ -407,9 +385,7 @@ public class PasswordlessQueries {
         String QUERY = "SELECT code_id, device_id_hash, link_code_hash, created_at FROM "
                 + getConfig(start).getPasswordlessCodesTable() + " WHERE created_at < ?";
 
-        return execute(start, QUERY, pst -> {
-            pst.setLong(1, time);
-        }, result -> {
+        return execute(start, QUERY, pst -> pst.setLong(1, time), result -> {
             List<PasswordlessCode> temp = new ArrayList<>();
             while (result.next()) {
                 temp.add(PasswordlessCodeRowMapper.getInstance().mapOrThrow(result));
@@ -426,9 +402,7 @@ public class PasswordlessQueries {
         String QUERY = "SELECT code_id, device_id_hash, link_code_hash, created_at FROM "
                 + getConfig(start).getPasswordlessCodesTable() + " WHERE code_id = ?";
 
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, codeId);
-        }, result -> {
+        return execute(start, QUERY, pst -> pst.setString(1, codeId), result -> {
             if (result.next()) {
                 return PasswordlessCodeRowMapper.getInstance().mapOrThrow(result);
             }
@@ -491,9 +465,7 @@ public class PasswordlessQueries {
         String QUERY = "SELECT user_id, email, phone_number, time_joined FROM "
                 + getConfig(start).getPasswordlessUsersTable() + " WHERE email = ?";
 
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, email);
-        }, result -> {
+        return execute(start, QUERY, pst -> pst.setString(1, email), result -> {
             if (result.next()) {
                 return UserInfoRowMapper.getInstance().mapOrThrow(result);
             }
@@ -506,9 +478,7 @@ public class PasswordlessQueries {
         String QUERY = "SELECT user_id, email, phone_number, time_joined FROM "
                 + getConfig(start).getPasswordlessUsersTable() + " WHERE phone_number = ?";
 
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, phoneNumber);
-        }, result -> {
+        return execute(start, QUERY, pst -> pst.setString(1, phoneNumber), result -> {
             if (result.next()) {
                 return UserInfoRowMapper.getInstance().mapOrThrow(result);
             }

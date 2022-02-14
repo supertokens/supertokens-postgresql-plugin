@@ -33,6 +33,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
+import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
@@ -90,12 +91,7 @@ public class SessionQueries {
         String QUERY = "SELECT session_handle FROM " + getConfig(start).getSessionInfoTable()
                 + " WHERE session_handle = ?";
 
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, sessionHandle);
-        }, result -> {
-
-            return !result.next();
-        });
+        return execute(start, QUERY, pst -> pst.setString(1, sessionHandle), result -> !result.next());
     }
 
     public static SessionInfo getSessionInfo_Transaction(Start start, Connection con, String sessionHandle)
@@ -103,9 +99,7 @@ public class SessionQueries {
         String QUERY = "SELECT session_handle, user_id, refresh_token_hash_2, session_data, expires_at, "
                 + "created_at_time, jwt_user_payload FROM " + getConfig(start).getSessionInfoTable()
                 + " WHERE session_handle = ? FOR UPDATE";
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, sessionHandle);
-        }, result -> {
+        return execute(con, QUERY, pst -> pst.setString(1, sessionHandle), result -> {
             if (result.next()) {
                 return SessionInfoRowMapper.getInstance().mapOrThrow(result);
             }
@@ -128,8 +122,7 @@ public class SessionQueries {
     public static int getNumberOfSessions(Start start) throws SQLException, StorageQueryException {
         String QUERY = "SELECT count(*) as num FROM " + getConfig(start).getSessionInfoTable();
 
-        return execute(start, QUERY, pst -> {
-        }, result -> {
+        return execute(start, QUERY, NO_OP_SETTER, result -> {
             if (result.next()) {
                 return result.getInt("num");
             }
@@ -161,18 +154,14 @@ public class SessionQueries {
     public static void deleteSessionsOfUser(Start start, String userId) throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getSessionInfoTable() + " WHERE user_id = ?";
 
-        update(start, QUERY.toString(), pst -> {
-            pst.setString(1, userId);
-        });
+        update(start, QUERY.toString(), pst -> pst.setString(1, userId));
     }
 
     public static String[] getAllSessionHandlesForUser(Start start, String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT session_handle FROM " + getConfig(start).getSessionInfoTable() + " WHERE user_id = ?";
 
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, userId);
-        }, result -> {
+        return execute(start, QUERY, pst -> pst.setString(1, userId), result -> {
             List<String> temp = new ArrayList<>();
             while (result.next()) {
                 temp.add(result.getString("session_handle"));
@@ -188,9 +177,7 @@ public class SessionQueries {
     public static void deleteAllExpiredSessions(Start start) throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getSessionInfoTable() + " WHERE expires_at <= ?";
 
-        update(start, QUERY, pst -> {
-            pst.setLong(1, currentTimeMillis());
-        });
+        update(start, QUERY, pst -> pst.setLong(1, currentTimeMillis()));
     }
 
     public static int updateSession(Start start, String sessionHandle, @Nullable JsonObject sessionData,
@@ -229,9 +216,7 @@ public class SessionQueries {
         String QUERY = "SELECT session_handle, user_id, refresh_token_hash_2, session_data, expires_at, "
                 + "created_at_time, jwt_user_payload FROM " + getConfig(start).getSessionInfoTable()
                 + " WHERE session_handle = ?";
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, sessionHandle);
-        }, result -> {
+        return execute(start, QUERY, pst -> pst.setString(1, sessionHandle), result -> {
             if (result.next()) {
                 return SessionInfoRowMapper.getInstance().mapOrThrow(result);
             }
@@ -254,8 +239,7 @@ public class SessionQueries {
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT * FROM " + getConfig(start).getAccessTokenSigningKeysTable() + " FOR UPDATE";
 
-        return execute(con, QUERY, pst -> {
-        }, result -> {
+        return execute(con, QUERY, NO_OP_SETTER, result -> {
             List<KeyValueInfo> temp = new ArrayList<>();
             while (result.next()) {
                 temp.add(AccessTokenSigningKeyRowMapper.getInstance().mapOrThrow(result));
@@ -273,9 +257,7 @@ public class SessionQueries {
         String QUERY = "DELETE FROM " + getConfig(start).getAccessTokenSigningKeysTable()
                 + " WHERE created_at_time < ?";
 
-        update(start, QUERY, pst -> {
-            pst.setLong(1, time);
-        });
+        update(start, QUERY, pst -> pst.setLong(1, time));
     }
 
     static class SessionInfoRowMapper implements RowMapper<SessionInfo, ResultSet> {

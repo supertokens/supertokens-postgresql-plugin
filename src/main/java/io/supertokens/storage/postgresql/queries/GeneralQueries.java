@@ -22,7 +22,6 @@ import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.storage.postgresql.ConnectionPool;
-import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -38,6 +37,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
 import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.CREATING_NEW_TABLE;
 import static io.supertokens.storage.postgresql.ProcessState.getInstance;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
@@ -62,7 +62,7 @@ public class GeneralQueries {
     private static boolean doesTableExists(Start start, String tableName) {
         try {
             String QUERY = "SELECT 1 FROM " + tableName + " LIMIT 1";
-            execute(start, QUERY, PreparedStatementValueSetter.NO_OP_SETTER, result -> null);
+            execute(start, QUERY, NO_OP_SETTER, result -> null);
             return true;
         } catch (SQLException | StorageQueryException e) {
             return false;
@@ -225,18 +225,15 @@ public class GeneralQueries {
     public static void deleteAllTables(Start start) throws SQLException, StorageQueryException {
         {
             String DROP_QUERY = "DROP INDEX IF EXISTS emailpassword_password_reset_token_expiry_index";
-            update(start, DROP_QUERY, pst -> {
-            });
+            update(start, DROP_QUERY, NO_OP_SETTER);
         }
         {
             String DROP_QUERY = "DROP INDEX IF EXISTS emailverification_tokens_index";
-            update(start, DROP_QUERY, pst -> {
-            });
+            update(start, DROP_QUERY, NO_OP_SETTER);
         }
         {
             String DROP_QUERY = "DROP INDEX IF EXISTS all_auth_recipe_users_pagination_index";
-            update(start, DROP_QUERY, pst -> {
-            });
+            update(start, DROP_QUERY, NO_OP_SETTER);
         }
 
         {
@@ -250,8 +247,7 @@ public class GeneralQueries {
                     + getConfig(start).getPasswordlessCodesTable() + ","
                     + getConfig(start).getPasswordlessDevicesTable() + ","
                     + getConfig(start).getPasswordlessUsersTable();
-            update(start, DROP_QUERY, pst -> {
-            });
+            update(start, DROP_QUERY, NO_OP_SETTER);
         }
     }
 
@@ -280,9 +276,7 @@ public class GeneralQueries {
     public static KeyValueInfo getKeyValue(Start start, String key) throws SQLException, StorageQueryException {
         String QUERY = "SELECT value, created_at_time FROM " + getConfig(start).getKeyValueTable() + " WHERE name = ?";
 
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, key);
-        }, result -> {
+        return execute(start, QUERY, pst -> pst.setString(1, key), result -> {
             if (result.next()) {
                 return KeyValueInfoRowMapper.getInstance().mapOrThrow(result);
             }
@@ -295,9 +289,7 @@ public class GeneralQueries {
         String QUERY = "SELECT value, created_at_time FROM " + getConfig(start).getKeyValueTable()
                 + " WHERE name = ? FOR UPDATE";
 
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, key);
-        }, result -> {
+        return execute(con, QUERY, pst -> pst.setString(1, key), result -> {
             if (result.next()) {
                 return KeyValueInfoRowMapper.getInstance().mapOrThrow(result);
             }
@@ -309,9 +301,7 @@ public class GeneralQueries {
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getKeyValueTable() + " WHERE name = ?";
 
-        update(start, QUERY, pst -> {
-            pst.setString(1, key);
-        });
+        update(start, QUERY, pst -> pst.setString(1, key));
     }
 
     public static long getUsersCount(Start start, RECIPE_ID[] includeRecipeIds)
@@ -330,8 +320,7 @@ public class GeneralQueries {
             QUERY.append(")");
         }
 
-        return execute(start, QUERY.toString(), pst -> {
-        }, result -> {
+        return execute(start, QUERY.toString(), NO_OP_SETTER, result -> {
             if (result.next()) {
                 return result.getLong("total");
             }
@@ -391,9 +380,7 @@ public class GeneralQueries {
                 }
                 String QUERY = "SELECT user_id, recipe_id FROM " + getConfig(start).getUsersTable() + recipeIdCondition
                         + " ORDER BY time_joined " + timeJoinedOrder + ", user_id DESC LIMIT ?";
-                usersFromQuery = execute(start, QUERY, pst -> {
-                    pst.setInt(1, limit);
-                }, result -> {
+                usersFromQuery = execute(start, QUERY, pst -> pst.setInt(1, limit), result -> {
                     List<UserInfoPaginationResultHolder> temp = new ArrayList<>();
                     while (result.next()) {
                         temp.add(new UserInfoPaginationResultHolder(result.getString("user_id"),
