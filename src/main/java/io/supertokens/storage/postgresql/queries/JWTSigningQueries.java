@@ -21,19 +21,18 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.jwt.JWTAsymmetricSigningKeyInfo;
 import io.supertokens.pluginInterface.jwt.JWTSigningKeyInfo;
 import io.supertokens.pluginInterface.jwt.JWTSymmetricSigningKeyInfo;
-import io.supertokens.storage.postgresql.QueryExecutorTemplate;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class JWTSigningQueries {
@@ -59,20 +58,19 @@ public class JWTSigningQueries {
 
     public static List<JWTSigningKeyInfo> getJWTSigningKeys_Transaction(Start start, Connection con)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT * FROM " + Config.getConfig(start).getJWTSigningKeysTable()
+        String QUERY = "SELECT * FROM " + getConfig(start).getJWTSigningKeysTable()
                 + " ORDER BY created_at DESC FOR UPDATE";
 
-        try (PreparedStatement pst = con.prepareStatement(QUERY)) {
-            try (ResultSet result = pst.executeQuery()) {
-                List<JWTSigningKeyInfo> keys = new ArrayList<>();
+        return execute(con, QUERY, pst -> {
+        }, result -> {
+            List<JWTSigningKeyInfo> keys = new ArrayList<>();
 
-                while (result.next()) {
-                    keys.add(JWTSigningKeyInfoRowMapper.getInstance().mapOrThrow(result));
-                }
-
-                return keys;
+            while (result.next()) {
+                keys.add(JWTSigningKeyInfoRowMapper.getInstance().mapOrThrow(result));
             }
-        }
+
+            return keys;
+        });
     }
 
     private static class JWTSigningKeyInfoRowMapper implements RowMapper<JWTSigningKeyInfo, ResultSet> {

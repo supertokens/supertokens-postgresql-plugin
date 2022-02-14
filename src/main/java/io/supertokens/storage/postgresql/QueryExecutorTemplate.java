@@ -53,10 +53,9 @@ public interface QueryExecutorTemplate {
 
     static int update(Connection con, String QUERY, PreparedStatementValueSetter setter)
             throws SQLException, StorageQueryException {
-        try (PreparedStatement pst = con.prepareStatement(QUERY)) {
+        return QueryExecutorTemplate.update(con, QUERY, pst -> {
             setter.setValues(pst);
-            return pst.executeUpdate();
-        }
+        });
     }
 
 }

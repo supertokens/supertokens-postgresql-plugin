@@ -20,13 +20,11 @@ import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.emailverification.EmailVerificationTokenInfo;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
-import io.supertokens.storage.postgresql.QueryExecutorTemplate;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -141,24 +139,22 @@ public class EmailVerificationQueries {
             Connection con, String userId, String email) throws SQLException, StorageQueryException {
 
         String QUERY = "SELECT user_id, token, token_expiry, email FROM "
-                + Config.getConfig(start).getEmailVerificationTokensTable()
-                + " WHERE user_id = ? AND email = ? FOR UPDATE";
+                + getConfig(start).getEmailVerificationTokensTable() + " WHERE user_id = ? AND email = ? FOR UPDATE";
 
-        try (PreparedStatement pst = con.prepareStatement(QUERY)) {
+        return execute(con, QUERY, pst -> {
             pst.setString(1, userId);
             pst.setString(2, email);
-            try (ResultSet result = pst.executeQuery()) {
-                List<EmailVerificationTokenInfo> temp = new ArrayList<>();
-                while (result.next()) {
-                    temp.add(EmailVerificationTokenInfoRowMapper.getInstance().mapOrThrow(result));
-                }
-                EmailVerificationTokenInfo[] finalResult = new EmailVerificationTokenInfo[temp.size()];
-                for (int i = 0; i < temp.size(); i++) {
-                    finalResult[i] = temp.get(i);
-                }
-                return finalResult;
+        }, result -> {
+            List<EmailVerificationTokenInfo> temp = new ArrayList<>();
+            while (result.next()) {
+                temp.add(EmailVerificationTokenInfoRowMapper.getInstance().mapOrThrow(result));
             }
-        }
+            EmailVerificationTokenInfo[] finalResult = new EmailVerificationTokenInfo[temp.size()];
+            for (int i = 0; i < temp.size(); i++) {
+                finalResult[i] = temp.get(i);
+            }
+            return finalResult;
+        });
     }
 
     public static EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser(Start start, String userId,

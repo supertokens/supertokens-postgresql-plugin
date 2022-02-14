@@ -22,6 +22,7 @@ import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.storage.postgresql.ConnectionPool;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -30,7 +31,6 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -38,7 +38,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static io.supertokens.storage.postgresql.ConnectionPool.getConnection;
 import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.CREATING_NEW_TABLE;
 import static io.supertokens.storage.postgresql.ProcessState.getInstance;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
@@ -63,12 +62,9 @@ public class GeneralQueries {
     private static boolean doesTableExists(Start start, String tableName) {
         try {
             String QUERY = "SELECT 1 FROM " + tableName + " LIMIT 1";
-            try (Connection con = ConnectionPool.getConnection(start);
-                    PreparedStatement pst = con.prepareStatement(QUERY)) {
-                pst.executeQuery();
-            }
+            execute(start, QUERY, PreparedStatementValueSetter.NO_OP_SETTER, result -> null);
             return true;
-        } catch (SQLException e) {
+        } catch (SQLException | StorageQueryException e) {
             return false;
         }
     }
@@ -122,11 +118,8 @@ public class GeneralQueries {
                     });
 
                     // index
-                    try (Connection con = getConnection(start);
-                            PreparedStatement pstIndex = con
-                                    .prepareStatement(getQueryToCreateUserPaginationIndex(start))) {
-                        pstIndex.executeUpdate();
-                    }
+                    update(start, getQueryToCreateUserPaginationIndex(start), pst -> {
+                    });
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
@@ -152,11 +145,8 @@ public class GeneralQueries {
                     update(start, getQueryToCreatePasswordResetTokensTable(start), pst -> {
                     });
                     // index
-                    try (Connection con = getConnection(start);
-                            PreparedStatement pstIndex = con
-                                    .prepareStatement(getQueryToCreatePasswordResetTokenExpiryIndex(start))) {
-                        pstIndex.executeUpdate();
-                    }
+                    update(start, getQueryToCreatePasswordResetTokenExpiryIndex(start), pst -> {
+                    });
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getEmailVerificationTable())) {
@@ -170,11 +160,8 @@ public class GeneralQueries {
                     update(start, getQueryToCreateEmailVerificationTokensTable(start), pst -> {
                     });
                     // index
-                    try (Connection con = getConnection(start);
-                            PreparedStatement pstIndex = con
-                                    .prepareStatement(getQueryToCreateEmailVerificationTokenExpiryIndex(start))) {
-                        pstIndex.executeUpdate();
-                    }
+                    update(start, getQueryToCreateEmailVerificationTokenExpiryIndex(start), pst -> {
+                    });
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getThirdPartyUsersTable())) {
@@ -200,16 +187,10 @@ public class GeneralQueries {
                     update(start, getQueryToCreateDevicesTable(start), pst -> {
                     });
                     // index
-                    try (Connection con = getConnection(start);
-                            PreparedStatement pstIndex = con
-                                    .prepareStatement(getQueryToCreateDeviceEmailIndex(start))) {
-                        pstIndex.executeUpdate();
-                    }
-                    try (Connection con = getConnection(start);
-                            PreparedStatement pstIndex = con
-                                    .prepareStatement(getQueryToCreateDevicePhoneNumberIndex(start))) {
-                        pstIndex.executeUpdate();
-                    }
+                    update(start, getQueryToCreateDeviceEmailIndex(start), pst -> {
+                    });
+                    update(start, getQueryToCreateDevicePhoneNumberIndex(start), pst -> {
+                    });
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessCodesTable())) {
@@ -217,11 +198,8 @@ public class GeneralQueries {
                     update(start, getQueryToCreateCodesTable(start), pst -> {
                     });
                     // index
-                    try (Connection con = getConnection(start);
-                            PreparedStatement pstIndex = con
-                                    .prepareStatement(getQueryToCreateCodeCreatedAtIndex(start))) {
-                        pstIndex.executeUpdate();
-                    }
+                    update(start, getQueryToCreateCodeCreatedAtIndex(start), pst -> {
+                    });
                 }
 
             } catch (Exception e) {
@@ -231,10 +209,8 @@ public class GeneralQueries {
                     String schema = Config.getConfig(start).getTableSchema();
                     if (!schema.equals("public")) {
                         String query = "CREATE SCHEMA " + schema;
-                        try (Connection con = ConnectionPool.getConnection(start);
-                                PreparedStatement drop = con.prepareStatement(query)) {
-                            drop.executeUpdate();
-                        }
+                        update(start, query, pst -> {
+                        });
                         numberOfRetries++;
                         retry = true;
                         continue;
@@ -246,47 +222,36 @@ public class GeneralQueries {
     }
 
     @TestOnly
-    public static void deleteAllTables(Start start) throws SQLException {
+    public static void deleteAllTables(Start start) throws SQLException, StorageQueryException {
         {
             String DROP_QUERY = "DROP INDEX IF EXISTS emailpassword_password_reset_token_expiry_index";
-            try (Connection con = ConnectionPool.getConnection(start);
-                    PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
-                drop.executeUpdate();
-            }
+            update(start, DROP_QUERY, pst -> {
+            });
         }
         {
             String DROP_QUERY = "DROP INDEX IF EXISTS emailverification_tokens_index";
-            try (Connection con = ConnectionPool.getConnection(start);
-                    PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
-                drop.executeUpdate();
-            }
+            update(start, DROP_QUERY, pst -> {
+            });
         }
         {
             String DROP_QUERY = "DROP INDEX IF EXISTS all_auth_recipe_users_pagination_index";
-            try (Connection con = ConnectionPool.getConnection(start);
-                    PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
-                drop.executeUpdate();
-            }
+            update(start, DROP_QUERY, pst -> {
+            });
         }
 
         {
-            String DROP_QUERY = "DROP TABLE IF EXISTS " + Config.getConfig(start).getKeyValueTable() + ","
-                    + Config.getConfig(start).getUsersTable() + ","
-                    + Config.getConfig(start).getAccessTokenSigningKeysTable() + ","
-                    + Config.getConfig(start).getSessionInfoTable() + ","
-                    + Config.getConfig(start).getEmailPasswordUsersTable() + ","
-                    + Config.getConfig(start).getPasswordResetTokensTable() + ","
-                    + Config.getConfig(start).getEmailVerificationTokensTable() + ","
-                    + Config.getConfig(start).getEmailVerificationTable() + ","
-                    + Config.getConfig(start).getThirdPartyUsersTable() + ","
-                    + Config.getConfig(start).getJWTSigningKeysTable() + ","
-                    + Config.getConfig(start).getPasswordlessCodesTable() + ","
-                    + Config.getConfig(start).getPasswordlessDevicesTable() + ","
-                    + Config.getConfig(start).getPasswordlessUsersTable();
-            try (Connection con = ConnectionPool.getConnection(start);
-                    PreparedStatement drop = con.prepareStatement(DROP_QUERY)) {
-                drop.executeUpdate();
-            }
+            String DROP_QUERY = "DROP TABLE IF EXISTS " + getConfig(start).getKeyValueTable() + ","
+                    + getConfig(start).getUsersTable() + "," + getConfig(start).getAccessTokenSigningKeysTable() + ","
+                    + getConfig(start).getSessionInfoTable() + "," + getConfig(start).getEmailPasswordUsersTable() + ","
+                    + getConfig(start).getPasswordResetTokensTable() + ","
+                    + getConfig(start).getEmailVerificationTokensTable() + ","
+                    + getConfig(start).getEmailVerificationTable() + "," + getConfig(start).getThirdPartyUsersTable()
+                    + "," + getConfig(start).getJWTSigningKeysTable() + ","
+                    + getConfig(start).getPasswordlessCodesTable() + ","
+                    + getConfig(start).getPasswordlessDevicesTable() + ","
+                    + getConfig(start).getPasswordlessUsersTable();
+            update(start, DROP_QUERY, pst -> {
+            });
         }
     }
 
@@ -327,18 +292,17 @@ public class GeneralQueries {
 
     public static KeyValueInfo getKeyValue_Transaction(Start start, Connection con, String key)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT value, created_at_time FROM " + Config.getConfig(start).getKeyValueTable()
+        String QUERY = "SELECT value, created_at_time FROM " + getConfig(start).getKeyValueTable()
                 + " WHERE name = ? FOR UPDATE";
 
-        try (PreparedStatement pst = con.prepareStatement(QUERY)) {
+        return execute(con, QUERY, pst -> {
             pst.setString(1, key);
-            try (ResultSet result = pst.executeQuery()) {
-                if (result.next()) {
-                    return KeyValueInfoRowMapper.getInstance().mapOrThrow(result);
-                }
+        }, result -> {
+            if (result.next()) {
+                return KeyValueInfoRowMapper.getInstance().mapOrThrow(result);
             }
-        }
-        return null;
+            return null;
+        });
     }
 
     public static void deleteKeyValue_Transaction(Start start, Connection con, String key)

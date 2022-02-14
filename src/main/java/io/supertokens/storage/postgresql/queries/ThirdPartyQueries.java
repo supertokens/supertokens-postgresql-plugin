@@ -20,15 +20,12 @@ import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.thirdparty.UserInfo;
-import io.supertokens.storage.postgresql.ConnectionPool;
-import io.supertokens.storage.postgresql.QueryExecutorTemplate;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
 import org.jetbrains.annotations.NotNull;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -199,18 +196,17 @@ public class ThirdPartyQueries {
             String thirdPartyUserId) throws SQLException, StorageQueryException {
 
         String QUERY = "SELECT user_id, third_party_id, third_party_user_id, email, time_joined FROM "
-                + Config.getConfig(start).getThirdPartyUsersTable()
+                + getConfig(start).getThirdPartyUsersTable()
                 + " WHERE third_party_id = ? AND third_party_user_id = ? FOR UPDATE";
-        try (PreparedStatement pst = con.prepareStatement(QUERY)) {
+        return execute(con, QUERY, pst -> {
             pst.setString(1, thirdPartyId);
             pst.setString(2, thirdPartyUserId);
-            try (ResultSet result = pst.executeQuery()) {
-                if (result.next()) {
-                    return UserInfoRowMapper.getInstance().mapOrThrow(result);
-                }
+        }, result -> {
+            if (result.next()) {
+                return UserInfoRowMapper.getInstance().mapOrThrow(result);
             }
-        }
-        return null;
+            return null;
+        });
     }
 
     @Deprecated
@@ -226,11 +222,7 @@ public class ThirdPartyQueries {
             while (result.next()) {
                 temp.add(UserInfoRowMapper.getInstance().mapOrThrow(result));
             }
-            UserInfo[] finalResult = new UserInfo[temp.size()];
-            for (int i = 0; i < temp.size(); i++) {
-                finalResult[i] = temp.get(i);
-            }
-            return finalResult;
+            return temp.toArray(UserInfo[]::new);
         });
     }
 
@@ -243,14 +235,20 @@ public class ThirdPartyQueries {
                 + " ? OR (time_joined = ? AND user_id <= ?) ORDER BY time_joined " + timeJoinedOrder
                 + ", user_id DESC LIMIT ?";
 
-        try (Connection con = ConnectionPool.getConnection(start);
-                PreparedStatement pst = con.prepareStatement(QUERY)) {
+        return execute(start, QUERY, pst -> {
             pst.setLong(1, timeJoined);
             pst.setLong(2, timeJoined);
             pst.setString(3, userId);
             pst.setInt(4, limit);
-            return getUsersFromResult(pst.executeQuery());
-        }
+        }, result -> {
+            List<UserInfo> users = new ArrayList<>();
+
+            while (result.next()) {
+                users.add(UserInfoRowMapper.getInstance().mapOrThrow(result));
+            }
+
+            return users.toArray(UserInfo[]::new);
+        });
     }
 
     @Deprecated
@@ -267,25 +265,18 @@ public class ThirdPartyQueries {
 
     public static UserInfo[] getThirdPartyUsersByEmail(Start start, @NotNull String email)
             throws SQLException, StorageQueryException {
-        String sqlQuery = "SELECT user_id, third_party_id, third_party_user_id, email, time_joined FROM "
+        String QUERY = "SELECT user_id, third_party_id, third_party_user_id, email, time_joined FROM "
                 + Config.getConfig(start).getThirdPartyUsersTable() + " WHERE email = ?";
 
-        try (Connection conn = ConnectionPool.getConnection(start);
-                PreparedStatement statement = conn.prepareStatement(sqlQuery)) {
-            statement.setString(1, email);
+        return execute(start, QUERY, pst -> pst.setString(1, email), result -> {
+            List<UserInfo> users = new ArrayList<>();
 
-            return getUsersFromResult(statement.executeQuery());
-        }
-    }
+            while (result.next()) {
+                users.add(UserInfoRowMapper.getInstance().mapOrThrow(result));
+            }
 
-    private static UserInfo[] getUsersFromResult(ResultSet resultSet) throws SQLException, StorageQueryException {
-        List<UserInfo> users = new ArrayList<>();
-
-        while (resultSet.next()) {
-            users.add(UserInfoRowMapper.getInstance().mapOrThrow(resultSet));
-        }
-
-        return users.toArray(UserInfo[]::new);
+            return users.toArray(UserInfo[]::new);
+        });
     }
 
     private static class UserInfoRowMapper implements RowMapper<UserInfo, ResultSet> {
