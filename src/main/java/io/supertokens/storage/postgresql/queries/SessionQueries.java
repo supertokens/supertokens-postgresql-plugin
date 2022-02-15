@@ -112,7 +112,7 @@ public class SessionQueries {
         String QUERY = "UPDATE " + getConfig(start).getSessionInfoTable()
                 + " SET refresh_token_hash_2 = ?, expires_at = ?" + " WHERE session_handle = ?";
 
-        update(start, QUERY, pst -> {
+        update(con, QUERY, pst -> {
             pst.setString(1, refreshTokenHash2);
             pst.setLong(2, expiry);
             pst.setString(3, sessionHandle);
@@ -229,7 +229,7 @@ public class SessionQueries {
         String QUERY = "INSERT INTO " + getConfig(start).getAccessTokenSigningKeysTable() + "(created_at_time, value)"
                 + " VALUES(?, ?)";
 
-        update(start, QUERY, pst -> {
+        update(con, QUERY, pst -> {
             pst.setLong(1, createdAtTime);
             pst.setString(2, value);
         });

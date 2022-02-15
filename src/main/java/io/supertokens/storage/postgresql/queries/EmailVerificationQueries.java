@@ -80,7 +80,7 @@ public class EmailVerificationQueries {
             String QUERY = "INSERT INTO " + getConfig(start).getEmailVerificationTable()
                     + "(user_id, email) VALUES(?, ?)";
 
-            update(start, QUERY, pst -> {
+            update(con, QUERY, pst -> {
                 pst.setString(1, userId);
                 pst.setString(2, email);
             });
@@ -88,7 +88,7 @@ public class EmailVerificationQueries {
             String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTable()
                     + " WHERE user_id = ? AND email = ?";
 
-            update(start, QUERY, pst -> {
+            update(con, QUERY, pst -> {
                 pst.setString(1, userId);
                 pst.setString(2, email);
             });
@@ -100,7 +100,7 @@ public class EmailVerificationQueries {
         String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTokensTable()
                 + " WHERE user_id = ? AND email = ?";
 
-        update(start, QUERY, pst -> {
+        update(con, QUERY, pst -> {
             pst.setString(1, userId);
             pst.setString(2, email);
         });
@@ -192,14 +192,14 @@ public class EmailVerificationQueries {
             try {
                 {
                     String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTable() + " WHERE user_id = ?";
-                    update(start, QUERY, pst -> pst.setString(1, userId));
+                    update(sqlCon, QUERY, pst -> pst.setString(1, userId));
                 }
 
                 {
                     String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTokensTable()
                             + " WHERE user_id = ?";
 
-                    update(start, QUERY, pst -> pst.setString(1, userId));
+                    update(sqlCon, QUERY, pst -> pst.setString(1, userId));
                 }
 
                 sqlCon.commit();

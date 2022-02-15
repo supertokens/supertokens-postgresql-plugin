@@ -104,7 +104,7 @@ public class JWTSigningQueries {
         String QUERY = "INSERT INTO " + getConfig(start).getJWTSigningKeysTable()
                 + "(key_id, key_string, created_at, algorithm) VALUES(?, ?, ?, ?)";
 
-        update(start, QUERY, pst -> {
+        update(con, QUERY, pst -> {
             pst.setString(1, info.keyId);
             pst.setString(2, info.keyString);
             pst.setLong(3, info.createdAtTime);

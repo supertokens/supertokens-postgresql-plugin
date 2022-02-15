@@ -86,7 +86,7 @@ public class EmailPasswordQueries {
         String QUERY = "UPDATE " + getConfig(start).getEmailPasswordUsersTable()
                 + " SET password_hash = ? WHERE user_id = ?";
 
-        update(start, QUERY, pst -> {
+        update(con, QUERY, pst -> {
             pst.setString(1, newPassword);
             pst.setString(2, userId);
         });
@@ -96,7 +96,7 @@ public class EmailPasswordQueries {
             throws SQLException, StorageQueryException {
         String QUERY = "UPDATE " + getConfig(start).getEmailPasswordUsersTable() + " SET email = ? WHERE user_id = ?";
 
-        update(start, QUERY, pst -> {
+        update(con, QUERY, pst -> {
             pst.setString(1, newEmail);
             pst.setString(2, userId);
         });
@@ -106,7 +106,7 @@ public class EmailPasswordQueries {
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getPasswordResetTokensTable() + " WHERE user_id = ?";
 
-        update(start, QUERY, pst -> pst.setString(1, userId));
+        update(con, QUERY, pst -> pst.setString(1, userId));
     }
 
     public static PasswordResetTokenInfo[] getAllPasswordResetTokenInfoForUser(Start start, String userId)
@@ -246,7 +246,7 @@ public class EmailPasswordQueries {
                 {
                     String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
                             + "(user_id, recipe_id, time_joined)" + " VALUES(?, ?, ?)";
-                    update(start, QUERY, pst -> {
+                    update(sqlCon, QUERY, pst -> {
                         pst.setString(1, userId);
                         pst.setString(2, EMAIL_PASSWORD.toString());
                         pst.setLong(3, timeJoined);
@@ -257,7 +257,7 @@ public class EmailPasswordQueries {
                     String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUsersTable()
                             + "(user_id, email, password_hash, time_joined)" + " VALUES(?, ?, ?, ?)";
 
-                    update(start, QUERY, pst -> {
+                    update(sqlCon, QUERY, pst -> {
                         pst.setString(1, userId);
                         pst.setString(2, email);
                         pst.setString(3, passwordHash);
@@ -282,7 +282,7 @@ public class EmailPasswordQueries {
                     String QUERY = "DELETE FROM " + getConfig(start).getUsersTable()
                             + " WHERE user_id = ? AND recipe_id = ?";
 
-                    update(start, QUERY, pst -> {
+                    update(sqlCon, QUERY, pst -> {
                         pst.setString(1, userId);
                         pst.setString(2, EMAIL_PASSWORD.toString());
                     });
@@ -292,7 +292,7 @@ public class EmailPasswordQueries {
                     String QUERY = "DELETE FROM " + getConfig(start).getEmailPasswordUsersTable()
                             + " WHERE user_id = ?";
 
-                    update(start, QUERY, pst -> pst.setString(1, userId));
+                    update(sqlCon, QUERY, pst -> pst.setString(1, userId));
                 }
                 sqlCon.commit();
             } catch (SQLException throwables) {

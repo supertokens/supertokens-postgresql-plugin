@@ -101,7 +101,7 @@ public class PasswordlessQueries {
                 String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessDevicesTable()
                         + "(device_id_hash, email, phone_number, link_code_salt, failed_attempts)"
                         + " VALUES(?, ?, ?, ?, 0)";
-                update(start, QUERY, pst -> {
+                update(sqlCon, QUERY, pst -> {
                     pst.setString(1, code.deviceIdHash);
                     pst.setString(2, email);
                     pst.setString(3, phoneNumber);
@@ -135,13 +135,13 @@ public class PasswordlessQueries {
         String QUERY = "UPDATE " + getConfig(start).getPasswordlessDevicesTable()
                 + " SET failed_attempts = failed_attempts + 1 WHERE device_id_hash = ?";
 
-        update(start, QUERY, pst -> pst.setString(1, deviceIdHash));
+        update(con, QUERY, pst -> pst.setString(1, deviceIdHash));
     }
 
     public static void deleteDevice_Transaction(Start start, Connection con, String deviceIdHash)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable() + " WHERE device_id_hash = ?";
-        update(start, QUERY, pst -> pst.setString(1, deviceIdHash));
+        update(con, QUERY, pst -> pst.setString(1, deviceIdHash));
     }
 
     public static void deleteDevicesByPhoneNumber_Transaction(Start start, Connection con, @Nonnull String phoneNumber)
@@ -149,7 +149,7 @@ public class PasswordlessQueries {
 
         String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable() + " WHERE phone_number = ?";
 
-        update(start, QUERY, pst -> pst.setString(1, phoneNumber));
+        update(con, QUERY, pst -> pst.setString(1, phoneNumber));
     }
 
     public static void deleteDevicesByEmail_Transaction(Start start, Connection con, @Nonnull String email)
@@ -157,14 +157,14 @@ public class PasswordlessQueries {
 
         String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable() + " WHERE email = ?";
 
-        update(start, QUERY, pst -> pst.setString(1, email));
+        update(con, QUERY, pst -> pst.setString(1, email));
     }
 
     private static void createCode_Transaction(Start start, Connection con, PasswordlessCode code)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessCodesTable()
                 + "(code_id, device_id_hash, link_code_hash, created_at)" + " VALUES(?, ?, ?, ?)";
-        update(start, QUERY, pst -> {
+        update(con, QUERY, pst -> {
             pst.setString(1, code.id);
             pst.setString(2, code.deviceIdHash);
             pst.setString(3, code.linkCodeHash);
@@ -224,7 +224,7 @@ public class PasswordlessQueries {
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessCodesTable() + " WHERE code_id = ?";
 
-        update(start, QUERY, pst -> pst.setString(1, codeId));
+        update(con, QUERY, pst -> pst.setString(1, codeId));
     }
 
     public static void createUser(Start start, UserInfo user)
@@ -235,7 +235,7 @@ public class PasswordlessQueries {
                 {
                     String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
                             + "(user_id, recipe_id, time_joined)" + " VALUES(?, ?, ?)";
-                    update(start, QUERY, pst -> {
+                    update(sqlCon, QUERY, pst -> {
                         pst.setString(1, user.id);
                         pst.setString(2, PASSWORDLESS.toString());
                         pst.setLong(3, user.timeJoined);
@@ -245,7 +245,7 @@ public class PasswordlessQueries {
                 {
                     String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUsersTable()
                             + "(user_id, email, phone_number, time_joined)" + " VALUES(?, ?, ?, ?)";
-                    update(start, QUERY, pst -> {
+                    update(sqlCon, QUERY, pst -> {
                         pst.setString(1, user.id);
                         pst.setString(2, user.email);
                         pst.setString(3, user.phoneNumber);
@@ -269,7 +269,7 @@ public class PasswordlessQueries {
                     String QUERY = "DELETE FROM " + getConfig(start).getUsersTable()
                             + " WHERE user_id = ? AND recipe_id = ?";
 
-                    update(start, QUERY, pst -> {
+                    update(sqlCon, QUERY, pst -> {
                         pst.setString(1, userId);
                         pst.setString(2, PASSWORDLESS.toString());
                     });

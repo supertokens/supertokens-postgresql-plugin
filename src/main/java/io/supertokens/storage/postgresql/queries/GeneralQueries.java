@@ -108,98 +108,79 @@ public class GeneralQueries {
             try {
                 if (!doesTableExists(start, Config.getConfig(start).getKeyValueTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, getQueryToCreateKeyValueTable(start), pst -> {
-                    });
+                    update(start, getQueryToCreateKeyValueTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, getQueryToCreateUsersTable(start), pst -> {
-                    });
+                    update(start, getQueryToCreateUsersTable(start), NO_OP_SETTER);
 
                     // index
-                    update(start, getQueryToCreateUserPaginationIndex(start), pst -> {
-                    });
+                    update(start, getQueryToCreateUserPaginationIndex(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, getQueryToCreateAccessTokenSigningKeysTable(start), pst -> {
-                    });
+                    update(start, getQueryToCreateAccessTokenSigningKeysTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getSessionInfoTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, getQueryToCreateSessionInfoTable(start), pst -> {
-                    });
+                    update(start, getQueryToCreateSessionInfoTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getEmailPasswordUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, EmailPasswordQueries.getQueryToCreateUsersTable(start), pst -> {
-                    });
+                    update(start, EmailPasswordQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordResetTokensTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, getQueryToCreatePasswordResetTokensTable(start), pst -> {
-                    });
+                    update(start, getQueryToCreatePasswordResetTokensTable(start), NO_OP_SETTER);
                     // index
-                    update(start, getQueryToCreatePasswordResetTokenExpiryIndex(start), pst -> {
-                    });
+                    update(start, getQueryToCreatePasswordResetTokenExpiryIndex(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getEmailVerificationTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, getQueryToCreateEmailVerificationTable(start), pst -> {
-                    });
+                    update(start, getQueryToCreateEmailVerificationTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getEmailVerificationTokensTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, getQueryToCreateEmailVerificationTokensTable(start), pst -> {
-                    });
+                    update(start, getQueryToCreateEmailVerificationTokensTable(start), NO_OP_SETTER);
                     // index
-                    update(start, getQueryToCreateEmailVerificationTokenExpiryIndex(start), pst -> {
-                    });
+                    update(start, getQueryToCreateEmailVerificationTokenExpiryIndex(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getThirdPartyUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, ThirdPartyQueries.getQueryToCreateUsersTable(start), pst -> {
-                    });
+                    update(start, ThirdPartyQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getJWTSigningKeysTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, getQueryToCreateJWTSigningTable(start), pst -> {
-                    });
+                    update(start, getQueryToCreateJWTSigningTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, PasswordlessQueries.getQueryToCreateUsersTable(start), pst -> {
-                    });
+                    update(start, PasswordlessQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessDevicesTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, getQueryToCreateDevicesTable(start), pst -> {
-                    });
+                    update(start, getQueryToCreateDevicesTable(start), NO_OP_SETTER);
                     // index
-                    update(start, getQueryToCreateDeviceEmailIndex(start), pst -> {
-                    });
-                    update(start, getQueryToCreateDevicePhoneNumberIndex(start), pst -> {
-                    });
+                    update(start, getQueryToCreateDeviceEmailIndex(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateDevicePhoneNumberIndex(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessCodesTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, getQueryToCreateCodesTable(start), pst -> {
-                    });
+                    update(start, getQueryToCreateCodesTable(start), NO_OP_SETTER);
                     // index
-                    update(start, getQueryToCreateCodeCreatedAtIndex(start), pst -> {
-                    });
+                    update(start, getQueryToCreateCodeCreatedAtIndex(start), NO_OP_SETTER);
                 }
 
             } catch (Exception e) {
@@ -209,8 +190,7 @@ public class GeneralQueries {
                     String schema = Config.getConfig(start).getTableSchema();
                     if (!schema.equals("public")) {
                         String query = "CREATE SCHEMA " + schema;
-                        update(start, query, pst -> {
-                        });
+                        update(start, query, NO_OP_SETTER);
                         numberOfRetries++;
                         retry = true;
                         continue;
@@ -257,7 +237,7 @@ public class GeneralQueries {
                 + "(name, value, created_at_time) VALUES(?, ?, ?) "
                 + "ON CONFLICT (name) DO UPDATE SET value = ?, created_at_time = ?";
 
-        update(start, QUERY, pst -> {
+        update(con, QUERY, pst -> {
             pst.setString(1, key);
             pst.setString(2, info.value);
             pst.setLong(3, info.createdAtTime);
@@ -301,7 +281,7 @@ public class GeneralQueries {
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getKeyValueTable() + " WHERE name = ?";
 
-        update(start, QUERY, pst -> pst.setString(1, key));
+        update(con, QUERY, pst -> pst.setString(1, key));
     }
 
     public static long getUsersCount(Start start, RECIPE_ID[] includeRecipeIds)

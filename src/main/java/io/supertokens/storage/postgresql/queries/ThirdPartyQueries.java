@@ -64,7 +64,7 @@ public class ThirdPartyQueries {
                 {
                     String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
                             + "(user_id, recipe_id, time_joined)" + " VALUES(?, ?, ?)";
-                    update(start, QUERY, pst -> {
+                    update(sqlCon, QUERY, pst -> {
                         pst.setString(1, userInfo.id);
                         pst.setString(2, THIRD_PARTY.toString());
                         pst.setLong(3, userInfo.timeJoined);
@@ -75,7 +75,7 @@ public class ThirdPartyQueries {
                     String QUERY = "INSERT INTO " + getConfig(start).getThirdPartyUsersTable()
                             + "(third_party_id, third_party_user_id, user_id, email, time_joined)"
                             + " VALUES(?, ?, ?, ?, ?)";
-                    update(start, QUERY, pst -> {
+                    update(sqlCon, QUERY, pst -> {
                         pst.setString(1, userInfo.thirdParty.id);
                         pst.setString(2, userInfo.thirdParty.userId);
                         pst.setString(3, userInfo.id);
@@ -100,7 +100,7 @@ public class ThirdPartyQueries {
                 {
                     String QUERY = "DELETE FROM " + getConfig(start).getUsersTable()
                             + " WHERE user_id = ? AND recipe_id = ?";
-                    update(start, QUERY, pst -> {
+                    update(sqlCon, QUERY, pst -> {
                         pst.setString(1, userId);
                         pst.setString(2, THIRD_PARTY.toString());
                     });
@@ -108,7 +108,7 @@ public class ThirdPartyQueries {
 
                 {
                     String QUERY = "DELETE FROM " + getConfig(start).getThirdPartyUsersTable() + " WHERE user_id = ? ";
-                    update(start, QUERY, pst -> pst.setString(1, userId));
+                    update(sqlCon, QUERY, pst -> pst.setString(1, userId));
                 }
 
                 sqlCon.commit();
