@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 ### Changes
 
-- Fixed ResultSet instances to avoid Memory Leaks
+- Refactor Query Mechanism to avoid Memory Leaks
 
 ## [1.13.0] - 2021-12-24
 
