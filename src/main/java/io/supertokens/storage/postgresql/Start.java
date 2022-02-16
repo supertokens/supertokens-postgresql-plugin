@@ -168,6 +168,10 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                 } else if (e instanceof StorageTransactionLogicException) {
                     actualException = ((StorageTransactionLogicException) e).actualException;
                 }
+                String exceptionMessage = actualException.getMessage();
+                if (exceptionMessage == null) {
+                    exceptionMessage = "";
+                }
                 // see: https://github.com/supertokens/supertokens-postgresql-plugin/pull/3
 
                 // We set this variable to the current (or cause) exception casted to PSQLException if we can safely
@@ -184,12 +188,11 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                 // We could get here if the new logic hits a false negative, e.g., in case someone renamed
                 // constraints/tables
                 boolean isDeadlockException = actualException instanceof SQLTransactionRollbackException
-                        || actualException.getMessage().toLowerCase().contains("concurrent update") || actualException
-                                .getMessage().toLowerCase().contains("the transaction might succeed if retried")
-                        ||
+                        || exceptionMessage.toLowerCase().contains("concurrent update")
+                        || exceptionMessage.toLowerCase().contains("the transaction might succeed if retried") ||
 
                         // we have deadlock as well due to the DeadlockTest.java
-                        actualException.getMessage().toLowerCase().contains("deadlock");
+                        exceptionMessage.toLowerCase().contains("deadlock");
 
                 if ((isPSQLRollbackException || isDeadlockException) && tries < 3) {
                     try {
