@@ -280,8 +280,13 @@ public class PasswordlessQueries {
                     String QUERY = "DELETE FROM " + Config.getConfig(start).getPasswordlessUsersTable()
                             + " WHERE user_id = ? RETURNING user_id, email, phone_number, time_joined";
 
-                    user = execute(sqlCon, QUERY, pst -> pst.setString(1, userId),
-                            result -> UserInfoRowMapper.getInstance().mapOrThrow(result));
+                    user = execute(sqlCon, QUERY, pst -> pst.setString(1, userId), result -> {
+                        if (result.next()) {
+                            return UserInfoRowMapper.getInstance().mapOrThrow(result);
+                        }
+                        return null;
+                    });
+
                 }
 
                 if (user != null) {
