@@ -55,9 +55,9 @@ import io.supertokens.storage.postgresql.queries.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
-import org.slf4j.LoggerFactory;
 import org.postgresql.util.PSQLException;
 import org.postgresql.util.ServerErrorMessage;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import java.sql.Connection;
@@ -161,13 +161,19 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             tries++;
             try {
                 return startTransactionHelper(logic);
-            } catch (SQLException | StorageQueryException e) {
+            } catch (SQLException | StorageQueryException | StorageTransactionLogicException e) {
+                Throwable actualException = e;
+                if (e instanceof StorageQueryException) {
+                    actualException = e.getCause();
+                } else if (e instanceof StorageTransactionLogicException) {
+                    actualException = ((StorageTransactionLogicException) e).actualException;
+                }
                 // see: https://github.com/supertokens/supertokens-postgresql-plugin/pull/3
 
                 // We set this variable to the current (or cause) exception casted to PSQLException if we can safely
                 // cast it
-                PSQLException psqlException = e instanceof PSQLException ? (PSQLException) e
-                        : e.getCause() instanceof PSQLException ? (PSQLException) e.getCause() : null;
+                PSQLException psqlException = actualException instanceof PSQLException ? (PSQLException) actualException
+                        : null;
 
                 // PSQL error class 40 is transaction rollback. See:
                 // https://www.postgresql.org/docs/12/errcodes-appendix.html
@@ -177,12 +183,13 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                 // We keep the old exception detection logic to ensure backwards compatibility.
                 // We could get here if the new logic hits a false negative, e.g., in case someone renamed
                 // constraints/tables
-                boolean isDeadlockException = e instanceof SQLTransactionRollbackException
-                        || e.getMessage().toLowerCase().contains("concurrent update")
-                        || e.getMessage().toLowerCase().contains("the transaction might succeed if retried") ||
+                boolean isDeadlockException = actualException instanceof SQLTransactionRollbackException
+                        || actualException.getMessage().toLowerCase().contains("concurrent update") || actualException
+                                .getMessage().toLowerCase().contains("the transaction might succeed if retried")
+                        ||
 
                         // we have deadlock as well due to the DeadlockTest.java
-                        e.getMessage().toLowerCase().contains("deadlock");
+                        actualException.getMessage().toLowerCase().contains("deadlock");
 
                 if ((isPSQLRollbackException || isDeadlockException) && tries < 3) {
                     try {
@@ -194,6 +201,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                 }
                 if (e instanceof StorageQueryException) {
                     throw (StorageQueryException) e;
+                } else if (e instanceof StorageTransactionLogicException) {
+                    throw (StorageTransactionLogicException) e;
                 }
                 throw new StorageQueryException(e);
             }
@@ -1179,8 +1188,6 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         try {
             PasswordlessQueries.createDeviceWithCode(this, email, phoneNumber, linkCodeSalt, code);
         } catch (StorageTransactionLogicException e) {
-            String message = e.actualException.getMessage();
-
             Exception actualException = e.actualException;
 
             if (actualException instanceof PSQLException) {

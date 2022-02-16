@@ -18,6 +18,7 @@
 package io.supertokens.storage.postgresql.test;
 
 import io.supertokens.ProcessState;
+import io.supertokens.passwordless.Passwordless;
 import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
@@ -30,6 +31,9 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestRule;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -146,6 +150,42 @@ public class DeadlockTest {
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
+
+    @Test
+    public void testCodeCreationRapidly() throws Exception {
+        String[] args = { "../" };
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        ExecutorService es = Executors.newCachedThreadPool();
+
+        AtomicBoolean pass = new AtomicBoolean(true);
+
+        for (int i = 0; i < 3000; i++) {
+            es.execute(() -> {
+                try {
+                    Passwordless.CreateCodeResponse resp = Passwordless.createCode(process.getProcess(),
+                            "test@example.com", null, null, null);
+                    Passwordless.ConsumeCodeResponse resp2 = Passwordless.consumeCode(process.getProcess(),
+                            resp.deviceId, resp.deviceIdHash, resp.userInputCode, resp.linkCode);
+
+                } catch (Exception e) {
+                    if (e.getMessage().toLowerCase().contains("the transaction might succeed if retried")) {
+                        pass.set(false);
+                    }
+                }
+            });
+        }
+
+        es.shutdown();
+        es.awaitTermination(2, TimeUnit.MINUTES);
+
+        assert (pass.get());
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
 }
 
 /*
@@ -170,7 +210,7 @@ public class DeadlockTest {
  * 3: len 30; hex 4d494942496a414e42676b71686b6947397730424151454641414f434151; asc MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ;
  * (total 2017 bytes);
  * 4: len 8; hex 0000016fa2a3229a; asc o " ;;
- *** 
+ ***
  * (2) TRANSACTION:
  * TRANSACTION 196680, ACTIVE 0 sec inserting
  * mysql tables in use 1, locked 1
@@ -196,7 +236,7 @@ public class DeadlockTest {
  * 3: len 30; hex 4d494942496a414e42676b71686b6947397730424151454641414f434151; asc MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ;
  * (total 2017 bytes);
  * 4: len 8; hex 0000016fa2a3229a; asc o " ;;
- *** 
+ ***
  * (2) WAITING FOR THIS LOCK TO BE GRANTED:
  * RECORD LOCKS space id 61 page no 3 n bits 80 index PRIMARY of table `supertokens`.`key_value` trx id 196680 lock_mode
  * X waiting
@@ -207,7 +247,7 @@ public class DeadlockTest {
  * 3: len 30; hex 4d494942496a414e42676b71686b6947397730424151454641414f434151; asc MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ;
  * (total 2017 bytes);
  * 4: len 8; hex 0000016fa2a3229a; asc o " ;;
- *** 
+ ***
  * WE ROLL BACK TRANSACTION (1)
  *
  */
