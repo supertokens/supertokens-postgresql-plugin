@@ -50,6 +50,8 @@ dependencies {
 
     // https://mvnrepository.com/artifact/com.google.code.gson/gson
     testImplementation group: 'com.google.code.gson', name: 'gson', version: '2.3.1'
+
+    testImplementation 'com.tngtech.archunit:archunit-junit4:0.22.0'
 }
 
 jar {
