@@ -6,9 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-### Changes
+
+## [1.13.2] - 2022-02-19
 
 - Refactor Query Mechanism to avoid Memory Leaks
+- Adds debug statement to help fix error of passwordless code creation procedure (related to https://github.
+  com/supertokens/supertokens-core/issues/373).
 
 ## [1.13.1] - 2022-02-16
 

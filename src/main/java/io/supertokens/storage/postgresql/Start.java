@@ -41,11 +41,7 @@ import io.supertokens.pluginInterface.jwt.exceptions.DuplicateKeyIdException;
 import io.supertokens.pluginInterface.jwt.sqlstorage.JWTRecipeSQLStorage;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
-import io.supertokens.pluginInterface.passwordless.exception.DuplicateCodeIdException;
-import io.supertokens.pluginInterface.passwordless.exception.DuplicateDeviceIdHashException;
-import io.supertokens.pluginInterface.passwordless.exception.DuplicateLinkCodeHashException;
-import io.supertokens.pluginInterface.passwordless.exception.DuplicatePhoneNumberException;
-import io.supertokens.pluginInterface.passwordless.exception.UnknownDeviceIdHash;
+import io.supertokens.pluginInterface.passwordless.exception.*;
 import io.supertokens.pluginInterface.passwordless.sqlStorage.PasswordlessSQLStorage;
 import io.supertokens.pluginInterface.session.SessionInfo;
 import io.supertokens.pluginInterface.session.sqlStorage.SessionSQLStorage;
@@ -55,13 +51,7 @@ import io.supertokens.pluginInterface.thirdparty.sqlStorage.ThirdPartySQLStorage
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storage.postgresql.output.Logging;
-import io.supertokens.storage.postgresql.queries.EmailPasswordQueries;
-import io.supertokens.storage.postgresql.queries.EmailVerificationQueries;
-import io.supertokens.storage.postgresql.queries.GeneralQueries;
-import io.supertokens.storage.postgresql.queries.JWTSigningQueries;
-import io.supertokens.storage.postgresql.queries.PasswordlessQueries;
-import io.supertokens.storage.postgresql.queries.SessionQueries;
-import io.supertokens.storage.postgresql.queries.ThirdPartyQueries;
+import io.supertokens.storage.postgresql.queries.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -215,6 +205,12 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                 if (e instanceof StorageQueryException) {
                     throw (StorageQueryException) e;
                 } else if (e instanceof StorageTransactionLogicException) {
+                    Logging.debug(this,
+                            "Number of retries: " + tries + ". Actual exception message: " + actualException);
+                    if (psqlException != null) {
+                        Logging.debug(this,
+                                "PSQL error status code: " + psqlException.getServerErrorMessage().getSQLState());
+                    }
                     throw (StorageTransactionLogicException) e;
                 }
                 throw new StorageQueryException(e);
