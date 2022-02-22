@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.13.3] - 2022-02-22
+
+- Adds an index on device_id_hash to the codes table.
+
 ## [1.13.2] - 2022-02-19
 
 - Refactor Query Mechanism to avoid Memory Leaks

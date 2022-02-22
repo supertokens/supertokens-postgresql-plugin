@@ -88,6 +88,11 @@ public class PasswordlessQueries {
                 + Config.getConfig(start).getPasswordlessDevicesTable() + " (phone_number);"; // USING hash
     }
 
+    public static String getQueryToCreateCodeDeviceIdHashIndex(Start start) {
+        return "CREATE INDEX IF NOT EXISTS passwordless_codes_device_id_hash_index ON "
+                + Config.getConfig(start).getPasswordlessCodesTable() + "(device_id_hash);";
+    }
+
     public static String getQueryToCreateCodeCreatedAtIndex(Start start) {
         return "CREATE INDEX passwordless_codes_created_at_index ON "
                 + Config.getConfig(start).getPasswordlessCodesTable() + "(created_at);";
