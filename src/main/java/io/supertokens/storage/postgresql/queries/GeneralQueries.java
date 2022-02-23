@@ -184,6 +184,8 @@ public class GeneralQueries {
                     update(start, getQueryToCreateCodeCreatedAtIndex(start), NO_OP_SETTER);
                 }
 
+                // This PostgreSQL specific, because it's created automatically in MySQL and it doesn't support "create
+                // index if not exists"
                 // We missed creating this earlier for the codes table, so it may be missing even if the table exists
                 update(start, getQueryToCreateCodeDeviceIdHashIndex(start), NO_OP_SETTER);
             } catch (Exception e) {

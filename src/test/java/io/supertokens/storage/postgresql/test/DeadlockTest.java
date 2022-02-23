@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class DeadlockTest {
@@ -182,6 +183,49 @@ public class DeadlockTest {
         es.awaitTermination(2, TimeUnit.MINUTES);
 
         assert (pass.get());
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
+    public void testCodeConsumeRapidlyWithoutRetries() throws Exception {
+        String[] args = { "../" };
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        ExecutorService es = Executors.newCachedThreadPool();
+
+        AtomicBoolean pass = new AtomicBoolean(true);
+
+        final int count = 3000;
+        Passwordless.CreateCodeResponse[] createResps = new Passwordless.CreateCodeResponse[count];
+        for (int i = 0; i < count; i++) {
+            final String email = "test" + i + "@example.com";
+            createResps[i] = Passwordless.createCode(process.getProcess(), email, null, null, null);
+        }
+
+        for (int i = 0; i < count; i++) {
+            final Passwordless.CreateCodeResponse resp = createResps[i];
+            es.execute(() -> {
+                try {
+                    Passwordless.consumeCode(process.getProcess(), resp.deviceId, resp.deviceIdHash, resp.userInputCode,
+                            resp.linkCode);
+                } catch (Exception e) {
+                    if (e.getMessage().toLowerCase().contains("the transaction might succeed if retried")) {
+                        pass.set(false);
+                    }
+                }
+            });
+        }
+
+        es.shutdown();
+        es.awaitTermination(2, TimeUnit.MINUTES);
+
+        assert (pass.get());
+        assertNull(process.checkOrWaitForEventInPlugin(
+                io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
