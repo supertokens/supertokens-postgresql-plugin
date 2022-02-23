@@ -22,6 +22,7 @@ import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicExceptio
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.UserInfo;
+import io.supertokens.pluginInterface.sqlStorage.SQLStorage.TransactionIsolationLevel;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -119,7 +120,7 @@ public class PasswordlessQueries {
                 throw new StorageTransactionLogicException(throwables);
             }
             return null;
-        }, false);
+        }, TransactionIsolationLevel.REPEATABLE_READ);
     }
 
     public static PasswordlessDevice getDevice_Transaction(Start start, Connection con, String deviceIdHash)
