@@ -19,6 +19,7 @@ package io.supertokens.storage.postgresql.test;
 
 import io.supertokens.ProcessState;
 import io.supertokens.passwordless.Passwordless;
+import io.supertokens.passwordless.exceptions.RestartFlowException;
 import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
@@ -182,6 +183,46 @@ public class DeadlockTest {
         es.shutdown();
         es.awaitTermination(2, TimeUnit.MINUTES);
 
+        assert (pass.get());
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
+    public void testCodeCreationRapidlyWithDifferentEmails() throws Exception {
+        String[] args = { "../" };
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        ExecutorService es = Executors.newCachedThreadPool();
+
+        AtomicBoolean pass = new AtomicBoolean(true);
+
+        for (int i = 0; i < 3000; i++) {
+            final int ind = i;
+            es.execute(() -> {
+                try {
+                    Passwordless.CreateCodeResponse resp = Passwordless.createCode(process.getProcess(),
+                            "test" + ind + "@example.com", null, null, null);
+                    Passwordless.ConsumeCodeResponse resp2 = Passwordless.consumeCode(process.getProcess(),
+                            resp.deviceId, resp.deviceIdHash, resp.userInputCode, resp.linkCode);
+
+                } catch (Exception e) {
+                    if (e.getMessage() != null
+                            && e.getMessage().toLowerCase().contains("the transaction might succeed if retried")) {
+                        pass.set(false);
+                    }
+                }
+            });
+        }
+
+        es.shutdown();
+        es.awaitTermination(2, TimeUnit.MINUTES);
+
+        assertNull(process.checkOrWaitForEventInPlugin(
+                io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
         assert (pass.get());
 
         process.kill();
