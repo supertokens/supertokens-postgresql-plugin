@@ -232,9 +232,20 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         try {
             con = ConnectionPool.getConnection(this);
             defaultTransactionIsolation = con.getTransactionIsolation();
-            con.setTransactionIsolation(
-                    isolationLevel == TransactionIsolationLevel.SERIALIZABLE ? Connection.TRANSACTION_SERIALIZABLE
-                            : Connection.TRANSACTION_REPEATABLE_READ);
+            int libIsolationLevel = Connection.TRANSACTION_SERIALIZABLE;
+            switch (isolationLevel) {
+            case SERIALIZABLE:
+                libIsolationLevel = Connection.TRANSACTION_SERIALIZABLE;
+            case REPEATABLE_READ:
+                libIsolationLevel = Connection.TRANSACTION_REPEATABLE_READ;
+            case READ_COMMITTED:
+                libIsolationLevel = Connection.TRANSACTION_READ_COMMITTED;
+            case READ_UNCOMMITTED:
+                libIsolationLevel = Connection.TRANSACTION_READ_UNCOMMITTED;
+            case NONE:
+                libIsolationLevel = Connection.TRANSACTION_NONE;
+            }
+            con.setTransactionIsolation(libIsolationLevel);
             con.setAutoCommit(false);
             return logic.mainLogicAndCommit(new TransactionConnection(con));
         } catch (Exception e) {
