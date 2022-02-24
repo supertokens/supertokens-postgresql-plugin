@@ -50,6 +50,7 @@ import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries
 import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.getQueryToCreateEmailVerificationTokensTable;
 import static io.supertokens.storage.postgresql.queries.JWTSigningQueries.getQueryToCreateJWTSigningTable;
 import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateCodeCreatedAtIndex;
+import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateCodeDeviceIdHashIndex;
 import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateCodesTable;
 import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateDeviceEmailIndex;
 import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateDevicePhoneNumberIndex;
@@ -183,6 +184,10 @@ public class GeneralQueries {
                     update(start, getQueryToCreateCodeCreatedAtIndex(start), NO_OP_SETTER);
                 }
 
+                // This PostgreSQL specific, because it's created automatically in MySQL and it doesn't support "create
+                // index if not exists"
+                // We missed creating this earlier for the codes table, so it may be missing even if the table exists
+                update(start, getQueryToCreateCodeDeviceIdHashIndex(start), NO_OP_SETTER);
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {

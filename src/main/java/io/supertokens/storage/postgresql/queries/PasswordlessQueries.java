@@ -22,6 +22,7 @@ import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicExceptio
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.UserInfo;
+import io.supertokens.pluginInterface.sqlStorage.SQLStorage.TransactionIsolationLevel;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -88,6 +89,11 @@ public class PasswordlessQueries {
                 + Config.getConfig(start).getPasswordlessDevicesTable() + " (phone_number);"; // USING hash
     }
 
+    public static String getQueryToCreateCodeDeviceIdHashIndex(Start start) {
+        return "CREATE INDEX IF NOT EXISTS passwordless_codes_device_id_hash_index ON "
+                + Config.getConfig(start).getPasswordlessCodesTable() + "(device_id_hash);";
+    }
+
     public static String getQueryToCreateCodeCreatedAtIndex(Start start) {
         return "CREATE INDEX passwordless_codes_created_at_index ON "
                 + Config.getConfig(start).getPasswordlessCodesTable() + "(created_at);";
@@ -114,7 +120,7 @@ public class PasswordlessQueries {
                 throw new StorageTransactionLogicException(throwables);
             }
             return null;
-        });
+        }, TransactionIsolationLevel.REPEATABLE_READ);
     }
 
     public static PasswordlessDevice getDevice_Transaction(Start start, Connection con, String deviceIdHash)

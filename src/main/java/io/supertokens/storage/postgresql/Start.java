@@ -156,11 +156,17 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
     @Override
     public <T> T startTransaction(TransactionLogic<T> logic)
             throws StorageTransactionLogicException, StorageQueryException {
+        return startTransaction(logic, TransactionIsolationLevel.SERIALIZABLE);
+    }
+
+    @Override
+    public <T> T startTransaction(TransactionLogic<T> logic, TransactionIsolationLevel isolationLevel)
+            throws StorageTransactionLogicException, StorageQueryException {
         int tries = 0;
         while (true) {
             tries++;
             try {
-                return startTransactionHelper(logic);
+                return startTransactionHelper(logic, isolationLevel);
             } catch (SQLException | StorageQueryException | StorageTransactionLogicException e) {
                 Throwable actualException = e;
                 if (e instanceof StorageQueryException) {
@@ -174,8 +180,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                 }
                 // see: https://github.com/supertokens/supertokens-postgresql-plugin/pull/3
 
-                // We set this variable to the current (or cause) exception casted to PSQLException if we can safely
-                // cast it
+                // We set this variable to the current (or cause) exception casted to
+                // PSQLException if we can safely cast it
                 PSQLException psqlException = actualException instanceof PSQLException ? (PSQLException) actualException
                         : null;
 
@@ -185,8 +191,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                         && psqlException.getServerErrorMessage().getSQLState().startsWith("40");
 
                 // We keep the old exception detection logic to ensure backwards compatibility.
-                // We could get here if the new logic hits a false negative, e.g., in case someone renamed
-                // constraints/tables
+                // We could get here if the new logic hits a false negative,
+                // e.g., in case someone renamed constraints/tables
                 boolean isDeadlockException = actualException instanceof SQLTransactionRollbackException
                         || exceptionMessage.toLowerCase().contains("concurrent update")
                         || exceptionMessage.toLowerCase().contains("the transaction might succeed if retried") ||
@@ -200,7 +206,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                     } catch (InterruptedException ignored) {
                     }
                     ProcessState.getInstance(this).addState(ProcessState.PROCESS_STATE.DEADLOCK_FOUND, e);
-                    continue; // this because deadlocks are not necessarily a result of faulty logic. They can happen
+                    // this because deadlocks are not necessarily a result of faulty logic. They can happen
+                    continue;
                 }
                 if (e instanceof StorageQueryException) {
                     throw (StorageQueryException) e;
@@ -218,14 +225,27 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         }
     }
 
-    private <T> T startTransactionHelper(TransactionLogic<T> logic)
+    private <T> T startTransactionHelper(TransactionLogic<T> logic, TransactionIsolationLevel isolationLevel)
             throws StorageQueryException, StorageTransactionLogicException, SQLException {
         Connection con = null;
         Integer defaultTransactionIsolation = null;
         try {
             con = ConnectionPool.getConnection(this);
             defaultTransactionIsolation = con.getTransactionIsolation();
-            con.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
+            int libIsolationLevel = Connection.TRANSACTION_SERIALIZABLE;
+            switch (isolationLevel) {
+            case SERIALIZABLE:
+                libIsolationLevel = Connection.TRANSACTION_SERIALIZABLE;
+            case REPEATABLE_READ:
+                libIsolationLevel = Connection.TRANSACTION_REPEATABLE_READ;
+            case READ_COMMITTED:
+                libIsolationLevel = Connection.TRANSACTION_READ_COMMITTED;
+            case READ_UNCOMMITTED:
+                libIsolationLevel = Connection.TRANSACTION_READ_UNCOMMITTED;
+            case NONE:
+                libIsolationLevel = Connection.TRANSACTION_NONE;
+            }
+            con.setTransactionIsolation(libIsolationLevel);
             con.setAutoCommit(false);
             return logic.mainLogicAndCommit(new TransactionConnection(con));
         } catch (Exception e) {
@@ -530,8 +550,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             }
 
             // We keep the old exception detection logic to ensure backwards compatibility.
-            // We could get here if the new logic hits a false negative, e.g., in case someone renamed
-            // constraints/tables
+            // We could get here if the new logic hits a false negative,
+            // e.g., in case someone renamed constraints/tables
             if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (email)")) {
                 throw new DuplicateEmailException();
             } else if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (user_id)")) {
@@ -588,8 +608,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             }
 
             // We keep the old exception detection logic to ensure backwards compatibility.
-            // We could get here if the new logic hits a false negative, e.g., in case someone renamed
-            // constraints/tables
+            // We could get here if the new logic hits a false negative,
+            // e.g., in case someone renamed constraints/tables
             if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (user_id, token)")) {
                 throw new DuplicatePasswordResetTokenException();
             } else if (e.getMessage().contains("foreign key") && e.getMessage().contains("user_id")) {
@@ -663,8 +683,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             }
 
             // We keep the old exception detection logic to ensure backwards compatibility.
-            // We could get here if the new logic hits a false negative, e.g., in case someone renamed
-            // constraints/tables
+            // We could get here if the new logic hits a false negative,
+            // e.g., in case someone renamed constraints/tables
             if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (email)")) {
                 throw new DuplicateEmailException();
             }
@@ -727,8 +747,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                     ((PSQLException) e).getServerErrorMessage(), Config.getConfig(this).getEmailVerificationTable());
 
             // We keep the old exception detection logic to ensure backwards compatibility.
-            // We could get here if the new logic hits a false negative, e.g., in case someone renamed
-            // constraints/tables
+            // We could get here if the new logic hits a false negative,
+            // e.g., in case someone renamed constraints/tables
             boolean isDuplicateKeyError = e.getMessage().contains("ERROR: duplicate key")
                     && e.getMessage().contains("Key (user_id, email)");
 
@@ -761,8 +781,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             }
 
             // We keep the old exception detection logic to ensure backwards compatibility.
-            // We could get here if the new logic hits a false negative, e.g., in case someone renamed
-            // constraints/tables
+            // We could get here if the new logic hits a false negative,
+            // e.g., in case someone renamed constraints/tables
             if (e.getMessage().contains("ERROR: duplicate key")
                     && e.getMessage().contains("Key (user_id, email, token)")) {
                 throw new DuplicateEmailVerificationTokenException();
@@ -897,8 +917,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             }
 
             // We keep the old exception detection logic to ensure backwards compatibility.
-            // We could get here if the new logic hits a false negative, e.g., in case someone renamed
-            // constraints/tables
+            // We could get here if the new logic hits a false negative,
+            // e.g., in case someone renamed constraints/tables
             if (e.getMessage().contains("ERROR: duplicate key")
                     && e.getMessage().contains("Key (third_party_id, third_party_user_id)")) {
                 throw new DuplicateThirdPartyUserException();
@@ -1026,8 +1046,8 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             }
 
             // We keep the old exception detection logic to ensure backwards compatibility.
-            // We could get here if the new logic hits a false negative, e.g., in case someone renamed
-            // constraints/tables
+            // We could get here if the new logic hits a false negative,
+            // e.g., in case someone renamed constraints/tables
             if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (key_id)")) {
                 throw new DuplicateKeyIdException();
             }
