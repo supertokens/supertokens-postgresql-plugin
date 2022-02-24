@@ -236,14 +236,19 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
             switch (isolationLevel) {
             case SERIALIZABLE:
                 libIsolationLevel = Connection.TRANSACTION_SERIALIZABLE;
+                break;
             case REPEATABLE_READ:
                 libIsolationLevel = Connection.TRANSACTION_REPEATABLE_READ;
+                break;
             case READ_COMMITTED:
                 libIsolationLevel = Connection.TRANSACTION_READ_COMMITTED;
+                break;
             case READ_UNCOMMITTED:
                 libIsolationLevel = Connection.TRANSACTION_READ_UNCOMMITTED;
+                break;
             case NONE:
                 libIsolationLevel = Connection.TRANSACTION_NONE;
+                break;
             }
             con.setTransactionIsolation(libIsolationLevel);
             con.setAutoCommit(false);
