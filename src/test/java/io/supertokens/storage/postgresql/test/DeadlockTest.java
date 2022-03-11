@@ -19,13 +19,14 @@ package io.supertokens.storage.postgresql.test;
 
 import io.supertokens.ProcessState;
 import io.supertokens.passwordless.Passwordless;
-import io.supertokens.passwordless.exceptions.RestartFlowException;
 import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.sqlStorage.SQLStorage;
+import io.supertokens.pluginInterface.usermetadata.sqlStorage.UserMetadataSQLStorage;
 import io.supertokens.storageLayer.StorageLayer;
+import io.supertokens.utils.MetadataUtils;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Rule;
@@ -36,8 +37,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.google.gson.JsonObject;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -224,6 +229,127 @@ public class DeadlockTest {
         assertNull(process.checkOrWaitForEventInPlugin(
                 io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
         assert (pass.get());
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
+    public void testUserMetadataEmptyRowLocking()
+            throws InterruptedException, StorageQueryException, StorageTransactionLogicException {
+
+        String[] args = { "../" };
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        String userId = "userId";
+
+        JsonObject expected = new JsonObject();
+        JsonObject update1 = new JsonObject();
+        update1.addProperty("a", 1);
+        expected.addProperty("a", 1);
+
+        JsonObject update2 = new JsonObject();
+        update2.addProperty("b", 2);
+        expected.addProperty("b", 2);
+
+        UserMetadataSQLStorage sqlStorage = StorageLayer.getUserMetadataStorage(process.getProcess());
+
+        AtomicReference<String> t1State = new AtomicReference<>("init");
+        AtomicReference<String> t2State = new AtomicReference<>("init");
+        final Object syncObject = new Object();
+
+        AtomicInteger tryCount1 = new AtomicInteger(0);
+        AtomicInteger tryCount2 = new AtomicInteger(0);
+        AtomicBoolean success1 = new AtomicBoolean(false);
+        AtomicBoolean success2 = new AtomicBoolean(false);
+
+        Runnable r1 = () -> {
+            try {
+                sqlStorage.startTransaction(con -> {
+                    tryCount1.incrementAndGet();
+                    JsonObject originalMetadata = sqlStorage.getUserMetadata_Transaction(con, userId);
+
+                    synchronized (syncObject) {
+                        t1State.set("read");
+                        syncObject.notifyAll();
+                    }
+
+                    synchronized (syncObject) {
+                        while (!t2State.get().equals("read")) {
+                            try {
+                                syncObject.wait();
+                            } catch (InterruptedException e) {
+                            }
+                        }
+                    }
+
+                    JsonObject updatedMetadata = originalMetadata == null ? new JsonObject() : originalMetadata;
+                    MetadataUtils.shallowMergeMetadataUpdate(updatedMetadata, update1);
+
+                    sqlStorage.setUserMetadata_Transaction(con, userId, updatedMetadata);
+                    sqlStorage.commitTransaction(con);
+                    success1.set(true); // it should come here because we will try three times.
+                    return null;
+                });
+            } catch (Exception ignored) {
+            }
+        };
+
+        Runnable r2 = () -> {
+            try {
+                sqlStorage.startTransaction(con -> {
+                    tryCount2.incrementAndGet();
+
+                    JsonObject originalMetadata = sqlStorage.getUserMetadata_Transaction(con, userId);
+
+                    synchronized (syncObject) {
+                        t2State.set("read");
+                        syncObject.notifyAll();
+                    }
+
+                    synchronized (syncObject) {
+                        while (!t1State.get().equals("read")) {
+                            try {
+                                syncObject.wait();
+                            } catch (InterruptedException e) {
+                            }
+                        }
+                    }
+
+                    JsonObject updatedMetadata = originalMetadata == null ? new JsonObject() : originalMetadata;
+                    MetadataUtils.shallowMergeMetadataUpdate(updatedMetadata, update2);
+
+                    sqlStorage.setUserMetadata_Transaction(con, userId, updatedMetadata);
+
+                    sqlStorage.commitTransaction(con);
+                    success2.set(true); // it should come here because we will try three times.
+                    return null;
+                });
+            } catch (Exception ignored) {
+            }
+        };
+
+        Thread t1 = new Thread(r1);
+        Thread t2 = new Thread(r2);
+
+        t1.start();
+        t2.start();
+
+        t1.join();
+        t2.join();
+
+        // Both succeeds in the end
+        assertTrue(success1.get());
+        assertTrue(success2.get());
+
+        // One of them had to be retried (not deterministic which)
+        assertEquals(3, tryCount1.get() + tryCount2.get());
+        assertNotNull(process.checkOrWaitForEventInPlugin(
+                io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
+
+        // The end result is as expected
+        assertEquals(expected, sqlStorage.getUserMetadata(userId));
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
