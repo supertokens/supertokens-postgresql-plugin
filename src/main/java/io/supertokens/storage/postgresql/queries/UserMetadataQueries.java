@@ -39,7 +39,7 @@ public class UserMetadataQueries {
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
                 + "user_id VARCHAR(128) NOT NULL,"
-                + "user_metadata TEXT," 
+                + "user_metadata TEXT NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey") + " PRIMARY KEY(user_id)" + " );";
         // @formatter:on
 
