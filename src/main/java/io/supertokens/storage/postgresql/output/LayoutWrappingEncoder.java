@@ -28,8 +28,8 @@ class LayoutWrappingEncoder extends EncoderBase<ILoggingEvent> {
 
     private Layout<ILoggingEvent> layout;
 
-    LayoutWrappingEncoder(Start start) {
-        layout = new CustomLayout(start);
+    LayoutWrappingEncoder(String processID) {
+        layout = new CustomLayout(processID);
     }
 
     @Override

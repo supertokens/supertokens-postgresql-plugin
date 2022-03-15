@@ -28,11 +28,11 @@ import java.util.Date;
 
 class CustomLayout extends LayoutBase<ILoggingEvent> {
 
-    private final Start start;
+    private final String processID;
 
-    CustomLayout(Start start) {
+    CustomLayout(String processID) {
         super();
-        this.start = start;
+        this.processID = processID;
     }
 
     @Override
@@ -47,7 +47,7 @@ class CustomLayout extends LayoutBase<ILoggingEvent> {
         sbuf.append(" | ");
 
         sbuf.append("pid: ");
-        sbuf.append(start.getProcessId());
+        sbuf.append(this.processID);
         sbuf.append(" | ");
 
         sbuf.append("[");

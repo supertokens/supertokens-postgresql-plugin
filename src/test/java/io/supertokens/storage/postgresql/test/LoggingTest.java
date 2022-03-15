@@ -54,6 +54,7 @@ public class LoggingTest {
     @Test
     public void defaultLogging() throws Exception {
         String[] args = { "../" };
+        StorageLayer.close();
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
 
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -148,14 +149,15 @@ public class LoggingTest {
     @Test
     public void confirmLoggerClosed() throws Exception {
         String[] args = { "../" };
+        StorageLayer.close();
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
 
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
         ch.qos.logback.classic.Logger postgresqlInfo = (ch.qos.logback.classic.Logger) LoggerFactory
-                .getLogger("io.supertokens.storage.postgresql.Info." + process.getProcess().getProcessId());
+                .getLogger("io.supertokens.storage.postgresql.Info");
         ch.qos.logback.classic.Logger postgresqlError = (ch.qos.logback.classic.Logger) LoggerFactory
-                .getLogger("io.supertokens.storage.postgresql.Error." + process.getProcess().getProcessId());
+                .getLogger("io.supertokens.storage.postgresql.Error");
 
         ch.qos.logback.classic.Logger hikariLogger = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
 
