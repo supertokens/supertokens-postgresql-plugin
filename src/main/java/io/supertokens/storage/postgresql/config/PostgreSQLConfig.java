@@ -277,6 +277,10 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("jwt_signing_keys");
     }
 
+    public String getUserMetadataTable() {
+        return addSchemaAndPrefixToTableName("user_metadata");
+    }
+
     private String addSchemaAndPrefixToTableName(String tableName) {
         String name = tableName;
         if (!postgresql_table_names_prefix.trim().equals("")) {

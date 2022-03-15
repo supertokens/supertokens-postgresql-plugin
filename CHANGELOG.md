@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 - Fixes https://github.com/supertokens/supertokens-postgresql-plugin/issues/34
 
+## [1.15.0] - 2022-03-04
+
+- Adds support for the new usermetadata recipe
+
 ## [1.14.0] - 2022-02-23
 
 - Adds an index on device_id_hash to the codes table.
