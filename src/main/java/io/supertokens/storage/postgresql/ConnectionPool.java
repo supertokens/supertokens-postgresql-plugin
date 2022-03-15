@@ -24,6 +24,7 @@ import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storage.postgresql.output.Logging;
 
+import java.io.ObjectInputFilter;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.text.DecimalFormat;
@@ -33,12 +34,24 @@ import java.util.Objects;
 public class ConnectionPool extends ResourceDistributor.SingletonResource {
 
     private static final String RESOURCE_KEY = "io.supertokens.storage.postgresql.ConnectionPool";
-    private final HikariDataSource ds;
+    private static HikariDataSource hikariDataSource = null;
 
     private ConnectionPool(Start start) {
         if (!start.enabled) {
             throw new RuntimeException("Connection to refused"); // emulates exception thrown by Hikari
         }
+
+        if (ConnectionPool.hikariDataSource != null) {
+            // This implies that it was already created before and that
+            // there is no need to create Hikari again.
+
+            // If ConnectionPool.hikariDataSource == null, it implies that
+            // either the config file had changed somehow (which means the plugin JAR was reloaded, resulting in static
+            // variables to be set to null), or it means that this is the first time we are trying to connect to a db
+            // (applicable only for testing).
+            return;
+        }
+
         HikariConfig config = new HikariConfig();
         PostgreSQLConfig userConfig = Config.getConfig(start);
         config.setDriverClassName("org.postgresql.Driver");
@@ -81,7 +94,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         // - Failed to validate connection org.mariadb.jdbc.MariaDbConnection@79af83ae (Connection.setNetworkTimeout
         // cannot be called on a closed connection). Possibly consider using a shorter maxLifetime value.
         config.setPoolName("SuperTokens");
-        ds = new HikariDataSource(config);
+        hikariDataSource = new HikariDataSource(config);
     }
 
     private static int getTimeToWaitToInit(Start start) {
@@ -166,13 +179,14 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         if (!start.enabled) {
             throw new SQLException("Storage layer disabled");
         }
-        return getInstance(start).ds.getConnection();
+        return ConnectionPool.hikariDataSource.getConnection();
     }
 
     static void close(Start start) {
         if (getInstance(start) == null) {
             return;
         }
-        getInstance(start).ds.close();
+        ConnectionPool.hikariDataSource.close();
+        ConnectionPool.hikariDataSource = null;
     }
 }
