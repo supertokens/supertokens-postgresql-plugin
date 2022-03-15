@@ -20,6 +20,7 @@ package io.supertokens.storage.postgresql.test;
 import io.supertokens.Main;
 import io.supertokens.pluginInterface.PluginInterfaceTesting;
 import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storageLayer.StorageLayer;
 import org.apache.tomcat.util.http.fileupload.FileUtils;
 import org.junit.rules.TestRule;
 import org.junit.rules.TestWatcher;
@@ -31,6 +32,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.List;
 
 abstract class Utils extends Mockito {
@@ -78,15 +80,20 @@ abstract class Utils extends Mockito {
         Main.makeConsolePrintSilent = true;
         String installDir = "../";
         try {
-            // move from temp folder to installDir
-            ProcessBuilder pb = new ProcessBuilder("cp", "temp/licenseKey", "./licenseKey");
+            // if the default config is not the same as the current config, we must reset the storage layer
+            File ogConfig = new File("../temp/config.yaml");
+            File currentConfig = new File("../config.yaml");
+            if (currentConfig.isFile()) {
+                byte[] ogConfigContent = Files.readAllBytes(ogConfig.toPath());
+                byte[] currentConfigContent = Files.readAllBytes(currentConfig.toPath());
+                if (!Arrays.equals(ogConfigContent, currentConfigContent)) {
+                    StorageLayer.close();
+                }
+            }
+
+            ProcessBuilder pb = new ProcessBuilder("cp", "temp/config.yaml", "./config.yaml");
             pb.directory(new File(installDir));
             Process process = pb.start();
-            process.waitFor();
-
-            pb = new ProcessBuilder("cp", "temp/config.yaml", "./config.yaml");
-            pb.directory(new File(installDir));
-            process = pb.start();
             process.waitFor();
 
             TestingProcessManager.killAll();
@@ -98,6 +105,7 @@ abstract class Utils extends Mockito {
         } catch (Exception e) {
             e.printStackTrace();
         }
+        System.gc();
     }
 
     static void stopLicenseKeyFromUpdatingToLatest(TestingProcessManager.TestingProcess process) {
@@ -121,6 +129,8 @@ abstract class Utils extends Mockito {
     }
 
     public static void setValueInConfig(String key, String value) throws FileNotFoundException, IOException {
+        // we close the storage layer since there might be a change in the db related config.
+        StorageLayer.close();
 
         String oldStr = "((#\\s)?)" + key + "(:|((:\\s).+))\n";
         String newStr = key + ": " + value + "\n";
@@ -139,6 +149,9 @@ abstract class Utils extends Mockito {
     }
 
     public static void commentConfigValue(String key) throws IOException {
+        // we close the storage layer since there might be a change in the db related config.
+        StorageLayer.close();
+
         String oldStr = "((#\\s)?)" + key + "(:|((:\\s).+))\n";
         String newStr = "# " + key + ":";
 

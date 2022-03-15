@@ -160,7 +160,7 @@ public class DeadlockTest {
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-        ExecutorService es = Executors.newCachedThreadPool();
+        ExecutorService es = Executors.newFixedThreadPool(1000);
 
         AtomicBoolean pass = new AtomicBoolean(true);
 
@@ -196,7 +196,7 @@ public class DeadlockTest {
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-        ExecutorService es = Executors.newCachedThreadPool();
+        ExecutorService es = Executors.newFixedThreadPool(1000);
 
         AtomicBoolean pass = new AtomicBoolean(true);
 
