@@ -48,14 +48,11 @@ import io.supertokens.pluginInterface.session.sqlStorage.SessionSQLStorage;
 import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.pluginInterface.thirdparty.sqlStorage.ThirdPartySQLStorage;
-import io.supertokens.pluginInterface.usermetadata.UserMetadataStorage;
 import io.supertokens.pluginInterface.usermetadata.sqlStorage.UserMetadataSQLStorage;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storage.postgresql.output.Logging;
 import io.supertokens.storage.postgresql.queries.*;
-import netscape.javascript.JSObject;
-
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -216,12 +213,6 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                 if (e instanceof StorageQueryException) {
                     throw (StorageQueryException) e;
                 } else if (e instanceof StorageTransactionLogicException) {
-                    Logging.debug(this,
-                            "Number of retries: " + tries + ". Actual exception message: " + actualException);
-                    if (psqlException != null) {
-                        Logging.debug(this,
-                                "PSQL error status code: " + psqlException.getServerErrorMessage().getSQLState());
-                    }
                     throw (StorageTransactionLogicException) e;
                 }
                 throw new StorageQueryException(e);
