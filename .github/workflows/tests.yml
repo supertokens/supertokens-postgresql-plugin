@@ -1,0 +1,65 @@
+name: "Run tests"
+on:
+  workflow_dispatch:
+    inputs:
+      coreRepoOwnerName:
+        description: 'supertokens-core repo owner name'
+        default: supertokens 
+        required: true
+      coreRepoBranch:
+        description: 'supertokens-core repos branch name'
+        default: master 
+        required: true
+      pluginRepoOwnerName:
+        description: 'supertokens-plugin-interface repo owner name'
+        default: supertokens 
+        required: true
+      pluginInterfaceBranch:
+        description: 'supertokens-plugin-interface repos branch name'
+        default: master 
+        required: true
+
+jobs:
+  test_job:
+    name: Run tests
+    runs-on: ubuntu-latest
+    container: rishabhpoddar/supertokens_core_testing
+    
+    # Service containers to run with `test_job`
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres:latest
+        # Provide the password for postgres
+        env:
+          POSTGRES_DB: supertokens
+          POSTGRES_PASSWORD: root
+          POSTGRES_USER: root
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - uses: actions/checkout@v2
+      - name: Adds postgres host to devConfig.yaml
+        run: "sed -i 's/# postgresql_host:/postgresql_host: postgres/g' ./devConfig.yaml"
+      - name: Cloning supertokens-root
+        run: cd ../ && git clone https://github.com/supertokens/supertokens-root.git
+      - name: Update Java 1
+        run: update-alternatives --install "/usr/bin/java" "java" "/usr/java/jdk-15.0.1/bin/java" 2
+      - name: Update Java 2
+        run: update-alternatives --install "/usr/bin/javac" "javac" "/usr/java/jdk-15.0.1/bin/javac" 2
+      - name: Modifying modules.txt in supertokens-root
+        run: cd ../supertokens-root && echo "core,${{ github.event.inputs.coreRepoBranch }},${{ github.event.inputs.coreRepoOwnerName }}\nplugin-interface,${{ github.event.inputs.pluginInterfaceBranch }},${{ github.event.inputs.pluginRepoOwnerName }}\npostgresql-plugin,master" > modules.txt
+      - name: Contents of modules.txt
+        run: cat ../supertokens-root/modules.txt
+      - name: Running loadModules in supertokens-root
+        run: cd ../supertokens-root && ./loadModules
+      - name: Copying current supertokens-postgresql-plugin branch into supertokens-root
+        run: cd ../supertokens-root && rm -rf ./supertokens-postgresql-plugin && cp -r ../supertokens-postgresql-plugin ./
+      - name: Building and running tests
+        run: cd ../supertokens-root && ./startTestingEnv
