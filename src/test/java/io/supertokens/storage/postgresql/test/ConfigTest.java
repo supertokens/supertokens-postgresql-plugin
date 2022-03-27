@@ -17,6 +17,8 @@
 
 package io.supertokens.storage.postgresql.test;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.gson.JsonObject;
 import io.supertokens.ProcessState;
 import io.supertokens.session.Session;
@@ -34,6 +36,7 @@ import org.junit.Test;
 import org.junit.rules.TestRule;
 
 import java.io.File;
+import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -318,10 +321,14 @@ public class ConfigTest {
 
     @Test
     public void testValidConnectionURI() throws Exception {
+        final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+        PostgreSQLConfig userConfig = mapper.readValue(new File("../config.yaml"), PostgreSQLConfig.class);
+        String hostname = userConfig.getHostName();
         {
             String[] args = { "../" };
 
-            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@localhost:5432/supertokens");
+            Utils.setValueInConfig("postgresql_connection_uri",
+                    "postgresql://root:root@" + hostname + ":5432/supertokens");
             Utils.commentConfigValue("postgresql_password");
             Utils.commentConfigValue("postgresql_user");
             Utils.commentConfigValue("postgresql_port");
@@ -341,7 +348,7 @@ public class ConfigTest {
             Utils.reset();
             String[] args = { "../" };
 
-            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@localhost/supertokens");
+            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@" + hostname + "/supertokens");
             Utils.commentConfigValue("postgresql_password");
             Utils.commentConfigValue("postgresql_user");
             Utils.commentConfigValue("postgresql_port");
@@ -361,7 +368,7 @@ public class ConfigTest {
             Utils.reset();
             String[] args = { "../" };
 
-            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://localhost:5432/supertokens");
+            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://" + hostname + ":5432/supertokens");
             Utils.commentConfigValue("postgresql_port");
             Utils.commentConfigValue("postgresql_host");
             Utils.commentConfigValue("postgresql_database_name");
@@ -379,7 +386,7 @@ public class ConfigTest {
             Utils.reset();
             String[] args = { "../" };
 
-            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root@localhost:5432/supertokens");
+            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root@" + hostname + ":5432/supertokens");
             Utils.commentConfigValue("postgresql_user");
             Utils.commentConfigValue("postgresql_port");
             Utils.commentConfigValue("postgresql_host");
@@ -398,7 +405,7 @@ public class ConfigTest {
             Utils.reset();
             String[] args = { "../" };
 
-            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@localhost:5432");
+            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@" + hostname + ":5432");
             Utils.commentConfigValue("postgresql_password");
             Utils.commentConfigValue("postgresql_user");
             Utils.commentConfigValue("postgresql_port");
@@ -417,6 +424,9 @@ public class ConfigTest {
 
     @Test
     public void testInvalidConnectionURI() throws Exception {
+        final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+        PostgreSQLConfig userConfig = mapper.readValue(new File("../config.yaml"), PostgreSQLConfig.class);
+        String hostname = userConfig.getHostName();
         {
             String[] args = { "../" };
 
@@ -439,7 +449,7 @@ public class ConfigTest {
             String[] args = { "../" };
 
             Utils.setValueInConfig("postgresql_connection_uri",
-                    "postgresql://root:wrongPassword@localhost:5432/supertokens");
+                    "postgresql://root:wrongPassword@" + hostname + ":5432/supertokens");
             Utils.commentConfigValue("postgresql_password");
             Utils.commentConfigValue("postgresql_user");
             Utils.commentConfigValue("postgresql_port");
@@ -459,11 +469,14 @@ public class ConfigTest {
 
     @Test
     public void testValidConnectionURIAttributes() throws Exception {
+        final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+        PostgreSQLConfig userConfig = mapper.readValue(new File("../config.yaml"), PostgreSQLConfig.class);
+        String hostname = userConfig.getHostName();
         {
             String[] args = { "../" };
 
             Utils.setValueInConfig("postgresql_connection_uri",
-                    "postgresql://root:root@localhost:5432/supertokens?key1=value1");
+                    "postgresql://root:root@" + hostname + ":5432/supertokens?key1=value1");
 
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -478,9 +491,8 @@ public class ConfigTest {
             Utils.reset();
             String[] args = { "../" };
 
-            Utils.setValueInConfig("postgresql_connection_uri",
-                    "postgresql://root:root@localhost:5432/supertokens?key1=value1&allowPublicKeyRetrieval=false&key2"
-                            + "=value2");
+            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@" + hostname
+                    + ":5432/supertokens?key1=value1&allowPublicKeyRetrieval=false&key2" + "=value2");
 
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -492,14 +504,17 @@ public class ConfigTest {
         }
     }
 
-    public static void checkConfig(PostgreSQLConfig config) {
+    public static void checkConfig(PostgreSQLConfig config) throws IOException {
+        final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+        PostgreSQLConfig userConfig = mapper.readValue(new File("../config.yaml"), PostgreSQLConfig.class);
+        String hostname = userConfig.getHostName();
         assertEquals("Config getAttributes did not match default", config.getConnectionAttributes(),
                 "allowPublicKeyRetrieval=true");
         assertEquals("Config getSchema did not match default", config.getConnectionScheme(), "postgresql");
         assertEquals("Config connectionPoolSize did not match default", config.getConnectionPoolSize(), 10);
         assertEquals("Config databaseName does not match default", config.getDatabaseName(), "supertokens");
         assertEquals("Config keyValue table does not match default", config.getKeyValueTable(), "key_value");
-        assertEquals("Config hostName does not match default ", config.getHostName(), "localhost");
+        assertEquals("Config hostName does not match default ", config.getHostName(), hostname);
         assertEquals("Config port does not match default", config.getPort(), 5432);
         assertEquals("Config sessionInfoTable does not match default", config.getSessionInfoTable(), "session_info");
         assertEquals("Config user does not match default", config.getUser(), "root");
