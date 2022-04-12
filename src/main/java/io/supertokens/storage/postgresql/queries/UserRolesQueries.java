@@ -57,9 +57,6 @@ public class UserRolesQueries {
         // @formatter:on
     }
 
-    // CONSTRAINT role_permissions_pkey PRIMARY KEY (role, permission),
-    // CONSTRAINT role_permissions_role_fkey FOREIGN KEY (role) REFERENCES roles(role) ON DELETE CASCADE
-
     static String getQueryToCreateRolePermissionsPermissionIndex(Start start) {
         return "CREATE INDEX role_permissions_permission_index ON " + getConfig(start).getUserRolesPermissionsTable()
                 + "(permission);";
