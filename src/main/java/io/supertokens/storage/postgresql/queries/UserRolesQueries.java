@@ -50,7 +50,7 @@ public class UserRolesQueries {
                 + "role VARCHAR(255) NOT NULL,"
                 + "permission VARCHAR(255) NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey") + " PRIMARY KEY(role, permission),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "fkey") + " FOREIGN KEY(role)"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "role", "fkey") + " FOREIGN KEY(role)"
                 + " REFERENCES " + getConfig(start).getRolesTable()
                 +"(role) ON DELETE CASCADE );";
 
@@ -70,7 +70,7 @@ public class UserRolesQueries {
                 + "user_id VARCHAR(128) NOT NULL,"
                 + "role VARCHAR(255) NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey") + " PRIMARY KEY(user_id, role),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "fkey") + " FOREIGN KEY(role)"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "role", "fkey") + " FOREIGN KEY(role)"
                 + " REFERENCES " + getConfig(start).getRolesTable()
                 +"(role) ON DELETE CASCADE );";
 

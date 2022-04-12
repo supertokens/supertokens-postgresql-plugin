@@ -1528,11 +1528,14 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
         try {
             UserRolesQueries.createNewRole_Transaction(this, sqlCon, role);
         } catch (SQLException e) {
-            PostgreSQLConfig config = Config.getConfig(this);
-            ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
-            if (isPrimaryKeyError(serverErrorMessage, config.getRolesTable())) {
-                throw new DuplicateRoleException();
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
+                if (isPrimaryKeyError(serverErrorMessage, config.getRolesTable())) {
+                    throw new DuplicateRoleException();
+                }
             }
+
             throw new StorageQueryException(e);
         }
     }
@@ -1554,6 +1557,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                     throw new DuplicateRolePermissionMappingException();
                 }
             }
+
             throw new StorageQueryException(e);
         }
     }
