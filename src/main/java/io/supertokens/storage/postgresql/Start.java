@@ -1452,16 +1452,19 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
     @Override
     public void addRoleToUser(String userId, String role)
             throws StorageQueryException, UnknownRoleException, DuplicateUserRoleMappingException {
+        // TODO
 
     }
 
     @Override
     public String[] getRolesForUser(String userId) throws StorageQueryException {
+        // TODO
         return new String[0];
     }
 
     @Override
     public String[] getUsersForRole(String role) throws StorageQueryException {
+        // TODO
         return new String[0];
     }
 
@@ -1476,6 +1479,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
 
     @Override
     public String[] getRolesThatHavePermission(String permission) throws StorageQueryException {
+        // TODO
         return new String[0];
     }
 
@@ -1490,6 +1494,7 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
 
     @Override
     public String[] getRoles() throws StorageQueryException {
+        // TODO
         return new String[0];
     }
 
@@ -1504,12 +1509,14 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
 
     @Override
     public int deleteAllRolesForUser(String userId) throws StorageQueryException {
+        // TODO
         return 0;
     }
 
     @Override
     public boolean deleteRoleForUser_Transaction(TransactionConnection con, String userId, String role)
             throws StorageQueryException {
+        // TODO
         return false;
     }
 
@@ -1554,17 +1561,20 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
     @Override
     public boolean deletePermissionForRole_Transaction(TransactionConnection con, String role, String permission)
             throws StorageQueryException {
+        // TODO
         return false;
     }
 
     @Override
     public int deleteAllPermissionsForRole_Transaction(TransactionConnection con, String role)
             throws StorageQueryException {
+        // TODO
         return 0;
     }
 
     @Override
     public boolean doesRoleExist_Transaction(TransactionConnection con, String role) throws StorageQueryException {
+        // TODO
         return false;
     }
 }
