@@ -281,6 +281,18 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("user_metadata");
     }
 
+    public String getRolesTable() {
+        return addSchemaAndPrefixToTableName("roles");
+    }
+
+    public String getUserRolesPermissionsTable() {
+        return addSchemaAndPrefixToTableName("role_permissions");
+    }
+
+    public String getUserRolesTable() {
+        return addSchemaAndPrefixToTableName("user_roles");
+    }
+
     private String addSchemaAndPrefixToTableName(String tableName) {
         String name = tableName;
         if (!postgresql_table_names_prefix.trim().equals("")) {
