@@ -19,6 +19,7 @@ package io.supertokens.storage.postgresql.queries;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -31,27 +32,33 @@ import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class UserRolesQueries {
     public static String getQueryToCreateRolesTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
         String tableName = getConfig(start).getRolesTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
                 + "role VARCHAR(255) NOT NULL,"
-                + "PRIMARY KEY(role)" + " );";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey") + " PRIMARY KEY(role)" + " );";
 
         // @formatter:on
     }
 
     public static String getQueryToCreateRolePermissionsTable(Start start) {
         String tableName = getConfig(start).getUserRolesPermissionsTable();
+        String schema = Config.getConfig(start).getTableSchema();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
                 + "role VARCHAR(255) NOT NULL,"
                 + "permission VARCHAR(255) NOT NULL,"
-                + "PRIMARY KEY(role, permission),"
-                + "FOREIGN KEY(role) REFERENCES " + getConfig(start).getRolesTable()
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey") + " PRIMARY KEY(role, permission),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "fkey") + " FOREIGN KEY(role)"
+                + " REFERENCES " + getConfig(start).getRolesTable()
                 +"(role) ON DELETE CASCADE );";
 
         // @formatter:on
     }
+
+    // CONSTRAINT role_permissions_pkey PRIMARY KEY (role, permission),
+    // CONSTRAINT role_permissions_role_fkey FOREIGN KEY (role) REFERENCES roles(role) ON DELETE CASCADE
 
     static String getQueryToCreateRolePermissionsPermissionIndex(Start start) {
         return "CREATE INDEX role_permissions_permission_index ON " + getConfig(start).getUserRolesPermissionsTable()
@@ -59,14 +66,16 @@ public class UserRolesQueries {
     }
 
     public static String getQueryToCreateUserRolesTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
         String tableName = getConfig(start).getUserRolesTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
                 + "user_id VARCHAR(128) NOT NULL,"
                 + "role VARCHAR(255) NOT NULL,"
-                + "PRIMARY KEY(user_id, role),"
-                + "FOREIGN KEY(role) REFERENCES " + getConfig(start).getRolesTable()
-                + "(role) ON DELETE CASCADE );";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey") + " PRIMARY KEY(user_id, role),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "fkey") + " FOREIGN KEY(role)"
+                + " REFERENCES " + getConfig(start).getRolesTable()
+                +"(role) ON DELETE CASCADE );";
 
         // @formatter:on
     }
