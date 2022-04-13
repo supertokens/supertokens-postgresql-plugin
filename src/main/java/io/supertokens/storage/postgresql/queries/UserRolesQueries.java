@@ -17,6 +17,7 @@
 package io.supertokens.storage.postgresql.queries;
 
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -83,14 +84,14 @@ public class UserRolesQueries {
 
     public static void createNewRole_Transaction(Start start, Connection con, String role)
             throws SQLException, StorageQueryException {
-        String QUERY = "INSERT INTO " + getConfig(start).getRolesTable() + " VALUES(?);";
+        String QUERY = "INSERT INTO " + getConfig(start).getRolesTable() + " VALUES(?) ON CONFLICT DO NOTHING;";
         update(con, QUERY, pst -> pst.setString(1, role));
     }
 
     public static void addPermissionToRole_Transaction(Start start, Connection con, String role, String permission)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getUserRolesPermissionsTable()
-                + " (role, permission) VALUES(?, ?)";
+                + " (role, permission) VALUES(?, ?) ON CONFLICT DO NOTHING";
 
         update(con, QUERY, pst -> {
             pst.setString(1, role);
@@ -122,4 +123,16 @@ public class UserRolesQueries {
             return permissions.toArray(String[]::new);
         });
     }
+
+    public static String[] getRoles(Start start) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT role FROM " + getConfig(start).getRolesTable();
+        return execute(start, QUERY, PreparedStatementValueSetter.NO_OP_SETTER, result -> {
+            ArrayList<String> roles = new ArrayList<>();
+            while (result.next()) {
+                roles.add(result.getString("role"));
+            }
+            return roles.toArray(String[]::new);
+        });
+    }
+
 }

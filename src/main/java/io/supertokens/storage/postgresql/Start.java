@@ -49,8 +49,6 @@ import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.pluginInterface.thirdparty.sqlStorage.ThirdPartySQLStorage;
 import io.supertokens.pluginInterface.usermetadata.sqlStorage.UserMetadataSQLStorage;
-import io.supertokens.pluginInterface.userroles.exception.DuplicateRoleException;
-import io.supertokens.pluginInterface.userroles.exception.DuplicateRolePermissionMappingException;
 import io.supertokens.pluginInterface.userroles.exception.DuplicateUserRoleMappingException;
 import io.supertokens.pluginInterface.userroles.exception.UnknownRoleException;
 import io.supertokens.pluginInterface.userroles.sqlStorage.UserRolesSQLStorage;
@@ -1494,8 +1492,11 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
 
     @Override
     public String[] getRoles() throws StorageQueryException {
-        // TODO
-        return new String[0];
+        try {
+            return UserRolesQueries.getRoles(this);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
@@ -1521,28 +1522,20 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
     }
 
     @Override
-    public void createNewRole_Transaction(TransactionConnection con, String role)
-            throws StorageQueryException, DuplicateRoleException {
+    public void createNewRoleOrDoNothingIfExists_Transaction(TransactionConnection con, String role)
+            throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
 
         try {
             UserRolesQueries.createNewRole_Transaction(this, sqlCon, role);
         } catch (SQLException e) {
-            if (e instanceof PSQLException) {
-                PostgreSQLConfig config = Config.getConfig(this);
-                ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
-                if (isPrimaryKeyError(serverErrorMessage, config.getRolesTable())) {
-                    throw new DuplicateRoleException();
-                }
-            }
-
             throw new StorageQueryException(e);
         }
     }
 
     @Override
     public void addPermissionToRole_Transaction(TransactionConnection con, String role, String permission)
-            throws StorageQueryException, UnknownRoleException, DuplicateRolePermissionMappingException {
+            throws StorageQueryException, UnknownRoleException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             UserRolesQueries.addPermissionToRole_Transaction(this, sqlCon, role, permission);
@@ -1552,9 +1545,6 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
                 ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
                 if (isForeignKeyConstraintError(serverErrorMessage, config.getUserRolesPermissionsTable(), "role")) {
                     throw new UnknownRoleException();
-                }
-                if (isPrimaryKeyError(serverErrorMessage, config.getUserRolesPermissionsTable())) {
-                    throw new DuplicateRolePermissionMappingException();
                 }
             }
 
