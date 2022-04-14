@@ -134,4 +134,23 @@ public class UserRolesQueries {
         });
     }
 
+    public static int addRoleToUser(Start start, String userId, String role)
+            throws SQLException, StorageQueryException {
+        String QUERY = "INSERT INTO " + getConfig(start).getUserRolesTable() + "(user_id, role) VALUES(?, ?);";
+        return update(start, QUERY, pst -> {
+            pst.setString(1, userId);
+            pst.setString(2, role);
+        });
+    }
+
+    public static String[] getRolesForUser(Start start, String userId) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT role FROM " + getConfig(start).getUserRolesTable() + " WHERE user_id = ? ;";
+        return execute(start, QUERY, pst -> pst.setString(1, userId), result -> {
+            ArrayList<String> roles = new ArrayList<>();
+            while (result.next()) {
+                roles.add(result.getString("role"));
+            }
+            return roles.toArray(String[]::new);
+        });
+    }
 }
