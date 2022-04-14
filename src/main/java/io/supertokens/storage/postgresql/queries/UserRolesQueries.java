@@ -88,8 +88,8 @@ public class UserRolesQueries {
         update(con, QUERY, pst -> pst.setString(1, role));
     }
 
-    public static void addPermissionToRole_Transaction(Start start, Connection con, String role, String permission)
-            throws SQLException, StorageQueryException {
+    public static void addPermissionToRoleOrDoNothingIfExists_Transaction(Start start, Connection con, String role,
+            String permission) throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getUserRolesPermissionsTable()
                 + " (role, permission) VALUES(?, ?) ON CONFLICT DO NOTHING";
 
@@ -109,7 +109,6 @@ public class UserRolesQueries {
     public static boolean doesRoleExist(Start start, String role) throws SQLException, StorageQueryException {
         String QUERY = "SELECT 1 FROM " + getConfig(start).getRolesTable() + " WHERE role = ?";
         return execute(start, QUERY, pst -> pst.setString(1, role), ResultSet::next);
-
     }
 
     public static String[] getPermissionsForRole(Start start, String role) throws SQLException, StorageQueryException {
