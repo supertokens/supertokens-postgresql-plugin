@@ -1450,14 +1450,32 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
     @Override
     public void addRoleToUser(String userId, String role)
             throws StorageQueryException, UnknownRoleException, DuplicateUserRoleMappingException {
-        // TODO
+
+        try {
+            UserRolesQueries.addRoleToUser(this, userId, role);
+        } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
+                if (isForeignKeyConstraintError(serverErrorMessage, config.getUserRolesTable(), "role")) {
+                    throw new UnknownRoleException();
+                }
+                if (isPrimaryKeyError(serverErrorMessage, config.getUserRolesTable())) {
+                    throw new DuplicateUserRoleMappingException();
+                }
+            }
+            throw new StorageQueryException(e);
+        }
 
     }
 
     @Override
     public String[] getRolesForUser(String userId) throws StorageQueryException {
-        // TODO
-        return new String[0];
+        try {
+            return UserRolesQueries.getRolesForUser(this, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
