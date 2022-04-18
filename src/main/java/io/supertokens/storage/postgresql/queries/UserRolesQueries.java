@@ -154,4 +154,23 @@ public class UserRolesQueries {
             return roles.toArray(String[]::new);
         });
     }
+
+    public static boolean deleteRoleForUser_Transaction(Start start, Connection con, String userId, String role)
+            throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + getConfig(start).getUserRolesTable() + " WHERE user_id = ? AND role = ? ;";
+
+        // store the number of rows updated
+        int rowUpdatedCount = update(con, QUERY, pst -> {
+            pst.setString(1, userId);
+            pst.setString(2, role);
+        });
+        return rowUpdatedCount > 0;
+    }
+
+    public static boolean doesRoleExist_transaction(Start start, Connection con, String role)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT 1 FROM " + getConfig(start).getRolesTable() + " WHERE role = ? ";
+        return execute(con, QUERY, pst -> pst.setString(1, role), ResultSet::next);
+    }
+
 }
