@@ -1540,12 +1540,12 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
     }
 
     @Override
-    public void createNewRoleOrDoNothingIfExists_Transaction(TransactionConnection con, String role)
+    public boolean createNewRoleOrDoNothingIfExists_Transaction(TransactionConnection con, String role)
             throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
 
         try {
-            UserRolesQueries.createNewRole_Transaction(this, sqlCon, role);
+            return UserRolesQueries.createNewRoleOrDoNothingIfExists_Transaction(this, sqlCon, role);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

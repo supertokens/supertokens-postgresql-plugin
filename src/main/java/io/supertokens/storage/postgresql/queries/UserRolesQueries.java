@@ -82,10 +82,11 @@ public class UserRolesQueries {
         return "CREATE INDEX user_roles_role_index ON " + getConfig(start).getUserRolesTable() + "(role);";
     }
 
-    public static void createNewRole_Transaction(Start start, Connection con, String role)
+    public static boolean createNewRoleOrDoNothingIfExists_Transaction(Start start, Connection con, String role)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getRolesTable() + " VALUES(?) ON CONFLICT DO NOTHING;";
-        update(con, QUERY, pst -> pst.setString(1, role));
+        int rowsUpdated = update(con, QUERY, pst -> pst.setString(1, role));
+        return rowsUpdated > 0;
     }
 
     public static void addPermissionToRoleOrDoNothingIfExists_Transaction(Start start, Connection con, String role,
