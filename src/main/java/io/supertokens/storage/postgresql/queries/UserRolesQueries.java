@@ -170,7 +170,7 @@ public class UserRolesQueries {
 
     public static boolean doesRoleExist_transaction(Start start, Connection con, String role)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT 1 FROM " + getConfig(start).getRolesTable() + " WHERE role = ? ";
+        String QUERY = "SELECT 1 FROM " + getConfig(start).getRolesTable() + " WHERE role = ? FOR UPDATE";
         return execute(con, QUERY, pst -> pst.setString(1, role), ResultSet::next);
     }
 
