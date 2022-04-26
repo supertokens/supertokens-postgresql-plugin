@@ -1480,8 +1480,11 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
 
     @Override
     public String[] getUsersForRole(String role) throws StorageQueryException {
-        // TODO
-        return new String[0];
+        try {
+            return UserRolesQueries.getUsersForRole(this, role);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
