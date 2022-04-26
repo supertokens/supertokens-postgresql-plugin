@@ -174,4 +174,14 @@ public class UserRolesQueries {
         return execute(con, QUERY, pst -> pst.setString(1, role), ResultSet::next);
     }
 
+    public static String[] getUsersForRole(Start start, String role) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT user_id FROM " + getConfig(start).getUserRolesTable() + " WHERE role = ? ";
+        return execute(start, QUERY, pst -> pst.setString(1, role), result -> {
+            ArrayList<String> userIds = new ArrayList<>();
+            while (result.next()) {
+                userIds.add(result.getString("user_id"));
+            }
+            return userIds.toArray(String[]::new);
+        });
+    }
 }
