@@ -1534,8 +1534,11 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
 
     @Override
     public int deleteAllRolesForUser(String userId) throws StorageQueryException {
-        // TODO
-        return 0;
+        try {
+            return UserRolesQueries.deleteAllRolesForUser(this, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
