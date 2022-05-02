@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Adds support for UserRoles recipe
+
 ## [1.15.0] - 2022-03-04
 
 - Adds support for the new usermetadata recipe
