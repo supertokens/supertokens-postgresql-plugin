@@ -226,4 +226,9 @@ public class UserRolesQueries {
         });
     }
 
+    public static int deleteAllRolesForUser(Start start, String userId) throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + getConfig(start).getUserRolesTable() + " WHERE user_id = ?";
+        return update(start, QUERY, pst -> pst.setString(1, userId));
+    }
+
 }
