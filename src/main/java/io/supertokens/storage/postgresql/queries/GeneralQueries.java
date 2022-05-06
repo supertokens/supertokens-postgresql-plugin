@@ -194,6 +194,26 @@ public class GeneralQueries {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateUserMetadataTable(start), NO_OP_SETTER);
                 }
+
+                if (!doesTableExists(start, Config.getConfig(start).getRolesTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, UserRolesQueries.getQueryToCreateRolesTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getUserRolesPermissionsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, UserRolesQueries.getQueryToCreateRolePermissionsTable(start), NO_OP_SETTER);
+                    // index
+                    update(start, UserRolesQueries.getQueryToCreateRolePermissionsPermissionIndex(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getUserRolesTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, UserRolesQueries.getQueryToCreateUserRolesTable(start), NO_OP_SETTER);
+                    // index
+                    update(start, UserRolesQueries.getQueryToCreateUserRolesRoleIndex(start), NO_OP_SETTER);
+                }
+
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
@@ -237,7 +257,9 @@ public class GeneralQueries {
                     + "," + getConfig(start).getJWTSigningKeysTable() + ","
                     + getConfig(start).getPasswordlessCodesTable() + ","
                     + getConfig(start).getPasswordlessDevicesTable() + ","
-                    + getConfig(start).getPasswordlessUsersTable() + "," + getConfig(start).getUserMetadataTable();
+                    + getConfig(start).getPasswordlessUsersTable() + "," + getConfig(start).getUserMetadataTable() + ","
+                    + getConfig(start).getRolesTable() + "," + getConfig(start).getUserRolesPermissionsTable() + ","
+                    + getConfig(start).getUserRolesTable();
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
     }
