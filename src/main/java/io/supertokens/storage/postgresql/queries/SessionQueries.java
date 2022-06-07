@@ -48,12 +48,13 @@ public class SessionQueries {
         return "CREATE TABLE IF NOT EXISTS " + sessionInfoTable + " ("
                 + "session_handle VARCHAR(255) NOT NULL,"
                 + "user_id VARCHAR(128) NOT NULL,"
-                + "refresh_token_hash_2 VARCHAR(128) NOT NULL," 
-                + "session_data TEXT," 
+                + "refresh_token_hash_2 VARCHAR(128) NOT NULL,"
+                + "session_data TEXT,"
                 + "expires_at BIGINT NOT NULL,"
-                + "created_at_time BIGINT NOT NULL," 
-                + "jwt_user_payload TEXT," 
-                + "CONSTRAINT " + Utils.getConstraintName(schema, sessionInfoTable, null, "pkey") + " PRIMARY KEY(session_handle)" + " );";
+                + "created_at_time BIGINT NOT NULL,"
+                + "jwt_user_payload TEXT,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, sessionInfoTable, null, "pkey") +
+                " PRIMARY KEY(session_handle)" + " );";
         // @formatter:on
 
     }
@@ -63,9 +64,10 @@ public class SessionQueries {
         String accessTokenSigningKeysTable = Config.getConfig(start).getAccessTokenSigningKeysTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + accessTokenSigningKeysTable + " ("
-                + "created_at_time BIGINT NOT NULL," 
-                + "value TEXT," 
-                + "CONSTRAINT " + Utils.getConstraintName(schema, accessTokenSigningKeysTable, null, "pkey") + " PRIMARY KEY(created_at_time)" + " );";
+                + "created_at_time BIGINT NOT NULL,"
+                + "value TEXT,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, accessTokenSigningKeysTable, null, "pkey") +
+                " PRIMARY KEY(created_at_time)" + " );";
         // @formatter:on
     }
 
@@ -157,11 +159,15 @@ public class SessionQueries {
         update(start, QUERY.toString(), pst -> pst.setString(1, userId));
     }
 
-    public static String[] getAllSessionHandlesForUser(Start start, String userId)
+    public static String[] getAllNonExpiredSessionHandlesForUser(Start start, String userId)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT session_handle FROM " + getConfig(start).getSessionInfoTable() + " WHERE user_id = ?";
+        String QUERY = "SELECT session_handle FROM " + getConfig(start).getSessionInfoTable()
+                + " WHERE user_id = ? AND expires_at >= ?";
 
-        return execute(start, QUERY, pst -> pst.setString(1, userId), result -> {
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, userId);
+            pst.setLong(2, currentTimeMillis());
+        }, result -> {
             List<String> temp = new ArrayList<>();
             while (result.next()) {
                 temp.add(result.getString("session_handle"));

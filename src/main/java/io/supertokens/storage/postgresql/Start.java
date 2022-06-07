@@ -407,9 +407,9 @@ public class Start implements SessionSQLStorage, EmailPasswordSQLStorage, EmailV
     }
 
     @Override
-    public String[] getAllSessionHandlesForUser(String userId) throws StorageQueryException {
+    public String[] getAllNonExpiredSessionHandlesForUser(String userId) throws StorageQueryException {
         try {
-            return SessionQueries.getAllSessionHandlesForUser(this, userId);
+            return SessionQueries.getAllNonExpiredSessionHandlesForUser(this, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
