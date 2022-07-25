@@ -214,6 +214,11 @@ public class GeneralQueries {
                     update(start, UserRolesQueries.getQueryToCreateUserRolesRoleIndex(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getUserIdMappingTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, UserIdMappingQueries.getQueryToCreateUserIdMappingTable(start), NO_OP_SETTER);
+                }
+
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
@@ -249,8 +254,9 @@ public class GeneralQueries {
 
         {
             String DROP_QUERY = "DROP TABLE IF EXISTS " + getConfig(start).getKeyValueTable() + ","
-                    + getConfig(start).getUsersTable() + "," + getConfig(start).getAccessTokenSigningKeysTable() + ","
-                    + getConfig(start).getSessionInfoTable() + "," + getConfig(start).getEmailPasswordUsersTable() + ","
+                    + getConfig(start).getUserIdMappingTable() + "," + getConfig(start).getUsersTable() + ","
+                    + getConfig(start).getAccessTokenSigningKeysTable() + "," + getConfig(start).getSessionInfoTable()
+                    + "," + getConfig(start).getEmailPasswordUsersTable() + ","
                     + getConfig(start).getPasswordResetTokensTable() + ","
                     + getConfig(start).getEmailVerificationTokensTable() + ","
                     + getConfig(start).getEmailVerificationTable() + "," + getConfig(start).getThirdPartyUsersTable()
@@ -339,6 +345,13 @@ public class GeneralQueries {
             }
             return 0L;
         });
+    }
+
+    public static boolean doesUserIdExist(Start start, String userId) throws SQLException, StorageQueryException {
+
+        String QUERY = "SELECT 1 FROM " + getConfig(start).getUsersTable() + " WHERE user_id = ?";
+        return execute(start, QUERY, pst -> pst.setString(1, userId), ResultSet::next);
+
     }
 
     public static AuthRecipeUserInfo[] getUsers(Start start, @NotNull Integer limit, @NotNull String timeJoinedOrder,

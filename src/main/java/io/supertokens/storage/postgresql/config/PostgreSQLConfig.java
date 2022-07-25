@@ -293,6 +293,10 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("user_roles");
     }
 
+    public String getUserIdMappingTable() {
+        return addSchemaAndPrefixToTableName("userid_mapping");
+    }
+
     private String addSchemaAndPrefixToTableName(String tableName) {
         String name = tableName;
         if (!postgresql_table_names_prefix.trim().equals("")) {
