@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.18.0] - 2022-07-25
+
+- Adds support for UserIdMapping recipe
+
 ## [1.17.0] - 2022-06-07
 
 - Compatibility with plugin interface 2.15 - returns only non expired session handles for a user
