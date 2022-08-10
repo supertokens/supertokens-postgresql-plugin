@@ -577,8 +577,8 @@ public class Start
         // add entries to nonAuthRecipe tables with input userId
         if (className.equals(SessionStorage.class.getName())) {
             try {
-                createNewSession("sessionHandle", userId, "refreshTokenHash", new JsonObject(), 1000000,
-                        new JsonObject(), 100000);
+                createNewSession("sessionHandle", userId, "refreshTokenHash", new JsonObject(),
+                        System.currentTimeMillis() + 1000000, new JsonObject(), System.currentTimeMillis());
             } catch (Exception e) {
                 throw new StorageQueryException(e);
             }
@@ -587,13 +587,13 @@ public class Start
                 String role = "testRole";
                 this.startTransaction(con -> {
                     createNewRoleOrDoNothingIfExists_Transaction(con, role);
-                    try {
-                        addRoleToUser(userId, role);
-                    } catch (Exception e) {
-                        throw new StorageTransactionLogicException(e);
-                    }
                     return null;
                 });
+                try {
+                    addRoleToUser(userId, role);
+                } catch (Exception e) {
+                    throw new StorageTransactionLogicException(e);
+                }
             } catch (StorageTransactionLogicException e) {
                 throw new StorageQueryException(e.actualException);
             }
