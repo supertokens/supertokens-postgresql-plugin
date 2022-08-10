@@ -110,6 +110,11 @@ public class UserIdMappingQueries {
 
     public static HashMap<String, String> getUserIdMappingWithUserIds(Start start, ArrayList<String> userIds)
             throws SQLException, StorageQueryException {
+
+        if (userIds.size() == 0) {
+            return new HashMap<>();
+        }
+
         StringBuilder QUERY = new StringBuilder(
                 "SELECT * FROM " + Config.getConfig(start).getUserIdMappingTable() + " WHERE supertokens_user_id IN (");
         for (int i = 0; i < userIds.size(); i++) {
