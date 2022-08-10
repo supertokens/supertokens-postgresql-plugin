@@ -31,12 +31,14 @@ import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicatePassword
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateUserIdException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.emailpassword.sqlStorage.EmailPasswordSQLStorage;
+import io.supertokens.pluginInterface.emailverification.EmailVerificationStorage;
 import io.supertokens.pluginInterface.emailverification.EmailVerificationTokenInfo;
 import io.supertokens.pluginInterface.emailverification.exception.DuplicateEmailVerificationTokenException;
 import io.supertokens.pluginInterface.emailverification.sqlStorage.EmailVerificationSQLStorage;
 import io.supertokens.pluginInterface.exceptions.QuitProgramFromPluginException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
+import io.supertokens.pluginInterface.jwt.JWTRecipeStorage;
 import io.supertokens.pluginInterface.jwt.JWTSigningKeyInfo;
 import io.supertokens.pluginInterface.jwt.exceptions.DuplicateKeyIdException;
 import io.supertokens.pluginInterface.jwt.sqlstorage.JWTRecipeSQLStorage;
@@ -45,6 +47,7 @@ import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.exception.*;
 import io.supertokens.pluginInterface.passwordless.sqlStorage.PasswordlessSQLStorage;
 import io.supertokens.pluginInterface.session.SessionInfo;
+import io.supertokens.pluginInterface.session.SessionStorage;
 import io.supertokens.pluginInterface.session.sqlStorage.SessionSQLStorage;
 import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
@@ -53,7 +56,9 @@ import io.supertokens.pluginInterface.useridmapping.UserIdMapping;
 import io.supertokens.pluginInterface.useridmapping.UserIdMappingStorage;
 import io.supertokens.pluginInterface.useridmapping.exception.UnknownSuperTokensUserIdException;
 import io.supertokens.pluginInterface.useridmapping.exception.UserIdMappingAlreadyExistsException;
+import io.supertokens.pluginInterface.usermetadata.UserMetadataStorage;
 import io.supertokens.pluginInterface.usermetadata.sqlStorage.UserMetadataSQLStorage;
+import io.supertokens.pluginInterface.userroles.UserRolesStorage;
 import io.supertokens.pluginInterface.userroles.exception.DuplicateUserRoleMappingException;
 import io.supertokens.pluginInterface.userroles.exception.UnknownRoleException;
 import io.supertokens.pluginInterface.userroles.sqlStorage.UserRolesSQLStorage;
@@ -72,6 +77,8 @@ import javax.annotation.Nonnull;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 public class Start
@@ -538,6 +545,83 @@ public class Start
     @Override
     public boolean canBeUsed(String configFilePath) {
         return Config.canBeUsed(configFilePath);
+    }
+
+    @Override
+    public boolean isUserIdBeingUsedInNonAuthRecipe(String className, String userId) throws StorageQueryException {
+        // check if the input userId is being used in nonAuthRecipes.
+        if (className.equals(SessionStorage.class.getName())) {
+            String[] sessionHandlesForUser = getAllNonExpiredSessionHandlesForUser(userId);
+            return sessionHandlesForUser.length > 0;
+        } else if (className.equals(UserRolesStorage.class.getName())) {
+            String[] roles = getRolesForUser(userId);
+            return roles.length > 0;
+        } else if (className.equals(UserMetadataStorage.class.getName())) {
+            JsonObject userMetadata = getUserMetadata(userId);
+            return userMetadata != null;
+        } else if (className.equals(EmailVerificationStorage.class.getName())) {
+            try {
+                return EmailVerificationQueries.isUserIdBeingUsedForEmailVerification(this, userId);
+            } catch (SQLException e) {
+                throw new StorageQueryException(e);
+            }
+        } else if (className.equals(JWTRecipeStorage.class.getName())) {
+            return false;
+        } else {
+            throw new IllegalStateException("ClassName: " + className + " is not part of NonAuthRecipeStorage");
+        }
+    }
+
+    @Override
+    public void addInfoToNonAuthRecipesBasedOnUserId(String className, String userId) throws StorageQueryException {
+        // add entries to nonAuthRecipe tables with input userId
+        if (className.equals(SessionStorage.class.getName())) {
+            try {
+                createNewSession("sessionHandle", userId, "refreshTokenHash", new JsonObject(), 1000000,
+                        new JsonObject(), 100000);
+            } catch (Exception e) {
+                throw new StorageQueryException(e);
+            }
+        } else if (className.equals(UserRolesStorage.class.getName())) {
+            try {
+                String role = "testRole";
+                this.startTransaction(con -> {
+                    createNewRoleOrDoNothingIfExists_Transaction(con, role);
+                    try {
+                        addRoleToUser(userId, role);
+                    } catch (Exception e) {
+                        throw new StorageTransactionLogicException(e);
+                    }
+                    return null;
+                });
+            } catch (StorageTransactionLogicException e) {
+                throw new StorageQueryException(e.actualException);
+            }
+        } else if (className.equals(EmailVerificationStorage.class.getName())) {
+            try {
+                EmailVerificationTokenInfo info = new EmailVerificationTokenInfo(userId, "someToken", 10000,
+                        "test123@example.com");
+                addEmailVerificationToken(info);
+
+            } catch (DuplicateEmailVerificationTokenException e) {
+                throw new StorageQueryException(e);
+            }
+        } else if (className.equals(UserMetadataStorage.class.getName())) {
+            JsonObject data = new JsonObject();
+            data.addProperty("test", "testData");
+            try {
+                this.startTransaction(con -> {
+                    setUserMetadata_Transaction(con, userId, data);
+                    return null;
+                });
+            } catch (StorageTransactionLogicException e) {
+                throw new StorageQueryException(e);
+            }
+        } else if (className.equals(JWTRecipeStorage.class.getName())) {
+            /* Since JWT recipe tables do not store userId we do not add any data to them */
+        } else {
+            throw new IllegalStateException("ClassName: " + className + " is not part of NonAuthRecipeStorage");
+        }
     }
 
     @Override
@@ -1713,6 +1797,16 @@ public class Start
 
             return UserIdMappingQueries.updateOrDeleteExternalUserIdInfoWithExternalUserId(this, userId,
                     externalUserIdInfo);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public HashMap<String, String> getUserIdMappingForSuperTokensIds(ArrayList<String> userIds)
+            throws StorageQueryException {
+        try {
+            return UserIdMappingQueries.getUserIdMappingWithUserIds(this, userIds);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

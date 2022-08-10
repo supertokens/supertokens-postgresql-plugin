@@ -53,7 +53,7 @@ public class EmailVerificationQueries {
         String emailVerificationTokensTable = Config.getConfig(start).getEmailVerificationTokensTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + emailVerificationTokensTable + " ("
-                + "user_id VARCHAR(128) NOT NULL," 
+                + "user_id VARCHAR(128) NOT NULL,"
                 + "email VARCHAR(256) NOT NULL,"
                 + "token VARCHAR(128) NOT NULL CONSTRAINT " + Utils.getConstraintName(schema, emailVerificationTokensTable, "token", "key") + " UNIQUE,"
                 + "token_expiry BIGINT NOT NULL,"
@@ -230,6 +230,15 @@ public class EmailVerificationQueries {
             pst.setString(1, userId);
             pst.setString(2, email);
         });
+    }
+
+    public static boolean isUserIdBeingUsedForEmailVerification(Start start, String userId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT * FROM " + getConfig(start).getEmailVerificationTokensTable() + " WHERE user_id = ?";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, userId);
+        }, ResultSet::next);
     }
 
     private static class EmailVerificationTokenInfoRowMapper
