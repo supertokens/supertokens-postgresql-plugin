@@ -572,6 +572,7 @@ public class Start
         }
     }
 
+    @TestOnly
     @Override
     public void addInfoToNonAuthRecipesBasedOnUserId(String className, String userId) throws StorageQueryException {
         // add entries to nonAuthRecipe tables with input userId
