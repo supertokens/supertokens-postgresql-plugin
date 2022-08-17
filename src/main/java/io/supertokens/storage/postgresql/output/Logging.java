@@ -22,8 +22,10 @@ import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.ConsoleAppender;
 import ch.qos.logback.core.FileAppender;
+import io.supertokens.pluginInterface.LOG_LEVEL;
 import io.supertokens.storage.postgresql.ResourceDistributor;
 import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
 import org.slf4j.LoggerFactory;
 
@@ -49,11 +51,13 @@ public class Logging extends ResourceDistributor.SingletonResource {
     public static void initFileLogging(Start start, String infoLogPath, String errorLogPath) {
         if (getInstance(start) == null) {
             start.getResourceDistributor().setResource(RESOURCE_ID, new Logging(start, infoLogPath, errorLogPath));
-
         }
     }
 
     public static void debug(Start start, String msg) {
+        if (!Config.getLogLevels(start).contains(LOG_LEVEL.DEBUG)) {
+            return;
+        }
         try {
             msg = msg.trim();
             if (getInstance(start) != null) {
@@ -63,18 +67,26 @@ public class Logging extends ResourceDistributor.SingletonResource {
         }
     }
 
-    public static void info(Start start, String msg) {
+    public static void info(Start start, String msg, boolean toConsoleAsWell) {
+        if (!Config.getLogLevels(start).contains(LOG_LEVEL.INFO)) {
+            return;
+        }
         try {
             msg = msg.trim();
-            systemOut(msg);
             if (getInstance(start) != null) {
                 getInstance(start).infoLogger.info(msg);
+            }
+            if (toConsoleAsWell) {
+                systemOut(msg);
             }
         } catch (NullPointerException ignored) {
         }
     }
 
     public static void warn(Start start, String msg) {
+        if (!Config.getLogLevels(start).contains(LOG_LEVEL.WARN)) {
+            return;
+        }
         try {
             msg = msg.trim();
             if (getInstance(start) != null) {
@@ -85,6 +97,15 @@ public class Logging extends ResourceDistributor.SingletonResource {
     }
 
     public static void error(Start start, String err, boolean toConsoleAsWell) {
+        try {
+            if (!Config.getLogLevels(start).contains(LOG_LEVEL.ERROR)) {
+                return;
+            }
+        } catch (Throwable ignored) {
+            // if it comes here, it means that the config was not loaded and that we are trying
+            // to log some other error. In this case, we want to log it anyway, so we catch any
+            // error and continue below.
+        }
         try {
             err = err.trim();
             if (getInstance(start) != null) {
@@ -98,6 +119,15 @@ public class Logging extends ResourceDistributor.SingletonResource {
     }
 
     public static void error(Start start, String message, boolean toConsoleAsWell, Exception e) {
+        try {
+            if (!Config.getLogLevels(start).contains(LOG_LEVEL.ERROR)) {
+                return;
+            }
+        } catch (Throwable ignored) {
+            // if it comes here, it means that the config was not loaded and that we are trying
+            // to log some other error. In this case, we want to log it anyway, so we catch any
+            // error and continue below.
+        }
         try {
             String err = Utils.exceptionStacktraceToString(e).trim();
             if (getInstance(start) != null) {
