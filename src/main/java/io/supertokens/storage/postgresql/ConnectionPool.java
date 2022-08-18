@@ -24,7 +24,6 @@ import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storage.postgresql.output.Logging;
 
-import java.io.ObjectInputFilter;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.text.DecimalFormat;
@@ -128,7 +127,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         if (Thread.currentThread() != start.mainThread) {
             throw new QuitProgramFromPluginException("Should not come here");
         }
-        Logging.info(start, "Setting up PostgreSQL connection pool.");
+        Logging.info(start, "Setting up PostgreSQL connection pool.", true);
         boolean longMessagePrinted = false;
         long maxTryTime = System.currentTimeMillis() + getTimeToWaitToInit(start);
         String errorMessage = "Error connecting to PostgreSQL instance. Please make sure that PostgreSQL is running and that "
@@ -148,12 +147,13 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
                         }
                         if (!longMessagePrinted) {
                             longMessagePrinted = true;
-                            Logging.info(start, errorMessage);
+                            Logging.info(start, errorMessage, true);
                         }
                         double minsRemaining = (maxTryTime - System.currentTimeMillis()) / (1000.0 * 60);
                         NumberFormat formatter = new DecimalFormat("#0.0");
                         Logging.info(start,
-                                "Trying again in a few seconds for " + formatter.format(minsRemaining) + " mins...");
+                                "Trying again in a few seconds for " + formatter.format(minsRemaining) + " mins...",
+                                true);
                         try {
                             if (Thread.interrupted()) {
                                 throw new InterruptedException();
