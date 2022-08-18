@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.0] - 2022-08-18
+
+- Adds log level feature and compatibility with plugin interface 2.18
+
 ## [1.19.0] - 2022-08-10
 
 - Adds compatibility with plugin interface 2.17
