@@ -92,6 +92,12 @@ public class EmailPasswordQueries {
         });
     }
 
+    public static boolean doesUserExist_transaction(Start start, Connection con, String email)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT 1 FROM " + getConfig(start).getEmailPasswordUsersTable() + " WHERE email = ? FOR UPDATE";
+        return execute(con, QUERY, pst -> pst.setString(1, email), ResultSet::next);
+    }
+
     public static void updateUsersEmail_Transaction(Start start, Connection con, String userId, String newEmail)
             throws SQLException, StorageQueryException {
         String QUERY = "UPDATE " + getConfig(start).getEmailPasswordUsersTable() + " SET email = ? WHERE user_id = ?";

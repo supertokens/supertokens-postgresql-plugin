@@ -659,39 +659,6 @@ public class Start
     }
 
     @Override
-    public UserInfo importUserWithPasswordHashOrUpdatePasswordHashIfUserExists(UserInfo userInfo)
-            throws StorageQueryException, DuplicateUserIdException {
-
-        try {
-            EmailPasswordQueries.importUserWithPasswordHash(this, userInfo);
-            return userInfo;
-        } catch (StorageTransactionLogicException eTemp) {
-            Exception e = eTemp.actualException;
-            if (e instanceof PSQLException) {
-                PostgreSQLConfig config = Config.getConfig(this);
-                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
-                if (isUniqueConstraintError(serverMessage, config.getEmailPasswordUsersTable(), "email")) {
-                    // if the user already exists, we update their passwordHash
-                    try {
-                        this.startTransaction(con -> {
-                            updateUsersPassword_Transaction(con, userInfo.id, userInfo.passwordHash);
-                            return null;
-                        });
-                    } catch (StorageTransactionLogicException ex) {
-                        throw new StorageQueryException(ex);
-                    }
-                    return getUserInfoUsingEmail(userInfo.email);
-                }
-                if (isPrimaryKeyError(serverMessage, config.getEmailPasswordUsersTable())
-                        || isPrimaryKeyError(serverMessage, config.getUsersTable())) {
-                    throw new DuplicateUserIdException();
-                }
-            }
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
     public void deleteEmailPasswordUser(String userId) throws StorageQueryException {
         try {
             EmailPasswordQueries.deleteUser(this, userId);
@@ -827,6 +794,16 @@ public class Start
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return EmailPasswordQueries.getUserInfoUsingId_Transaction(this, sqlCon, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean doesUserExist_Transaction(TransactionConnection con, String email) throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return EmailPasswordQueries.doesUserExist_transaction(this, sqlCon, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
