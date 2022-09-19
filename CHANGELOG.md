@@ -15,7 +15,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - Updates the `password_hash` column in the `emailpassword_users` table from `VARCHAR(128)` to `VARCHAR(256)` to support more types of password hashes.
 
 - For legacy users who are self hosting the SuperTokens core run the following command to update your database with the changes:
-ALTER TABLE foog ALTER COLUMN a TYPE varchar(30);
 `ALTER TABLE thirdparty_users ALTER COLUMN third_party_user_id TYPE VARCHAR(256); ALTER TABLE emailpassword_users ALTER COLUMN password_hash TYPE VARCHAR(256);` 
 
 ## [1.20.0] - 2022-08-18
