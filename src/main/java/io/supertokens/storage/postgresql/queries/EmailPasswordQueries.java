@@ -49,7 +49,7 @@ public class EmailPasswordQueries {
                 + "user_id CHAR(36) NOT NULL,"
                 + "email VARCHAR(256) NOT NULL CONSTRAINT " +
                 Utils.getConstraintName(schema, emailPasswordUsersTable, "email", "key") + " UNIQUE,"
-                + "password_hash VARCHAR(128) NOT NULL," + "time_joined BIGINT NOT NULL,"
+                + "password_hash VARCHAR(256) NOT NULL," + "time_joined BIGINT NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUsersTable, null, "pkey") +
                 " PRIMARY KEY (user_id));";
         // @formatter:on

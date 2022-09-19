@@ -46,7 +46,7 @@ public class ThirdPartyQueries {
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + thirdPartyUsersTable + " ("
                 + "third_party_id VARCHAR(28) NOT NULL,"
-                + "third_party_user_id VARCHAR(128) NOT NULL,"
+                + "third_party_user_id VARCHAR(256) NOT NULL,"
                 + "user_id CHAR(36) NOT NULL CONSTRAINT " +
                 Utils.getConstraintName(schema, thirdPartyUsersTable, "user_id", "key") + " UNIQUE,"
                 + "email VARCHAR(256) NOT NULL,"
