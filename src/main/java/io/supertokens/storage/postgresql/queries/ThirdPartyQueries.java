@@ -19,6 +19,7 @@ package io.supertokens.storage.postgresql.queries;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
+import io.supertokens.pluginInterface.thirdparty.ThirdPartyTenantConfig;
 import io.supertokens.pluginInterface.thirdparty.UserInfo;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -54,6 +55,111 @@ public class ThirdPartyQueries {
                 + "CONSTRAINT " + Utils.getConstraintName(schema, thirdPartyUsersTable, null, "pkey") +
                 " PRIMARY KEY (third_party_id, third_party_user_id));";
         // @formatter:on
+    }
+
+    static String getQueryToCreateThirdPartyTenantMappingTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String thirdPartyTenantMappingTable = Config.getConfig(start).getThirdPartyTenantConfigTable();
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + thirdPartyTenantMappingTable  + " ("
+                + "supertokens_tenant_id VARCHAR(256) NOT NULL,"
+                + "third_party_id VARCHAR(28) NOT NULL,"
+                + "config TEXT,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, thirdPartyTenantMappingTable, null, "pkey") +
+                " PRIMARY KEY (supertokens_tenant_id, third_party_id));";
+        // @formatter:on
+    }
+
+    public static void createThirdPartyTenantMapping(Start start, String supertokensTenantId, String thirdPartyId,
+            String config) throws SQLException, StorageQueryException {
+        String QUERY = "INSERT INTO " + getConfig(start).getThirdPartyTenantConfigTable()
+                + "(supertokens_tenant_id, third_party_id, config )" + " VALUES(?, ?, ?)";
+        update(start, QUERY, pst -> {
+            pst.setString(1, supertokensTenantId);
+            pst.setString(2, thirdPartyId);
+            pst.setString(3, config);
+        });
+    }
+
+    public static boolean updateThirdPartyTenantMapping(Start start, String supertokensTenantId, String thirdPartyId,
+            String config) throws SQLException, StorageQueryException {
+
+        String QUERY = "UPDATE " + getConfig(start).getThirdPartyTenantConfigTable()
+                + " SET config = ? WHERE supertokens_tenant_id = ? AND third_party_id = ?";
+
+        int rowUpdated = update(start, QUERY, pst -> {
+            pst.setString(1, config);
+            pst.setString(2, supertokensTenantId);
+            pst.setString(3, thirdPartyId);
+        });
+
+        return rowUpdated > 0;
+    }
+
+    public static ThirdPartyTenantConfig getThirdPartyTenantConfig(Start start, String supertokensTenantId,
+            String thirdPartyId) throws SQLException, StorageQueryException {
+
+        String QUERY = "SELECT * FROM " + getConfig(start).getThirdPartyTenantConfigTable()
+                + " WHERE supertokens_tenant_id = ? AND third_party_id = ?";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, supertokensTenantId);
+            pst.setString(2, thirdPartyId);
+        }, result -> {
+            if (result.next()) {
+                return new ThirdPartyTenantConfig(result.getString("supertokens_tenant_id"),
+                        result.getString("third_party_id"), result.getString("config"));
+            }
+            return null;
+        });
+    }
+
+    public static ThirdPartyTenantConfig[] getThirdPartyTenantConfigsForSuperTokensTenantId(Start start,
+            String supertokensTenantId) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT * FROM " + getConfig(start).getThirdPartyTenantConfigTable()
+                + " WHERE supertokens_tenant_id = ?";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, supertokensTenantId);
+        }, result -> {
+            ArrayList<ThirdPartyTenantConfig> configs = new ArrayList<>();
+            while (result.next()) {
+                configs.add(new ThirdPartyTenantConfig(result.getString("supertokens_tenant_id"),
+                        result.getString("third_party_id"), result.getString("config")));
+            }
+            return configs.toArray(ThirdPartyTenantConfig[]::new);
+        });
+    }
+
+    public static ThirdPartyTenantConfig[] getThirdPartyTenantConfigsForThirdPartyId(Start start, String thirdPartyId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT * FROM " + getConfig(start).getThirdPartyTenantConfigTable()
+                + " WHERE third_party_id = ?";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, thirdPartyId);
+        }, result -> {
+            ArrayList<ThirdPartyTenantConfig> configs = new ArrayList<>();
+            while (result.next()) {
+                configs.add(new ThirdPartyTenantConfig(result.getString("supertokens_tenant_id"),
+                        result.getString("third_party_id"), result.getString("config")));
+            }
+            return configs.toArray(ThirdPartyTenantConfig[]::new);
+        });
+    }
+
+    public static boolean removeThirdPartyTenantMapping(Start start, String supertokensTenantId, String thirdPartyId)
+            throws SQLException, StorageQueryException {
+
+        String QUERY = "DELETE FROM " + getConfig(start).getThirdPartyTenantConfigTable()
+                + " WHERE supertokens_tenant_id = ? AND third_party_id = ?";
+
+        int rowUpdated = update(start, QUERY, pst -> {
+            pst.setString(1, supertokensTenantId);
+            pst.setString(2, thirdPartyId);
+        });
+
+        return rowUpdated > 0;
     }
 
     public static void signUp(Start start, io.supertokens.pluginInterface.thirdparty.UserInfo userInfo)

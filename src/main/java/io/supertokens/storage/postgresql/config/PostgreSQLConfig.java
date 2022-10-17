@@ -257,6 +257,10 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName(tableName);
     }
 
+    public String getThirdPartyTenantConfigTable() {
+        return "thirdparty_tenant_config_mapping";
+    }
+
     public String getPasswordlessUsersTable() {
         String tableName = "passwordless_users";
         return addSchemaAndPrefixToTableName(tableName);
