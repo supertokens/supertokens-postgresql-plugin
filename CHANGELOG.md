@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.1] - 2022-10-17
+
+- Adds support for thirdparty tenant mapping
+
 ## [2.0.0] - 2022-09-19
 
 - Updates the `third_party_user_id` column in the `thirdparty_users` table from `VARCHAR(128)` to `VARCHAR(256)` to resolve https://github.com/supertokens/supertokens-core/issues/306
