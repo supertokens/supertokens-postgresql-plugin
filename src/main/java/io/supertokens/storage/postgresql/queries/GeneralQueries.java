@@ -219,6 +219,11 @@ public class GeneralQueries {
                     update(start, UserIdMappingQueries.getQueryToCreateUserIdMappingTable(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getThirdPartyTenantConfigTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, ThirdPartyQueries.getQueryToCreateThirdPartyTenantMappingTable(start), NO_OP_SETTER);
+                }
+
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
@@ -265,7 +270,7 @@ public class GeneralQueries {
                     + getConfig(start).getPasswordlessDevicesTable() + ","
                     + getConfig(start).getPasswordlessUsersTable() + "," + getConfig(start).getUserMetadataTable() + ","
                     + getConfig(start).getRolesTable() + "," + getConfig(start).getUserRolesPermissionsTable() + ","
-                    + getConfig(start).getUserRolesTable();
+                    + getConfig(start).getUserRolesTable() + "," + getConfig(start).getThirdPartyTenantConfigTable();
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
     }
