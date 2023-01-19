@@ -58,7 +58,7 @@ public class ConfigTest {
 
     @Test
     public void testThatDefaultConfigLoadsCorrectly() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -74,7 +74,7 @@ public class ConfigTest {
 
     @Test
     public void testThatCustomConfigLoadsCorrectly() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_connection_pool_size", "5");
         Utils.setValueInConfig("postgresql_key_value_table_name", "\"temp_name\"");
@@ -92,14 +92,14 @@ public class ConfigTest {
 
     @Test
     public void testThatInvalidConfigThrowsRightError() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_connection_pool_size", "-1");
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
 
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
         assertNotNull(e);
-        TestCase.assertEquals(e.exception.getMessage(),
+        TestCase.assertEquals(e.exception.getCause().getMessage(),
                 "'postgresql_connection_pool_size' in the config.yaml file must be > 0");
 
         process.kill();
@@ -109,7 +109,7 @@ public class ConfigTest {
 
     @Test
     public void testThatMissingConfigFileThrowsError() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         ProcessBuilder pb = new ProcessBuilder("rm", "-r", "config.yaml");
         pb.directory(new File(args[0]));
@@ -121,7 +121,7 @@ public class ConfigTest {
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
         assertNotNull(e);
         TestCase.assertEquals(e.exception.getMessage(),
-                "java.io.FileNotFoundException: ../config.yaml (No such file or directory)");
+                "../config.yaml (No such file or directory)");
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -130,7 +130,7 @@ public class ConfigTest {
 
     @Test
     public void testCustomLocationForConfigLoadsCorrectly() throws Exception {
-        String[] args = { "../", "configFile=../temp/config.yaml" };
+        String[] args = {"../", "configFile=../temp/config.yaml"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
@@ -142,7 +142,7 @@ public class ConfigTest {
 
         // absolute path
         File f = new File("../temp/config.yaml");
-        args = new String[] { "../", "configFile=" + f.getAbsolutePath() };
+        args = new String[]{"../", "configFile=" + f.getAbsolutePath()};
 
         process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -156,7 +156,7 @@ public class ConfigTest {
 
     @Test
     public void testBadPortInput() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_port", "8989");
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -183,7 +183,7 @@ public class ConfigTest {
 
     @Test
     public void storageDisabledAndThenEnabled() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
         process.getProcess().waitToInitStorageModule();
@@ -208,7 +208,7 @@ public class ConfigTest {
 
     @Test
     public void testBadHostInput() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_host", "random");
 
@@ -225,7 +225,7 @@ public class ConfigTest {
 
     @Test
     public void testThatChangeInTableNameIsCorrect() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_key_value_table_name", "key_value_table");
         Utils.setValueInConfig("postgresql_session_info_table_name", "session_info_table");
@@ -252,7 +252,7 @@ public class ConfigTest {
 
     @Test
     public void testAddingTableNamePrefixWorks() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_key_value_table_name", "key_value_table");
         Utils.setValueInConfig("postgresql_table_names_prefix", "some_prefix");
@@ -279,7 +279,7 @@ public class ConfigTest {
 
     @Test
     public void testAddingSchemaWorks() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_table_schema", "myschema");
         Utils.setValueInConfig("postgresql_table_names_prefix", "some_prefix");
@@ -325,7 +325,7 @@ public class ConfigTest {
         PostgreSQLConfig userConfig = mapper.readValue(new File("../config.yaml"), PostgreSQLConfig.class);
         String hostname = userConfig.getHostName();
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri",
                     "postgresql://root:root@" + hostname + ":5432/supertokens");
@@ -346,7 +346,7 @@ public class ConfigTest {
 
         {
             Utils.reset();
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@" + hostname + "/supertokens");
             Utils.commentConfigValue("postgresql_password");
@@ -366,7 +366,7 @@ public class ConfigTest {
 
         {
             Utils.reset();
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri", "postgresql://" + hostname + ":5432/supertokens");
             Utils.commentConfigValue("postgresql_port");
@@ -384,7 +384,7 @@ public class ConfigTest {
 
         {
             Utils.reset();
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root@" + hostname + ":5432/supertokens");
             Utils.commentConfigValue("postgresql_user");
@@ -403,7 +403,7 @@ public class ConfigTest {
 
         {
             Utils.reset();
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@" + hostname + ":5432");
             Utils.commentConfigValue("postgresql_password");
@@ -428,7 +428,7 @@ public class ConfigTest {
         PostgreSQLConfig userConfig = mapper.readValue(new File("../config.yaml"), PostgreSQLConfig.class);
         String hostname = userConfig.getHostName();
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri", ":/localhost:5432/supertokens");
 
@@ -438,7 +438,7 @@ public class ConfigTest {
             assertEquals(
                     "The provided postgresql connection URI has an incorrect format. Please use a format like "
                             + "postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2...",
-                    e.exception.getMessage());
+                    e.exception.getCause().getMessage());
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -446,7 +446,7 @@ public class ConfigTest {
 
         {
             Utils.reset();
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri",
                     "postgresql://root:wrongPassword@" + hostname + ":5432/supertokens");
@@ -460,7 +460,7 @@ public class ConfigTest {
             ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
             assertNotNull(e);
 
-            TestCase.assertTrue(e.exception.getMessage().contains("password authentication failed"));
+            TestCase.assertTrue(e.exception.getCause().getMessage().contains("password authentication failed"));
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -473,7 +473,7 @@ public class ConfigTest {
         PostgreSQLConfig userConfig = mapper.readValue(new File("../config.yaml"), PostgreSQLConfig.class);
         String hostname = userConfig.getHostName();
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri",
                     "postgresql://root:root@" + hostname + ":5432/supertokens?key1=value1");
@@ -489,7 +489,7 @@ public class ConfigTest {
 
         {
             Utils.reset();
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@" + hostname
                     + ":5432/supertokens?key1=value1&allowPublicKeyRetrieval=false&key2" + "=value2");
