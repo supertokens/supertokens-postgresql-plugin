@@ -125,14 +125,13 @@ public class Start
     }
 
     @Override
-    public String getUserPoolId(JsonObject jsonConfig) {
-        // TODO..
-        return null;
+    public String getUserPoolId(JsonObject jsonConfig) throws InvalidConfigException {
+        return Config.getUserPoolId(this, jsonConfig);
     }
 
     @Override
     public void assertThatConfigFromSameUserPoolIsNotConflicting(JsonObject otherConfig) throws InvalidConfigException {
-        // TODO..
+        Config.assertThatConfigFromSameUserPoolIsNotConflicting(this, otherConfig);
     }
 
     @Override

@@ -28,6 +28,7 @@ import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.output.Logging;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Set;
 
 public class Config extends ResourceDistributor.SingletonResource {
@@ -58,6 +59,27 @@ public class Config extends ResourceDistributor.SingletonResource {
         }
         start.getResourceDistributor().setResource(RESOURCE_KEY, new Config(start, configJson, logLevels));
         Logging.info(start, "Loading PostgreSQL config.", true);
+    }
+
+    public static String getUserPoolId(Start start, JsonObject jsonConfig) throws InvalidConfigException {
+        // this function returns a unique string per connection pool.
+        // TODO: The way things are implemented right now, this function has the issue that if the user points to the
+        //  same database, but with a different host (cause the db is reachable via two hosts as an example),
+        //  then it will return two different user pool IDs - which is technically the wrong thing to do.
+        Set<LOG_LEVEL> temp = new HashSet();
+        temp.add(LOG_LEVEL.NONE);
+        PostgreSQLConfig config = new Config(start, jsonConfig, temp).config;
+        return config.getDatabaseName() + "|" + config.getHostName() + "|" + config.getTableSchema() + "|" +
+                config.getPort() + "|" + config.getTablePrefix();
+    }
+
+    public static void assertThatConfigFromSameUserPoolIsNotConflicting(Start start, JsonObject otherConfigJson)
+            throws InvalidConfigException {
+        Set<LOG_LEVEL> temp = new HashSet();
+        temp.add(LOG_LEVEL.NONE);
+        PostgreSQLConfig otherConfig = new Config(start, otherConfigJson, temp).config;
+        PostgreSQLConfig thisConfig = getConfig(start);
+        thisConfig.assertThatConfigFromSameUserPoolIsNotConflicting(otherConfig);
     }
 
     public static PostgreSQLConfig getConfig(Start start) {

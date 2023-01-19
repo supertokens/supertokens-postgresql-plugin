@@ -297,10 +297,14 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("userid_mapping");
     }
 
+    public String getTablePrefix() {
+        return postgresql_table_names_prefix.trim();
+    }
+
     private String addSchemaAndPrefixToTableName(String tableName) {
         String name = tableName;
-        if (!postgresql_table_names_prefix.trim().equals("")) {
-            name = postgresql_table_names_prefix.trim() + "_" + name;
+        if (!getTablePrefix().equals("")) {
+            name = getTablePrefix() + "_" + name;
         }
         return addSchemaToTableName(name);
     }
@@ -333,6 +337,53 @@ public class PostgreSQLConfig {
         if (getConnectionPoolSize() <= 0) {
             throw new InvalidConfigException(
                     "'postgresql_connection_pool_size' in the config.yaml file must be > 0");
+        }
+    }
+
+    void assertThatConfigFromSameUserPoolIsNotConflicting(PostgreSQLConfig otherConfig) throws InvalidConfigException {
+        if (!otherConfig.postgresql_key_value_table_name.equals(postgresql_key_value_table_name)) {
+            throw new InvalidConfigException(
+                    "You cannot set different name for table " + postgresql_key_value_table_name +
+                            " for the same user pool");
+        }
+        if (!otherConfig.postgresql_session_info_table_name.equals(postgresql_session_info_table_name)) {
+            throw new InvalidConfigException(
+                    "You cannot set different name for table " + postgresql_session_info_table_name +
+                            " for the same user pool");
+        }
+
+        if (!otherConfig.postgresql_emailpassword_users_table_name.equals(postgresql_emailpassword_users_table_name)) {
+            throw new InvalidConfigException(
+                    "You cannot set different name for table " + postgresql_emailpassword_users_table_name +
+                            " for the same user pool");
+        }
+
+        if (!otherConfig.postgresql_emailpassword_pswd_reset_tokens_table_name.equals(
+                postgresql_emailpassword_pswd_reset_tokens_table_name)) {
+            throw new InvalidConfigException(
+                    "You cannot set different name for table " + postgresql_emailpassword_pswd_reset_tokens_table_name +
+                            " for the same user pool");
+        }
+
+        if (!otherConfig.postgresql_emailverification_tokens_table_name.equals(
+                postgresql_emailverification_tokens_table_name)) {
+            throw new InvalidConfigException(
+                    "You cannot set different name for table " + postgresql_emailverification_tokens_table_name +
+                            " for the same user pool");
+        }
+
+        if (!otherConfig.postgresql_emailverification_verified_emails_table_name.equals(
+                postgresql_emailverification_verified_emails_table_name)) {
+            throw new InvalidConfigException(
+                    "You cannot set different name for table " +
+                            postgresql_emailverification_verified_emails_table_name +
+                            " for the same user pool");
+        }
+
+        if (!otherConfig.postgresql_thirdparty_users_table_name.equals(postgresql_thirdparty_users_table_name)) {
+            throw new InvalidConfigException(
+                    "You cannot set different name for table " + postgresql_thirdparty_users_table_name +
+                            " for the same user pool");
         }
     }
 
