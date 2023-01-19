@@ -35,6 +35,7 @@ import io.supertokens.pluginInterface.emailverification.EmailVerificationStorage
 import io.supertokens.pluginInterface.emailverification.EmailVerificationTokenInfo;
 import io.supertokens.pluginInterface.emailverification.exception.DuplicateEmailVerificationTokenException;
 import io.supertokens.pluginInterface.emailverification.sqlStorage.EmailVerificationSQLStorage;
+import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.pluginInterface.exceptions.QuitProgramFromPluginException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
@@ -119,8 +120,8 @@ public class Start
     }
 
     @Override
-    public void loadConfig(String configFilePath, Set<LOG_LEVEL> logLevels) {
-        Config.loadConfig(this, configFilePath, logLevels);
+    public void loadConfig(JsonObject configJson, Set<LOG_LEVEL> logLevels) throws InvalidConfigException {
+        Config.loadConfig(this, configJson, logLevels);
     }
 
     @Override
@@ -247,21 +248,21 @@ public class Start
             defaultTransactionIsolation = con.getTransactionIsolation();
             int libIsolationLevel = Connection.TRANSACTION_SERIALIZABLE;
             switch (isolationLevel) {
-            case SERIALIZABLE:
-                libIsolationLevel = Connection.TRANSACTION_SERIALIZABLE;
-                break;
-            case REPEATABLE_READ:
-                libIsolationLevel = Connection.TRANSACTION_REPEATABLE_READ;
-                break;
-            case READ_COMMITTED:
-                libIsolationLevel = Connection.TRANSACTION_READ_COMMITTED;
-                break;
-            case READ_UNCOMMITTED:
-                libIsolationLevel = Connection.TRANSACTION_READ_UNCOMMITTED;
-                break;
-            case NONE:
-                libIsolationLevel = Connection.TRANSACTION_NONE;
-                break;
+                case SERIALIZABLE:
+                    libIsolationLevel = Connection.TRANSACTION_SERIALIZABLE;
+                    break;
+                case REPEATABLE_READ:
+                    libIsolationLevel = Connection.TRANSACTION_REPEATABLE_READ;
+                    break;
+                case READ_COMMITTED:
+                    libIsolationLevel = Connection.TRANSACTION_READ_COMMITTED;
+                    break;
+                case READ_UNCOMMITTED:
+                    libIsolationLevel = Connection.TRANSACTION_READ_UNCOMMITTED;
+                    break;
+                case NONE:
+                    libIsolationLevel = Connection.TRANSACTION_NONE;
+                    break;
             }
             con.setTransactionIsolation(libIsolationLevel);
             con.setAutoCommit(false);
@@ -383,7 +384,8 @@ public class Start
 
     @Override
     public void createNewSession(String sessionHandle, String userId, String refreshTokenHash2,
-            JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT, long createdAtTime)
+                                 JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT,
+                                 long createdAtTime)
             throws StorageQueryException {
         try {
             SessionQueries.createNewSession(this, sessionHandle, userId, refreshTokenHash2, userDataInDatabase, expiry,
@@ -493,7 +495,7 @@ public class Start
 
     @Override
     public void updateSessionInfo_Transaction(TransactionConnection con, String sessionHandle, String refreshTokenHash2,
-            long expiry) throws StorageQueryException {
+                                              long expiry) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             SessionQueries.updateSessionInfo_Transaction(this, sqlCon, sessionHandle, refreshTokenHash2, expiry);
@@ -544,8 +546,8 @@ public class Start
     }
 
     @Override
-    public boolean canBeUsed(String configFilePath) {
-        return Config.canBeUsed(configFilePath);
+    public boolean canBeUsed(JsonObject configJson) {
+        return Config.canBeUsed(configJson);
     }
 
     @Override
@@ -735,7 +737,8 @@ public class Start
 
     @Override
     public PasswordResetTokenInfo[] getAllPasswordResetTokenInfoForUser_Transaction(TransactionConnection con,
-            String userId) throws StorageQueryException {
+                                                                                    String userId)
+            throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return EmailPasswordQueries.getAllPasswordResetTokenInfoForUser_Transaction(this, sqlCon, userId);
@@ -810,7 +813,8 @@ public class Start
 
     @Override
     public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser_Transaction(TransactionConnection con,
-            String userId, String email) throws StorageQueryException {
+                                                                                            String userId, String email)
+            throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return EmailVerificationQueries.getAllEmailVerificationTokenInfoForUser_Transaction(this, sqlCon, userId,
@@ -822,7 +826,7 @@ public class Start
 
     @Override
     public void deleteAllEmailVerificationTokensForUser_Transaction(TransactionConnection con, String userId,
-            String email) throws StorageQueryException {
+                                                                    String email) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             EmailVerificationQueries.deleteAllEmailVerificationTokensForUser_Transaction(this, sqlCon, userId, email);
@@ -833,7 +837,7 @@ public class Start
 
     @Override
     public void updateIsEmailVerified_Transaction(TransactionConnection con, String userId, String email,
-            boolean isEmailVerified) throws StorageQueryException {
+                                                  boolean isEmailVerified) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             EmailVerificationQueries.updateUsersIsEmailVerified_Transaction(this, sqlCon, userId, email,
@@ -936,7 +940,7 @@ public class Start
     @Override
     @Deprecated
     public UserInfo[] getUsers(@Nonnull String userId, @Nonnull Long timeJoined, @Nonnull Integer limit,
-            @Nonnull String timeJoinedOrder) throws StorageQueryException {
+                               @Nonnull String timeJoinedOrder) throws StorageQueryException {
         try {
             return EmailPasswordQueries.getUsersInfo(this, userId, timeJoined, limit, timeJoinedOrder);
         } catch (SQLException e) {
@@ -975,7 +979,9 @@ public class Start
 
     @Override
     public io.supertokens.pluginInterface.thirdparty.UserInfo getUserInfoUsingId_Transaction(TransactionConnection con,
-            String thirdPartyId, String thirdPartyUserId) throws StorageQueryException {
+                                                                                             String thirdPartyId,
+                                                                                             String thirdPartyUserId)
+            throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return ThirdPartyQueries.getUserInfoUsingId_Transaction(this, sqlCon, thirdPartyId, thirdPartyUserId);
@@ -986,7 +992,7 @@ public class Start
 
     @Override
     public void updateUserEmail_Transaction(TransactionConnection con, String thirdPartyId, String thirdPartyUserId,
-            String newEmail) throws StorageQueryException {
+                                            String newEmail) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             ThirdPartyQueries.updateUserEmail_Transaction(this, sqlCon, thirdPartyId, thirdPartyUserId, newEmail);
@@ -1037,7 +1043,8 @@ public class Start
 
     @Override
     public io.supertokens.pluginInterface.thirdparty.UserInfo getThirdPartyUserInfoUsingId(String thirdPartyId,
-            String thirdPartyUserId) throws StorageQueryException {
+                                                                                           String thirdPartyUserId)
+            throws StorageQueryException {
         try {
             return ThirdPartyQueries.getThirdPartyUserInfoUsingId(this, thirdPartyId, thirdPartyUserId);
         } catch (SQLException e) {
@@ -1058,7 +1065,9 @@ public class Start
     @Override
     @Deprecated
     public io.supertokens.pluginInterface.thirdparty.UserInfo[] getThirdPartyUsers(@NotNull String userId,
-            @NotNull Long timeJoined, @NotNull Integer limit, @NotNull String timeJoinedOrder)
+                                                                                   @NotNull Long timeJoined,
+                                                                                   @NotNull Integer limit,
+                                                                                   @NotNull String timeJoinedOrder)
             throws StorageQueryException {
         try {
             return ThirdPartyQueries.getThirdPartyUsers(this, userId, timeJoined, limit, timeJoinedOrder);
@@ -1070,7 +1079,8 @@ public class Start
     @Override
     @Deprecated
     public io.supertokens.pluginInterface.thirdparty.UserInfo[] getThirdPartyUsers(@NotNull Integer limit,
-            @NotNull String timeJoinedOrder) throws StorageQueryException {
+                                                                                   @NotNull String timeJoinedOrder)
+            throws StorageQueryException {
         try {
             return ThirdPartyQueries.getThirdPartyUsers(this, limit, timeJoinedOrder);
         } catch (SQLException e) {
@@ -1109,7 +1119,8 @@ public class Start
 
     @Override
     public AuthRecipeUserInfo[] getUsers(@NotNull Integer limit, @NotNull String timeJoinedOrder,
-            @Nullable RECIPE_ID[] includeRecipeIds, @Nullable String userId, @Nullable Long timeJoined)
+                                         @Nullable RECIPE_ID[] includeRecipeIds, @Nullable String userId,
+                                         @Nullable Long timeJoined)
             throws StorageQueryException {
         try {
             return GeneralQueries.getUsers(this, limit, timeJoinedOrder, includeRecipeIds, userId, timeJoined);
@@ -1314,7 +1325,8 @@ public class Start
 
     @Override
     public void createDeviceWithCode(@Nullable String email, @Nullable String phoneNumber, @NotNull String linkCodeSalt,
-            PasswordlessCode code) throws StorageQueryException, DuplicateDeviceIdHashException,
+                                     PasswordlessCode code)
+            throws StorageQueryException, DuplicateDeviceIdHashException,
             DuplicateCodeIdException, DuplicateLinkCodeHashException {
         if (email == null && phoneNumber == null) {
             throw new IllegalArgumentException("Both email and phoneNumber can't be null");
@@ -1387,7 +1399,7 @@ public class Start
                 if (isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
                         Config.getConfig(this).getPasswordlessUsersTable())
                         || isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
-                                Config.getConfig(this).getUsersTable())) {
+                        Config.getConfig(this).getUsersTable())) {
                     throw new DuplicateUserIdException();
                 }
 
@@ -1668,7 +1680,8 @@ public class Start
 
     @Override
     public void addPermissionToRoleOrDoNothingIfExists_Transaction(TransactionConnection con, String role,
-            String permission) throws StorageQueryException, UnknownRoleException {
+                                                                   String permission)
+            throws StorageQueryException, UnknownRoleException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             UserRolesQueries.addPermissionToRoleOrDoNothingIfExists_Transaction(this, sqlCon, role, permission);
@@ -1720,7 +1733,7 @@ public class Start
 
     @Override
     public void createUserIdMapping(String superTokensUserId, String externalUserId,
-            @Nullable String externalUserIdInfo)
+                                    @Nullable String externalUserIdInfo)
             throws StorageQueryException, UnknownSuperTokensUserIdException, UserIdMappingAlreadyExistsException {
         try {
             UserIdMappingQueries.createUserIdMapping(this, superTokensUserId, externalUserId, externalUserIdInfo);
@@ -1789,7 +1802,7 @@ public class Start
 
     @Override
     public boolean updateOrDeleteExternalUserIdInfo(String userId, boolean isSuperTokensUserId,
-            @Nullable String externalUserIdInfo) throws StorageQueryException {
+                                                    @Nullable String externalUserIdInfo) throws StorageQueryException {
 
         try {
             if (isSuperTokensUserId) {

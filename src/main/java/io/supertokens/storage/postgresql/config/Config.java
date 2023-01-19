@@ -19,13 +19,14 @@ package io.supertokens.storage.postgresql.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.google.gson.JsonObject;
 import io.supertokens.pluginInterface.LOG_LEVEL;
+import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.pluginInterface.exceptions.QuitProgramFromPluginException;
 import io.supertokens.storage.postgresql.ResourceDistributor;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.output.Logging;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Set;
 
@@ -36,11 +37,11 @@ public class Config extends ResourceDistributor.SingletonResource {
     private final Start start;
     private final Set<LOG_LEVEL> logLevels;
 
-    private Config(Start start, String configFilePath, Set<LOG_LEVEL> logLevels) {
+    private Config(Start start, JsonObject configJson, Set<LOG_LEVEL> logLevels) throws InvalidConfigException {
         this.start = start;
         this.logLevels = logLevels;
         try {
-            config = loadPostgreSQLConfig(configFilePath);
+            config = loadPostgreSQLConfig(configJson);
         } catch (IOException e) {
             throw new QuitProgramFromPluginException(e);
         }
@@ -50,11 +51,12 @@ public class Config extends ResourceDistributor.SingletonResource {
         return (Config) start.getResourceDistributor().getResource(RESOURCE_KEY);
     }
 
-    public static void loadConfig(Start start, String configFilePath, Set<LOG_LEVEL> logLevels) {
+    public static void loadConfig(Start start, JsonObject configJson, Set<LOG_LEVEL> logLevels)
+            throws InvalidConfigException {
         if (getInstance(start) != null) {
             return;
         }
-        start.getResourceDistributor().setResource(RESOURCE_KEY, new Config(start, configFilePath, logLevels));
+        start.getResourceDistributor().setResource(RESOURCE_KEY, new Config(start, configJson, logLevels));
         Logging.info(start, "Loading PostgreSQL config.", true);
     }
 
@@ -69,17 +71,17 @@ public class Config extends ResourceDistributor.SingletonResource {
         return getInstance(start).logLevels;
     }
 
-    private PostgreSQLConfig loadPostgreSQLConfig(String configFilePath) throws IOException {
+    private PostgreSQLConfig loadPostgreSQLConfig(JsonObject configJson) throws IOException, InvalidConfigException {
         final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-        PostgreSQLConfig config = mapper.readValue(new File(configFilePath), PostgreSQLConfig.class);
-        config.validateAndInitialise();
+        PostgreSQLConfig config = mapper.readValue(configJson.toString(), PostgreSQLConfig.class);
+        config.validate();
         return config;
     }
 
-    public static boolean canBeUsed(String configFilePath) {
+    public static boolean canBeUsed(JsonObject configJson) {
         try {
             final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-            PostgreSQLConfig config = mapper.readValue(new File(configFilePath), PostgreSQLConfig.class);
+            PostgreSQLConfig config = mapper.readValue(configJson.toString(), PostgreSQLConfig.class);
             return config.getUser() != null || config.getPassword() != null || config.getConnectionURI() != null;
         } catch (Exception e) {
             return false;
