@@ -135,6 +135,11 @@ public class Start
     }
 
     @Override
+    public String getConnectionPoolId(JsonObject jsonConfig) throws InvalidConfigException {
+        return Config.getConnectionPoolId(this, jsonConfig);
+    }
+
+    @Override
     public void assertThatConfigFromSameUserPoolIsNotConflicting(JsonObject otherConfig) throws InvalidConfigException {
         Config.assertThatConfigFromSameUserPoolIsNotConflicting(this, otherConfig);
     }

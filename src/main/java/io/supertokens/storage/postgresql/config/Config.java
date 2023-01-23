@@ -73,6 +73,15 @@ public class Config extends ResourceDistributor.SingletonResource {
                 config.getPort() + "|" + config.getTablePrefix();
     }
 
+    public static String getConnectionPoolId(Start start, JsonObject jsonConfig) throws InvalidConfigException {
+        Set<LOG_LEVEL> temp = new HashSet();
+        temp.add(LOG_LEVEL.NONE);
+        PostgreSQLConfig config = new Config(start, jsonConfig, temp).config;
+        return config.getConnectionScheme() + "|" + config.getConnectionAttributes() + "|" + config.getUser() + "|" +
+                config.getPassword() + "|" + config.getConnectionPoolSize();
+
+    }
+
     public static void assertThatConfigFromSameUserPoolIsNotConflicting(Start start, JsonObject otherConfigJson)
             throws InvalidConfigException {
         Set<LOG_LEVEL> temp = new HashSet();
