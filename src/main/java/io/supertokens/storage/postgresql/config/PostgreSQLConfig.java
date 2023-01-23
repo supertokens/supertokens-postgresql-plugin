@@ -341,48 +341,48 @@ public class PostgreSQLConfig {
     }
 
     void assertThatConfigFromSameUserPoolIsNotConflicting(PostgreSQLConfig otherConfig) throws InvalidConfigException {
-        if (!otherConfig.postgresql_key_value_table_name.equals(postgresql_key_value_table_name)) {
+        if (!otherConfig.getKeyValueTable().equals(getKeyValueTable())) {
             throw new InvalidConfigException(
-                    "You cannot set different name for table " + postgresql_key_value_table_name +
+                    "You cannot set different name for table " + getKeyValueTable() +
                             " for the same user pool");
         }
-        if (!otherConfig.postgresql_session_info_table_name.equals(postgresql_session_info_table_name)) {
+        if (!otherConfig.getSessionInfoTable().equals(getSessionInfoTable())) {
             throw new InvalidConfigException(
-                    "You cannot set different name for table " + postgresql_session_info_table_name +
-                            " for the same user pool");
-        }
-
-        if (!otherConfig.postgresql_emailpassword_users_table_name.equals(postgresql_emailpassword_users_table_name)) {
-            throw new InvalidConfigException(
-                    "You cannot set different name for table " + postgresql_emailpassword_users_table_name +
+                    "You cannot set different name for table " + getSessionInfoTable() +
                             " for the same user pool");
         }
 
-        if (!otherConfig.postgresql_emailpassword_pswd_reset_tokens_table_name.equals(
-                postgresql_emailpassword_pswd_reset_tokens_table_name)) {
+        if (!otherConfig.getEmailPasswordUsersTable().equals(getEmailPasswordUsersTable())) {
             throw new InvalidConfigException(
-                    "You cannot set different name for table " + postgresql_emailpassword_pswd_reset_tokens_table_name +
+                    "You cannot set different name for table " + getEmailPasswordUsersTable() +
                             " for the same user pool");
         }
 
-        if (!otherConfig.postgresql_emailverification_tokens_table_name.equals(
-                postgresql_emailverification_tokens_table_name)) {
+        if (!otherConfig.getPasswordResetTokensTable().equals(
+                getPasswordResetTokensTable())) {
             throw new InvalidConfigException(
-                    "You cannot set different name for table " + postgresql_emailverification_tokens_table_name +
+                    "You cannot set different name for table " + getPasswordResetTokensTable() +
                             " for the same user pool");
         }
 
-        if (!otherConfig.postgresql_emailverification_verified_emails_table_name.equals(
-                postgresql_emailverification_verified_emails_table_name)) {
+        if (!otherConfig.getEmailVerificationTokensTable().equals(
+                getEmailVerificationTokensTable())) {
+            throw new InvalidConfigException(
+                    "You cannot set different name for table " + getEmailVerificationTokensTable() +
+                            " for the same user pool");
+        }
+
+        if (!otherConfig.getEmailVerificationTable().equals(
+                getEmailVerificationTable())) {
             throw new InvalidConfigException(
                     "You cannot set different name for table " +
-                            postgresql_emailverification_verified_emails_table_name +
+                            getEmailVerificationTable() +
                             " for the same user pool");
         }
 
-        if (!otherConfig.postgresql_thirdparty_users_table_name.equals(postgresql_thirdparty_users_table_name)) {
+        if (!otherConfig.getThirdPartyUsersTable().equals(getThirdPartyUsersTable())) {
             throw new InvalidConfigException(
-                    "You cannot set different name for table " + postgresql_thirdparty_users_table_name +
+                    "You cannot set different name for table " + getThirdPartyUsersTable() +
                             " for the same user pool");
         }
     }
