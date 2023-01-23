@@ -130,13 +130,13 @@ public class Start
     }
 
     @Override
-    public String getUserPoolId(JsonObject jsonConfig) throws InvalidConfigException {
-        return Config.getUserPoolId(this, jsonConfig);
+    public String getUserPoolId() {
+        return Config.getUserPoolId(this);
     }
 
     @Override
-    public String getConnectionPoolId(JsonObject jsonConfig) throws InvalidConfigException {
-        return Config.getConnectionPoolId(this, jsonConfig);
+    public String getConnectionPoolId() {
+        return Config.getConnectionPoolId(this);
     }
 
     @Override

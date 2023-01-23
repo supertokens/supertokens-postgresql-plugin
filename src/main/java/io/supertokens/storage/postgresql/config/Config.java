@@ -61,22 +61,18 @@ public class Config extends ResourceDistributor.SingletonResource {
         Logging.info(start, "Loading PostgreSQL config.", true);
     }
 
-    public static String getUserPoolId(Start start, JsonObject jsonConfig) throws InvalidConfigException {
+    public static String getUserPoolId(Start start) {
         // this function returns a unique string per connection pool.
         // TODO: The way things are implemented right now, this function has the issue that if the user points to the
         //  same database, but with a different host (cause the db is reachable via two hosts as an example),
         //  then it will return two different user pool IDs - which is technically the wrong thing to do.
-        Set<LOG_LEVEL> temp = new HashSet();
-        temp.add(LOG_LEVEL.NONE);
-        PostgreSQLConfig config = new Config(start, jsonConfig, temp).config;
+        PostgreSQLConfig config = getConfig(start);
         return config.getDatabaseName() + "|" + config.getHostName() + "|" + config.getTableSchema() + "|" +
                 config.getPort() + "|" + config.getTablePrefix();
     }
 
-    public static String getConnectionPoolId(Start start, JsonObject jsonConfig) throws InvalidConfigException {
-        Set<LOG_LEVEL> temp = new HashSet();
-        temp.add(LOG_LEVEL.NONE);
-        PostgreSQLConfig config = new Config(start, jsonConfig, temp).config;
+    public static String getConnectionPoolId(Start start) {
+        PostgreSQLConfig config = getConfig(start);
         return config.getConnectionScheme() + "|" + config.getConnectionAttributes() + "|" + config.getUser() + "|" +
                 config.getPassword() + "|" + config.getConnectionPoolSize();
 
