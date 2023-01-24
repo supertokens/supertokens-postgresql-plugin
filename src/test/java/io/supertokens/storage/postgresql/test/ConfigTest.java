@@ -172,7 +172,7 @@ public class ConfigTest {
 
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE, 7000);
         assertNotNull(e);
-        assertEquals(e.exception.getMessage(),
+        assertEquals(e.exception.getCause().getCause().getMessage(),
                 "Error connecting to PostgreSQL instance. Please make sure that PostgreSQL is running and that you "
                         + "have specified the correct values for ('postgresql_host' and 'postgresql_port') or for "
                         + "'postgresql_connection_uri'");
@@ -216,7 +216,8 @@ public class ConfigTest {
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
         assertNotNull(e);
 
-        assertEquals("Failed to initialize pool: The connection attempt failed.", e.exception.getMessage());
+        assertEquals("Failed to initialize pool: The connection attempt failed.",
+                e.exception.getCause().getCause().getMessage());
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));

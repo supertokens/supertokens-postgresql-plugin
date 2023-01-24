@@ -68,7 +68,7 @@ public class Config extends ResourceDistributor.SingletonResource {
         //  then it will return two different user pool IDs - which is technically the wrong thing to do.
         PostgreSQLConfig config = getConfig(start);
         return config.getDatabaseName() + "|" + config.getHostName() + "|" + config.getTableSchema() + "|" +
-                config.getPort() + "|" + config.getTablePrefix();
+                config.getPort();
     }
 
     public static String getConnectionPoolId(Start start) {

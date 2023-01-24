@@ -68,7 +68,7 @@ public class InMemoryDBTest {
             Utils.commentConfigValue("postgresql_user");
             Utils.commentConfigValue("postgresql_password");
 
-            String[] args = { "../" };
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -91,7 +91,7 @@ public class InMemoryDBTest {
         }
 
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
             StorageLayer.close();
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -109,7 +109,7 @@ public class InMemoryDBTest {
             NoSuchPaddingException, BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException,
             IllegalBlockSizeException, StorageTransactionLogicException {
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -131,7 +131,7 @@ public class InMemoryDBTest {
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
         }
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -148,7 +148,7 @@ public class InMemoryDBTest {
             NoSuchPaddingException, BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException,
             IllegalBlockSizeException, StorageTransactionLogicException {
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -170,7 +170,7 @@ public class InMemoryDBTest {
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
         }
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -183,7 +183,7 @@ public class InMemoryDBTest {
 
     @Test
     public void checkThatErrorIsThrownIfIncorrectConfigInProduction() throws IOException, InterruptedException {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.commentConfigValue("postgresql_user");
 
@@ -191,7 +191,7 @@ public class InMemoryDBTest {
 
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE, 15000);
         assertNotNull(e);
-        TestCase.assertEquals(e.exception.getMessage(),
+        TestCase.assertEquals(e.exception.getCause().getMessage(),
                 "'postgresql_user' and 'postgresql_connection_uri' are not set. Please set at least one of "
                         + "these values");
 
@@ -201,7 +201,7 @@ public class InMemoryDBTest {
 
     @Test
     public void ifForceNoInMemoryThenDevShouldThrowError() throws IOException, InterruptedException {
-        String[] args = { "../", "forceNoInMemDB=true" };
+        String[] args = {"../", "forceNoInMemDB=true"};
 
         Utils.commentConfigValue("postgresql_user");
 
@@ -209,7 +209,7 @@ public class InMemoryDBTest {
 
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE, 15000);
         assertNotNull(e);
-        TestCase.assertEquals(e.exception.getMessage(),
+        TestCase.assertEquals(e.exception.getCause().getMessage(),
                 "'postgresql_user' and 'postgresql_connection_uri' are not set. Please set at least one of "
                         + "these values");
 

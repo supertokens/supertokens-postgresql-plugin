@@ -341,6 +341,11 @@ public class PostgreSQLConfig {
     }
 
     void assertThatConfigFromSameUserPoolIsNotConflicting(PostgreSQLConfig otherConfig) throws InvalidConfigException {
+        if (!otherConfig.getTablePrefix().equals(getTablePrefix())) {
+            throw new InvalidConfigException(
+                    "You cannot set different name for table prefix for the same user pool");
+        }
+
         if (!otherConfig.getKeyValueTable().equals(getKeyValueTable())) {
             throw new InvalidConfigException(
                     "You cannot set different name for table " + getKeyValueTable() +
