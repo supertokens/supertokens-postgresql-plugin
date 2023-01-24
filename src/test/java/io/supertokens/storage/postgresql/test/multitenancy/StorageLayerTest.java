@@ -16,15 +16,22 @@
 
 package io.supertokens.storage.postgresql.test.multitenancy;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import io.supertokens.ProcessState;
+import io.supertokens.config.Config;
 import io.supertokens.featureflag.EE_FEATURES;
 import io.supertokens.featureflag.FeatureFlagTestContent;
+import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
+import io.supertokens.pluginInterface.multitenancy.EmailPasswordConfig;
+import io.supertokens.pluginInterface.multitenancy.PasswordlessConfig;
+import io.supertokens.pluginInterface.multitenancy.TenantConfig;
+import io.supertokens.pluginInterface.multitenancy.ThirdPartyConfig;
+import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.test.TestingProcessManager;
 import io.supertokens.storage.postgresql.test.Utils;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import io.supertokens.storageLayer.StorageLayer;
+import org.junit.*;
 import org.junit.rules.TestRule;
 
 import java.io.IOException;
@@ -65,50 +72,46 @@ public class StorageLayerTest {
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
-//
-//    @Test
-//    public void mergingTenantWithBaseConfigWorks() throws InterruptedException, IOException, InvalidConfigException {
-//        String[] args = {"../"};
-//
-//        Utils.setValueInConfig("refresh_token_validity", "144001");
-//        Utils.setValueInConfig("access_token_signing_key_dynamic", "false");
-//        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
-//        FeatureFlagTestContent.getInstance(process.getProcess())
-//                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
-//        process.startProcess();
-//        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
-//
-//        JsonObject tenantConfig = new JsonObject();
-//        tenantConfig.add("refresh_token_validity", new JsonPrimitive(144002));
-//        tenantConfig.add("password_reset_token_lifetime", new JsonPrimitive(3600001));
-//
-//        Config.loadAllTenantConfig(process.getProcess(), new TenantConfig[]{
-//                new TenantConfig("abc", null, new EmailPasswordConfig(false),
-//                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
-//                        new PasswordlessConfig(false),
-//                        tenantConfig)});
-//
-//        Assert.assertEquals(Config.getConfig(process.getProcess()).getRefreshTokenValidity(),
-//                (long) 144001 * 60 * 1000);
-//        Assert.assertEquals(Config.getConfig(process.getProcess()).getPasswordResetTokenLifetime(),
-//                3600000);
-//        Assert.assertEquals(Config.getConfig(process.getProcess()).getPasswordlessMaxCodeInputAttempts(),
-//                5);
-//        Assert.assertEquals(Config.getConfig(process.getProcess()).getAccessTokenSigningKeyDynamic(),
-//                false);
-//
-//        Assert.assertEquals(Config.getConfig("abc", null, process.getProcess()).getRefreshTokenValidity(),
-//                (long) 144002 * 60 * 1000);
-//        Assert.assertEquals(Config.getConfig("abc", null, process.getProcess()).getPasswordResetTokenLifetime(),
-//                3600001);
-//        Assert.assertEquals(Config.getConfig("abc", null, process.getProcess()).getPasswordlessMaxCodeInputAttempts(),
-//                5);
-//        Assert.assertEquals(Config.getConfig("abc", null, process.getProcess()).getAccessTokenSigningKeyDynamic(),
-//                false);
-//
-//        process.kill();
-//        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
-//    }
+
+    @Test
+    public void mergingTenantWithBaseConfigWorks()
+            throws InterruptedException, IOException, InvalidConfigException {
+        String[] args = {"../"};
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        JsonObject tenantConfig = new JsonObject();
+        tenantConfig.add("postgresql_table_names_prefix", new JsonPrimitive("test"));
+
+        TenantConfig[] tenants = new TenantConfig[]{
+                new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new PasswordlessConfig(false),
+                        tenantConfig)};
+
+        Config.loadAllTenantConfig(process.getProcess(), tenants);
+
+        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage(null, null, process.getProcess()))
+                .getTablePrefix(), "");
+
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage("abc", null, process.getProcess()))
+                .getTablePrefix(), "test");
+
+        Assert.assertEquals(
+                process.getProcess().getResourceDistributor().getAllResourcesWithResourceKey(StorageLayer.RESOURCE_KEY)
+                        .size(), 2);
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
 //
 //    @Test
 //    public void mergingTenantWithBaseConfigWithInvalidConfigThrowsErrorWorks()
