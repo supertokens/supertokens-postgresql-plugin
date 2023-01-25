@@ -396,6 +396,26 @@ public class StorageLayerTest {
 
         StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
 
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage("abc", null, process.getProcess()))
+                .getTableSchema(), "supertokens2");
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage("abc", null, process.getProcess()))
+                .getConnectionPoolSize(), 11);
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage("abc", null, process.getProcess()))
+                .getThirdPartyUsersTable(), "supertokens2.random");
+
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage(null, null, process.getProcess()))
+                .getTableSchema(), "public");
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage(null, null, process.getProcess()))
+                .getConnectionPoolSize(), 10);
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage(null, null, process.getProcess()))
+                .getThirdPartyUsersTable(), "thirdparty_users");
+
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
@@ -569,6 +589,113 @@ public class StorageLayerTest {
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
 
-    // TODO: different connection URI creates different connection pool -> based on schema (via connenction uri and
-    //  otherwise) difference (should work).
+    @Test
+    public void differentUserPoolCreatedBasedOnSchemaInConnectionUri()
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException {
+        String[] args = {"../"};
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        JsonObject tenantConfig = new JsonObject();
+        tenantConfig.add("postgresql_connection_uri",
+                new JsonPrimitive("postgresql://root:root@localhost:5432/supertokens?currentSchema=random"));
+
+        TenantConfig[] tenants = new TenantConfig[]{
+                new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new PasswordlessConfig(false),
+                        tenantConfig)};
+        Config.loadAllTenantConfig(process.getProcess(), tenants);
+
+        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage("abc", null, process.getProcess()))
+                .getTableSchema(), "random");
+
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage(null, null, process.getProcess()))
+                .getTableSchema(), "public");
+
+        assertNotSame(StorageLayer.getStorage("abc", null, process.getProcess()),
+                StorageLayer.getStorage(null, null, process.getProcess()));
+
+        Assert.assertEquals(
+                process.getProcess().getResourceDistributor().getAllResourcesWithResourceKey(StorageLayer.RESOURCE_KEY)
+                        .size(), 2);
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
+    public void multipleTenantsSameUserPoolAndConnectionPoolShouldWork()
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException {
+        String[] args = {"../"};
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        JsonObject tenantConfig = new JsonObject();
+
+        TenantConfig[] tenants = new TenantConfig[]{
+                new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new PasswordlessConfig(false),
+                        tenantConfig)};
+        Config.loadAllTenantConfig(process.getProcess(), tenants);
+
+        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+
+        assertSame(StorageLayer.getStorage("abc", null, process.getProcess()),
+                StorageLayer.getStorage(null, null, process.getProcess()));
+
+        Assert.assertEquals(
+                process.getProcess().getResourceDistributor().getAllResourcesWithResourceKey(StorageLayer.RESOURCE_KEY)
+                        .size(), 2);
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
+    public void multipleTenantsSameUserPoolAndDifferentConnectionPoolShouldWork()
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException {
+        String[] args = {"../"};
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        JsonObject tenantConfig = new JsonObject();
+        tenantConfig.add("postgresql_connection_pool_size", new JsonPrimitive(20));
+
+        TenantConfig[] tenants = new TenantConfig[]{
+                new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new PasswordlessConfig(false),
+                        tenantConfig)};
+        Config.loadAllTenantConfig(process.getProcess(), tenants);
+
+        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+
+        assertNotSame(StorageLayer.getStorage("abc", null, process.getProcess()),
+                StorageLayer.getStorage(null, null, process.getProcess()));
+
+        Assert.assertEquals(
+                process.getProcess().getResourceDistributor().getAllResourcesWithResourceKey(StorageLayer.RESOURCE_KEY)
+                        .size(), 2);
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
 }

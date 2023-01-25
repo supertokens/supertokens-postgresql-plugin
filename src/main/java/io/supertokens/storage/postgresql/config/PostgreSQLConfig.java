@@ -86,10 +86,10 @@ public class PostgreSQLConfig {
                 if (valueStr.contains("&")) {
                     return valueStr.split("&")[0];
                 }
-                return valueStr;
+                return valueStr.trim();
             }
         }
-        return postgresql_table_schema;
+        return postgresql_table_schema.trim();
     }
 
     public int getConnectionPoolSize() {
@@ -329,8 +329,8 @@ public class PostgreSQLConfig {
 
     private String addSchemaToTableName(String tableName) {
         String name = tableName;
-        if (!postgresql_table_schema.trim().equals("public")) {
-            name = postgresql_table_schema.trim() + "." + name;
+        if (!getTableSchema().equals("public")) {
+            name = getTableSchema() + "." + name;
         }
         return name;
     }

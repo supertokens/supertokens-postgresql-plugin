@@ -321,6 +321,135 @@ public class ConfigTest {
     }
 
     @Test
+    public void testAddingSchemaViaConnectionUriWorks() throws Exception {
+        String[] args = {"../"};
+
+        Utils.setValueInConfig("postgresql_connection_uri",
+                "postgresql://root:root@localhost:5432/supertokens?currentSchema=myschema");
+        Utils.setValueInConfig("postgresql_table_names_prefix", "some_prefix");
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+        PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
+
+        assertEquals("change in KeyValueTable name not reflected", config.getKeyValueTable(),
+                "myschema.some_prefix_key_value");
+        assertEquals("change in SessionInfoTable name not reflected", config.getSessionInfoTable(),
+                "myschema.some_prefix_session_info");
+        assertEquals("change in table name not reflected", config.getEmailPasswordUsersTable(),
+                "myschema.some_prefix_emailpassword_users");
+        assertEquals("change in table name not reflected", config.getPasswordResetTokensTable(),
+                "myschema.some_prefix_emailpassword_pswd_reset_tokens");
+
+        String userId = "userId";
+        JsonObject userDataInJWT = new JsonObject();
+        userDataInJWT.addProperty("key", "value");
+        JsonObject userDataInDatabase = new JsonObject();
+        userDataInDatabase.addProperty("key", "value");
+
+        SessionInformationHolder sessionInfo = Session.createNewSession(process.getProcess(), userId, userDataInJWT,
+                userDataInDatabase);
+
+        assert sessionInfo.accessToken != null;
+        assert sessionInfo.refreshToken != null;
+
+        TestCase.assertEquals(StorageLayer.getSessionStorage(process.getProcess()).getNumberOfSessions(), 1);
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+        // we call this here so that the database is cleared with the modified table names
+        // since in postgres, we delete all dbs one by one
+        TestingProcessManager.deleteAllInformation();
+    }
+
+    @Test
+    public void testAddingSchemaViaConnectionUriWorks2() throws Exception {
+        String[] args = {"../"};
+
+        Utils.setValueInConfig("postgresql_connection_uri",
+                "postgresql://root:root@localhost:5432/supertokens?a=b&currentSchema=myschema");
+        Utils.setValueInConfig("postgresql_table_names_prefix", "some_prefix");
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+        PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
+
+        assertEquals("change in KeyValueTable name not reflected", config.getKeyValueTable(),
+                "myschema.some_prefix_key_value");
+        assertEquals("change in SessionInfoTable name not reflected", config.getSessionInfoTable(),
+                "myschema.some_prefix_session_info");
+        assertEquals("change in table name not reflected", config.getEmailPasswordUsersTable(),
+                "myschema.some_prefix_emailpassword_users");
+        assertEquals("change in table name not reflected", config.getPasswordResetTokensTable(),
+                "myschema.some_prefix_emailpassword_pswd_reset_tokens");
+
+        String userId = "userId";
+        JsonObject userDataInJWT = new JsonObject();
+        userDataInJWT.addProperty("key", "value");
+        JsonObject userDataInDatabase = new JsonObject();
+        userDataInDatabase.addProperty("key", "value");
+
+        SessionInformationHolder sessionInfo = Session.createNewSession(process.getProcess(), userId, userDataInJWT,
+                userDataInDatabase);
+
+        assert sessionInfo.accessToken != null;
+        assert sessionInfo.refreshToken != null;
+
+        TestCase.assertEquals(StorageLayer.getSessionStorage(process.getProcess()).getNumberOfSessions(), 1);
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+        // we call this here so that the database is cleared with the modified table names
+        // since in postgres, we delete all dbs one by one
+        TestingProcessManager.deleteAllInformation();
+    }
+
+    @Test
+    public void testAddingSchemaViaConnectionUriWorks3() throws Exception {
+        String[] args = {"../"};
+
+        Utils.setValueInConfig("postgresql_connection_uri",
+                "postgresql://root:root@localhost:5432/supertokens?e=f&currentSchema=myschema&a=b&c=d");
+        Utils.setValueInConfig("postgresql_table_names_prefix", "some_prefix");
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+        PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
+
+        assertEquals("change in KeyValueTable name not reflected", config.getKeyValueTable(),
+                "myschema.some_prefix_key_value");
+        assertEquals("change in SessionInfoTable name not reflected", config.getSessionInfoTable(),
+                "myschema.some_prefix_session_info");
+        assertEquals("change in table name not reflected", config.getEmailPasswordUsersTable(),
+                "myschema.some_prefix_emailpassword_users");
+        assertEquals("change in table name not reflected", config.getPasswordResetTokensTable(),
+                "myschema.some_prefix_emailpassword_pswd_reset_tokens");
+
+        String userId = "userId";
+        JsonObject userDataInJWT = new JsonObject();
+        userDataInJWT.addProperty("key", "value");
+        JsonObject userDataInDatabase = new JsonObject();
+        userDataInDatabase.addProperty("key", "value");
+
+        SessionInformationHolder sessionInfo = Session.createNewSession(process.getProcess(), userId, userDataInJWT,
+                userDataInDatabase);
+
+        assert sessionInfo.accessToken != null;
+        assert sessionInfo.refreshToken != null;
+
+        TestCase.assertEquals(StorageLayer.getSessionStorage(process.getProcess()).getNumberOfSessions(), 1);
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+        // we call this here so that the database is cleared with the modified table names
+        // since in postgres, we delete all dbs one by one
+        TestingProcessManager.deleteAllInformation();
+    }
+
+    @Test
     public void testValidConnectionURI() throws Exception {
         final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         PostgreSQLConfig userConfig = mapper.readValue(new File("../config.yaml"), PostgreSQLConfig.class);
