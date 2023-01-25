@@ -359,7 +359,7 @@ public class ConfigTest {
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
             PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
-            assertEquals(config.getPort(), -1);
+            assertEquals(config.getPort(), 5432);
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));

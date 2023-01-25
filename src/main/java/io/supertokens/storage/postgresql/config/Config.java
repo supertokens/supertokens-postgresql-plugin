@@ -109,7 +109,7 @@ public class Config extends ResourceDistributor.SingletonResource {
         try {
             final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
             PostgreSQLConfig config = mapper.readValue(configJson.toString(), PostgreSQLConfig.class);
-            return config.getUser() != null || config.getPassword() != null || config.getConnectionURI() != null;
+            return config.getConnectionURI() != null || config.getUser() != null || config.getPassword() != null;
         } catch (Exception e) {
             return false;
         }

@@ -131,7 +131,9 @@ public class PostgreSQLConfig {
             if (uri.getHost() != null) {
                 return uri.getHost();
             }
-        } else if (postgresql_host != null) {
+        }
+
+        if (postgresql_host != null) {
             return postgresql_host;
         }
         return "localhost";
@@ -140,8 +142,12 @@ public class PostgreSQLConfig {
     public int getPort() {
         if (postgresql_connection_uri != null) {
             URI uri = URI.create(postgresql_connection_uri);
-            return uri.getPort();
-        } else if (postgresql_port != -1) {
+            if (uri.getPort() > 0) {
+                return uri.getPort();
+            }
+        }
+
+        if (postgresql_port != -1) {
             return postgresql_port;
         }
         return 5432;
@@ -157,7 +163,9 @@ public class PostgreSQLConfig {
                     return userInfoArray[0];
                 }
             }
-        } else if (postgresql_user != null) {
+        }
+
+        if (postgresql_user != null) {
             return postgresql_user;
         }
         return null;
@@ -173,7 +181,9 @@ public class PostgreSQLConfig {
                     return userInfoArray[1];
                 }
             }
-        } else if (postgresql_password != null) {
+        }
+
+        if (postgresql_password != null) {
             return postgresql_password;
         }
         return null;
@@ -189,7 +199,9 @@ public class PostgreSQLConfig {
                 }
                 return path;
             }
-        } else if (postgresql_database_name != null) {
+        }
+
+        if (postgresql_database_name != null) {
             return postgresql_database_name;
         }
         return "supertokens";
