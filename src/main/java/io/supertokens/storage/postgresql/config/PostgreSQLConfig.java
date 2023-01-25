@@ -78,6 +78,17 @@ public class PostgreSQLConfig {
     private String postgresql_connection_uri = null;
 
     public String getTableSchema() {
+        if (postgresql_connection_uri != null) {
+            String connectionAttributes = getConnectionAttributes();
+            if (connectionAttributes.contains("currentSchema=")) {
+                String[] splitted = connectionAttributes.split("currentSchema=");
+                String valueStr = splitted[1];
+                if (valueStr.contains("&")) {
+                    return valueStr.split("&")[0];
+                }
+                return valueStr;
+            }
+        }
         return postgresql_table_schema;
     }
 
@@ -115,78 +126,73 @@ public class PostgreSQLConfig {
     }
 
     public String getHostName() {
-        if (postgresql_host == null) {
-            if (postgresql_connection_uri != null) {
-                URI uri = URI.create(postgresql_connection_uri);
-                if (uri.getHost() != null) {
-                    return uri.getHost();
-                }
+        if (postgresql_connection_uri != null) {
+            URI uri = URI.create(postgresql_connection_uri);
+            if (uri.getHost() != null) {
+                return uri.getHost();
             }
-            return "localhost";
+        } else if (postgresql_host != null) {
+            return postgresql_host;
         }
-        return postgresql_host;
+        return "localhost";
     }
 
     public int getPort() {
-        if (postgresql_port == -1) {
-            if (postgresql_connection_uri != null) {
-                URI uri = URI.create(postgresql_connection_uri);
-                return uri.getPort();
-            }
-            return 5432;
+        if (postgresql_connection_uri != null) {
+            URI uri = URI.create(postgresql_connection_uri);
+            return uri.getPort();
+        } else if (postgresql_port != -1) {
+            return postgresql_port;
         }
-        return postgresql_port;
+        return 5432;
     }
 
     public String getUser() {
-        if (postgresql_user == null) {
-            if (postgresql_connection_uri != null) {
-                URI uri = URI.create(postgresql_connection_uri);
-                String userInfo = uri.getUserInfo();
-                if (userInfo != null) {
-                    String[] userInfoArray = userInfo.split(":");
-                    if (userInfoArray.length > 0 && !userInfoArray[0].equals("")) {
-                        return userInfoArray[0];
-                    }
+        if (postgresql_connection_uri != null) {
+            URI uri = URI.create(postgresql_connection_uri);
+            String userInfo = uri.getUserInfo();
+            if (userInfo != null) {
+                String[] userInfoArray = userInfo.split(":");
+                if (userInfoArray.length > 0 && !userInfoArray[0].equals("")) {
+                    return userInfoArray[0];
                 }
             }
-            return null;
+        } else if (postgresql_user != null) {
+            return postgresql_user;
         }
-        return postgresql_user;
+        return null;
     }
 
     public String getPassword() {
-        if (postgresql_password == null) {
-            if (postgresql_connection_uri != null) {
-                URI uri = URI.create(postgresql_connection_uri);
-                String userInfo = uri.getUserInfo();
-                if (userInfo != null) {
-                    String[] userInfoArray = userInfo.split(":");
-                    if (userInfoArray.length > 1 && !userInfoArray[1].equals("")) {
-                        return userInfoArray[1];
-                    }
+        if (postgresql_connection_uri != null) {
+            URI uri = URI.create(postgresql_connection_uri);
+            String userInfo = uri.getUserInfo();
+            if (userInfo != null) {
+                String[] userInfoArray = userInfo.split(":");
+                if (userInfoArray.length > 1 && !userInfoArray[1].equals("")) {
+                    return userInfoArray[1];
                 }
             }
-            return null;
+        } else if (postgresql_password != null) {
+            return postgresql_password;
         }
-        return postgresql_password;
+        return null;
     }
 
     public String getDatabaseName() {
-        if (postgresql_database_name == null) {
-            if (postgresql_connection_uri != null) {
-                URI uri = URI.create(postgresql_connection_uri);
-                String path = uri.getPath();
-                if (path != null && !path.equals("") && !path.equals("/")) {
-                    if (path.startsWith("/")) {
-                        return path.substring(1);
-                    }
-                    return path;
+        if (postgresql_connection_uri != null) {
+            URI uri = URI.create(postgresql_connection_uri);
+            String path = uri.getPath();
+            if (path != null && !path.equals("") && !path.equals("/")) {
+                if (path.startsWith("/")) {
+                    return path.substring(1);
                 }
+                return path;
             }
-            return "supertokens";
+        } else if (postgresql_database_name != null) {
+            return postgresql_database_name;
         }
-        return postgresql_database_name;
+        return "supertokens";
     }
 
     public String getConnectionURI() {

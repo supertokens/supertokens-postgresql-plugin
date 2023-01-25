@@ -441,80 +441,134 @@ public class StorageLayerTest {
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
-//
-//    @Test
-//    public void testDifferentWaysToGetConfigBasedOnConnectionURIAndTenantId()
-//            throws InterruptedException, IOException, InvalidConfigException {
-//        String[] args = {"../"};
-//
-//        Utils.setValueInConfig("refresh_token_validity", "144001");
-//        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
-//        FeatureFlagTestContent.getInstance(process.getProcess())
-//                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
-//        process.startProcess();
-//        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
-//
-//        TenantConfig[] tenants = new TenantConfig[4];
-//
-//        {
-//            JsonObject tenantConfig = new JsonObject();
-//            tenantConfig.add("refresh_token_validity", new JsonPrimitive(144002));
-//            tenants[0] = new TenantConfig("c1", null, new EmailPasswordConfig(false),
-//                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
-//                    new PasswordlessConfig(false),
-//                    tenantConfig);
-//        }
-//
-//        {
-//            JsonObject tenantConfig = new JsonObject();
-//            tenantConfig.add("refresh_token_validity", new JsonPrimitive(144003));
-//            tenants[1] = new TenantConfig("c1", "t1", new EmailPasswordConfig(false),
-//                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
-//                    new PasswordlessConfig(false),
-//                    tenantConfig);
-//        }
-//
-//        {
-//            JsonObject tenantConfig = new JsonObject();
-//            tenantConfig.add("refresh_token_validity", new JsonPrimitive(144004));
-//            tenants[2] = new TenantConfig(null, "t2", new EmailPasswordConfig(false),
-//                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
-//                    new PasswordlessConfig(false),
-//                    tenantConfig);
-//        }
-//
-//        {
-//            JsonObject tenantConfig = new JsonObject();
-//            tenantConfig.add("refresh_token_validity", new JsonPrimitive(144005));
-//            tenants[3] = new TenantConfig(null, "t1", new EmailPasswordConfig(false),
-//                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
-//                    new PasswordlessConfig(false),
-//                    tenantConfig);
-//        }
-//
-//        Config.loadAllTenantConfig(process.getProcess(), tenants);
-//
-//        Assert.assertEquals(Config.getConfig(null, null, process.getProcess()).getRefreshTokenValidity(),
-//                (long) 144001 * 60 * 1000);
-//        Assert.assertEquals(Config.getConfig("c1", null, process.getProcess()).getRefreshTokenValidity(),
-//                (long) 144002 * 60 * 1000);
-//        Assert.assertEquals(Config.getConfig("c1", "t1", process.getProcess()).getRefreshTokenValidity(),
-//                (long) 144003 * 60 * 1000);
-//        Assert.assertEquals(Config.getConfig(null, "t1", process.getProcess()).getRefreshTokenValidity(),
-//                (long) 144005 * 60 * 1000);
-//        Assert.assertEquals(Config.getConfig("c2", null, process.getProcess()).getRefreshTokenValidity(),
-//                (long) 144001 * 60 * 1000);
-//        Assert.assertEquals(Config.getConfig("c2", "t1", process.getProcess()).getRefreshTokenValidity(),
-//                (long) 144005 * 60 * 1000);
-//        Assert.assertEquals(Config.getConfig("c3", "t2", process.getProcess()).getRefreshTokenValidity(),
-//                (long) 144004 * 60 * 1000);
-//        Assert.assertEquals(Config.getConfig("c1", "t2", process.getProcess()).getRefreshTokenValidity(),
-//                (long) 144002 * 60 * 1000);
-//        Assert.assertEquals(Config.getConfig(null, "t2", process.getProcess()).getRefreshTokenValidity(),
-//                (long) 144004 * 60 * 1000);
-//
-//
-//        process.kill();
-//        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
-//    }
+
+    @Test
+    public void testDifferentWaysToGetConfigBasedOnConnectionURIAndTenantId()
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException {
+        String[] args = {"../"};
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        TenantConfig[] tenants = new TenantConfig[4];
+
+        {
+            JsonObject tenantConfig = new JsonObject();
+            tenantConfig.add("postgresql_connection_pool_size", new JsonPrimitive(12));
+            tenants[0] = new TenantConfig("c1", null, new EmailPasswordConfig(false),
+                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                    new PasswordlessConfig(false),
+                    tenantConfig);
+        }
+
+        {
+            JsonObject tenantConfig = new JsonObject();
+            tenantConfig.add("postgresql_connection_pool_size", new JsonPrimitive(13));
+            tenants[1] = new TenantConfig("c1", "t1", new EmailPasswordConfig(false),
+                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                    new PasswordlessConfig(false),
+                    tenantConfig);
+        }
+
+        {
+            JsonObject tenantConfig = new JsonObject();
+            tenantConfig.add("postgresql_connection_pool_size", new JsonPrimitive(14));
+            tenants[2] = new TenantConfig(null, "t2", new EmailPasswordConfig(false),
+                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                    new PasswordlessConfig(false),
+                    tenantConfig);
+        }
+
+        {
+            JsonObject tenantConfig = new JsonObject();
+            tenantConfig.add("postgresql_connection_pool_size", new JsonPrimitive(15));
+            tenants[3] = new TenantConfig(null, "t1", new EmailPasswordConfig(false),
+                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                    new PasswordlessConfig(false),
+                    tenantConfig);
+        }
+
+        Config.loadAllTenantConfig(process.getProcess(), tenants);
+
+        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage(null, null, process.getProcess()))
+                .getConnectionPoolSize(), 10);
+
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage("c1", null, process.getProcess()))
+                .getConnectionPoolSize(), 12);
+
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage("c1", "t1", process.getProcess()))
+                .getConnectionPoolSize(), 13);
+
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage(null, "t1", process.getProcess()))
+                .getConnectionPoolSize(), 15);
+
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage("c2", null, process.getProcess()))
+                .getConnectionPoolSize(), 10);
+
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage("c1", "t1", process.getProcess()))
+                .getConnectionPoolSize(), 13);
+
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage("c3", "t2", process.getProcess()))
+                .getConnectionPoolSize(), 14);
+
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage("c1", "t2", process.getProcess()))
+                .getConnectionPoolSize(), 12);
+
+        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
+                        (Start) StorageLayer.getStorage(null, "t2", process.getProcess()))
+                .getConnectionPoolSize(), 14);
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
+    public void differentUserPoolCreatedBasedOnConnectionUri()
+            throws InterruptedException, IOException, InvalidConfigException {
+        String[] args = {"../"};
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        JsonObject tenantConfig = new JsonObject();
+        tenantConfig.add("postgresql_connection_uri",
+                new JsonPrimitive("postgresql://root:root@localhost:5432/random"));
+
+        try {
+            TenantConfig[] tenants = new TenantConfig[]{
+                    new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                            new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                            new PasswordlessConfig(false),
+                            tenantConfig)};
+            Config.loadAllTenantConfig(process.getProcess(), tenants);
+
+            StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+            fail();
+        } catch (DbInitException e) {
+            assertEquals(e.getMessage(), "com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to " +
+                    "initialize pool: FATAL: database \"random\" does not exist");
+        }
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    // TODO: different connection URI creates different connection pool -> based on schema (via connenction uri and
+    //  otherwise) difference (should work).
 }
