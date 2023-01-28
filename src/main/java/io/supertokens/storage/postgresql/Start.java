@@ -19,6 +19,7 @@ package io.supertokens.storage.postgresql;
 
 import ch.qos.logback.classic.Logger;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.LOG_LEVEL;
 import io.supertokens.pluginInterface.RECIPE_ID;
@@ -649,6 +650,11 @@ public class Start
         } else {
             throw new IllegalStateException("ClassName: " + className + " is not part of NonAuthRecipeStorage");
         }
+    }
+
+    @Override
+    public void modifyConfigToAddANewUserPoolForTesting(JsonObject config, int poolNumber) {
+        config.add("postgresql_database_name", new JsonPrimitive("st" + poolNumber));
     }
 
     @Override

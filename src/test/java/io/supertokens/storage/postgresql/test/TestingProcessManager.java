@@ -133,6 +133,20 @@ public class TestingProcessManager {
             if (killed) {
                 return;
             }
+            // we check if there are multiple user pool IDs loaded, and if there are,
+            // we clear all the info before killing cause otherwise those extra dbs will retain info
+            // across tests
+            if (StorageLayer.hasMultipleUserPools(this.main)) {
+                try {
+                    main.deleteAllInformationForTesting();
+                } catch (Exception e) {
+                    if (!e.getMessage().contains("Please call initPool before getConnection")) {
+                        // we ignore this type of message because it's due to tests in which the init failed
+                        // and here we try and delete assuming that init had succeeded.
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
             main.killForTestingAndWaitForShutdown();
             killed = true;
         }
