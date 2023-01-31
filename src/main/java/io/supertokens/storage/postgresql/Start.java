@@ -147,6 +147,9 @@ public class Start
 
     @Override
     public void initFileLogging(String infoLogPath, String errorLogPath) {
+        if (Logging.isAlreadyInitialised(this)) {
+            return;
+        }
         Logging.initFileLogging(this, infoLogPath, errorLogPath);
 
         /*
