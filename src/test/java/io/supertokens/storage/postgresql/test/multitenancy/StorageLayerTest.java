@@ -20,6 +20,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import io.supertokens.ProcessState;
 import io.supertokens.config.Config;
+import io.supertokens.exceptions.TenantNotFoundException;
 import io.supertokens.featureflag.EE_FEATURES;
 import io.supertokens.featureflag.FeatureFlagTestContent;
 import io.supertokens.pluginInterface.Storage;
@@ -77,7 +78,7 @@ public class StorageLayerTest {
 
     @Test
     public void mergingTenantWithBaseConfigWorks()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -162,7 +163,7 @@ public class StorageLayerTest {
 
     @Test
     public void storageInstanceIsReusedAcrossTenants()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -203,7 +204,7 @@ public class StorageLayerTest {
 
     @Test
     public void storageInstanceIsReusedAcrossTenantsComplex()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -373,7 +374,7 @@ public class StorageLayerTest {
 
     @Test
     public void mergingDifferentUserPoolIdTenantWithBaseConfigWithConflictingConfigsShouldNotThrowsError()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -422,7 +423,7 @@ public class StorageLayerTest {
 
     @Test
     public void newStorageIsNotCreatedWhenSameTenantIsAdded()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -464,7 +465,7 @@ public class StorageLayerTest {
 
     @Test
     public void testDifferentWaysToGetConfigBasedOnConnectionURIAndTenantId()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -544,10 +545,6 @@ public class StorageLayerTest {
                 .getConnectionPoolSize(), 14);
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage("c1", "t2", process.getProcess()))
-                .getConnectionPoolSize(), 12);
-
-        Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
                         (Start) StorageLayer.getStorage(null, "t2", process.getProcess()))
                 .getConnectionPoolSize(), 14);
 
@@ -591,7 +588,7 @@ public class StorageLayerTest {
 
     @Test
     public void differentUserPoolCreatedBasedOnSchemaInConnectionUri()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -634,7 +631,7 @@ public class StorageLayerTest {
 
     @Test
     public void multipleTenantsSameUserPoolAndConnectionPoolShouldWork()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -667,7 +664,7 @@ public class StorageLayerTest {
 
     @Test
     public void multipleTenantsSameUserPoolAndDifferentConnectionPoolShouldWork()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
