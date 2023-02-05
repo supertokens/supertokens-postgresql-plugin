@@ -20,16 +20,13 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import io.supertokens.ProcessState;
 import io.supertokens.config.Config;
-import io.supertokens.exceptions.TenantNotFoundException;
+import io.supertokens.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.featureflag.EE_FEATURES;
 import io.supertokens.featureflag.FeatureFlagTestContent;
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.exceptions.DbInitException;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
-import io.supertokens.pluginInterface.multitenancy.EmailPasswordConfig;
-import io.supertokens.pluginInterface.multitenancy.PasswordlessConfig;
-import io.supertokens.pluginInterface.multitenancy.TenantConfig;
-import io.supertokens.pluginInterface.multitenancy.ThirdPartyConfig;
+import io.supertokens.pluginInterface.multitenancy.*;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.test.TestingProcessManager;
 import io.supertokens.storage.postgresql.test.Utils;
@@ -78,7 +75,8 @@ public class StorageLayerTest {
 
     @Test
     public void mergingTenantWithBaseConfigWorks()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException,
+            TenantOrAppNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -92,7 +90,7 @@ public class StorageLayerTest {
         tenantConfig.add("postgresql_table_schema", new JsonPrimitive("random"));
 
         TenantConfig[] tenants = new TenantConfig[]{
-                new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
                         new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
                         tenantConfig)};
@@ -101,21 +99,21 @@ public class StorageLayerTest {
 
         StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
 
-        assertNotSame(StorageLayer.getStorage("abc", null, process.getProcess()),
-                StorageLayer.getStorage(null, null, process.getProcess()));
+        assertNotSame(StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()),
+                StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()));
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage(null, null, process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()))
                 .getTablePrefix(), "");
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage(null, null, process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()))
                 .getTableSchema(), "public");
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage("abc", null, process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()))
                 .getTablePrefix(), "test");
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage("abc", null, process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()))
                 .getTableSchema(), "random");
 
         Assert.assertEquals(
@@ -143,7 +141,7 @@ public class StorageLayerTest {
 
         try {
             TenantConfig[] tenants = new TenantConfig[]{
-                    new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                    new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
                             new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                             new PasswordlessConfig(false),
                             tenantConfig)};
@@ -163,7 +161,8 @@ public class StorageLayerTest {
 
     @Test
     public void storageInstanceIsReusedAcrossTenants()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException,
+            TenantOrAppNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -176,7 +175,7 @@ public class StorageLayerTest {
         tenantConfig.add("access_token_validity", new JsonPrimitive(3601));
 
         TenantConfig[] tenants = new TenantConfig[]{
-                new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
                         new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
                         tenantConfig)};
@@ -185,13 +184,15 @@ public class StorageLayerTest {
 
         StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
 
-        assertSame(StorageLayer.getStorage("abc", null, process.getProcess()),
-                StorageLayer.getStorage(null, null, process.getProcess()));
+        assertSame(StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()),
+                StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()));
 
-        Assert.assertEquals(Config.getConfig(null, null, process.getProcess()).getAccessTokenValidity(),
+        Assert.assertEquals(
+                Config.getConfig(new TenantIdentifier(null, null, null), process.getProcess()).getAccessTokenValidity(),
                 (long) 3600 * 1000);
 
-        Assert.assertEquals(Config.getConfig("abc", null, process.getProcess()).getAccessTokenValidity(),
+        Assert.assertEquals(Config.getConfig(new TenantIdentifier("abc", null, null), process.getProcess())
+                        .getAccessTokenValidity(),
                 (long) 3601 * 1000);
 
         Assert.assertEquals(
@@ -204,7 +205,8 @@ public class StorageLayerTest {
 
     @Test
     public void storageInstanceIsReusedAcrossTenantsComplex()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException,
+            TenantOrAppNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -220,15 +222,15 @@ public class StorageLayerTest {
         tenantConfig1.add("postgresql_connection_pool_size", new JsonPrimitive(11));
 
         TenantConfig[] tenants = new TenantConfig[]{
-                new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
                         new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
                         tenantConfig),
-                new TenantConfig("abc", "t1", new EmailPasswordConfig(false),
+                new TenantConfig(new TenantIdentifier("abc", null, "t1"), new EmailPasswordConfig(false),
                         new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
                         tenantConfig1),
-                new TenantConfig(null, "t2", new EmailPasswordConfig(false),
+                new TenantConfig(new TenantIdentifier(null, null, "t2"), new EmailPasswordConfig(false),
                         new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
                         tenantConfig1)};
@@ -237,19 +239,21 @@ public class StorageLayerTest {
 
         StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
 
-        assertSame(StorageLayer.getStorage("abc", null, process.getProcess()),
-                StorageLayer.getStorage(null, null, process.getProcess()));
+        assertSame(StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()),
+                StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()));
 
-        assertSame(StorageLayer.getStorage("abc", "t1", process.getProcess()),
-                StorageLayer.getStorage(null, "t2", process.getProcess()));
+        assertSame(StorageLayer.getStorage(new TenantIdentifier("abc", null, "t1"), process.getProcess()),
+                StorageLayer.getStorage(new TenantIdentifier(null, null, "t2"), process.getProcess()));
 
-        assertNotSame(StorageLayer.getStorage("abc", "t1", process.getProcess()),
-                StorageLayer.getStorage(null, null, process.getProcess()));
+        assertNotSame(StorageLayer.getStorage(new TenantIdentifier("abc", null, "t1"), process.getProcess()),
+                StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()));
 
-        Assert.assertEquals(Config.getConfig(null, null, process.getProcess()).getAccessTokenValidity(),
+        Assert.assertEquals(
+                Config.getConfig(new TenantIdentifier(null, null, null), process.getProcess()).getAccessTokenValidity(),
                 (long) 3600 * 1000);
 
-        Assert.assertEquals(Config.getConfig("abc", null, process.getProcess()).getAccessTokenValidity(),
+        Assert.assertEquals(Config.getConfig(new TenantIdentifier("abc", null, null), process.getProcess())
+                        .getAccessTokenValidity(),
                 (long) 3601 * 1000);
 
         Assert.assertEquals(
@@ -257,15 +261,17 @@ public class StorageLayerTest {
                         .size(), 4);
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage("abc", "t1", process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier("abc", null, "t1"), process.getProcess()))
                 .getConnectionPoolSize(), 11);
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage("random", "t2", process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier("random", null, "t2"),
+                                process.getProcess()))
                 .getConnectionPoolSize(), 11);
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage("random", null, process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier("random", null, null),
+                                process.getProcess()))
                 .getConnectionPoolSize(), 10);
 
         process.kill();
@@ -288,7 +294,7 @@ public class StorageLayerTest {
 
         try {
             TenantConfig[] tenants = new TenantConfig[]{
-                    new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                    new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
                             new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                             new PasswordlessConfig(false),
                             tenantConfig)};
@@ -321,7 +327,7 @@ public class StorageLayerTest {
 
         try {
             TenantConfig[] tenants = new TenantConfig[]{
-                    new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                    new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
                             new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                             new PasswordlessConfig(false),
                             tenantConfig)};
@@ -355,7 +361,7 @@ public class StorageLayerTest {
 
         try {
             TenantConfig[] tenants = new TenantConfig[]{
-                    new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                    new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
                             new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                             new PasswordlessConfig(false),
                             tenantConfig)};
@@ -374,7 +380,8 @@ public class StorageLayerTest {
 
     @Test
     public void mergingDifferentUserPoolIdTenantWithBaseConfigWithConflictingConfigsShouldNotThrowsError()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException,
+            TenantOrAppNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -389,7 +396,7 @@ public class StorageLayerTest {
         tenantConfig.add("postgresql_table_schema", new JsonPrimitive("supertokens2"));
 
         TenantConfig[] tenants = new TenantConfig[]{
-                new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
                         new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
                         tenantConfig)};
@@ -398,23 +405,23 @@ public class StorageLayerTest {
         StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage("abc", null, process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()))
                 .getTableSchema(), "supertokens2");
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage("abc", null, process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()))
                 .getConnectionPoolSize(), 11);
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage("abc", null, process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()))
                 .getThirdPartyUsersTable(), "supertokens2.random");
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage(null, null, process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()))
                 .getTableSchema(), "public");
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage(null, null, process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()))
                 .getConnectionPoolSize(), 10);
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage(null, null, process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()))
                 .getThirdPartyUsersTable(), "thirdparty_users");
 
         process.kill();
@@ -423,7 +430,8 @@ public class StorageLayerTest {
 
     @Test
     public void newStorageIsNotCreatedWhenSameTenantIsAdded()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException,
+            TenantOrAppNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -432,13 +440,13 @@ public class StorageLayerTest {
         process.startProcess();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-        Storage existingStorage = StorageLayer.getStorage(null, null, process.getProcess());
+        Storage existingStorage = StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess());
 
         JsonObject tenantConfig = new JsonObject();
         tenantConfig.add("access_token_validity", new JsonPrimitive(3601));
 
         TenantConfig[] tenants = new TenantConfig[]{
-                new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
                         new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
                         tenantConfig)};
@@ -447,12 +455,15 @@ public class StorageLayerTest {
 
         StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
 
-        assertSame(StorageLayer.getStorage("abc", null, process.getProcess()), existingStorage);
+        assertSame(StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()),
+                existingStorage);
 
-        Assert.assertEquals(Config.getConfig(null, null, process.getProcess()).getAccessTokenValidity(),
+        Assert.assertEquals(
+                Config.getConfig(new TenantIdentifier(null, null, null), process.getProcess()).getAccessTokenValidity(),
                 (long) 3600 * 1000);
 
-        Assert.assertEquals(Config.getConfig("abc", null, process.getProcess()).getAccessTokenValidity(),
+        Assert.assertEquals(Config.getConfig(new TenantIdentifier("abc", null, null), process.getProcess())
+                        .getAccessTokenValidity(),
                 (long) 3601 * 1000);
 
         Assert.assertEquals(
@@ -465,7 +476,8 @@ public class StorageLayerTest {
 
     @Test
     public void testDifferentWaysToGetConfigBasedOnConnectionURIAndTenantId()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException,
+            TenantOrAppNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -479,7 +491,7 @@ public class StorageLayerTest {
         {
             JsonObject tenantConfig = new JsonObject();
             tenantConfig.add("postgresql_connection_pool_size", new JsonPrimitive(12));
-            tenants[0] = new TenantConfig("c1", null, new EmailPasswordConfig(false),
+            tenants[0] = new TenantConfig(new TenantIdentifier("c1", null, null), new EmailPasswordConfig(false),
                     new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                     new PasswordlessConfig(false),
                     tenantConfig);
@@ -488,7 +500,7 @@ public class StorageLayerTest {
         {
             JsonObject tenantConfig = new JsonObject();
             tenantConfig.add("postgresql_connection_pool_size", new JsonPrimitive(13));
-            tenants[1] = new TenantConfig("c1", "t1", new EmailPasswordConfig(false),
+            tenants[1] = new TenantConfig(new TenantIdentifier("c1", null, "t1"), new EmailPasswordConfig(false),
                     new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                     new PasswordlessConfig(false),
                     tenantConfig);
@@ -497,7 +509,7 @@ public class StorageLayerTest {
         {
             JsonObject tenantConfig = new JsonObject();
             tenantConfig.add("postgresql_connection_pool_size", new JsonPrimitive(14));
-            tenants[2] = new TenantConfig(null, "t2", new EmailPasswordConfig(false),
+            tenants[2] = new TenantConfig(new TenantIdentifier(null, null, "t2"), new EmailPasswordConfig(false),
                     new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                     new PasswordlessConfig(false),
                     tenantConfig);
@@ -506,7 +518,7 @@ public class StorageLayerTest {
         {
             JsonObject tenantConfig = new JsonObject();
             tenantConfig.add("postgresql_connection_pool_size", new JsonPrimitive(15));
-            tenants[3] = new TenantConfig(null, "t1", new EmailPasswordConfig(false),
+            tenants[3] = new TenantConfig(new TenantIdentifier(null, null, "t1"), new EmailPasswordConfig(false),
                     new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                     new PasswordlessConfig(false),
                     tenantConfig);
@@ -517,35 +529,35 @@ public class StorageLayerTest {
         StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage(null, null, process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()))
                 .getConnectionPoolSize(), 10);
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage("c1", null, process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier("c1", null, null), process.getProcess()))
                 .getConnectionPoolSize(), 12);
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage("c1", "t1", process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier("c1", null, "t1"), process.getProcess()))
                 .getConnectionPoolSize(), 13);
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage(null, "t1", process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier(null, null, "t1"), process.getProcess()))
                 .getConnectionPoolSize(), 15);
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage("c2", null, process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier("c2", null, null), process.getProcess()))
                 .getConnectionPoolSize(), 10);
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage("c1", "t1", process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier("c1", null, "t1"), process.getProcess()))
                 .getConnectionPoolSize(), 13);
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage("c3", "t2", process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier("c3", null, "t2"), process.getProcess()))
                 .getConnectionPoolSize(), 14);
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage(null, "t2", process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier(null, null, "t2"), process.getProcess()))
                 .getConnectionPoolSize(), 14);
 
         process.kill();
@@ -569,7 +581,7 @@ public class StorageLayerTest {
 
         try {
             TenantConfig[] tenants = new TenantConfig[]{
-                    new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                    new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
                             new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                             new PasswordlessConfig(false),
                             tenantConfig)};
@@ -588,7 +600,8 @@ public class StorageLayerTest {
 
     @Test
     public void differentUserPoolCreatedBasedOnSchemaInConnectionUri()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException,
+            TenantOrAppNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -602,7 +615,7 @@ public class StorageLayerTest {
                 new JsonPrimitive("postgresql://root:root@localhost:5432/supertokens?currentSchema=random"));
 
         TenantConfig[] tenants = new TenantConfig[]{
-                new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
                         new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
                         tenantConfig)};
@@ -611,15 +624,15 @@ public class StorageLayerTest {
         StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage("abc", null, process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()))
                 .getTableSchema(), "random");
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
-                        (Start) StorageLayer.getStorage(null, null, process.getProcess()))
+                        (Start) StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()))
                 .getTableSchema(), "public");
 
-        assertNotSame(StorageLayer.getStorage("abc", null, process.getProcess()),
-                StorageLayer.getStorage(null, null, process.getProcess()));
+        assertNotSame(StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()),
+                StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()));
 
         Assert.assertEquals(
                 process.getProcess().getResourceDistributor().getAllResourcesWithResourceKey(StorageLayer.RESOURCE_KEY)
@@ -631,7 +644,8 @@ public class StorageLayerTest {
 
     @Test
     public void multipleTenantsSameUserPoolAndConnectionPoolShouldWork()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException,
+            TenantOrAppNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -643,7 +657,7 @@ public class StorageLayerTest {
         JsonObject tenantConfig = new JsonObject();
 
         TenantConfig[] tenants = new TenantConfig[]{
-                new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
                         new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
                         tenantConfig)};
@@ -651,8 +665,8 @@ public class StorageLayerTest {
 
         StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
 
-        assertSame(StorageLayer.getStorage("abc", null, process.getProcess()),
-                StorageLayer.getStorage(null, null, process.getProcess()));
+        assertSame(StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()),
+                StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()));
 
         Assert.assertEquals(
                 process.getProcess().getResourceDistributor().getAllResourcesWithResourceKey(StorageLayer.RESOURCE_KEY)
@@ -664,7 +678,8 @@ public class StorageLayerTest {
 
     @Test
     public void multipleTenantsSameUserPoolAndDifferentConnectionPoolShouldWork()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException, TenantNotFoundException {
+            throws InterruptedException, IOException, InvalidConfigException, DbInitException,
+            TenantOrAppNotFoundException {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -677,7 +692,7 @@ public class StorageLayerTest {
         tenantConfig.add("postgresql_connection_pool_size", new JsonPrimitive(20));
 
         TenantConfig[] tenants = new TenantConfig[]{
-                new TenantConfig("abc", null, new EmailPasswordConfig(false),
+                new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
                         new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
                         tenantConfig)};
@@ -685,8 +700,8 @@ public class StorageLayerTest {
 
         StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
 
-        assertNotSame(StorageLayer.getStorage("abc", null, process.getProcess()),
-                StorageLayer.getStorage(null, null, process.getProcess()));
+        assertNotSame(StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()),
+                StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()));
 
         Assert.assertEquals(
                 process.getProcess().getResourceDistributor().getAllResourcesWithResourceKey(StorageLayer.RESOURCE_KEY)
