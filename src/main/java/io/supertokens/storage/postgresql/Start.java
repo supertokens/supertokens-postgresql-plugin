@@ -46,6 +46,7 @@ import io.supertokens.pluginInterface.jwt.exceptions.DuplicateKeyIdException;
 import io.supertokens.pluginInterface.jwt.sqlstorage.JWTRecipeSQLStorage;
 import io.supertokens.pluginInterface.multitenancy.MultitenancyStorage;
 import io.supertokens.pluginInterface.multitenancy.TenantConfig;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateTenantException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.UnknownTenantException;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
@@ -1870,12 +1871,22 @@ public class Start
     }
 
     @Override
-    public void deleteTenant(String tenantId) throws UnknownTenantException {
+    public void deleteTenant(TenantIdentifier tenantIdentifier) throws UnknownTenantException {
         // TODO:
     }
 
     @Override
-    public TenantConfig getTenantConfigForTenantId(String tenantId) {
+    public void deleteApp(TenantIdentifier tenantIdentifier) throws UnknownTenantException {
+        // TODO:
+    }
+
+    @Override
+    public void deleteConnectionUriDomainMapping(TenantIdentifier tenantIdentifier) throws UnknownTenantException {
+        // TODO:
+    }
+
+    @Override
+    public TenantConfig getTenantConfigForTenantIdentifier(TenantIdentifier tenantIdentifier) {
         // TODO:
         return null;
     }
