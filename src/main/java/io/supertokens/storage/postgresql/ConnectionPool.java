@@ -20,7 +20,6 @@ package io.supertokens.storage.postgresql;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import io.supertokens.pluginInterface.exceptions.DbInitException;
-import io.supertokens.pluginInterface.exceptions.QuitProgramFromPluginException;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storage.postgresql.output.Logging;
@@ -170,7 +169,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
 
     public static Connection getConnection(Start start) throws SQLException {
         if (getInstance(start) == null) {
-            throw new QuitProgramFromPluginException("Please call initPool before getConnection");
+            throw new IllegalStateException("Please call initPool before getConnection");
         }
         if (!start.enabled) {
             throw new SQLException("Storage layer disabled");

@@ -22,7 +22,6 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.gson.JsonObject;
 import io.supertokens.pluginInterface.LOG_LEVEL;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
-import io.supertokens.pluginInterface.exceptions.QuitProgramFromPluginException;
 import io.supertokens.storage.postgresql.ResourceDistributor;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.output.Logging;
@@ -44,7 +43,7 @@ public class Config extends ResourceDistributor.SingletonResource {
         try {
             config = loadPostgreSQLConfig(configJson);
         } catch (IOException e) {
-            throw new QuitProgramFromPluginException(e);
+            throw new RuntimeException(e);
         }
     }
 
@@ -89,7 +88,7 @@ public class Config extends ResourceDistributor.SingletonResource {
 
     public static PostgreSQLConfig getConfig(Start start) {
         if (getInstance(start) == null) {
-            throw new QuitProgramFromPluginException("Please call loadConfig() before calling getConfig()");
+            throw new IllegalStateException("Please call loadConfig() before calling getConfig()");
         }
         return getInstance(start).config;
     }
