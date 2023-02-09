@@ -1866,6 +1866,16 @@ public class Start
     }
 
     @Override
+    public void addTenantIdInUserPool(TenantIdentifier tenantIdentifier) throws DuplicateTenantException {
+        // TODO:
+    }
+
+    @Override
+    public void deleteTenantIdInUserPool(TenantIdentifier tenantIdentifier) throws UnknownTenantException {
+        // TODO:
+    }
+
+    @Override
     public void overwriteTenantConfig(TenantConfig config) throws UnknownTenantException {
         // TODO:
     }
@@ -1900,6 +1910,16 @@ public class Start
     @Override
     public void addRoleToTenant(TenantIdentifier tenantIdentifier, String role)
             throws UnknownTenantException, UnknownRoleException {
+        // TODO:
+    }
+
+    @Override
+    public void markAppIdAsDeleted(String appId) throws UnknownTenantException {
+        // TODO:
+    }
+
+    @Override
+    public void markConnectionUriDomainAsDeleted(String connectionUriDomain) throws UnknownTenantException {
         // TODO:
     }
 }
