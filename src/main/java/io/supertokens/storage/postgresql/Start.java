@@ -662,8 +662,9 @@ public class Start
     }
 
     @Override
-    public void signUp(UserInfo userInfo)
+    public void signUp(TenantIdentifier tenantIdentifier, UserInfo userInfo)
             throws StorageQueryException, DuplicateUserIdException, DuplicateEmailException {
+        // TODO..
         try {
             EmailPasswordQueries.signUp(this, userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined);
         } catch (StorageTransactionLogicException eTemp) {
@@ -694,7 +695,8 @@ public class Start
     }
 
     @Override
-    public void deleteEmailPasswordUser(String userId) throws StorageQueryException {
+    public void deleteEmailPasswordUser(TenantIdentifier tenantIdentifier, String userId) throws StorageQueryException {
+        // TODO..
         try {
             EmailPasswordQueries.deleteUser(this, userId);
         } catch (StorageTransactionLogicException e) {
@@ -703,7 +705,8 @@ public class Start
     }
 
     @Override
-    public UserInfo getUserInfoUsingId(String id) throws StorageQueryException {
+    public UserInfo getUserInfoUsingId(TenantIdentifier tenantIdentifier, String id) throws StorageQueryException {
+        // TODO..
         try {
             return EmailPasswordQueries.getUserInfoUsingId(this, id);
         } catch (SQLException e) {
@@ -712,7 +715,9 @@ public class Start
     }
 
     @Override
-    public UserInfo getUserInfoUsingEmail(String email) throws StorageQueryException {
+    public UserInfo getUserInfoUsingEmail(TenantIdentifier tenantIdentifier, String email)
+            throws StorageQueryException {
+        // TODO..
         try {
             return EmailPasswordQueries.getUserInfoUsingEmail(this, email);
         } catch (SQLException e) {
@@ -721,8 +726,9 @@ public class Start
     }
 
     @Override
-    public void addPasswordResetToken(PasswordResetTokenInfo passwordResetTokenInfo)
+    public void addPasswordResetToken(TenantIdentifier tenantIdentifier, PasswordResetTokenInfo passwordResetTokenInfo)
             throws StorageQueryException, UnknownUserIdException, DuplicatePasswordResetTokenException {
+        // TODO..
         try {
             EmailPasswordQueries.addPasswordResetToken(this, passwordResetTokenInfo.userId,
                     passwordResetTokenInfo.token, passwordResetTokenInfo.tokenExpiry);
@@ -751,7 +757,9 @@ public class Start
     }
 
     @Override
-    public PasswordResetTokenInfo getPasswordResetTokenInfo(String token) throws StorageQueryException {
+    public PasswordResetTokenInfo getPasswordResetTokenInfo(TenantIdentifier tenantIdentifier, String token)
+            throws StorageQueryException {
+        // TODO..
         try {
             return EmailPasswordQueries.getPasswordResetTokenInfo(this, token);
         } catch (SQLException e) {
@@ -760,7 +768,9 @@ public class Start
     }
 
     @Override
-    public PasswordResetTokenInfo[] getAllPasswordResetTokenInfoForUser(String userId) throws StorageQueryException {
+    public PasswordResetTokenInfo[] getAllPasswordResetTokenInfoForUser(TenantIdentifier tenantIdentifier,
+                                                                        String userId) throws StorageQueryException {
+        // TODO..
         try {
             return EmailPasswordQueries.getAllPasswordResetTokenInfoForUser(this, userId);
         } catch (SQLException e) {
@@ -971,37 +981,6 @@ public class Start
     }
 
     @Override
-    @Deprecated
-    public UserInfo[] getUsers(@Nonnull String userId, @Nonnull Long timeJoined, @Nonnull Integer limit,
-                               @Nonnull String timeJoinedOrder) throws StorageQueryException {
-        try {
-            return EmailPasswordQueries.getUsersInfo(this, userId, timeJoined, limit, timeJoinedOrder);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    @Deprecated
-    public UserInfo[] getUsers(@Nonnull Integer limit, @Nonnull String timeJoinedOrder) throws StorageQueryException {
-        try {
-            return EmailPasswordQueries.getUsersInfo(this, limit, timeJoinedOrder);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    @Deprecated
-    public long getUsersCount() throws StorageQueryException {
-        try {
-            return EmailPasswordQueries.getUsersCount(this);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
     public void deleteExpiredPasswordResetTokens() throws StorageQueryException {
         try {
             EmailPasswordQueries.deleteExpiredPasswordResetTokens(this);
@@ -1142,7 +1121,9 @@ public class Start
     }
 
     @Override
-    public long getUsersCount(RECIPE_ID[] includeRecipeIds) throws StorageQueryException {
+    public long getUsersCount(TenantIdentifier tenantIdentifier, RECIPE_ID[] includeRecipeIds)
+            throws StorageQueryException {
+        // TODO..
         try {
             return GeneralQueries.getUsersCount(this, includeRecipeIds);
         } catch (SQLException e) {
@@ -1151,10 +1132,12 @@ public class Start
     }
 
     @Override
-    public AuthRecipeUserInfo[] getUsers(@NotNull Integer limit, @NotNull String timeJoinedOrder,
+    public AuthRecipeUserInfo[] getUsers(TenantIdentifier tenantIdentifier, @NotNull Integer limit,
+                                         @NotNull String timeJoinedOrder,
                                          @Nullable RECIPE_ID[] includeRecipeIds, @Nullable String userId,
                                          @Nullable Long timeJoined)
             throws StorageQueryException {
+        // TODO..
         try {
             return GeneralQueries.getUsers(this, limit, timeJoinedOrder, includeRecipeIds, userId, timeJoined);
         } catch (SQLException e) {
@@ -1163,7 +1146,8 @@ public class Start
     }
 
     @Override
-    public boolean doesUserIdExist(String userId) throws StorageQueryException {
+    public boolean doesUserIdExist(TenantIdentifier tenantIdentifier, String userId) throws StorageQueryException {
+        // TODO..
         try {
             return GeneralQueries.doesUserIdExist(this, userId);
         } catch (SQLException e) {
@@ -1765,9 +1749,10 @@ public class Start
     }
 
     @Override
-    public void createUserIdMapping(String superTokensUserId, String externalUserId,
+    public void createUserIdMapping(TenantIdentifier tenantIdentifier, String superTokensUserId, String externalUserId,
                                     @Nullable String externalUserIdInfo)
             throws StorageQueryException, UnknownSuperTokensUserIdException, UserIdMappingAlreadyExistsException {
+        // TODO..
         try {
             UserIdMappingQueries.createUserIdMapping(this, superTokensUserId, externalUserId, externalUserIdInfo);
         } catch (SQLException e) {
@@ -1798,7 +1783,9 @@ public class Start
     }
 
     @Override
-    public boolean deleteUserIdMapping(String userId, boolean isSuperTokensUserId) throws StorageQueryException {
+    public boolean deleteUserIdMapping(TenantIdentifier tenantIdentifier, String userId, boolean isSuperTokensUserId)
+            throws StorageQueryException {
+        // TODO..
         try {
             if (isSuperTokensUserId) {
                 return UserIdMappingQueries.deleteUserIdMappingWithSuperTokensUserId(this, userId);
@@ -1811,8 +1798,9 @@ public class Start
     }
 
     @Override
-    public UserIdMapping getUserIdMapping(String userId, boolean isSuperTokensUserId) throws StorageQueryException {
-
+    public UserIdMapping getUserIdMapping(TenantIdentifier tenantIdentifier, String userId, boolean isSuperTokensUserId)
+            throws StorageQueryException {
+        // TODO..
         try {
             if (isSuperTokensUserId) {
                 return UserIdMappingQueries.getuseraIdMappingWithSuperTokensUserId(this, userId);
@@ -1825,7 +1813,9 @@ public class Start
     }
 
     @Override
-    public UserIdMapping[] getUserIdMapping(String userId) throws StorageQueryException {
+    public UserIdMapping[] getUserIdMapping(TenantIdentifier tenantIdentifier, String userId)
+            throws StorageQueryException {
+        // TODO..
         try {
             return UserIdMappingQueries.getUserIdMappingWithEitherSuperTokensUserIdOrExternalUserId(this, userId);
         } catch (SQLException e) {
@@ -1834,9 +1824,11 @@ public class Start
     }
 
     @Override
-    public boolean updateOrDeleteExternalUserIdInfo(String userId, boolean isSuperTokensUserId,
+    public boolean updateOrDeleteExternalUserIdInfo(TenantIdentifier tenantIdentifier, String userId,
+                                                    boolean isSuperTokensUserId,
                                                     @Nullable String externalUserIdInfo) throws StorageQueryException {
 
+        // TODO..
         try {
             if (isSuperTokensUserId) {
                 return UserIdMappingQueries.updateOrDeleteExternalUserIdInfoWithSuperTokensUserId(this, userId,
@@ -1851,8 +1843,10 @@ public class Start
     }
 
     @Override
-    public HashMap<String, String> getUserIdMappingForSuperTokensIds(ArrayList<String> userIds)
+    public HashMap<String, String> getUserIdMappingForSuperTokensIds(TenantIdentifier tenantIdentifier,
+                                                                     ArrayList<String> userIds)
             throws StorageQueryException {
+        // TODO..
         try {
             return UserIdMappingQueries.getUserIdMappingWithUserIds(this, userIds);
         } catch (SQLException e) {

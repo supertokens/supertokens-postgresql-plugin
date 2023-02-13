@@ -17,26 +17,6 @@
 
 package io.supertokens.storage.postgresql.test;
 
-import static junit.framework.TestCase.assertEquals;
-import static org.junit.Assert.assertNotNull;
-
-import java.io.UnsupportedEncodingException;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.SignatureException;
-import java.security.spec.InvalidKeySpecException;
-
-import javax.crypto.BadPaddingException;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
-
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TestRule;
-
 import io.supertokens.ProcessState;
 import io.supertokens.pluginInterface.RECIPE_ID;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
@@ -52,8 +32,27 @@ import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicExceptio
 import io.supertokens.pluginInterface.jwt.JWTSymmetricSigningKeyInfo;
 import io.supertokens.pluginInterface.jwt.exceptions.DuplicateKeyIdException;
 import io.supertokens.pluginInterface.jwt.sqlstorage.JWTRecipeSQLStorage;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.storageLayer.StorageLayer;
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TestRule;
+
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import java.io.UnsupportedEncodingException;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.SignatureException;
+import java.security.spec.InvalidKeySpecException;
+
+import static junit.framework.TestCase.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 public class ExceptionParsingTest {
     @Rule
@@ -72,7 +71,7 @@ public class ExceptionParsingTest {
     @Test
     public void thirdPartySignupExceptions() throws Exception {
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -104,7 +103,8 @@ public class ExceptionParsingTest {
                 // expected
             }
 
-            assertEquals(storage.getUsersCount(new RECIPE_ID[] { RECIPE_ID.THIRD_PARTY }), 1);
+            assertEquals(storage.getUsersCount(new TenantIdentifier(null, null, null),
+                    new RECIPE_ID[]{RECIPE_ID.THIRD_PARTY}), 1);
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -114,7 +114,7 @@ public class ExceptionParsingTest {
     @Test
     public void emailPasswordSignupExceptions() throws Exception {
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -126,9 +126,9 @@ public class ExceptionParsingTest {
             String userEmail = "useremail@asdf.fdas";
 
             var info = new UserInfo(userId, userEmail, pwHash, System.currentTimeMillis());
-            storage.signUp(info);
+            storage.signUp(new TenantIdentifier(null, null, null), info);
             try {
-                storage.signUp(info);
+                storage.signUp(new TenantIdentifier(null, null, null), info);
                 throw new Exception("This should throw");
             } catch (DuplicateUserIdException ex) {
                 // expected
@@ -136,13 +136,14 @@ public class ExceptionParsingTest {
             var info2 = new UserInfo(userId2, userEmail, pwHash, System.currentTimeMillis());
 
             try {
-                storage.signUp(info2);
+                storage.signUp(new TenantIdentifier(null, null, null), info2);
                 throw new Exception("This should throw");
             } catch (DuplicateEmailException ex) {
                 // expected
             }
 
-            assertEquals(storage.getUsersCount(new RECIPE_ID[] { RECIPE_ID.EMAIL_PASSWORD }), 1);
+            assertEquals(storage.getUsersCount(new TenantIdentifier(null, null, null),
+                    new RECIPE_ID[]{RECIPE_ID.EMAIL_PASSWORD}), 1);
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -156,7 +157,7 @@ public class ExceptionParsingTest {
             UnsupportedEncodingException, InvalidKeySpecException, IllegalBlockSizeException,
             StorageTransactionLogicException, DuplicateUserIdException, DuplicateEmailException {
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -171,8 +172,8 @@ public class ExceptionParsingTest {
 
             var info = new UserInfo(userId, userEmail, pwHash, System.currentTimeMillis());
             var info2 = new UserInfo(userId2, userEmail2, pwHash, System.currentTimeMillis());
-            storage.signUp(info);
-            storage.signUp(info2);
+            storage.signUp(new TenantIdentifier(null, null, null), info);
+            storage.signUp(new TenantIdentifier(null, null, null), info2);
             storage.startTransaction(conn -> {
                 try {
                     storage.updateUsersEmail_Transaction(conn, userId, userEmail2);
@@ -192,7 +193,8 @@ public class ExceptionParsingTest {
                 return true;
             });
 
-            assertEquals(storage.getUsersCount(new RECIPE_ID[] { RECIPE_ID.EMAIL_PASSWORD }), 2);
+            assertEquals(storage.getUsersCount(new TenantIdentifier(null, null, null),
+                    new RECIPE_ID[]{RECIPE_ID.EMAIL_PASSWORD}), 2);
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -206,7 +208,7 @@ public class ExceptionParsingTest {
             UnsupportedEncodingException, InvalidKeySpecException, IllegalBlockSizeException,
             StorageTransactionLogicException, DuplicateUserIdException, DuplicateEmailException {
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -255,7 +257,7 @@ public class ExceptionParsingTest {
     @Test
     public void addPasswordResetTokenExceptions() throws Exception {
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -269,13 +271,13 @@ public class ExceptionParsingTest {
             var userInfo = new UserInfo(userId, userEmail, pwHash, System.currentTimeMillis());
             var info = new PasswordResetTokenInfo(userId, tokenHash, System.currentTimeMillis() + 10000);
             try {
-                storage.addPasswordResetToken(info);
+                storage.addPasswordResetToken(new TenantIdentifier(null, null, null), info);
             } catch (UnknownUserIdException ex) {
-                storage.signUp(userInfo);
+                storage.signUp(new TenantIdentifier(null, null, null), userInfo);
             }
-            storage.addPasswordResetToken(info);
+            storage.addPasswordResetToken(new TenantIdentifier(null, null, null), info);
             try {
-                storage.addPasswordResetToken(info);
+                storage.addPasswordResetToken(new TenantIdentifier(null, null, null), info);
                 throw new Exception("This should throw");
             } catch (DuplicatePasswordResetTokenException ex) {
                 // expected
@@ -289,7 +291,7 @@ public class ExceptionParsingTest {
     @Test
     public void addEmailVerificationTokenExceptions() throws Exception {
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -316,7 +318,7 @@ public class ExceptionParsingTest {
     @Test
     public void verifyEmailExceptions() throws Exception {
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -328,9 +330,9 @@ public class ExceptionParsingTest {
             String userEmail = "useremail@asdf.fdas";
 
             var info = new UserInfo(userId, userEmail, pwHash, System.currentTimeMillis());
-            storage.signUp(info);
+            storage.signUp(new TenantIdentifier(null, null, null), info);
             try {
-                storage.signUp(info);
+                storage.signUp(new TenantIdentifier(null, null, null), info);
                 throw new Exception("This should throw");
             } catch (DuplicateUserIdException ex) {
                 // expected
@@ -338,13 +340,14 @@ public class ExceptionParsingTest {
             var info2 = new UserInfo(userId2, userEmail, pwHash, System.currentTimeMillis());
 
             try {
-                storage.signUp(info2);
+                storage.signUp(new TenantIdentifier(null, null, null), info2);
                 throw new Exception("This should throw");
             } catch (DuplicateEmailException ex) {
                 // expected
             }
 
-            assertEquals(storage.getUsersCount(new RECIPE_ID[] { RECIPE_ID.EMAIL_PASSWORD }), 1);
+            assertEquals(storage.getUsersCount(new TenantIdentifier(null, null, null),
+                    new RECIPE_ID[]{RECIPE_ID.EMAIL_PASSWORD}), 1);
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -357,7 +360,7 @@ public class ExceptionParsingTest {
             NoSuchPaddingException, BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException,
             IllegalBlockSizeException, StorageTransactionLogicException {
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
