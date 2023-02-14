@@ -323,8 +323,10 @@ public class Start
     }
 
     @Override
-    public KeyValueInfo getLegacyAccessTokenSigningKey_Transaction(TransactionConnection con)
+    public KeyValueInfo getLegacyAccessTokenSigningKey_Transaction(TenantIdentifier tenantIdentifier,
+                                                                   TransactionConnection con)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return GeneralQueries.getKeyValue_Transaction(this, sqlCon, ACCESS_TOKEN_SIGNING_KEY_NAME);
@@ -334,7 +336,9 @@ public class Start
     }
 
     @Override
-    public void removeLegacyAccessTokenSigningKey_Transaction(TransactionConnection con) throws StorageQueryException {
+    public void removeLegacyAccessTokenSigningKey_Transaction(TenantIdentifier tenantIdentifier,
+                                                              TransactionConnection con) throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             GeneralQueries.deleteKeyValue_Transaction(this, sqlCon, ACCESS_TOKEN_SIGNING_KEY_NAME);
@@ -344,8 +348,10 @@ public class Start
     }
 
     @Override
-    public KeyValueInfo[] getAccessTokenSigningKeys_Transaction(TransactionConnection con)
+    public KeyValueInfo[] getAccessTokenSigningKeys_Transaction(TenantIdentifier tenantIdentifier,
+                                                                TransactionConnection con)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return SessionQueries.getAccessTokenSigningKeys_Transaction(this, sqlCon);
@@ -355,8 +361,10 @@ public class Start
     }
 
     @Override
-    public void addAccessTokenSigningKey_Transaction(TransactionConnection con, KeyValueInfo info)
+    public void addAccessTokenSigningKey_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
+                                                     KeyValueInfo info)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             SessionQueries.addAccessTokenSigningKey_Transaction(this, sqlCon, info.createdAtTime, info.value);
@@ -366,8 +374,10 @@ public class Start
     }
 
     @Override
-    public void removeAccessTokenSigningKeysBefore(long time) throws StorageQueryException {
+    public void removeAccessTokenSigningKeysBefore(TenantIdentifier tenantIdentifier, long time)
+            throws StorageQueryException {
         try {
+            // TODO..
             SessionQueries.removeAccessTokenSigningKeysBefore(this, time);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -375,7 +385,9 @@ public class Start
     }
 
     @Override
-    public KeyValueInfo getRefreshTokenSigningKey_Transaction(TransactionConnection con) throws StorageQueryException {
+    public KeyValueInfo getRefreshTokenSigningKey_Transaction(TenantIdentifier tenantIdentifier,
+                                                              TransactionConnection con) throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return GeneralQueries.getKeyValue_Transaction(this, sqlCon, REFRESH_TOKEN_KEY_NAME);
@@ -385,8 +397,10 @@ public class Start
     }
 
     @Override
-    public void setRefreshTokenSigningKey_Transaction(TransactionConnection con, KeyValueInfo info)
+    public void setRefreshTokenSigningKey_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
+                                                      KeyValueInfo info)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             GeneralQueries.setKeyValue_Transaction(this, sqlCon, REFRESH_TOKEN_KEY_NAME, info);
@@ -411,10 +425,12 @@ public class Start
     }
 
     @Override
-    public void createNewSession(String sessionHandle, String userId, String refreshTokenHash2,
+    public void createNewSession(TenantIdentifier tenantIdentifier, String sessionHandle, String userId,
+                                 String refreshTokenHash2,
                                  JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT,
                                  long createdAtTime)
             throws StorageQueryException {
+        // TODO..
         try {
             SessionQueries.createNewSession(this, sessionHandle, userId, refreshTokenHash2, userDataInDatabase, expiry,
                     userDataInJWT, createdAtTime);
@@ -424,8 +440,9 @@ public class Start
     }
 
     @Override
-    public void deleteSessionsOfUser(String userId) throws StorageQueryException {
+    public void deleteSessionsOfUser(TenantIdentifier tenantIdentifier, String userId) throws StorageQueryException {
         try {
+            // TODO..
             SessionQueries.deleteSessionsOfUser(this, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -433,8 +450,9 @@ public class Start
     }
 
     @Override
-    public int getNumberOfSessions() throws StorageQueryException {
+    public int getNumberOfSessions(TenantIdentifier tenantIdentifier) throws StorageQueryException {
         try {
+            // TODO..
             return SessionQueries.getNumberOfSessions(this);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -442,8 +460,9 @@ public class Start
     }
 
     @Override
-    public int deleteSession(String[] sessionHandles) throws StorageQueryException {
+    public int deleteSession(TenantIdentifier tenantIdentifier, String[] sessionHandles) throws StorageQueryException {
         try {
+            // TODO..
             return SessionQueries.deleteSession(this, sessionHandles);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -451,8 +470,10 @@ public class Start
     }
 
     @Override
-    public String[] getAllNonExpiredSessionHandlesForUser(String userId) throws StorageQueryException {
+    public String[] getAllNonExpiredSessionHandlesForUser(TenantIdentifier tenantIdentifier, String userId)
+            throws StorageQueryException {
         try {
+            // TODO..
             return SessionQueries.getAllNonExpiredSessionHandlesForUser(this, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -495,8 +516,10 @@ public class Start
     }
 
     @Override
-    public SessionInfo getSession(String sessionHandle) throws StorageQueryException {
+    public SessionInfo getSession(TenantIdentifier tenantIdentifier, String sessionHandle)
+            throws StorageQueryException {
         try {
+            // TODO..
             return SessionQueries.getSession(this, sessionHandle);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -504,9 +527,11 @@ public class Start
     }
 
     @Override
-    public int updateSession(String sessionHandle, JsonObject sessionData, JsonObject jwtPayload)
+    public int updateSession(TenantIdentifier tenantIdentifier, String sessionHandle, JsonObject sessionData,
+                             JsonObject jwtPayload)
             throws StorageQueryException {
         try {
+            // TODO..
             return SessionQueries.updateSession(this, sessionHandle, sessionData, jwtPayload);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -514,8 +539,10 @@ public class Start
     }
 
     @Override
-    public SessionInfo getSessionInfo_Transaction(TransactionConnection con, String sessionHandle)
+    public SessionInfo getSessionInfo_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
+                                                  String sessionHandle)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return SessionQueries.getSessionInfo_Transaction(this, sqlCon, sessionHandle);
@@ -525,10 +552,12 @@ public class Start
     }
 
     @Override
-    public void updateSessionInfo_Transaction(TransactionConnection con, String sessionHandle, String refreshTokenHash2,
+    public void updateSessionInfo_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
+                                              String sessionHandle, String refreshTokenHash2,
                                               long expiry) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
+            // TODO..
             SessionQueries.updateSessionInfo_Transaction(this, sqlCon, sessionHandle, refreshTokenHash2, expiry);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -591,7 +620,7 @@ public class Start
         // TODO..
         // check if the input userId is being used in nonAuthRecipes.
         if (className.equals(SessionStorage.class.getName())) {
-            String[] sessionHandlesForUser = getAllNonExpiredSessionHandlesForUser(userId);
+            String[] sessionHandlesForUser = getAllNonExpiredSessionHandlesForUser(tenantIdentifier, userId);
             return sessionHandlesForUser.length > 0;
         } else if (className.equals(UserRolesStorage.class.getName())) {
             String[] roles = getRolesForUser(userId);
@@ -618,7 +647,8 @@ public class Start
         // add entries to nonAuthRecipe tables with input userId
         if (className.equals(SessionStorage.class.getName())) {
             try {
-                createNewSession("sessionHandle", userId, "refreshTokenHash", new JsonObject(),
+                createNewSession(new TenantIdentifier(null, null, null), "sessionHandle", userId, "refreshTokenHash",
+                        new JsonObject(),
                         System.currentTimeMillis() + 1000000, new JsonObject(), System.currentTimeMillis());
             } catch (Exception e) {
                 throw new StorageQueryException(e);
