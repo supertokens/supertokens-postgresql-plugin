@@ -19,11 +19,11 @@ package io.supertokens.storage.postgresql.test;
 
 import io.supertokens.ProcessState;
 import io.supertokens.passwordless.Passwordless;
-import io.supertokens.passwordless.exceptions.RestartFlowException;
 import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.sqlStorage.SQLStorage;
 import io.supertokens.storageLayer.StorageLayer;
 import org.junit.AfterClass;
@@ -38,9 +38,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class DeadlockTest {
     @Rule
@@ -59,15 +57,17 @@ public class DeadlockTest {
     @Test
     public void transactionDeadlockTesting()
             throws InterruptedException, StorageQueryException, StorageTransactionLogicException {
-        String[] args = { "../" };
+        String[] args = {"../"};
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
         Storage storage = StorageLayer.getStorage(process.getProcess());
         SQLStorage sqlStorage = (SQLStorage) storage;
         sqlStorage.startTransaction(con -> {
-            sqlStorage.setKeyValue_Transaction(con, "Key", new KeyValueInfo("Value"));
-            sqlStorage.setKeyValue_Transaction(con, "Key1", new KeyValueInfo("Value1"));
+            sqlStorage.setKeyValue_Transaction(new TenantIdentifier(null, null, null), con, "Key",
+                    new KeyValueInfo("Value"));
+            sqlStorage.setKeyValue_Transaction(new TenantIdentifier(null, null, null), con, "Key1",
+                    new KeyValueInfo("Value1"));
             sqlStorage.commitTransaction(con);
             return null;
         });
@@ -83,7 +83,7 @@ public class DeadlockTest {
             try {
                 sqlStorage.startTransaction(con -> {
 
-                    sqlStorage.getKeyValue_Transaction(con, "Key");
+                    sqlStorage.getKeyValue_Transaction(new TenantIdentifier(null, null, null), con, "Key");
 
                     synchronized (syncObject) {
                         t1State.set("read");
@@ -99,7 +99,7 @@ public class DeadlockTest {
                         }
                     }
 
-                    sqlStorage.getKeyValue_Transaction(con, "Key1");
+                    sqlStorage.getKeyValue_Transaction(new TenantIdentifier(null, null, null), con, "Key1");
                     t1Failed.set(false); // it should come here because we will try three times.
                     return null;
                 });
@@ -111,7 +111,7 @@ public class DeadlockTest {
             try {
                 sqlStorage.startTransaction(con -> {
 
-                    sqlStorage.getKeyValue_Transaction(con, "Key1");
+                    sqlStorage.getKeyValue_Transaction(new TenantIdentifier(null, null, null), con, "Key1");
 
                     synchronized (syncObject) {
                         t2State.set("read");
@@ -127,7 +127,7 @@ public class DeadlockTest {
                         }
                     }
 
-                    sqlStorage.getKeyValue_Transaction(con, "Key");
+                    sqlStorage.getKeyValue_Transaction(new TenantIdentifier(null, null, null), con, "Key");
 
                     t2Failed.set(false); // it should come here because we will try three times.
                     return null;
@@ -155,7 +155,7 @@ public class DeadlockTest {
 
     @Test
     public void testCodeCreationRapidly() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -191,7 +191,7 @@ public class DeadlockTest {
 
     @Test
     public void testCodeCreationRapidlyWithDifferentEmails() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
