@@ -635,7 +635,7 @@ public class Start
             String[] sessionHandlesForUser = getAllNonExpiredSessionHandlesForUser(appIdentifier, userId);
             return sessionHandlesForUser.length > 0;
         } else if (className.equals(UserRolesStorage.class.getName())) {
-            String[] roles = getRolesForUser(userId);
+            String[] roles = getRolesForUser(appIdentifier, userId);
             return roles.length > 0;
         } else if (className.equals(UserMetadataStorage.class.getName())) {
             JsonObject userMetadata = getUserMetadata(appIdentifier, userId);
@@ -669,11 +669,11 @@ public class Start
             try {
                 String role = "testRole";
                 this.startTransaction(con -> {
-                    createNewRoleOrDoNothingIfExists_Transaction(con, role);
+                    createNewRoleOrDoNothingIfExists_Transaction(new TenantIdentifier(null, null, null), con, role);
                     return null;
                 });
                 try {
-                    addRoleToUser(userId, role);
+                    addRoleToUser(new TenantIdentifier(null, null, null), userId, role);
                 } catch (Exception e) {
                     throw new StorageTransactionLogicException(e);
                 }
@@ -1648,9 +1648,9 @@ public class Start
     }
 
     @Override
-    public void addRoleToUser(String userId, String role)
+    public void addRoleToUser(TenantIdentifier tenantIdentifier, String userId, String role)
             throws StorageQueryException, UnknownRoleException, DuplicateUserRoleMappingException {
-
+        // TODO...
         try {
             UserRolesQueries.addRoleToUser(this, userId, role);
         } catch (SQLException e) {
@@ -1670,8 +1670,18 @@ public class Start
     }
 
     @Override
-    public String[] getRolesForUser(String userId) throws StorageQueryException {
+    public String[] getRolesForUser(TenantIdentifier tenantIdentifier, String userId) throws StorageQueryException {
         try {
+            // TODO..
+            return UserRolesQueries.getRolesForUser(this, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    private String[] getRolesForUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
+        try {
+            // TODO..
             return UserRolesQueries.getRolesForUser(this, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1679,8 +1689,9 @@ public class Start
     }
 
     @Override
-    public String[] getUsersForRole(String role) throws StorageQueryException {
+    public String[] getUsersForRole(TenantIdentifier tenantIdentifier, String role) throws StorageQueryException {
         try {
+            // TODO..
             return UserRolesQueries.getUsersForRole(this, role);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1688,8 +1699,9 @@ public class Start
     }
 
     @Override
-    public String[] getPermissionsForRole(String role) throws StorageQueryException {
+    public String[] getPermissionsForRole(AppIdentifier appIdentifier, String role) throws StorageQueryException {
         try {
+            // TODO..
             return UserRolesQueries.getPermissionsForRole(this, role);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1697,8 +1709,10 @@ public class Start
     }
 
     @Override
-    public String[] getRolesThatHavePermission(String permission) throws StorageQueryException {
+    public String[] getRolesThatHavePermission(AppIdentifier appIdentifier, String permission)
+            throws StorageQueryException {
         try {
+            // TODO..
             return UserRolesQueries.getRolesThatHavePermission(this, permission);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1706,8 +1720,9 @@ public class Start
     }
 
     @Override
-    public boolean deleteRole(String role) throws StorageQueryException {
+    public boolean deleteRole(AppIdentifier appIdentifier, String role) throws StorageQueryException {
         try {
+            // TODO..
             return UserRolesQueries.deleteRole(this, role);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1715,8 +1730,9 @@ public class Start
     }
 
     @Override
-    public String[] getRoles() throws StorageQueryException {
+    public String[] getRoles(AppIdentifier appIdentifier) throws StorageQueryException {
         try {
+            // TODO..
             return UserRolesQueries.getRoles(this);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1724,8 +1740,9 @@ public class Start
     }
 
     @Override
-    public boolean doesRoleExist(String role) throws StorageQueryException {
+    public boolean doesRoleExist(AppIdentifier appIdentifier, String role) throws StorageQueryException {
         try {
+            // TODO..
             return UserRolesQueries.doesRoleExist(this, role);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1733,8 +1750,9 @@ public class Start
     }
 
     @Override
-    public int deleteAllRolesForUser(String userId) throws StorageQueryException {
+    public int deleteAllRolesForUser(TenantIdentifier tenantIdentifier, String userId) throws StorageQueryException {
         try {
+            // TODO..
             return UserRolesQueries.deleteAllRolesForUser(this, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1742,8 +1760,20 @@ public class Start
     }
 
     @Override
-    public boolean deleteRoleForUser_Transaction(TransactionConnection con, String userId, String role)
+    public void deleteAllRolesForUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
+        try {
+            // TODO..
+            UserRolesQueries.deleteAllRolesForUser(this, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean deleteRoleForUser_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
+                                                 String userId, String role)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
 
         try {
@@ -1754,8 +1784,10 @@ public class Start
     }
 
     @Override
-    public boolean createNewRoleOrDoNothingIfExists_Transaction(TransactionConnection con, String role)
+    public boolean createNewRoleOrDoNothingIfExists_Transaction(TenantIdentifier tenantIdentifier,
+                                                                TransactionConnection con, String role)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
 
         try {
@@ -1766,9 +1798,11 @@ public class Start
     }
 
     @Override
-    public void addPermissionToRoleOrDoNothingIfExists_Transaction(TransactionConnection con, String role,
+    public void addPermissionToRoleOrDoNothingIfExists_Transaction(AppIdentifier appIdentifier,
+                                                                   TransactionConnection con, String role,
                                                                    String permission)
             throws StorageQueryException, UnknownRoleException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             UserRolesQueries.addPermissionToRoleOrDoNothingIfExists_Transaction(this, sqlCon, role, permission);
@@ -1786,8 +1820,10 @@ public class Start
     }
 
     @Override
-    public boolean deletePermissionForRole_Transaction(TransactionConnection con, String role, String permission)
+    public boolean deletePermissionForRole_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                       String role, String permission)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return UserRolesQueries.deletePermissionForRole_Transaction(this, sqlCon, role, permission);
@@ -1797,9 +1833,10 @@ public class Start
     }
 
     @Override
-    public int deleteAllPermissionsForRole_Transaction(TransactionConnection con, String role)
+    public int deleteAllPermissionsForRole_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                       String role)
             throws StorageQueryException {
-
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return UserRolesQueries.deleteAllPermissionsForRole_Transaction(this, sqlCon, role);
@@ -1809,7 +1846,9 @@ public class Start
     }
 
     @Override
-    public boolean doesRoleExist_Transaction(TransactionConnection con, String role) throws StorageQueryException {
+    public boolean doesRoleExist_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String role)
+            throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return UserRolesQueries.doesRoleExist_transaction(this, sqlCon, role);
