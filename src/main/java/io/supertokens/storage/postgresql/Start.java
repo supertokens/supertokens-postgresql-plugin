@@ -638,7 +638,7 @@ public class Start
             String[] roles = getRolesForUser(userId);
             return roles.length > 0;
         } else if (className.equals(UserMetadataStorage.class.getName())) {
-            JsonObject userMetadata = getUserMetadata(userId);
+            JsonObject userMetadata = getUserMetadata(appIdentifier, userId);
             return userMetadata != null;
         } else if (className.equals(EmailVerificationStorage.class.getName())) {
             try {
@@ -694,7 +694,7 @@ public class Start
             data.addProperty("test", "testData");
             try {
                 this.startTransaction(con -> {
-                    setUserMetadata_Transaction(con, userId, data);
+                    setUserMetadata_Transaction(new AppIdentifier(null, null), con, userId, data);
                     return null;
                 });
             } catch (StorageTransactionLogicException e) {
@@ -1603,8 +1603,9 @@ public class Start
     }
 
     @Override
-    public JsonObject getUserMetadata(String userId) throws StorageQueryException {
+    public JsonObject getUserMetadata(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
         try {
+            // TODO..
             return UserMetadataQueries.getUserMetadata(this, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1612,8 +1613,9 @@ public class Start
     }
 
     @Override
-    public JsonObject getUserMetadata_Transaction(TransactionConnection con, String userId)
+    public JsonObject getUserMetadata_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String userId)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return UserMetadataQueries.getUserMetadata_Transaction(this, sqlCon, userId);
@@ -1623,8 +1625,10 @@ public class Start
     }
 
     @Override
-    public int setUserMetadata_Transaction(TransactionConnection con, String userId, JsonObject metadata)
+    public int setUserMetadata_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String userId,
+                                           JsonObject metadata)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return UserMetadataQueries.setUserMetadata_Transaction(this, sqlCon, userId, metadata);
@@ -1634,8 +1638,9 @@ public class Start
     }
 
     @Override
-    public int deleteUserMetadata(String userId) throws StorageQueryException {
+    public int deleteUserMetadata(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
         try {
+            // TODO..
             return UserMetadataQueries.deleteUserMetadata(this, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
