@@ -441,7 +441,8 @@ public class Start
     }
 
     @Override
-    public void deleteSessionsOfUser(TenantIdentifier tenantIdentifier, String userId) throws StorageQueryException {
+    public void deleteSessionsOfUser(AppIdentifier appIdentifierIdentifier, String userId)
+            throws StorageQueryException {
         try {
             // TODO..
             SessionQueries.deleteSessionsOfUser(this, userId);
@@ -1198,6 +1199,17 @@ public class Start
     @Override
     public boolean doesUserIdExist(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
         // TODO..
+        try {
+            return GeneralQueries.doesUserIdExist(this, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean doesUserIdExist(TenantIdentifier tenantIdentifierIdentifier, String userId)
+            throws StorageQueryException {
+        // TODO:...
         try {
             return GeneralQueries.doesUserIdExist(this, userId);
         } catch (SQLException e) {

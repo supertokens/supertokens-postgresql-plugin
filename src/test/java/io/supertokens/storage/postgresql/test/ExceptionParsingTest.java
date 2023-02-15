@@ -32,6 +32,7 @@ import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicExceptio
 import io.supertokens.pluginInterface.jwt.JWTSymmetricSigningKeyInfo;
 import io.supertokens.pluginInterface.jwt.exceptions.DuplicateKeyIdException;
 import io.supertokens.pluginInterface.jwt.sqlstorage.JWTRecipeSQLStorage;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.storageLayer.StorageLayer;
@@ -374,13 +375,13 @@ public class ExceptionParsingTest {
             var info = new JWTSymmetricSigningKeyInfo(keyId, System.currentTimeMillis(), algorithm, keyString);
             storage.startTransaction(con -> {
                 try {
-                    storage.setJWTSigningKey_Transaction(con, info);
+                    storage.setJWTSigningKey_Transaction(new AppIdentifier(null, null), con, info);
                 } catch (DuplicateKeyIdException e) {
                     throw new StorageTransactionLogicException(e);
                 }
 
                 try {
-                    storage.setJWTSigningKey_Transaction(con, info);
+                    storage.setJWTSigningKey_Transaction(new AppIdentifier(null, null), con, info);
                     throw new StorageTransactionLogicException(new Exception("This should throw"));
                 } catch (DuplicateKeyIdException e) {
                     // expected
