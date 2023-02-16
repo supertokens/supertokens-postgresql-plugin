@@ -177,7 +177,7 @@ public class ExceptionParsingTest {
             storage.signUp(new TenantIdentifier(null, null, null), info2);
             storage.startTransaction(conn -> {
                 try {
-                    storage.updateUsersEmail_Transaction(conn, userId, userEmail2);
+                    storage.updateUsersEmail_Transaction(new AppIdentifier(null, null), conn, userId, userEmail2);
                     throw new StorageTransactionLogicException(new Exception("This should throw"));
                 } catch (DuplicateEmailException ex) {
                     // expected
@@ -187,7 +187,7 @@ public class ExceptionParsingTest {
 
             storage.startTransaction(conn -> {
                 try {
-                    storage.updateUsersEmail_Transaction(conn, userId, userEmail3);
+                    storage.updateUsersEmail_Transaction(new AppIdentifier(null, null), conn, userId, userEmail3);
                 } catch (DuplicateEmailException ex) {
                     throw new StorageQueryException(ex);
                 }
@@ -272,13 +272,13 @@ public class ExceptionParsingTest {
             var userInfo = new UserInfo(userId, userEmail, pwHash, System.currentTimeMillis());
             var info = new PasswordResetTokenInfo(userId, tokenHash, System.currentTimeMillis() + 10000);
             try {
-                storage.addPasswordResetToken(new TenantIdentifier(null, null, null), info);
+                storage.addPasswordResetToken(new AppIdentifier(null, null), info);
             } catch (UnknownUserIdException ex) {
                 storage.signUp(new TenantIdentifier(null, null, null), userInfo);
             }
-            storage.addPasswordResetToken(new TenantIdentifier(null, null, null), info);
+            storage.addPasswordResetToken(new AppIdentifier(null, null), info);
             try {
-                storage.addPasswordResetToken(new TenantIdentifier(null, null, null), info);
+                storage.addPasswordResetToken(new AppIdentifier(null, null), info);
                 throw new Exception("This should throw");
             } catch (DuplicatePasswordResetTokenException ex) {
                 // expected
