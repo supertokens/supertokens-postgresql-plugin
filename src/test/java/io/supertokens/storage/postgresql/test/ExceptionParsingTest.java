@@ -219,16 +219,17 @@ public class ExceptionParsingTest {
             String userEmail = "useremail@asdf.fdas";
 
             storage.startTransaction(conn -> {
-                storage.updateIsEmailVerified_Transaction(conn, userId, userEmail, true);
+                storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail, true);
                 // The insert in this call throws, but it's swallowed in the method
-                storage.updateIsEmailVerified_Transaction(conn, userId, userEmail, true);
+                storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail, true);
                 return true;
             });
 
             storage.startTransaction(conn -> {
                 try {
                     // This call should throw, and the method shouldn't swallow it
-                    storage.updateIsEmailVerified_Transaction(conn, null, userEmail, true);
+                    storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, null, userEmail,
+                            true);
                     throw new StorageTransactionLogicException(new Exception("This should throw"));
                 } catch (StorageQueryException ex) {
                     // expected
@@ -237,7 +238,8 @@ public class ExceptionParsingTest {
             });
 
             storage.startTransaction(conn -> {
-                storage.updateIsEmailVerified_Transaction(conn, userId, userEmail, false);
+                storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail,
+                        false);
                 return true;
             });
 
@@ -303,9 +305,9 @@ public class ExceptionParsingTest {
             String userEmail = "useremail@asdf.fdas";
 
             var info = new EmailVerificationTokenInfo(userId, tokenHash, System.currentTimeMillis() + 10000, userEmail);
-            storage.addEmailVerificationToken(info);
+            storage.addEmailVerificationToken(new AppIdentifier(null, null), info);
             try {
-                storage.addEmailVerificationToken(info);
+                storage.addEmailVerificationToken(new AppIdentifier(null, null), info);
                 throw new Exception("This should throw");
             } catch (DuplicateEmailVerificationTokenException ex) {
                 // expected

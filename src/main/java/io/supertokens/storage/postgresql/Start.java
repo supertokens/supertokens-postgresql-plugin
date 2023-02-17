@@ -684,7 +684,7 @@ public class Start
             try {
                 EmailVerificationTokenInfo info = new EmailVerificationTokenInfo(userId, "someToken", 10000,
                         "test123@example.com");
-                addEmailVerificationToken(info);
+                addEmailVerificationToken(new AppIdentifier(null, null), info);
 
             } catch (DuplicateEmailVerificationTokenException e) {
                 throw new StorageQueryException(e);
@@ -916,9 +916,11 @@ public class Start
     }
 
     @Override
-    public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser_Transaction(TransactionConnection con,
+    public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser_Transaction(AppIdentifier appIdentifier,
+                                                                                            TransactionConnection con,
                                                                                             String userId, String email)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return EmailVerificationQueries.getAllEmailVerificationTokenInfoForUser_Transaction(this, sqlCon, userId,
@@ -929,8 +931,10 @@ public class Start
     }
 
     @Override
-    public void deleteAllEmailVerificationTokensForUser_Transaction(TransactionConnection con, String userId,
+    public void deleteAllEmailVerificationTokensForUser_Transaction(AppIdentifier appIdentifier,
+                                                                    TransactionConnection con, String userId,
                                                                     String email) throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             EmailVerificationQueries.deleteAllEmailVerificationTokensForUser_Transaction(this, sqlCon, userId, email);
@@ -940,8 +944,10 @@ public class Start
     }
 
     @Override
-    public void updateIsEmailVerified_Transaction(TransactionConnection con, String userId, String email,
+    public void updateIsEmailVerified_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String userId,
+                                                  String email,
                                                   boolean isEmailVerified) throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             EmailVerificationQueries.updateUsersIsEmailVerified_Transaction(this, sqlCon, userId, email,
@@ -964,8 +970,10 @@ public class Start
     }
 
     @Override
-    public void deleteEmailVerificationUserInfo(String userId) throws StorageQueryException {
+    public void deleteEmailVerificationUserInfo(AppIdentifier appIdentifier, String userId)
+            throws StorageQueryException {
         try {
+            // TODO..
             EmailVerificationQueries.deleteUserInfo(this, userId);
         } catch (StorageTransactionLogicException e) {
             throw new StorageQueryException(e.actualException);
@@ -973,9 +981,10 @@ public class Start
     }
 
     @Override
-    public void addEmailVerificationToken(EmailVerificationTokenInfo emailVerificationInfo)
+    public void addEmailVerificationToken(AppIdentifier appIdentifier, EmailVerificationTokenInfo emailVerificationInfo)
             throws StorageQueryException, DuplicateEmailVerificationTokenException {
         try {
+            // TODO..
             EmailVerificationQueries.addEmailVerificationToken(this, emailVerificationInfo.userId,
                     emailVerificationInfo.token, emailVerificationInfo.tokenExpiry, emailVerificationInfo.email);
         } catch (SQLException e) {
@@ -996,8 +1005,10 @@ public class Start
     }
 
     @Override
-    public EmailVerificationTokenInfo getEmailVerificationTokenInfo(String token) throws StorageQueryException {
+    public EmailVerificationTokenInfo getEmailVerificationTokenInfo(AppIdentifier appIdentifier, String token)
+            throws StorageQueryException {
         try {
+            // TODO..
             return EmailVerificationQueries.getEmailVerificationTokenInfo(this, token);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1005,8 +1016,9 @@ public class Start
     }
 
     @Override
-    public void revokeAllTokens(String userId, String email) throws StorageQueryException {
+    public void revokeAllTokens(AppIdentifier appIdentifier, String userId, String email) throws StorageQueryException {
         try {
+            // TODO..
             EmailVerificationQueries.revokeAllTokens(this, userId, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1014,8 +1026,9 @@ public class Start
     }
 
     @Override
-    public void unverifyEmail(String userId, String email) throws StorageQueryException {
+    public void unverifyEmail(AppIdentifier appIdentifier, String userId, String email) throws StorageQueryException {
         try {
+            // TODO..
             EmailVerificationQueries.unverifyEmail(this, userId, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1023,8 +1036,10 @@ public class Start
     }
 
     @Override
-    public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser(String userId, String email)
+    public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser(AppIdentifier appIdentifier,
+                                                                                String userId, String email)
             throws StorageQueryException {
+        // TODO..
         try {
             return EmailVerificationQueries.getAllEmailVerificationTokenInfoForUser(this, userId, email);
         } catch (SQLException e) {
@@ -1033,8 +1048,10 @@ public class Start
     }
 
     @Override
-    public boolean isEmailVerified(String userId, String email) throws StorageQueryException {
+    public boolean isEmailVerified(AppIdentifier appIdentifier, String userId, String email)
+            throws StorageQueryException {
         try {
+            // TODO..
             return EmailVerificationQueries.isEmailVerified(this, userId, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
