@@ -1270,8 +1270,10 @@ public class Start
     }
 
     @Override
-    public PasswordlessDevice getDevice_Transaction(TransactionConnection con, String deviceIdHash)
+    public PasswordlessDevice getDevice_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
+                                                    String deviceIdHash)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return PasswordlessQueries.getDevice_Transaction(this, sqlCon, deviceIdHash);
@@ -1281,8 +1283,10 @@ public class Start
     }
 
     @Override
-    public void incrementDeviceFailedAttemptCount_Transaction(TransactionConnection con, String deviceIdHash)
+    public void incrementDeviceFailedAttemptCount_Transaction(TenantIdentifier tenantIdentifier,
+                                                              TransactionConnection con, String deviceIdHash)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             PasswordlessQueries.incrementDeviceFailedAttemptCount_Transaction(this, sqlCon, deviceIdHash);
@@ -1293,8 +1297,10 @@ public class Start
     }
 
     @Override
-    public PasswordlessCode[] getCodesOfDevice_Transaction(TransactionConnection con, String deviceIdHash)
+    public PasswordlessCode[] getCodesOfDevice_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
+                                                           String deviceIdHash)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return PasswordlessQueries.getCodesOfDevice_Transaction(this, sqlCon, deviceIdHash);
@@ -1304,7 +1310,9 @@ public class Start
     }
 
     @Override
-    public void deleteDevice_Transaction(TransactionConnection con, String deviceIdHash) throws StorageQueryException {
+    public void deleteDevice_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
+                                         String deviceIdHash) throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             PasswordlessQueries.deleteDevice_Transaction(this, sqlCon, deviceIdHash);
@@ -1315,8 +1323,10 @@ public class Start
     }
 
     @Override
-    public void deleteDevicesByPhoneNumber_Transaction(TransactionConnection con, @Nonnull String phoneNumber)
+    public void deleteDevicesByPhoneNumber_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
+                                                       @Nonnull String phoneNumber)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             PasswordlessQueries.deleteDevicesByPhoneNumber_Transaction(this, sqlCon, phoneNumber);
@@ -1326,8 +1336,10 @@ public class Start
     }
 
     @Override
-    public void deleteDevicesByEmail_Transaction(TransactionConnection con, @Nonnull String email)
+    public void deleteDevicesByEmail_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
+                                                 @Nonnull String email)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             PasswordlessQueries.deleteDevicesByEmail_Transaction(this, sqlCon, email);
@@ -1337,8 +1349,34 @@ public class Start
     }
 
     @Override
-    public PasswordlessCode getCodeByLinkCodeHash_Transaction(TransactionConnection con, String linkCodeHash)
+    public void deleteDevicesByPhoneNumber_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                       String phoneNumber, String userId) throws StorageQueryException {
+        // TODO..
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            PasswordlessQueries.deleteDevicesByPhoneNumber_Transaction(this, sqlCon, phoneNumber);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void deleteDevicesByEmail_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String email,
+                                                 String userId) throws StorageQueryException {
+        // TODO..
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            PasswordlessQueries.deleteDevicesByEmail_Transaction(this, sqlCon, email);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public PasswordlessCode getCodeByLinkCodeHash_Transaction(TenantIdentifier tenantIdentifier,
+                                                              TransactionConnection con, String linkCodeHash)
             throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return PasswordlessQueries.getCodeByLinkCodeHash_Transaction(this, sqlCon, linkCodeHash);
@@ -1348,7 +1386,9 @@ public class Start
     }
 
     @Override
-    public void deleteCode_Transaction(TransactionConnection con, String deviceIdHash) throws StorageQueryException {
+    public void deleteCode_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
+                                       String deviceIdHash) throws StorageQueryException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             PasswordlessQueries.deleteCode_Transaction(this, sqlCon, deviceIdHash);
@@ -1358,8 +1398,10 @@ public class Start
     }
 
     @Override
-    public void updateUserEmail_Transaction(TransactionConnection con, String userId, String email)
+    public void updateUserEmail_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String userId,
+                                            String email)
             throws StorageQueryException, UnknownUserIdException, DuplicateEmailException {
+        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             int updated_rows = PasswordlessQueries.updateUserEmail_Transaction(this, sqlCon, userId, email);
@@ -1381,8 +1423,10 @@ public class Start
     }
 
     @Override
-    public void updateUserPhoneNumber_Transaction(TransactionConnection con, String userId, String phoneNumber)
+    public void updateUserPhoneNumber_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String userId,
+                                                  String phoneNumber)
             throws StorageQueryException, UnknownUserIdException, DuplicatePhoneNumberException {
+        // TODO...
         Connection sqlCon = (Connection) con.getConnection();
         try {
             int updated_rows = PasswordlessQueries.updateUserPhoneNumber_Transaction(this, sqlCon, userId, phoneNumber);
@@ -1406,10 +1450,12 @@ public class Start
     }
 
     @Override
-    public void createDeviceWithCode(@Nullable String email, @Nullable String phoneNumber, @NotNull String linkCodeSalt,
+    public void createDeviceWithCode(TenantIdentifier tenantIdentifier, @Nullable String email,
+                                     @Nullable String phoneNumber, @NotNull String linkCodeSalt,
                                      PasswordlessCode code)
             throws StorageQueryException, DuplicateDeviceIdHashException,
             DuplicateCodeIdException, DuplicateLinkCodeHashException {
+        // TODO..
         if (email == null && phoneNumber == null) {
             throw new IllegalArgumentException("Both email and phoneNumber can't be null");
         }
@@ -1439,9 +1485,10 @@ public class Start
     }
 
     @Override
-    public void createCode(PasswordlessCode code) throws StorageQueryException, UnknownDeviceIdHash,
+    public void createCode(TenantIdentifier tenantIdentifier, PasswordlessCode code)
+            throws StorageQueryException, UnknownDeviceIdHash,
             DuplicateCodeIdException, DuplicateLinkCodeHashException {
-
+        // TODO..
         try {
             PasswordlessQueries.createCode(this, code);
         } catch (StorageTransactionLogicException e) {
@@ -1468,9 +1515,11 @@ public class Start
     }
 
     @Override
-    public void createUser(io.supertokens.pluginInterface.passwordless.UserInfo user) throws StorageQueryException,
+    public void createUser(TenantIdentifier tenantIdentifier, io.supertokens.pluginInterface.passwordless.UserInfo user)
+            throws StorageQueryException,
             DuplicateEmailException, DuplicatePhoneNumberException, DuplicateUserIdException {
         try {
+            // TODO..
             PasswordlessQueries.createUser(this, user);
         } catch (StorageTransactionLogicException e) {
 
@@ -1501,8 +1550,9 @@ public class Start
     }
 
     @Override
-    public void deletePasswordlessUser(String userId) throws StorageQueryException {
+    public void deletePasswordlessUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
         try {
+            // TODO..
             PasswordlessQueries.deleteUser(this, userId);
         } catch (StorageTransactionLogicException e) {
             throw new StorageQueryException(e.actualException);
@@ -1510,8 +1560,10 @@ public class Start
     }
 
     @Override
-    public PasswordlessDevice getDevice(String deviceIdHash) throws StorageQueryException {
+    public PasswordlessDevice getDevice(TenantIdentifier tenantIdentifier, String deviceIdHash)
+            throws StorageQueryException {
         try {
+            // TODO..
             return PasswordlessQueries.getDevice(this, deviceIdHash);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1519,8 +1571,10 @@ public class Start
     }
 
     @Override
-    public PasswordlessDevice[] getDevicesByEmail(String email) throws StorageQueryException {
+    public PasswordlessDevice[] getDevicesByEmail(TenantIdentifier tenantIdentifier, String email)
+            throws StorageQueryException {
         try {
+            // TODO..
             return PasswordlessQueries.getDevicesByEmail(this, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1528,8 +1582,10 @@ public class Start
     }
 
     @Override
-    public PasswordlessDevice[] getDevicesByPhoneNumber(String phoneNumber) throws StorageQueryException {
+    public PasswordlessDevice[] getDevicesByPhoneNumber(TenantIdentifier tenantIdentifier, String phoneNumber)
+            throws StorageQueryException {
         try {
+            // TODO..
             return PasswordlessQueries.getDevicesByPhoneNumber(this, phoneNumber);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1537,8 +1593,10 @@ public class Start
     }
 
     @Override
-    public PasswordlessCode[] getCodesOfDevice(String deviceIdHash) throws StorageQueryException {
+    public PasswordlessCode[] getCodesOfDevice(TenantIdentifier tenantIdentifier, String deviceIdHash)
+            throws StorageQueryException {
         try {
+            // TODO..
             return PasswordlessQueries.getCodesOfDevice(this, deviceIdHash);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1546,8 +1604,10 @@ public class Start
     }
 
     @Override
-    public PasswordlessCode[] getCodesBefore(long time) throws StorageQueryException {
+    public PasswordlessCode[] getCodesBefore(TenantIdentifier tenantIdentifier, long time)
+            throws StorageQueryException {
         try {
+            // TODO..
             return PasswordlessQueries.getCodesBefore(this, time);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1555,8 +1615,9 @@ public class Start
     }
 
     @Override
-    public PasswordlessCode getCode(String codeId) throws StorageQueryException {
+    public PasswordlessCode getCode(TenantIdentifier tenantIdentifier, String codeId) throws StorageQueryException {
         try {
+            // TODO..
             return PasswordlessQueries.getCode(this, codeId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1564,8 +1625,10 @@ public class Start
     }
 
     @Override
-    public PasswordlessCode getCodeByLinkCodeHash(String linkCodeHash) throws StorageQueryException {
+    public PasswordlessCode getCodeByLinkCodeHash(TenantIdentifier tenantIdentifier, String linkCodeHash)
+            throws StorageQueryException {
         try {
+            // TODO..
             return PasswordlessQueries.getCodeByLinkCodeHash(this, linkCodeHash);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1573,8 +1636,10 @@ public class Start
     }
 
     @Override
-    public io.supertokens.pluginInterface.passwordless.UserInfo getUserById(String userId)
+    public io.supertokens.pluginInterface.passwordless.UserInfo getUserById(AppIdentifier appIdentifier,
+                                                                            String userId)
             throws StorageQueryException {
+        // TODO..
         try {
             return PasswordlessQueries.getUserById(this, userId);
         } catch (SQLException e) {
@@ -1583,8 +1648,10 @@ public class Start
     }
 
     @Override
-    public io.supertokens.pluginInterface.passwordless.UserInfo getUserByEmail(String email)
+    public io.supertokens.pluginInterface.passwordless.UserInfo getUserByEmail(TenantIdentifier tenantIdentifier,
+                                                                               String email)
             throws StorageQueryException {
+        // TODO..
         try {
             return PasswordlessQueries.getUserByEmail(this, email);
         } catch (SQLException e) {
@@ -1593,8 +1660,10 @@ public class Start
     }
 
     @Override
-    public io.supertokens.pluginInterface.passwordless.UserInfo getUserByPhoneNumber(String phoneNumber)
+    public io.supertokens.pluginInterface.passwordless.UserInfo getUserByPhoneNumber(TenantIdentifier tenantIdentifier,
+                                                                                     String phoneNumber)
             throws StorageQueryException {
+        // TODO...
         try {
             return PasswordlessQueries.getUserByPhoneNumber(this, phoneNumber);
         } catch (SQLException e) {
