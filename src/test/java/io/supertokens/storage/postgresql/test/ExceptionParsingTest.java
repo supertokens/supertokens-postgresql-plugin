@@ -87,9 +87,9 @@ public class ExceptionParsingTest {
             var tp = new io.supertokens.pluginInterface.thirdparty.UserInfo.ThirdParty(tpId, thirdPartyUserId);
             var info = new io.supertokens.pluginInterface.thirdparty.UserInfo(userId, userEmail, tp,
                     System.currentTimeMillis());
-            storage.signUp(info);
+            storage.signUp(new TenantIdentifier(null, null, null), info);
             try {
-                storage.signUp(info);
+                storage.signUp(new TenantIdentifier(null, null, null), info);
                 throw new Exception("This should throw");
             } catch (io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException ex) {
                 // expected
@@ -98,7 +98,7 @@ public class ExceptionParsingTest {
                     System.currentTimeMillis());
 
             try {
-                storage.signUp(info2);
+                storage.signUp(new TenantIdentifier(null, null, null), info2);
                 throw new Exception("This should throw");
             } catch (DuplicateThirdPartyUserException ex) {
                 // expected

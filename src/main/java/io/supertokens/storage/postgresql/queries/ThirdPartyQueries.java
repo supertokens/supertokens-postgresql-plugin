@@ -33,7 +33,6 @@ import java.util.Collections;
 import java.util.List;
 
 import static io.supertokens.pluginInterface.RECIPE_ID.THIRD_PARTY;
-import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
@@ -180,7 +179,8 @@ public class ThirdPartyQueries {
     }
 
     public static void updateUserEmail_Transaction(Start start, Connection con, String thirdPartyId,
-            String thirdPartyUserId, String newEmail) throws SQLException, StorageQueryException {
+                                                   String thirdPartyUserId, String newEmail)
+            throws SQLException, StorageQueryException {
         String QUERY = "UPDATE " + getConfig(start).getThirdPartyUsersTable()
                 + " SET email = ? WHERE third_party_id = ? AND third_party_user_id = ?";
 
@@ -192,7 +192,8 @@ public class ThirdPartyQueries {
     }
 
     public static UserInfo getUserInfoUsingId_Transaction(Start start, Connection con, String thirdPartyId,
-            String thirdPartyUserId) throws SQLException, StorageQueryException {
+                                                          String thirdPartyUserId)
+            throws SQLException, StorageQueryException {
 
         String QUERY = "SELECT user_id, third_party_id, third_party_user_id, email, time_joined FROM "
                 + getConfig(start).getThirdPartyUsersTable()
@@ -205,57 +206,6 @@ public class ThirdPartyQueries {
                 return UserInfoRowMapper.getInstance().mapOrThrow(result);
             }
             return null;
-        });
-    }
-
-    @Deprecated
-    public static UserInfo[] getThirdPartyUsers(Start start, @NotNull Integer limit, @NotNull String timeJoinedOrder)
-            throws SQLException, StorageQueryException {
-        String QUERY = "SELECT user_id, third_party_id, third_party_user_id, email, time_joined FROM "
-                + getConfig(start).getThirdPartyUsersTable() + " ORDER BY time_joined " + timeJoinedOrder
-                + ", user_id DESC LIMIT ?";
-        return execute(start, QUERY, pst -> pst.setInt(1, limit), result -> {
-            List<UserInfo> temp = new ArrayList<>();
-            while (result.next()) {
-                temp.add(UserInfoRowMapper.getInstance().mapOrThrow(result));
-            }
-            return temp.toArray(UserInfo[]::new);
-        });
-    }
-
-    @Deprecated
-    public static UserInfo[] getThirdPartyUsers(Start start, @NotNull String userId, @NotNull Long timeJoined,
-            @NotNull Integer limit, @NotNull String timeJoinedOrder) throws SQLException, StorageQueryException {
-        String timeJoinedOrderSymbol = timeJoinedOrder.equals("ASC") ? ">" : "<";
-        String QUERY = "SELECT user_id, third_party_id, third_party_user_id, email, time_joined FROM "
-                + Config.getConfig(start).getThirdPartyUsersTable() + " WHERE time_joined " + timeJoinedOrderSymbol
-                + " ? OR (time_joined = ? AND user_id <= ?) ORDER BY time_joined " + timeJoinedOrder
-                + ", user_id DESC LIMIT ?";
-
-        return execute(start, QUERY, pst -> {
-            pst.setLong(1, timeJoined);
-            pst.setLong(2, timeJoined);
-            pst.setString(3, userId);
-            pst.setInt(4, limit);
-        }, result -> {
-            List<UserInfo> users = new ArrayList<>();
-
-            while (result.next()) {
-                users.add(UserInfoRowMapper.getInstance().mapOrThrow(result));
-            }
-
-            return users.toArray(UserInfo[]::new);
-        });
-    }
-
-    @Deprecated
-    public static long getUsersCount(Start start) throws SQLException, StorageQueryException {
-        String QUERY = "SELECT COUNT(*) as total FROM " + getConfig(start).getThirdPartyUsersTable();
-        return execute(start, QUERY, NO_OP_SETTER, result -> {
-            if (result.next()) {
-                return result.getLong("total");
-            }
-            return 0L;
         });
     }
 
