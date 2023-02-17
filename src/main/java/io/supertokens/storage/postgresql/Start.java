@@ -756,7 +756,7 @@ public class Start
     }
 
     @Override
-    public UserInfo getUserInfoUsingId(TenantIdentifier tenantIdentifier, String id) throws StorageQueryException {
+    public UserInfo getUserInfoUsingId(AppIdentifier appIdentifier, String id) throws StorageQueryException {
         // TODO..
         try {
             return EmailPasswordQueries.getUserInfoUsingId(this, id);
@@ -894,7 +894,7 @@ public class Start
     }
 
     @Override
-    public UserInfo getUserInfoUsingId_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
+    public UserInfo getUserInfoUsingId_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
                                                    String userId)
             throws StorageQueryException {
         // TODO..
