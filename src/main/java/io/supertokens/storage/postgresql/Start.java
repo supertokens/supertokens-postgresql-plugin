@@ -1833,11 +1833,12 @@ public class Start
                 ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
 
                 if (isPrimaryKeyError(serverErrorMessage, config.getDashboardUsersTable())) {
-                    throw new io.supertokens.pluginInterface.dashboard.exceptions.DuplicateEmailException();
+                    throw new io.supertokens.pluginInterface.dashboard.exceptions.DuplicateUserIdException();
                 }
                 if (isUniqueConstraintError(serverErrorMessage, config.getDashboardUsersTable(),
                         "email")) {
-                    throw new io.supertokens.pluginInterface.dashboard.exceptions.DuplicateUserIdException();
+                    throw new io.supertokens.pluginInterface.dashboard.exceptions.DuplicateEmailException();
+
                 }
             }
             throw new StorageQueryException(e);
