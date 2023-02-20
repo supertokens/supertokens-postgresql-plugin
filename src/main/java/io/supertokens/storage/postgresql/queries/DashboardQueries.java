@@ -175,6 +175,28 @@ public class DashboardQueries {
         QueryExecutorTemplate.update(start, QUERY, pst -> pst.setLong(1, currentTimeMillis));
     }
 
+    public static DashboardUser getDashboardUserByEmail(Start start, String email)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT * FROM "
+                + Config.getConfig(start).getDashboardUsersTable() + " WHERE email = ?";
+        return QueryExecutorTemplate.execute(start, QUERY, pst -> pst.setString(1, email), result -> {
+            if (result.next()) {
+                return DashboardInfoMapper.getInstance().mapOrThrow(result);
+            }
+            return null;
+        });
+    }
+
+    public static boolean deleteDashboardUserSessionWithSessionId(Start start, String sessionId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + Config.getConfig(start).getDashboardSessionsTable()
+                + " WHERE session_id = ?";
+        // store the number of rows updated
+        int rowUpdatedCount = QueryExecutorTemplate.update(start, QUERY, pst -> pst.setString(1, sessionId));
+
+        return rowUpdatedCount > 0;
+    }
+
     private static class DashboardInfoMapper implements RowMapper<DashboardUser, ResultSet> {
         private static final DashboardInfoMapper INSTANCE = new DashboardInfoMapper();
 
