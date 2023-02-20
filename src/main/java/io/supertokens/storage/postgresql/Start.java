@@ -24,6 +24,10 @@ import io.supertokens.pluginInterface.LOG_LEVEL;
 import io.supertokens.pluginInterface.RECIPE_ID;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
+import io.supertokens.pluginInterface.dashboard.DashboardSessionInfo;
+import io.supertokens.pluginInterface.dashboard.DashboardUser;
+import io.supertokens.pluginInterface.dashboard.exceptions.UserIdNotFoundException;
+import io.supertokens.pluginInterface.dashboard.sqlStorage.DashboardSQLStorage;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
 import io.supertokens.pluginInterface.emailpassword.UserInfo;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
@@ -84,7 +88,7 @@ import java.util.Set;
 
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
-        JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage {
+        JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage, DashboardSQLStorage {
 
     private static final Object appenderLock = new Object();
     public static boolean silent = false;
@@ -1812,5 +1816,83 @@ public class Start
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
+    }
+
+    @Override
+    public void createNewDashboardUser(DashboardUser userInfo)
+            throws StorageQueryException, io.supertokens.pluginInterface.dashboard.exceptions.DuplicateUserIdException,
+            io.supertokens.pluginInterface.dashboard.exceptions.DuplicateEmailException {
+        // TODO Auto-generated method stub
+        
+    }
+
+    @Override
+    public DashboardUser getDashboardUserByEmail(String email) throws StorageQueryException {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public DashboardUser getDashboardUserByUserId(String userId) throws StorageQueryException {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public DashboardUser[] getAllDashboardUsers() throws StorageQueryException {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public boolean deleteDashboardUserWithUserId(String userId) throws StorageQueryException {
+        // TODO Auto-generated method stub
+        return false;
+    }
+
+    @Override
+    public void createNewDashboardUserSession(String userId, String sessionId, long timeCreated, long expiry)
+            throws StorageQueryException, UserIdNotFoundException {
+        // TODO Auto-generated method stub
+        
+    }
+
+    @Override
+    public DashboardSessionInfo[] getAllSessionsForUserId(String userId) throws StorageQueryException {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public DashboardSessionInfo getSessionInfoWithSessionId(String sessionId) throws StorageQueryException {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public boolean revokeSessionWithSessionId(String sessionId) throws StorageQueryException {
+        // TODO Auto-generated method stub
+        return false;
+    }
+
+    @Override
+    public void revokeExpiredSessions() throws StorageQueryException {
+        // TODO Auto-generated method stub
+        
+    }
+
+    @Override
+    public void updateDashboardUsersEmailWithUserId_Transaction(TransactionConnection con, String userId,
+            String newEmail) throws StorageQueryException,
+            io.supertokens.pluginInterface.dashboard.exceptions.DuplicateEmailException, UserIdNotFoundException {
+        // TODO Auto-generated method stub
+        
+    }
+
+    @Override
+    public void updateDashboardUsersPasswordWithUserId_Transaction(TransactionConnection con, String userId,
+            String newPassword) throws StorageQueryException, UserIdNotFoundException {
+        // TODO Auto-generated method stub
+        
     }
 }
