@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Adds support for Dashboard recipe
+
 ## [2.1.0] - 2022-11-07
 
 - Updates dependencies as per: https://github.com/supertokens/supertokens-core/issues/525
