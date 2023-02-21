@@ -185,9 +185,11 @@ public class GeneralQueries {
                     update(start, getQueryToCreateCodeCreatedAtIndex(start), NO_OP_SETTER);
                 }
 
-                // This PostgreSQL specific, because it's created automatically in MySQL and it doesn't support "create
+                // This PostgreSQL specific, because it's created automatically in MySQL and it
+                // doesn't support "create
                 // index if not exists"
-                // We missed creating this earlier for the codes table, so it may be missing even if the table exists
+                // We missed creating this earlier for the codes table, so it may be missing
+                // even if the table exists
                 update(start, getQueryToCreateCodeDeviceIdHashIndex(start), NO_OP_SETTER);
 
                 if (!doesTableExists(start, Config.getConfig(start).getUserMetadataTable())) {
@@ -217,6 +219,19 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getUserIdMappingTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, UserIdMappingQueries.getQueryToCreateUserIdMappingTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getDashboardUsersTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, DashboardQueries.getQueryToCreateDashboardUsersTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getDashboardSessionsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, DashboardQueries.getQueryToCreateDashboardUserSessionsTable(start), NO_OP_SETTER);
+                    // index
+                    update(start, DashboardQueries.getQueryToCreateDashboardUserSessionsExpiryIndex(start),
+                            NO_OP_SETTER);
                 }
 
             } catch (Exception e) {
@@ -265,7 +280,8 @@ public class GeneralQueries {
                     + getConfig(start).getPasswordlessDevicesTable() + ","
                     + getConfig(start).getPasswordlessUsersTable() + "," + getConfig(start).getUserMetadataTable() + ","
                     + getConfig(start).getRolesTable() + "," + getConfig(start).getUserRolesPermissionsTable() + ","
-                    + getConfig(start).getUserRolesTable();
+                    + getConfig(start).getUserRolesTable() + "," + getConfig(start).getDashboardUsersTable() + ","
+                    + getConfig(start).getDashboardSessionsTable();
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
     }
@@ -439,7 +455,8 @@ public class GeneralQueries {
             List<? extends AuthRecipeUserInfo> users = getUserInfoForRecipeIdFromUserIds(start, recipeId,
                     recipeIdToUserIdListMap.get(recipeId));
 
-            // we fill in all the slots in finalResult based on their position in usersFromQuery
+            // we fill in all the slots in finalResult based on their position in
+            // usersFromQuery
             Map<String, AuthRecipeUserInfo> userIdToInfoMap = new HashMap<>();
             for (AuthRecipeUserInfo user : users) {
                 userIdToInfoMap.put(user.id, user);
