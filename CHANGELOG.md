@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.0] - 2023-02-21
+
 - Adds support for Dashboard recipe
 
 ## [2.1.0] - 2022-11-07
