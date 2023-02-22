@@ -2033,11 +2033,12 @@ public class Start
     }
 
     @Override
-    public void createTenant(TenantConfig config) throws DuplicateTenantException {
+    public void createTenant(TenantConfig tenantConfig) throws DuplicateTenantException {
         try {
-            MultitenancyQueries.createTenant(this, config);
+            MultitenancyQueries.createTenant(this, tenantConfig);
         } catch (SQLException e) {
-            if (e.getMessage().contains("duplicate key")) {
+            PostgreSQLConfig config = Config.getConfig(this);
+            if (isPrimaryKeyError(((PSQLException) e).getServerErrorMessage(), config.getTenantConfigsTable())) {
                 throw new DuplicateTenantException();
             }
             // TODO: what about other error?
@@ -2051,7 +2052,8 @@ public class Start
         try {
             MultitenancyQueries.addTenantIdInUserPool(this, tenantIdentifier);
         } catch (StorageTransactionLogicException e) {
-            if (e.getMessage().contains("duplicate key")) {
+            PostgreSQLConfig config = Config.getConfig(this);
+            if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantConfigsTable())) {
                 throw new DuplicateTenantException();
             }
             // TODO: what about other error?
