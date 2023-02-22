@@ -48,6 +48,12 @@ public class PostgreSQLConfig {
     private String postgresql_database_name = null;
 
     @JsonProperty
+    private String postgresql_apps_table_name = null;
+
+    @JsonProperty
+    private String postgresql_tenants_table_name = null;
+
+    @JsonProperty
     private String postgresql_key_value_table_name = null;
 
     @JsonProperty
@@ -67,6 +73,9 @@ public class PostgreSQLConfig {
 
     @JsonProperty
     private String postgresql_thirdparty_users_table_name = null;
+
+    @JsonProperty
+    private String postgresql_multitenancy_tenant_configs_table_name = null;
 
     @JsonProperty
     private String postgresql_table_names_prefix = "";
@@ -215,12 +224,40 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("all_auth_recipe_users");
     }
 
+    public String getAppsTable() {
+        String tableName = "apps";
+        if (postgresql_apps_table_name != null) {
+            return addSchemaToTableName(postgresql_apps_table_name);
+        }
+        return addSchemaAndPrefixToTableName(tableName);
+    }
+
+    public String getTenantsTable() {
+        String tableName = "tenants";
+        if (postgresql_tenants_table_name != null) {
+            return addSchemaToTableName(postgresql_tenants_table_name);
+        }
+        return addSchemaAndPrefixToTableName(tableName);
+    }
+
+    public String getTenantConfigsTable() {
+        String tableName = "tenant_configs";
+        if (postgresql_multitenancy_tenant_configs_table_name != null) {
+            return addSchemaToTableName(postgresql_multitenancy_tenant_configs_table_name);
+        }
+        return addSchemaAndPrefixToTableName(tableName);
+    }
+
     public String getKeyValueTable() {
         String tableName = "key_value";
         if (postgresql_key_value_table_name != null) {
             return addSchemaToTableName(postgresql_key_value_table_name);
         }
         return addSchemaAndPrefixToTableName(tableName);
+    }
+
+    public String getAppIdToUserIdTable() {
+        return addSchemaAndPrefixToTableName("app_id_to_user_id");
     }
 
     public String getAccessTokenSigningKeysTable() {
@@ -409,5 +446,4 @@ public class PostgreSQLConfig {
                             " for the same user pool");
         }
     }
-
 }

@@ -2034,12 +2034,30 @@ public class Start
 
     @Override
     public void createTenant(TenantConfig config) throws DuplicateTenantException {
-        // TODO:
+        try {
+            MultitenancyQueries.createTenant(this, config);
+        } catch (SQLException e) {
+            if (e.getMessage().contains("duplicate key")) {
+                throw new DuplicateTenantException();
+            }
+            // TODO: what about other error?
+        } catch (StorageQueryException e) {
+            // TODO: what about other error?
+        }
     }
 
     @Override
     public void addTenantIdInUserPool(TenantIdentifier tenantIdentifier) throws DuplicateTenantException {
-        // TODO:
+        try {
+            MultitenancyQueries.addTenantIdInUserPool(this, tenantIdentifier);
+        } catch (StorageTransactionLogicException e) {
+            if (e.getMessage().contains("duplicate key")) {
+                throw new DuplicateTenantException();
+            }
+            // TODO: what about other error?
+        } catch (StorageQueryException e) {
+            // TODO: what about other error?
+        }
     }
 
     @Override
@@ -2049,7 +2067,13 @@ public class Start
 
     @Override
     public void overwriteTenantConfig(TenantConfig config) throws TenantOrAppNotFoundException {
-        // TODO:
+        try {
+            MultitenancyQueries.updateTenant(this, config);
+        } catch (SQLException e) {
+            // TODO: handle error??
+        } catch (StorageQueryException e) {
+            // TODO: handle error??
+        }
     }
 
     @Override
@@ -2071,12 +2095,14 @@ public class Start
     @Override
     public TenantConfig[] getAllTenants() {
         // TODO:
-        return new TenantConfig[]{
-                new TenantConfig(
-                        new TenantIdentifier(null, null, null),
-                        new EmailPasswordConfig(true), new ThirdPartyConfig(true, null),
-                        new PasswordlessConfig(true), new JsonObject())
-        };
+        try {
+            return MultitenancyQueries.getAllTenants(this);
+        } catch (SQLException e) {
+            // TODO:
+        } catch (StorageQueryException e) {
+            // TODO:
+        }
+        return new TenantConfig[]{};
     }
 
     @Override
