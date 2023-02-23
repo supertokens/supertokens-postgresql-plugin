@@ -110,8 +110,10 @@ public class GeneralQueries {
                 + "tenant_id VARCHAR(64) NOT NULL DEFAULT 'public',"
                 + "created_at_time BIGINT ,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tenantsTable, null, "pkey") + " PRIMARY KEY(app_id, tenant_id) ,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tenantsTable, "app_id", "fkey") + " FOREIGN KEY(app_id) REFERENCES apps (app_id) ON DELETE CASCADE"
-                + " );";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tenantsTable, "app_id", "fkey")
+                + " FOREIGN KEY(app_id)"
+                + " REFERENCES " + Config.getConfig(start).getAppsTable() + " (app_id) ON DELETE CASCADE"
+                + ");";
         // @formatter:on
     }
 
