@@ -167,7 +167,7 @@ public class MultitenancyQueries {
         String tenantConfigsTable = Config.getConfig(start).getTenantConfigsTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tenantConfigsTable + " ("
-                + "connection_uri_domain CHAR(128) DEFAULT '',"
+                + "connection_uri_domain CHAR(256) DEFAULT '',"
                 + "app_id CHAR(64) DEFAULT 'public',"
                 + "tenant_id CHAR(64) DEFAULT 'public',"
                 + "core_config TEXT,"
@@ -184,7 +184,7 @@ public class MultitenancyQueries {
         String tenantThirdPartyProvidersTable = Config.getConfig(start).getTenantThirdPartyProvidersTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tenantThirdPartyProvidersTable + " ("
-                + "connection_uri_domain CHAR(128) DEFAULT '',"
+                + "connection_uri_domain CHAR(256) DEFAULT '',"
                 + "app_id CHAR(64) DEFAULT 'public',"
                 + "tenant_id CHAR(64) DEFAULT 'public',"
                 + "third_party_id CHAR(64) NOT NULL,"
@@ -217,7 +217,7 @@ public class MultitenancyQueries {
         String schema = Config.getConfig(start).getTableSchema();
         String tenantThirdPartyProvidersTable = Config.getConfig(start).getTenantThirdPartyProviderClientsTable();
         return "CREATE TABLE IF NOT EXISTS " + tenantThirdPartyProvidersTable + " ("
-                + "connection_uri_domain CHAR(128) DEFAULT '',"
+                + "connection_uri_domain CHAR(256) DEFAULT '',"
                 + "app_id CHAR(64) DEFAULT 'public',"
                 + "tenant_id CHAR(64) DEFAULT 'public',"
                 + "third_party_id CHAR(64) NOT NULL,"
