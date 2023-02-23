@@ -2092,16 +2092,8 @@ public class Start
     }
 
     @Override
-    public TenantConfig[] getAllTenants() {
-        // TODO:
-        try {
-            return MultitenancyQueries.getAllTenants(this);
-        } catch (SQLException e) {
-            // TODO:
-        } catch (StorageQueryException e) {
-            // TODO:
-        }
-        return new TenantConfig[]{};
+    public TenantConfig[] getAllTenants() throws StorageQueryException {
+        return MultitenancyQueries.getAllTenants(this);
     }
 
     @Override

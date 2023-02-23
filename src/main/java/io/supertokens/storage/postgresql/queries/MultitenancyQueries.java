@@ -410,109 +410,113 @@ public class MultitenancyQueries {
         });
     }
 
-    public static TenantConfig[] getAllTenants(Start start) throws SQLException, StorageQueryException {
+    public static TenantConfig[] getAllTenants(Start start) throws StorageQueryException {
         TenantConfig[] tenantConfigs;
 
-        {
-            // Read all tenant configs
-            String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, core_config, email_password_enabled, passwordless_enabled, third_party_enabled FROM "
-                    + getConfig(start).getTenantConfigsTable() + ";";
+        try {
+            {
+                // Read all tenant configs
+                String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, core_config, email_password_enabled, passwordless_enabled, third_party_enabled FROM "
+                        + getConfig(start).getTenantConfigsTable() + ";";
 
-            tenantConfigs = execute(start, QUERY, pst -> {}, result -> {
-                List<TenantConfig> temp = new ArrayList<>();
-                while (result.next()) {
-                    temp.add(MultitenancyQueries.TenantConfigRowMapper.getInstance().mapOrThrow(result));
-                }
-                TenantConfig[] finalResult = new TenantConfig[temp.size()];
-                for (int i = 0; i < temp.size(); i++) {
-                    finalResult[i] = temp.get(i);
-                }
-                return finalResult;
-            });
-        }
-
-        HashMap<TenantIdentifier, HashMap<String, ThirdPartyConfig.Provider>> providerMap = new HashMap<>();
-
-        {
-            // Read all providers
-            String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, third_party_id, name, authorization_endpoint, authorization_endpoint_query_params, token_endpoint, token_endpoint_body_params, user_info_endpoint, user_info_endpoint_query_params, user_info_endpoint_headers, jwks_uri, oidc_discover_endpoint, require_email, user_info_map_from_id_token_payload_user_id, user_info_map_from_id_token_payload_email, user_info_map_from_id_token_payload_email_verified, user_info_map_from_user_info_endpoint_user_id, user_info_map_from_user_info_endpoint_email, user_info_map_from_user_info_endpoint_email_verified FROM "
-                    + getConfig(start).getTenantThirdPartyProvidersTable() + ";";
-
-            execute(start, QUERY, pst -> {}, result -> {
-                List<ThirdPartyConfig.Provider> temp = new ArrayList<>();
-                while (result.next()) {
-                    TenantIdentifier tenantIdentifier = new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id"));
-                    ThirdPartyConfig.Provider provider = MultitenancyQueries.TenantThirdPartyProviderRowMapper.getInstance().mapOrThrow(result);
-
-                    if (!providerMap.containsKey(tenantIdentifier)) {
-                        providerMap.put(tenantIdentifier, new HashMap<>());
+                tenantConfigs = execute(start, QUERY, pst -> {}, result -> {
+                    List<TenantConfig> temp = new ArrayList<>();
+                    while (result.next()) {
+                        temp.add(MultitenancyQueries.TenantConfigRowMapper.getInstance().mapOrThrow(result));
                     }
-                    providerMap.get(tenantIdentifier).put(provider.thirdPartyId, provider);
-                }
-                return null;
-            });
-        }
-
-        {
-            // Read all provider clients
-            String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, third_party_id, client_type, client_id, client_secret, scope, force_pkce, additional_config FROM "
-                    + getConfig(start).getTenantThirdPartyProviderClientsTable() + ";";
-
-            execute(start, QUERY, pst -> {}, result -> {
-                List<ThirdPartyConfig.Provider> temp = new ArrayList<>();
-                while (result.next()) {
-                    TenantIdentifier tenantIdentifier = new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id"));
-                    ThirdPartyConfig.Provider provider = providerMap.get(tenantIdentifier).get(result.getString("third_party_id"));
-                    ThirdPartyConfig.ProviderClient providerClient = MultitenancyQueries.TenantThirdPartyProviderClientRowMapper.getInstance().mapOrThrow(result);
-
-                    ThirdPartyConfig.ProviderClient[] clients;
-                    if (provider.clients == null) {
-                        clients = new ThirdPartyConfig.ProviderClient[1];
-                    } else {
-                        clients = Arrays.copyOf(provider.clients, provider.clients.length + 1);
+                    TenantConfig[] finalResult = new TenantConfig[temp.size()];
+                    for (int i = 0; i < temp.size(); i++) {
+                        finalResult[i] = temp.get(i);
                     }
-                    clients[clients.length-1] = providerClient;
-                    providerMap.get(tenantIdentifier).put(result.getString("third_party_id"), new ThirdPartyConfig.Provider(
-                            provider.thirdPartyId,
-                            provider.name,
-                            clients,
-                            provider.authorizationEndpoint,
-                            provider.authorizationEndpointQueryParams,
-                            provider.tokenEndpoint,
-                            provider.tokenEndpointBodyParams,
-                            provider.userInfoEndpoint,
-                            provider.userInfoEndpointQueryParams,
-                            provider.userInfoEndpointHeaders,
-                            provider.jwksURI,
-                            provider.oidcDiscoveryEndpoint,
-                            provider.requireEmail,
-                            provider.userInfoMap
-                    ));
-                }
-                return null;
-            });
-        }
-
-        for (int i=0; i<tenantConfigs.length; i++) {
-            TenantConfig tenantConfig = tenantConfigs[i];
-
-            if (!providerMap.containsKey(tenantConfig.tenantIdentifier)) {
-                continue;
+                    return finalResult;
+                });
             }
 
-            tenantConfigs[i] = new TenantConfig(
-                    tenantConfig.tenantIdentifier,
-                    tenantConfig.emailPasswordConfig,
-                    new ThirdPartyConfig(
-                            tenantConfig.thirdPartyConfig.enabled,
-                            (ThirdPartyConfig.Provider[]) providerMap.get(tenantConfig.tenantIdentifier).values().toArray()
-                    ),
-                    tenantConfig.passwordlessConfig,
-                    tenantConfig.coreConfig
-            );
-        }
+            HashMap<TenantIdentifier, HashMap<String, ThirdPartyConfig.Provider>> providerMap = new HashMap<>();
 
-        return tenantConfigs;
+            {
+                // Read all providers
+                String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, third_party_id, name, authorization_endpoint, authorization_endpoint_query_params, token_endpoint, token_endpoint_body_params, user_info_endpoint, user_info_endpoint_query_params, user_info_endpoint_headers, jwks_uri, oidc_discover_endpoint, require_email, user_info_map_from_id_token_payload_user_id, user_info_map_from_id_token_payload_email, user_info_map_from_id_token_payload_email_verified, user_info_map_from_user_info_endpoint_user_id, user_info_map_from_user_info_endpoint_email, user_info_map_from_user_info_endpoint_email_verified FROM "
+                        + getConfig(start).getTenantThirdPartyProvidersTable() + ";";
+
+                execute(start, QUERY, pst -> {}, result -> {
+                    List<ThirdPartyConfig.Provider> temp = new ArrayList<>();
+                    while (result.next()) {
+                        TenantIdentifier tenantIdentifier = new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id"));
+                        ThirdPartyConfig.Provider provider = MultitenancyQueries.TenantThirdPartyProviderRowMapper.getInstance().mapOrThrow(result);
+
+                        if (!providerMap.containsKey(tenantIdentifier)) {
+                            providerMap.put(tenantIdentifier, new HashMap<>());
+                        }
+                        providerMap.get(tenantIdentifier).put(provider.thirdPartyId, provider);
+                    }
+                    return null;
+                });
+            }
+
+            {
+                // Read all provider clients
+                String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, third_party_id, client_type, client_id, client_secret, scope, force_pkce, additional_config FROM "
+                        + getConfig(start).getTenantThirdPartyProviderClientsTable() + ";";
+
+                execute(start, QUERY, pst -> {}, result -> {
+                    List<ThirdPartyConfig.Provider> temp = new ArrayList<>();
+                    while (result.next()) {
+                        TenantIdentifier tenantIdentifier = new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id"));
+                        ThirdPartyConfig.Provider provider = providerMap.get(tenantIdentifier).get(result.getString("third_party_id"));
+                        ThirdPartyConfig.ProviderClient providerClient = MultitenancyQueries.TenantThirdPartyProviderClientRowMapper.getInstance().mapOrThrow(result);
+
+                        ThirdPartyConfig.ProviderClient[] clients;
+                        if (provider.clients == null) {
+                            clients = new ThirdPartyConfig.ProviderClient[1];
+                        } else {
+                            clients = Arrays.copyOf(provider.clients, provider.clients.length + 1);
+                        }
+                        clients[clients.length-1] = providerClient;
+                        providerMap.get(tenantIdentifier).put(result.getString("third_party_id"), new ThirdPartyConfig.Provider(
+                                provider.thirdPartyId,
+                                provider.name,
+                                clients,
+                                provider.authorizationEndpoint,
+                                provider.authorizationEndpointQueryParams,
+                                provider.tokenEndpoint,
+                                provider.tokenEndpointBodyParams,
+                                provider.userInfoEndpoint,
+                                provider.userInfoEndpointQueryParams,
+                                provider.userInfoEndpointHeaders,
+                                provider.jwksURI,
+                                provider.oidcDiscoveryEndpoint,
+                                provider.requireEmail,
+                                provider.userInfoMap
+                        ));
+                    }
+                    return null;
+                });
+            }
+
+            for (int i=0; i<tenantConfigs.length; i++) {
+                TenantConfig tenantConfig = tenantConfigs[i];
+
+                if (!providerMap.containsKey(tenantConfig.tenantIdentifier)) {
+                    continue;
+                }
+
+                tenantConfigs[i] = new TenantConfig(
+                        tenantConfig.tenantIdentifier,
+                        tenantConfig.emailPasswordConfig,
+                        new ThirdPartyConfig(
+                                tenantConfig.thirdPartyConfig.enabled,
+                                (ThirdPartyConfig.Provider[]) providerMap.get(tenantConfig.tenantIdentifier).values().toArray()
+                        ),
+                        tenantConfig.passwordlessConfig,
+                        tenantConfig.coreConfig
+                );
+            }
+
+            return tenantConfigs;
+        } catch (SQLException throwables) {
+            throw new StorageQueryException(throwables);
+        }
     }
 
     public static void addTenantIdInUserPool(Start start, TenantIdentifier tenantIdentifier) throws
