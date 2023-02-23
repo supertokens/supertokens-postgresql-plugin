@@ -192,6 +192,16 @@ public class GeneralQueries {
                     update(start, MultitenancyQueries.getQueryToCreateTenantConfigsTable(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getTenantThirdPartyProvidersTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, MultitenancyQueries.getQueryToCreateTenantThirdPartyProvidersTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getTenantThirdPartyProviderClientsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, MultitenancyQueries.getQueryToCreateTenantThirdPartyProviderClientsTable(start), NO_OP_SETTER);
+                }
+
                 if (!doesTableExists(start, Config.getConfig(start).getEmailPasswordUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, EmailPasswordQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
@@ -323,6 +333,8 @@ public class GeneralQueries {
                     + getConfig(start).getUsersTable() + ","
                     + getConfig(start).getAccessTokenSigningKeysTable() + ","
                     + getConfig(start).getTenantConfigsTable() + ","
+                    + getConfig(start).getTenantThirdPartyProvidersTable() + ","
+                    + getConfig(start).getTenantThirdPartyProviderClientsTable() + ","
                     + getConfig(start).getSessionInfoTable() + ","
                     + getConfig(start).getEmailPasswordUsersTable() + ","
                     + getConfig(start).getPasswordResetTokensTable() + ","

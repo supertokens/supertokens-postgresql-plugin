@@ -2033,22 +2033,21 @@ public class Start
     }
 
     @Override
-    public void createTenant(TenantConfig tenantConfig) throws DuplicateTenantException {
+    public void createTenant(TenantConfig tenantConfig)
+            throws DuplicateTenantException, StorageQueryException {
         try {
-            MultitenancyQueries.createTenant(this, tenantConfig);
-        } catch (SQLException e) {
+            MultitenancyQueries.createTenantConfig(this, tenantConfig);
+        } catch (StorageTransactionLogicException e) {
             PostgreSQLConfig config = Config.getConfig(this);
-            if (isPrimaryKeyError(((PSQLException) e).getServerErrorMessage(), config.getTenantConfigsTable())) {
+            if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantConfigsTable())) {
                 throw new DuplicateTenantException();
             }
-            // TODO: what about other error?
-        } catch (StorageQueryException e) {
-            // TODO: what about other error?
+            throw new StorageQueryException(e.actualException);
         }
     }
 
     @Override
-    public void addTenantIdInUserPool(TenantIdentifier tenantIdentifier) throws DuplicateTenantException {
+    public void addTenantIdInUserPool(TenantIdentifier tenantIdentifier) throws DuplicateTenantException, StorageQueryException {
         try {
             MultitenancyQueries.addTenantIdInUserPool(this, tenantIdentifier);
         } catch (StorageTransactionLogicException e) {
@@ -2056,9 +2055,6 @@ public class Start
             if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantConfigsTable())) {
                 throw new DuplicateTenantException();
             }
-            // TODO: what about other error?
-        } catch (StorageQueryException e) {
-            // TODO: what about other error?
         }
     }
 
@@ -2068,13 +2064,14 @@ public class Start
     }
 
     @Override
-    public void overwriteTenantConfig(TenantConfig config) throws TenantOrAppNotFoundException {
+    public void overwriteTenantConfig(TenantConfig config) throws TenantOrAppNotFoundException, StorageQueryException {
         try {
-            MultitenancyQueries.updateTenant(this, config);
-        } catch (SQLException e) {
-            // TODO: handle error??
-        } catch (StorageQueryException e) {
-            // TODO: handle error??
+            MultitenancyQueries.overwriteTenantConfig(this, config);
+        } catch (StorageTransactionLogicException e) {
+            if (e.actualException.getClass().isInstance(TenantOrAppNotFoundException.class)) {
+                throw (TenantOrAppNotFoundException) e.actualException;
+            }
+            throw new StorageQueryException(e.actualException);
         }
     }
 

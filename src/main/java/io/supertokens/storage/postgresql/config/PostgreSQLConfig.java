@@ -48,12 +48,6 @@ public class PostgreSQLConfig {
     private String postgresql_database_name = null;
 
     @JsonProperty
-    private String postgresql_apps_table_name = null;
-
-    @JsonProperty
-    private String postgresql_tenants_table_name = null;
-
-    @JsonProperty
     private String postgresql_key_value_table_name = null;
 
     @JsonProperty
@@ -73,9 +67,6 @@ public class PostgreSQLConfig {
 
     @JsonProperty
     private String postgresql_thirdparty_users_table_name = null;
-
-    @JsonProperty
-    private String postgresql_multitenancy_tenant_configs_table_name = null;
 
     @JsonProperty
     private String postgresql_table_names_prefix = "";
@@ -226,27 +217,29 @@ public class PostgreSQLConfig {
 
     public String getAppsTable() {
         String tableName = "apps";
-        if (postgresql_apps_table_name != null) {
-            return addSchemaToTableName(postgresql_apps_table_name);
-        }
         return addSchemaAndPrefixToTableName(tableName);
     }
 
     public String getTenantsTable() {
         String tableName = "tenants";
-        if (postgresql_tenants_table_name != null) {
-            return addSchemaToTableName(postgresql_tenants_table_name);
-        }
         return addSchemaAndPrefixToTableName(tableName);
     }
 
     public String getTenantConfigsTable() {
         String tableName = "tenant_configs";
-        if (postgresql_multitenancy_tenant_configs_table_name != null) {
-            return addSchemaToTableName(postgresql_multitenancy_tenant_configs_table_name);
-        }
         return addSchemaAndPrefixToTableName(tableName);
     }
+
+    public String getTenantThirdPartyProvidersTable() {
+        String tableName = "tenant_thirdparty_providers";
+        return addSchemaAndPrefixToTableName(tableName);
+    }
+
+    public String getTenantThirdPartyProviderClientsTable() {
+        String tableName = "tenant_thirdparty_provider_clients";
+        return addSchemaAndPrefixToTableName(tableName);
+    }
+
 
     public String getKeyValueTable() {
         String tableName = "key_value";
