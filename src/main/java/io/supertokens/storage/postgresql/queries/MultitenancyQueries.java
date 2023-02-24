@@ -84,38 +84,31 @@ public class MultitenancyQueries {
             try {
                 JsonParser jp = new JsonParser();
                 ThirdPartyConfig.Provider provider = new ThirdPartyConfig.Provider(
-                        result.getString("third_party_id"),
-                        result.getString("name"),
-                        null, // to be added later
-                        result.getString("authorization_endpoint"),
-                        jp.parse(result.getString("authorization_endpoint_query_params")).getAsJsonObject(),
-                        result.getString("token_endpoint"),
-                        jp.parse(result.getString("token_endpoint_body_params")).getAsJsonObject(),
-                        result.getString("user_info_endpoint"),
-                        jp.parse(result.getString("user_info_endpoint_query_params")).getAsJsonObject(),
-                        jp.parse(result.getString("user_info_endpoint_headers")).getAsJsonObject(),
-                        result.getString("jwks_uri"),
-                        result.getString("oidc_discovery_endpoint"),
-                        result.getBoolean("require_email"),
-                        new ThirdPartyConfig.UserInfoMap(
-                            new ThirdPartyConfig.UserInfoMapKeyValue(
-                                result.getString("user_info_map_from_id_token_payload_user_id"),
-                                result.getString("user_info_map_from_id_token_payload_email"),
-                                result.getString("user_info_map_from_id_token_payload_email_verified")
-                            ),
-                            new ThirdPartyConfig.UserInfoMapKeyValue(
-                                result.getString("user_info_map_from_user_info_endpoint_user_id"),
-                                result.getString("user_info_map_from_user_info_endpoint_email"),
-                                result.getString("user_info_map_from_user_info_endpoint_email_verified")
-                            )
+                    result.getString("third_party_id"),
+                    result.getString("name"),
+                    null, // to be added later
+                    result.getString("authorization_endpoint"),
+                    jp.parse(result.getString("authorization_endpoint_query_params")).getAsJsonObject(),
+                    result.getString("token_endpoint"),
+                    jp.parse(result.getString("token_endpoint_body_params")).getAsJsonObject(),
+                    result.getString("user_info_endpoint"),
+                    jp.parse(result.getString("user_info_endpoint_query_params")).getAsJsonObject(),
+                    jp.parse(result.getString("user_info_endpoint_headers")).getAsJsonObject(),
+                    result.getString("jwks_uri"),
+                    result.getString("oidc_discovery_endpoint"),
+                    result.getBoolean("require_email"),
+                    new ThirdPartyConfig.UserInfoMap(
+                        new ThirdPartyConfig.UserInfoMapKeyValue(
+                            result.getString("user_info_map_from_id_token_payload_user_id"),
+                            result.getString("user_info_map_from_id_token_payload_email"),
+                            result.getString("user_info_map_from_id_token_payload_email_verified")
+                        ),
+                        new ThirdPartyConfig.UserInfoMapKeyValue(
+                            result.getString("user_info_map_from_user_info_endpoint_user_id"),
+                            result.getString("user_info_map_from_user_info_endpoint_email"),
+                            result.getString("user_info_map_from_user_info_endpoint_email_verified")
                         )
-                );
-                TenantConfig config = new TenantConfig(
-                        new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id")),
-                        new EmailPasswordConfig(result.getBoolean("email_password_enabled")),
-                        new ThirdPartyConfig(result.getBoolean("third_party_enabled"), null), // Providers will be populated later
-                        new PasswordlessConfig(result.getBoolean("passwordless_enabled")),
-                        jp.parse(result.getString("core_config")).getAsJsonObject()
+                    )
                 );
                 return provider;
             } catch (Exception e) {
@@ -148,13 +141,6 @@ public class MultitenancyQueries {
                         jp.parse(result.getString("additional_config")).getAsJsonObject()
                 );
                 scopeArray.free();
-                TenantConfig config = new TenantConfig(
-                        new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id")),
-                        new EmailPasswordConfig(result.getBoolean("email_password_enabled")),
-                        new ThirdPartyConfig(result.getBoolean("third_party_enabled"), null), // Providers will be populated later
-                        new PasswordlessConfig(result.getBoolean("passwordless_enabled")),
-                        jp.parse(result.getString("core_config")).getAsJsonObject()
-                );
                 return providerClient;
             } catch (Exception e) {
                 throw new StorageQueryException(e);
@@ -197,7 +183,7 @@ public class MultitenancyQueries {
                 + "user_info_endpoint_query_params TEXT,"
                 + "user_info_endpoint_headers TEXT,"
                 + "jwks_uri CHAR(256),"
-                + "oidc_discover_endpoint CHAR(256),"
+                + "oidc_discovery_endpoint CHAR(256),"
                 + "require_email BOOLEAN,"
                 + "user_info_map_from_id_token_payload_user_id CHAR(64),"
                 + "user_info_map_from_id_token_payload_email CHAR(64),"
@@ -258,7 +244,7 @@ public class MultitenancyQueries {
 
             for (ThirdPartyConfig.Provider provider : tenantConfig.thirdPartyConfig.providers) {
                 String QUERY = "INSERT INTO " + getConfig(start).getTenantThirdPartyProvidersTable()
-                        + "(connection_uri_domain, app_id, tenant_id, third_party_id, name, authorization_endpoint, authorization_endpoint_query_params, token_endpoint, token_endpoint_body_params, user_info_endpoint, user_info_endpoint_query_params, user_info_endpoint_headers, jwks_uri, oidc_discover_endpoint, require_email, user_info_map_from_id_token_payload_user_id, user_info_map_from_id_token_payload_email, user_info_map_from_id_token_payload_email_verified, user_info_map_from_user_info_endpoint_user_id, user_info_map_from_user_info_endpoint_email, user_info_map_from_user_info_endpoint_email_verified)" + " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                        + "(connection_uri_domain, app_id, tenant_id, third_party_id, name, authorization_endpoint, authorization_endpoint_query_params, token_endpoint, token_endpoint_body_params, user_info_endpoint, user_info_endpoint_query_params, user_info_endpoint_headers, jwks_uri, oidc_discovery_endpoint, require_email, user_info_map_from_id_token_payload_user_id, user_info_map_from_id_token_payload_email, user_info_map_from_id_token_payload_email_verified, user_info_map_from_user_info_endpoint_user_id, user_info_map_from_user_info_endpoint_email, user_info_map_from_user_info_endpoint_email_verified)" + " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
                 String user_info_map_from_id_token_payload_user_id;
                 String user_info_map_from_id_token_payload_email;
@@ -436,7 +422,7 @@ public class MultitenancyQueries {
 
             {
                 // Read all providers
-                String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, third_party_id, name, authorization_endpoint, authorization_endpoint_query_params, token_endpoint, token_endpoint_body_params, user_info_endpoint, user_info_endpoint_query_params, user_info_endpoint_headers, jwks_uri, oidc_discover_endpoint, require_email, user_info_map_from_id_token_payload_user_id, user_info_map_from_id_token_payload_email, user_info_map_from_id_token_payload_email_verified, user_info_map_from_user_info_endpoint_user_id, user_info_map_from_user_info_endpoint_email, user_info_map_from_user_info_endpoint_email_verified FROM "
+                String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, third_party_id, name, authorization_endpoint, authorization_endpoint_query_params, token_endpoint, token_endpoint_body_params, user_info_endpoint, user_info_endpoint_query_params, user_info_endpoint_headers, jwks_uri, oidc_discovery_endpoint, require_email, user_info_map_from_id_token_payload_user_id, user_info_map_from_id_token_payload_email, user_info_map_from_id_token_payload_email_verified, user_info_map_from_user_info_endpoint_user_id, user_info_map_from_user_info_endpoint_email, user_info_map_from_user_info_endpoint_email_verified FROM "
                         + getConfig(start).getTenantThirdPartyProvidersTable() + ";";
 
                 execute(start, QUERY, pst -> {}, result -> {
@@ -501,12 +487,18 @@ public class MultitenancyQueries {
                     continue;
                 }
 
+                Object[] providerObjects = providerMap.get(tenantConfig.tenantIdentifier).values().toArray();
+                ThirdPartyConfig.Provider[] providers = new ThirdPartyConfig.Provider[providerObjects.length];
+                for (int ii=0; ii<providerObjects.length; ii++) {
+                    providers[ii] = (ThirdPartyConfig.Provider) providerObjects[ii];
+                }
+
                 tenantConfigs[i] = new TenantConfig(
                         tenantConfig.tenantIdentifier,
                         tenantConfig.emailPasswordConfig,
                         new ThirdPartyConfig(
                                 tenantConfig.thirdPartyConfig.enabled,
-                                (ThirdPartyConfig.Provider[]) providerMap.get(tenantConfig.tenantIdentifier).values().toArray()
+                                providers
                         ),
                         tenantConfig.passwordlessConfig,
                         tenantConfig.coreConfig
