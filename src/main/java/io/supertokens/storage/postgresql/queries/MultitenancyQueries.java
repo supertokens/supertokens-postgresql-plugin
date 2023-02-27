@@ -16,6 +16,7 @@
 
 package io.supertokens.storage.postgresql.queries;
 
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
@@ -54,13 +55,12 @@ public class MultitenancyQueries {
         @Override
         public TenantConfig map(ResultSet result) throws StorageQueryException {
             try {
-                JsonParser jp = new JsonParser();
                 TenantConfig config = new TenantConfig(
                         new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id")),
                         new EmailPasswordConfig(result.getBoolean("email_password_enabled")),
                         new ThirdPartyConfig(result.getBoolean("third_party_enabled"), null), // Providers will be populated later
                         new PasswordlessConfig(result.getBoolean("passwordless_enabled")),
-                        jp.parse(result.getString("core_config")).getAsJsonObject()
+                        MultitenancyQueries.stringToJsonObject(result.getString("core_config"))
                 );
                 return config;
             } catch (Exception e) {
@@ -82,18 +82,17 @@ public class MultitenancyQueries {
         @Override
         public ThirdPartyConfig.Provider map(ResultSet result) throws StorageQueryException {
             try {
-                JsonParser jp = new JsonParser();
                 ThirdPartyConfig.Provider provider = new ThirdPartyConfig.Provider(
                     result.getString("third_party_id"),
                     result.getString("name"),
                     null, // to be added later
                     result.getString("authorization_endpoint"),
-                    jp.parse(result.getString("authorization_endpoint_query_params")).getAsJsonObject(),
+                    MultitenancyQueries.stringToJsonObject(result.getString("authorization_endpoint_query_params")),
                     result.getString("token_endpoint"),
-                    jp.parse(result.getString("token_endpoint_body_params")).getAsJsonObject(),
+                    MultitenancyQueries.stringToJsonObject(result.getString("token_endpoint_body_params")),
                     result.getString("user_info_endpoint"),
-                    jp.parse(result.getString("user_info_endpoint_query_params")).getAsJsonObject(),
-                    jp.parse(result.getString("user_info_endpoint_headers")).getAsJsonObject(),
+                    MultitenancyQueries.stringToJsonObject(result.getString("user_info_endpoint_query_params")),
+                    MultitenancyQueries.stringToJsonObject(result.getString("user_info_endpoint_headers")),
                     result.getString("jwks_uri"),
                     result.getString("oidc_discovery_endpoint"),
                     result.getBoolean("require_email"),
@@ -130,17 +129,23 @@ public class MultitenancyQueries {
         @Override
         public ThirdPartyConfig.ProviderClient map(ResultSet result) throws StorageQueryException {
             try {
-                JsonParser jp = new JsonParser();
                 Array scopeArray = result.getArray("scope");
+                String[] scopeStringArray;
+                if (scopeArray == null) {
+                    scopeStringArray = null;
+                } else {
+                    scopeStringArray = (String[]) scopeArray.getArray();
+                    scopeArray.free();
+                }
                 ThirdPartyConfig.ProviderClient providerClient = new ThirdPartyConfig.ProviderClient(
-                        result.getString("client_type"),
-                        result.getString("client_id"),
-                        result.getString("client_secret"),
-                        (String[]) scopeArray.getArray(),
-                        result.getBoolean("force_pkce"),
-                        jp.parse(result.getString("additional_config")).getAsJsonObject()
+                    result.getString("client_type"),
+                    result.getString("client_id"),
+                    result.getString("client_secret"),
+                    scopeStringArray,
+                    result.getBoolean("force_pkce"),
+                    MultitenancyQueries.stringToJsonObject(result.getString("additional_config"))
                 );
-                scopeArray.free();
+
                 return providerClient;
             } catch (Exception e) {
                 throw new StorageQueryException(e);
@@ -148,14 +153,29 @@ public class MultitenancyQueries {
         }
     }
 
+    private static String jsonObjectToString(JsonObject obj) {
+        if (obj == null) {
+            return null;
+        }
+        return obj.toString();
+    }
+
+    private static JsonObject stringToJsonObject(String json) {
+        if (json == null) {
+            return null;
+        }
+        JsonParser jp = new JsonParser();
+        return jp.parse(json).getAsJsonObject();
+    }
+
     static String getQueryToCreateTenantConfigsTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String tenantConfigsTable = Config.getConfig(start).getTenantConfigsTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tenantConfigsTable + " ("
-                + "connection_uri_domain CHAR(256) DEFAULT '',"
-                + "app_id CHAR(64) DEFAULT 'public',"
-                + "tenant_id CHAR(64) DEFAULT 'public',"
+                + "connection_uri_domain VARCHAR(256) DEFAULT '',"
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "tenant_id VARCHAR(64) DEFAULT 'public',"
                 + "core_config TEXT,"
                 + "email_password_enabled BOOLEAN,"
                 + "passwordless_enabled BOOLEAN,"
@@ -170,27 +190,27 @@ public class MultitenancyQueries {
         String tenantThirdPartyProvidersTable = Config.getConfig(start).getTenantThirdPartyProvidersTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tenantThirdPartyProvidersTable + " ("
-                + "connection_uri_domain CHAR(256) DEFAULT '',"
-                + "app_id CHAR(64) DEFAULT 'public',"
-                + "tenant_id CHAR(64) DEFAULT 'public',"
-                + "third_party_id CHAR(64) NOT NULL,"
-                + "name CHAR(64),"
-                + "authorization_endpoint CHAR(256),"
+                + "connection_uri_domain VARCHAR(256) DEFAULT '',"
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "tenant_id VARCHAR(64) DEFAULT 'public',"
+                + "third_party_id VARCHAR(28) NOT NULL,"
+                + "name VARCHAR(64),"
+                + "authorization_endpoint TEXT,"
                 + "authorization_endpoint_query_params TEXT,"
-                + "token_endpoint CHAR(256),"
+                + "token_endpoint TEXT,"
                 + "token_endpoint_body_params TEXT,"
-                + "user_info_endpoint CHAR(256),"
+                + "user_info_endpoint TEXT,"
                 + "user_info_endpoint_query_params TEXT,"
                 + "user_info_endpoint_headers TEXT,"
-                + "jwks_uri CHAR(256),"
-                + "oidc_discovery_endpoint CHAR(256),"
+                + "jwks_uri TEXT,"
+                + "oidc_discovery_endpoint TEXT,"
                 + "require_email BOOLEAN,"
-                + "user_info_map_from_id_token_payload_user_id CHAR(64),"
-                + "user_info_map_from_id_token_payload_email CHAR(64),"
-                + "user_info_map_from_id_token_payload_email_verified CHAR(64),"
-                + "user_info_map_from_user_info_endpoint_user_id CHAR(64),"
-                + "user_info_map_from_user_info_endpoint_email CHAR(64),"
-                + "user_info_map_from_user_info_endpoint_email_verified CHAR(64),"
+                + "user_info_map_from_id_token_payload_user_id VARCHAR(64),"
+                + "user_info_map_from_id_token_payload_email VARCHAR(64),"
+                + "user_info_map_from_id_token_payload_email_verified VARCHAR(64),"
+                + "user_info_map_from_user_info_endpoint_user_id VARCHAR(64),"
+                + "user_info_map_from_user_info_endpoint_email VARCHAR(64),"
+                + "user_info_map_from_user_info_endpoint_email_verified VARCHAR(64),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tenantThirdPartyProvidersTable, null, "pkey") + " PRIMARY KEY (connection_uri_domain, app_id, tenant_id, third_party_id),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tenantThirdPartyProvidersTable, "tenant_id", "fkey")
                 + " FOREIGN KEY(connection_uri_domain, app_id, tenant_id)"
@@ -203,14 +223,14 @@ public class MultitenancyQueries {
         String schema = Config.getConfig(start).getTableSchema();
         String tenantThirdPartyProvidersTable = Config.getConfig(start).getTenantThirdPartyProviderClientsTable();
         return "CREATE TABLE IF NOT EXISTS " + tenantThirdPartyProvidersTable + " ("
-                + "connection_uri_domain CHAR(256) DEFAULT '',"
-                + "app_id CHAR(64) DEFAULT 'public',"
-                + "tenant_id CHAR(64) DEFAULT 'public',"
-                + "third_party_id CHAR(64) NOT NULL,"
-                + "client_type CHAR(64) NOT NULL DEFAULT '',"
-                + "client_id CHAR(256) NOT NULL,"
+                + "connection_uri_domain VARCHAR(256) DEFAULT '',"
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "tenant_id VARCHAR(64) DEFAULT 'public',"
+                + "third_party_id VARCHAR(28) NOT NULL,"
+                + "client_type VARCHAR(64) NOT NULL DEFAULT '',"
+                + "client_id VARCHAR(256) NOT NULL,"
                 + "client_secret TEXT,"
-                + "scope CHAR(128)[],"
+                + "scope VARCHAR(128)[],"
                 + "force_pkce BOOLEAN,"
                 + "additional_config TEXT,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tenantThirdPartyProvidersTable, null, "pkey") + " PRIMARY KEY (connection_uri_domain, app_id, tenant_id, third_party_id, client_type),"
@@ -238,86 +258,82 @@ public class MultitenancyQueries {
         }
 
         {
-            if (tenantConfig.thirdPartyConfig.providers == null) {
-                return;
-            }
+            if (tenantConfig.thirdPartyConfig.providers != null) {
+                for (ThirdPartyConfig.Provider provider : tenantConfig.thirdPartyConfig.providers) {
+                    String QUERY = "INSERT INTO " + getConfig(start).getTenantThirdPartyProvidersTable()
+                            + "(connection_uri_domain, app_id, tenant_id, third_party_id, name, authorization_endpoint, authorization_endpoint_query_params, token_endpoint, token_endpoint_body_params, user_info_endpoint, user_info_endpoint_query_params, user_info_endpoint_headers, jwks_uri, oidc_discovery_endpoint, require_email, user_info_map_from_id_token_payload_user_id, user_info_map_from_id_token_payload_email, user_info_map_from_id_token_payload_email_verified, user_info_map_from_user_info_endpoint_user_id, user_info_map_from_user_info_endpoint_email, user_info_map_from_user_info_endpoint_email_verified)" + " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-            for (ThirdPartyConfig.Provider provider : tenantConfig.thirdPartyConfig.providers) {
-                String QUERY = "INSERT INTO " + getConfig(start).getTenantThirdPartyProvidersTable()
-                        + "(connection_uri_domain, app_id, tenant_id, third_party_id, name, authorization_endpoint, authorization_endpoint_query_params, token_endpoint, token_endpoint_body_params, user_info_endpoint, user_info_endpoint_query_params, user_info_endpoint_headers, jwks_uri, oidc_discovery_endpoint, require_email, user_info_map_from_id_token_payload_user_id, user_info_map_from_id_token_payload_email, user_info_map_from_id_token_payload_email_verified, user_info_map_from_user_info_endpoint_user_id, user_info_map_from_user_info_endpoint_email, user_info_map_from_user_info_endpoint_email_verified)" + " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    String user_info_map_from_id_token_payload_user_id;
+                    String user_info_map_from_id_token_payload_email;
+                    String user_info_map_from_id_token_payload_email_verified;
 
-                String user_info_map_from_id_token_payload_user_id;
-                String user_info_map_from_id_token_payload_email;
-                String user_info_map_from_id_token_payload_email_verified;
+                    if (provider.userInfoMap != null && provider.userInfoMap.fromIdTokenPayload != null) {
+                        user_info_map_from_id_token_payload_user_id = provider.userInfoMap.fromIdTokenPayload.userId;
+                        user_info_map_from_id_token_payload_email = provider.userInfoMap.fromIdTokenPayload.email;
+                        user_info_map_from_id_token_payload_email_verified = provider.userInfoMap.fromIdTokenPayload.emailVerified;
+                    } else {
+                        user_info_map_from_id_token_payload_user_id = null;
+                        user_info_map_from_id_token_payload_email = null;
+                        user_info_map_from_id_token_payload_email_verified = null;
+                    }
 
-                if (provider.userInfoMap != null && provider.userInfoMap.fromIdTokenPayload != null) {
-                    user_info_map_from_id_token_payload_user_id = provider.userInfoMap.fromIdTokenPayload.userId;
-                    user_info_map_from_id_token_payload_email = provider.userInfoMap.fromIdTokenPayload.email;
-                    user_info_map_from_id_token_payload_email_verified = provider.userInfoMap.fromIdTokenPayload.emailVerified;
-                } else {
-                    user_info_map_from_id_token_payload_user_id = null;
-                    user_info_map_from_id_token_payload_email = null;
-                    user_info_map_from_id_token_payload_email_verified = null;
-                }
+                    String user_info_map_from_user_info_endpoint_user_id;
+                    String user_info_map_from_user_info_endpoint_email;
+                    String user_info_map_from_user_info_endpoint_email_verified;
 
-                String user_info_map_from_user_info_endpoint_user_id;
-                String user_info_map_from_user_info_endpoint_email;
-                String user_info_map_from_user_info_endpoint_email_verified;
+                    if (provider.userInfoMap != null && provider.userInfoMap.fromUserInfoAPI != null) {
+                        user_info_map_from_user_info_endpoint_user_id = provider.userInfoMap.fromUserInfoAPI.userId;
+                        user_info_map_from_user_info_endpoint_email = provider.userInfoMap.fromUserInfoAPI.email;
+                        user_info_map_from_user_info_endpoint_email_verified = provider.userInfoMap.fromUserInfoAPI.emailVerified;
+                    } else {
+                        user_info_map_from_user_info_endpoint_user_id = null;
+                        user_info_map_from_user_info_endpoint_email = null;
+                        user_info_map_from_user_info_endpoint_email_verified = null;
+                    }
 
-                if (provider.userInfoMap != null && provider.userInfoMap.fromUserInfoAPI != null) {
-                    user_info_map_from_user_info_endpoint_user_id = provider.userInfoMap.fromUserInfoAPI.userId;
-                    user_info_map_from_user_info_endpoint_email = provider.userInfoMap.fromUserInfoAPI.email;
-                    user_info_map_from_user_info_endpoint_email_verified = provider.userInfoMap.fromUserInfoAPI.emailVerified;
-                } else {
-                    user_info_map_from_user_info_endpoint_user_id = null;
-                    user_info_map_from_user_info_endpoint_email = null;
-                    user_info_map_from_user_info_endpoint_email_verified = null;
-                }
-
-                update(sqlCon, QUERY, pst -> {
-                    pst.setString(1, tenantConfig.tenantIdentifier.getConnectionUriDomain());
-                    pst.setString(2, tenantConfig.tenantIdentifier.getAppId());
-                    pst.setString(3, tenantConfig.tenantIdentifier.getTenantId());
-                    pst.setString(4, provider.thirdPartyId);
-                    pst.setString(5, provider.name);
-                    pst.setString(6, provider.authorizationEndpoint);
-                    pst.setString(7, provider.authorizationEndpointQueryParams.toString());
-                    pst.setString(8, provider.tokenEndpoint);
-                    pst.setString(9, provider.tokenEndpointBodyParams.toString());
-                    pst.setString(10, provider.userInfoEndpoint);
-                    pst.setString(11, provider.userInfoEndpointQueryParams.toString());
-                    pst.setString(12, provider.userInfoEndpointHeaders.toString());
-                    pst.setString(13, provider.jwksURI);
-                    pst.setString(14, provider.oidcDiscoveryEndpoint);
-                    pst.setBoolean(15, provider.requireEmail);
-                    pst.setString(16, user_info_map_from_id_token_payload_user_id);
-                    pst.setString(17, user_info_map_from_id_token_payload_email);
-                    pst.setString(18, user_info_map_from_id_token_payload_email_verified);
-                    pst.setString(19, user_info_map_from_user_info_endpoint_user_id);
-                    pst.setString(20, user_info_map_from_user_info_endpoint_email);
-                    pst.setString(21, user_info_map_from_user_info_endpoint_email_verified);
-                });
-
-                if (provider.clients == null) {
-                    continue;
-                }
-
-                for (ThirdPartyConfig.ProviderClient providerClient : provider.clients) {
-                    String QUERY2 = "INSERT INTO " + getConfig(start).getTenantThirdPartyProviderClientsTable()
-                            + "(connection_uri_domain, app_id, tenant_id, third_party_id, client_type, client_id, client_secret, scope, force_pkce, additional_config)" + " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
-                    update(sqlCon, QUERY2, pst -> {
+                    update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantConfig.tenantIdentifier.getConnectionUriDomain());
                         pst.setString(2, tenantConfig.tenantIdentifier.getAppId());
                         pst.setString(3, tenantConfig.tenantIdentifier.getTenantId());
                         pst.setString(4, provider.thirdPartyId);
-                        pst.setString(5, providerClient.clientType);
-                        pst.setString(6, providerClient.clientId);
-                        pst.setString(7, providerClient.clientSecret);
-                        pst.setArray(8, sqlCon.createArrayOf("CHAR", providerClient.scope));
-                        pst.setBoolean(9, providerClient.forcePKCE);
-                        pst.setString(10, providerClient.additionalConfig.toString());
+                        pst.setString(5, provider.name);
+                        pst.setString(6, provider.authorizationEndpoint);
+                        pst.setString(7, jsonObjectToString(provider.authorizationEndpointQueryParams));
+                        pst.setString(8, provider.tokenEndpoint);
+                        pst.setString(9, jsonObjectToString(provider.tokenEndpointBodyParams));
+                        pst.setString(10, provider.userInfoEndpoint);
+                        pst.setString(11, jsonObjectToString(provider.userInfoEndpointQueryParams));
+                        pst.setString(12, jsonObjectToString(provider.userInfoEndpointHeaders));
+                        pst.setString(13, provider.jwksURI);
+                        pst.setString(14, provider.oidcDiscoveryEndpoint);
+                        pst.setBoolean(15, provider.requireEmail);
+                        pst.setString(16, user_info_map_from_id_token_payload_user_id);
+                        pst.setString(17, user_info_map_from_id_token_payload_email);
+                        pst.setString(18, user_info_map_from_id_token_payload_email_verified);
+                        pst.setString(19, user_info_map_from_user_info_endpoint_user_id);
+                        pst.setString(20, user_info_map_from_user_info_endpoint_email);
+                        pst.setString(21, user_info_map_from_user_info_endpoint_email_verified);
                     });
+
+                    if (provider.clients != null) {
+                        for (ThirdPartyConfig.ProviderClient providerClient : provider.clients) {
+                            String QUERY2 = "INSERT INTO " + getConfig(start).getTenantThirdPartyProviderClientsTable()
+                                    + "(connection_uri_domain, app_id, tenant_id, third_party_id, client_type, client_id, client_secret, scope, force_pkce, additional_config)" + " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+                            update(sqlCon, QUERY2, pst -> {
+                                pst.setString(1, tenantConfig.tenantIdentifier.getConnectionUriDomain());
+                                pst.setString(2, tenantConfig.tenantIdentifier.getAppId());
+                                pst.setString(3, tenantConfig.tenantIdentifier.getTenantId());
+                                pst.setString(4, provider.thirdPartyId);
+                                pst.setString(5, providerClient.clientType);
+                                pst.setString(6, providerClient.clientId);
+                                pst.setString(7, providerClient.clientSecret);
+                                pst.setArray(8, sqlCon.createArrayOf("VARCHAR", providerClient.scope));
+                                pst.setBoolean(9, providerClient.forcePKCE);
+                                pst.setString(10, jsonObjectToString(providerClient.additionalConfig));
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -344,29 +360,6 @@ public class MultitenancyQueries {
             Connection sqlCon = (Connection) con.getConnection();
             {
                 try {
-                    /*
-                    This may not be required as delete will cascade
-                    {
-                        String QUERY = "DELETE FROM " + getConfig(start).getTenantThirdPartyProviderClientsTable()
-                                + " WHERE connection_uri_domain = ? AND app_id = ? AND tenant_id = ?;";
-                        update(start, QUERY, pst -> {
-                            pst.setString(1, tenantConfig.tenantIdentifier.getConnectionUriDomain());
-                            pst.setString(2, tenantConfig.tenantIdentifier.getAppId());
-                            pst.setString(3, tenantConfig.tenantIdentifier.getTenantId());
-                        });
-                    }
-
-                    {
-                        String QUERY = "DELETE FROM " + getConfig(start).getTenantThirdPartyProvidersTable()
-                                + " WHERE connection_uri_domain = ? AND app_id = ? AND tenant_id = ?;";
-                        update(start, QUERY, pst -> {
-                            pst.setString(1, tenantConfig.tenantIdentifier.getConnectionUriDomain());
-                            pst.setString(2, tenantConfig.tenantIdentifier.getAppId());
-                            pst.setString(3, tenantConfig.tenantIdentifier.getTenantId());
-                        });
-                    }
-                    */
-
                     {
                         String QUERY = "DELETE FROM " + getConfig(start).getTenantConfigsTable()
                                 + " WHERE connection_uri_domain = ? AND app_id = ? AND tenant_id = ?;";
@@ -376,7 +369,6 @@ public class MultitenancyQueries {
                             pst.setString(3, tenantConfig.tenantIdentifier.getTenantId());
                         });
                         if (rowsAffected == 0) {
-                            sqlCon.rollback();
                             throw new StorageTransactionLogicException(new TenantOrAppNotFoundException(tenantConfig.tenantIdentifier));
                         }
                     }

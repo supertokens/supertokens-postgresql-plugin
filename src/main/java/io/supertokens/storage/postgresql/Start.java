@@ -45,7 +45,9 @@ import io.supertokens.pluginInterface.jwt.JWTSigningKeyInfo;
 import io.supertokens.pluginInterface.jwt.exceptions.DuplicateKeyIdException;
 import io.supertokens.pluginInterface.jwt.sqlstorage.JWTRecipeSQLStorage;
 import io.supertokens.pluginInterface.multitenancy.*;
+import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateClientTypeException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateTenantException;
+import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateThirdPartyIdException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
@@ -2034,7 +2036,8 @@ public class Start
 
     @Override
     public void createTenant(TenantConfig tenantConfig)
-            throws DuplicateTenantException, StorageQueryException {
+            throws DuplicateTenantException, StorageQueryException, DuplicateThirdPartyIdException,
+            DuplicateClientTypeException {
         try {
             MultitenancyQueries.createTenantConfig(this, tenantConfig);
         } catch (StorageTransactionLogicException e) {
@@ -2042,17 +2045,24 @@ public class Start
             if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantConfigsTable())) {
                 throw new DuplicateTenantException();
             }
+            if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantThirdPartyProvidersTable())) {
+                throw new DuplicateThirdPartyIdException();
+            }
+            if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantThirdPartyProviderClientsTable())) {
+                throw new DuplicateClientTypeException();
+            }
             throw new StorageQueryException(e.actualException);
         }
     }
 
     @Override
-    public void addTenantIdInUserPool(TenantIdentifier tenantIdentifier) throws DuplicateTenantException, StorageQueryException {
+    public void addTenantIdInUserPool(TenantIdentifier tenantIdentifier)
+            throws DuplicateTenantException, StorageQueryException {
         try {
             MultitenancyQueries.addTenantIdInUserPool(this, tenantIdentifier);
         } catch (StorageTransactionLogicException e) {
             PostgreSQLConfig config = Config.getConfig(this);
-            if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantConfigsTable())) {
+            if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantsTable())) {
                 throw new DuplicateTenantException();
             }
         }
@@ -2064,12 +2074,21 @@ public class Start
     }
 
     @Override
-    public void overwriteTenantConfig(TenantConfig config) throws TenantOrAppNotFoundException, StorageQueryException {
+    public void overwriteTenantConfig(TenantConfig tenantConfig)
+            throws TenantOrAppNotFoundException, StorageQueryException, DuplicateThirdPartyIdException,
+            DuplicateClientTypeException {
         try {
-            MultitenancyQueries.overwriteTenantConfig(this, config);
+            MultitenancyQueries.overwriteTenantConfig(this, tenantConfig);
         } catch (StorageTransactionLogicException e) {
-            if (e.actualException.getClass().isInstance(TenantOrAppNotFoundException.class)) {
+            if (e.actualException instanceof TenantOrAppNotFoundException) {
                 throw (TenantOrAppNotFoundException) e.actualException;
+            }
+            PostgreSQLConfig config = Config.getConfig(this);
+            if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantThirdPartyProvidersTable())) {
+                throw new DuplicateThirdPartyIdException();
+            }
+            if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantThirdPartyProviderClientsTable())) {
+                throw new DuplicateClientTypeException();
             }
             throw new StorageQueryException(e.actualException);
         }
