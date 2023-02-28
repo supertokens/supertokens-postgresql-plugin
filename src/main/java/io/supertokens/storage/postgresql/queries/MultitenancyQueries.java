@@ -184,78 +184,12 @@ public class MultitenancyQueries {
         try {
 
             // Map TenantIdentifier -> thirdPartyId -> clientType
-            HashMap<TenantIdentifier, HashMap<String, HashMap<String, ThirdPartyConfig.ProviderClient>>> providerClientsMap = new HashMap<>();
-            {
-                // Read all provider clients from the third party provider clients table
-                String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, third_party_id, client_type, client_id, client_secret, scope, force_pkce, additional_config FROM "
-                        + getConfig(start).getTenantThirdPartyProviderClientsTable() + ";";
-
-                execute(start, QUERY, pst -> {}, result -> {
-                    while (result.next()) {
-                        TenantIdentifier tenantIdentifier = new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id"));
-                        ThirdPartyConfig.ProviderClient providerClient = ThirdPartyProviderClientSQLHelper.TenantThirdPartyProviderClientRowMapper.getInstance().mapOrThrow(result);
-                        if (!providerClientsMap.containsKey(tenantIdentifier)) {
-                            providerClientsMap.put(tenantIdentifier, new HashMap<>());
-                        }
-
-                        if(!providerClientsMap.get(tenantIdentifier).containsKey(result.getString("third_party_id"))) {
-                            providerClientsMap.get(tenantIdentifier).put(result.getString("third_party_id"), new HashMap<>());
-                        }
-
-                        providerClientsMap.get(tenantIdentifier).get(result.getString("third_party_id")).put(providerClient.clientType, providerClient);
-                    }
-                    return null;
-                });
-            }
+            HashMap<TenantIdentifier, HashMap<String, HashMap<String, ThirdPartyConfig.ProviderClient>>> providerClientsMap = ThirdPartyProviderClientSQLHelper.selectAll(start);
 
             // Map (tenantIdentifier) -> thirdPartyId -> provider
-            HashMap<TenantIdentifier, HashMap<String, ThirdPartyConfig.Provider>> providerMap = new HashMap<>();
-            {
-                // Read all providers from the third party providers table
-                String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, third_party_id, name, authorization_endpoint, authorization_endpoint_query_params, token_endpoint, token_endpoint_body_params, user_info_endpoint, user_info_endpoint_query_params, user_info_endpoint_headers, jwks_uri, oidc_discovery_endpoint, require_email, user_info_map_from_id_token_payload_user_id, user_info_map_from_id_token_payload_email, user_info_map_from_id_token_payload_email_verified, user_info_map_from_user_info_endpoint_user_id, user_info_map_from_user_info_endpoint_email, user_info_map_from_user_info_endpoint_email_verified FROM "
-                        + getConfig(start).getTenantThirdPartyProvidersTable() + ";";
+            HashMap<TenantIdentifier, HashMap<String, ThirdPartyConfig.Provider>> providerMap = ThirdPartyProviderSQLHelper.selectAll(start, providerClientsMap);
 
-                execute(start, QUERY, pst -> {}, result -> {
-                    while (result.next()) {
-                        TenantIdentifier tenantIdentifier = new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id"));
-                        ThirdPartyConfig.ProviderClient[] clients = null;
-                        if (providerClientsMap.containsKey(tenantIdentifier) && providerClientsMap.get(tenantIdentifier).containsKey(result.getString("third_party_id"))) {
-                            clients = providerClientsMap.get(tenantIdentifier).get(result.getString("third_party_id")).values().toArray(new ThirdPartyConfig.ProviderClient[0]);
-                        }
-                        ThirdPartyConfig.Provider provider = ThirdPartyProviderSQLHelper.TenantThirdPartyProviderRowMapper.getInstance(clients).mapOrThrow(result);
-
-                        if (!providerMap.containsKey(tenantIdentifier)) {
-                            providerMap.put(tenantIdentifier, new HashMap<>());
-                        }
-                        providerMap.get(tenantIdentifier).put(provider.thirdPartyId, provider);
-                    }
-                    return null;
-                });
-            }
-
-            {
-                // Read all tenant configs
-                String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, core_config, email_password_enabled, passwordless_enabled, third_party_enabled FROM "
-                        + getConfig(start).getTenantConfigsTable() + ";";
-
-                TenantConfig[] tenantConfigs = execute(start, QUERY, pst -> {}, result -> {
-                    List<TenantConfig> temp = new ArrayList<>();
-                    while (result.next()) {
-                        TenantIdentifier tenantIdentifier = new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id"));
-                        ThirdPartyConfig.Provider[] providers = null;
-                        if (providerMap.containsKey(tenantIdentifier)) {
-                            providers = providerMap.get(tenantIdentifier).values().toArray(new ThirdPartyConfig.Provider[0]);
-                        }
-                        temp.add(TenantConfigSQLHelper.TenantConfigRowMapper.getInstance(providers).mapOrThrow(result));
-                    }
-                    TenantConfig[] finalResult = new TenantConfig[temp.size()];
-                    for (int i = 0; i < temp.size(); i++) {
-                        finalResult[i] = temp.get(i);
-                    }
-                    return finalResult;
-                });
-                return tenantConfigs;
-            }
+            return TenantConfigSQLHelper.selectAll(start, providerMap);
         } catch (SQLException throwables) {
             throw new StorageQueryException(throwables);
         }

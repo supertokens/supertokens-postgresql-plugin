@@ -19,6 +19,7 @@ package io.supertokens.storage.postgresql.queries.multitenancy;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.TenantConfig;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.multitenancy.ThirdPartyConfig;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.queries.utils.JsonUtils;
@@ -26,7 +27,9 @@ import io.supertokens.storage.postgresql.queries.utils.JsonUtils;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.HashMap;
 
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
@@ -77,6 +80,32 @@ public class ThirdPartyProviderSQLHelper {
                 throw new StorageQueryException(e);
             }
         }
+    }
+
+    public static HashMap<TenantIdentifier, HashMap<String, ThirdPartyConfig.Provider>> selectAll(Start start, HashMap<TenantIdentifier, HashMap<String, HashMap<String, ThirdPartyConfig.ProviderClient>>> providerClientsMap)
+            throws SQLException, StorageQueryException {
+        HashMap<TenantIdentifier, HashMap<String, ThirdPartyConfig.Provider>> providerMap = new HashMap<>();
+
+        String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, third_party_id, name, authorization_endpoint, authorization_endpoint_query_params, token_endpoint, token_endpoint_body_params, user_info_endpoint, user_info_endpoint_query_params, user_info_endpoint_headers, jwks_uri, oidc_discovery_endpoint, require_email, user_info_map_from_id_token_payload_user_id, user_info_map_from_id_token_payload_email, user_info_map_from_id_token_payload_email_verified, user_info_map_from_user_info_endpoint_user_id, user_info_map_from_user_info_endpoint_email, user_info_map_from_user_info_endpoint_email_verified FROM "
+                + getConfig(start).getTenantThirdPartyProvidersTable() + ";";
+
+        execute(start, QUERY, pst -> {}, result -> {
+            while (result.next()) {
+                TenantIdentifier tenantIdentifier = new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id"));
+                ThirdPartyConfig.ProviderClient[] clients = null;
+                if (providerClientsMap.containsKey(tenantIdentifier) && providerClientsMap.get(tenantIdentifier).containsKey(result.getString("third_party_id"))) {
+                    clients = providerClientsMap.get(tenantIdentifier).get(result.getString("third_party_id")).values().toArray(new ThirdPartyConfig.ProviderClient[0]);
+                }
+                ThirdPartyConfig.Provider provider = ThirdPartyProviderSQLHelper.TenantThirdPartyProviderRowMapper.getInstance(clients).mapOrThrow(result);
+
+                if (!providerMap.containsKey(tenantIdentifier)) {
+                    providerMap.put(tenantIdentifier, new HashMap<>());
+                }
+                providerMap.get(tenantIdentifier).put(provider.thirdPartyId, provider);
+            }
+            return null;
+        });
+        return providerMap;
     }
 
     public static void create(Start start, Connection sqlCon, TenantConfig tenantConfig, ThirdPartyConfig.Provider provider)

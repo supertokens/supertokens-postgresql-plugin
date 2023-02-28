@@ -19,6 +19,7 @@ package io.supertokens.storage.postgresql.queries.multitenancy;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.TenantConfig;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.multitenancy.ThirdPartyConfig;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.queries.utils.JsonUtils;
@@ -27,8 +28,10 @@ import java.sql.Array;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.HashMap;
 import java.util.Objects;
 
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
@@ -74,6 +77,32 @@ public class ThirdPartyProviderClientSQLHelper {
         }
     }
 
+    public static HashMap<TenantIdentifier, HashMap<String, HashMap<String, ThirdPartyConfig.ProviderClient>>> selectAll(Start start)
+            throws SQLException, StorageQueryException {
+        HashMap<TenantIdentifier, HashMap<String, HashMap<String, ThirdPartyConfig.ProviderClient>>> providerClientsMap = new HashMap<>();
+
+        String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, third_party_id, client_type, client_id, client_secret, scope, force_pkce, additional_config FROM "
+                + getConfig(start).getTenantThirdPartyProviderClientsTable() + ";";
+
+        execute(start, QUERY, pst -> {}, result -> {
+            while (result.next()) {
+                TenantIdentifier tenantIdentifier = new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id"));
+                ThirdPartyConfig.ProviderClient providerClient = ThirdPartyProviderClientSQLHelper.TenantThirdPartyProviderClientRowMapper.getInstance().mapOrThrow(result);
+                if (!providerClientsMap.containsKey(tenantIdentifier)) {
+                    providerClientsMap.put(tenantIdentifier, new HashMap<>());
+                }
+
+                if(!providerClientsMap.get(tenantIdentifier).containsKey(result.getString("third_party_id"))) {
+                    providerClientsMap.get(tenantIdentifier).put(result.getString("third_party_id"), new HashMap<>());
+                }
+
+                providerClientsMap.get(tenantIdentifier).get(result.getString("third_party_id")).put(providerClient.clientType, providerClient);
+            }
+            return null;
+        });
+        return providerClientsMap;
+    }
+
     public static void create(Start start, Connection sqlCon, TenantConfig tenantConfig, ThirdPartyConfig.Provider provider, ThirdPartyConfig.ProviderClient providerClient)
             throws SQLException, StorageQueryException {
 
@@ -100,5 +129,4 @@ public class ThirdPartyProviderClientSQLHelper {
             pst.setString(10, JsonUtils.jsonObjectToString(providerClient.additionalConfig));
         });
     }
-
 }

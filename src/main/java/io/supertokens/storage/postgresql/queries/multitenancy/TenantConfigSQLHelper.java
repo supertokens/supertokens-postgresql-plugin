@@ -25,7 +25,11 @@ import io.supertokens.storage.postgresql.queries.utils.JsonUtils;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
@@ -55,6 +59,30 @@ public class TenantConfigSQLHelper {
                 throw new StorageQueryException(e);
             }
         }
+    }
+
+    public static TenantConfig[] selectAll(Start start, HashMap<TenantIdentifier, HashMap<String, ThirdPartyConfig.Provider>> providerMap)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, core_config, email_password_enabled, passwordless_enabled, third_party_enabled FROM "
+                + getConfig(start).getTenantConfigsTable() + ";";
+
+        TenantConfig[] tenantConfigs = execute(start, QUERY, pst -> {}, result -> {
+            List<TenantConfig> temp = new ArrayList<>();
+            while (result.next()) {
+                TenantIdentifier tenantIdentifier = new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id"));
+                ThirdPartyConfig.Provider[] providers = null;
+                if (providerMap.containsKey(tenantIdentifier)) {
+                    providers = providerMap.get(tenantIdentifier).values().toArray(new ThirdPartyConfig.Provider[0]);
+                }
+                temp.add(TenantConfigSQLHelper.TenantConfigRowMapper.getInstance(providers).mapOrThrow(result));
+            }
+            TenantConfig[] finalResult = new TenantConfig[temp.size()];
+            for (int i = 0; i < temp.size(); i++) {
+                finalResult[i] = temp.get(i);
+            }
+            return finalResult;
+        });
+        return tenantConfigs;
     }
 
     public static void create(Start start, Connection sqlCon, TenantConfig tenantConfig)
