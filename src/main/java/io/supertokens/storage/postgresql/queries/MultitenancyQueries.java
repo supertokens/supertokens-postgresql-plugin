@@ -155,7 +155,7 @@ public class MultitenancyQueries {
                     {
                         String QUERY = "DELETE FROM " + getConfig(start).getTenantConfigsTable()
                                 + " WHERE connection_uri_domain = ? AND app_id = ? AND tenant_id = ?;";
-                        int rowsAffected = update(start, QUERY, pst -> {
+                        int rowsAffected = update(sqlCon, QUERY, pst -> {
                             pst.setString(1, tenantConfig.tenantIdentifier.getConnectionUriDomain());
                             pst.setString(2, tenantConfig.tenantIdentifier.getAppId());
                             pst.setString(3, tenantConfig.tenantIdentifier.getTenantId());
