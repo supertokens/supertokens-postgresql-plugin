@@ -2041,16 +2041,19 @@ public class Start
         try {
             MultitenancyQueries.createTenantConfig(this, tenantConfig);
         } catch (StorageTransactionLogicException e) {
-            PostgreSQLConfig config = Config.getConfig(this);
-            if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantConfigsTable())) {
-                throw new DuplicateTenantException();
+            if (e.actualException instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantConfigsTable())) {
+                    throw new DuplicateTenantException();
+                }
+                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantThirdPartyProvidersTable())) {
+                    throw new DuplicateThirdPartyIdException();
+                }
+                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantThirdPartyProviderClientsTable())) {
+                    throw new DuplicateClientTypeException();
+                }
             }
-            if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantThirdPartyProvidersTable())) {
-                throw new DuplicateThirdPartyIdException();
-            }
-            if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantThirdPartyProviderClientsTable())) {
-                throw new DuplicateClientTypeException();
-            }
+
             throw new StorageQueryException(e.actualException);
         }
     }
@@ -2061,10 +2064,14 @@ public class Start
         try {
             MultitenancyQueries.addTenantIdInUserPool(this, tenantIdentifier);
         } catch (StorageTransactionLogicException e) {
-            PostgreSQLConfig config = Config.getConfig(this);
-            if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantsTable())) {
-                throw new DuplicateTenantException();
+            if (e.actualException instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(),
+                        config.getTenantsTable())) {
+                    throw new DuplicateTenantException();
+                }
             }
+            throw new StorageQueryException(e.actualException);
         }
     }
 
@@ -2083,12 +2090,14 @@ public class Start
             if (e.actualException instanceof TenantOrAppNotFoundException) {
                 throw (TenantOrAppNotFoundException) e.actualException;
             }
-            PostgreSQLConfig config = Config.getConfig(this);
-            if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantThirdPartyProvidersTable())) {
-                throw new DuplicateThirdPartyIdException();
-            }
-            if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantThirdPartyProviderClientsTable())) {
-                throw new DuplicateClientTypeException();
+            if (e.actualException instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantThirdPartyProvidersTable())) {
+                    throw new DuplicateThirdPartyIdException();
+                }
+                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantThirdPartyProviderClientsTable())) {
+                    throw new DuplicateClientTypeException();
+                }
             }
             throw new StorageQueryException(e.actualException);
         }
