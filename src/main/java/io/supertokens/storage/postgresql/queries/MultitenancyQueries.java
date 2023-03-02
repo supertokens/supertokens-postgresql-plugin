@@ -112,15 +112,11 @@ public class MultitenancyQueries {
 
         TenantConfigSQLHelper.create(start, sqlCon, tenantConfig);
 
-        if (tenantConfig.thirdPartyConfig.providers != null) {
-            for (ThirdPartyConfig.Provider provider : tenantConfig.thirdPartyConfig.providers) {
-                ThirdPartyProviderSQLHelper.create(start, sqlCon, tenantConfig, provider);
+        for (ThirdPartyConfig.Provider provider : tenantConfig.thirdPartyConfig.providers) {
+            ThirdPartyProviderSQLHelper.create(start, sqlCon, tenantConfig, provider);
 
-                if (provider.clients != null) {
-                    for (ThirdPartyConfig.ProviderClient providerClient : provider.clients) {
-                        ThirdPartyProviderClientSQLHelper.create(start, sqlCon, tenantConfig, provider, providerClient);
-                    }
-                }
+            for (ThirdPartyConfig.ProviderClient providerClient : provider.clients) {
+                ThirdPartyProviderClientSQLHelper.create(start, sqlCon, tenantConfig, provider, providerClient);
             }
         }
     }

@@ -24,10 +24,7 @@ import io.supertokens.pluginInterface.multitenancy.ThirdPartyConfig;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.queries.utils.JsonUtils;
 
-import java.sql.Array;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.HashMap;
 import java.util.Objects;
 
@@ -63,12 +60,15 @@ public class ThirdPartyProviderClientSQLHelper {
                     clientType = null;
                 }
 
+                Boolean forcePkce = result.getBoolean("force_pkce");
+                if (result.wasNull()) forcePkce = null;
+
                 return new ThirdPartyConfig.ProviderClient(
                         clientType,
                         result.getString("client_id"),
                         result.getString("client_secret"),
                         scopeStringArray,
-                        result.getBoolean("force_pkce"),
+                        forcePkce,
                         JsonUtils.stringToJsonObject(result.getString("additional_config"))
                 );
             } catch (Exception e) {
@@ -125,7 +125,11 @@ public class ThirdPartyProviderClientSQLHelper {
             pst.setString(6, providerClient.clientId);
             pst.setString(7, providerClient.clientSecret);
             pst.setArray(8, scopeArray);
-            pst.setBoolean(9, providerClient.forcePKCE);
+            if (providerClient.forcePKCE == null) {
+                pst.setNull(9, Types.BOOLEAN);
+            } else {
+                pst.setBoolean(9, providerClient.forcePKCE.booleanValue());
+            }
             pst.setString(10, JsonUtils.jsonObjectToString(providerClient.additionalConfig));
         });
     }

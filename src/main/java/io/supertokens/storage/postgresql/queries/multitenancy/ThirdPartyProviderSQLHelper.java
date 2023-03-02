@@ -24,9 +24,7 @@ import io.supertokens.pluginInterface.multitenancy.ThirdPartyConfig;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.queries.utils.JsonUtils;
 
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.HashMap;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
@@ -49,6 +47,8 @@ public class ThirdPartyProviderSQLHelper {
         @Override
         public ThirdPartyConfig.Provider map(ResultSet result) throws StorageQueryException {
             try {
+                Boolean requireEmail = result.getBoolean("require_email");
+                if (result.wasNull()) requireEmail = null;
                 return new ThirdPartyConfig.Provider(
                         result.getString("third_party_id"),
                         result.getString("name"),
@@ -62,7 +62,7 @@ public class ThirdPartyProviderSQLHelper {
                         JsonUtils.stringToJsonObject(result.getString("user_info_endpoint_headers")),
                         result.getString("jwks_uri"),
                         result.getString("oidc_discovery_endpoint"),
-                        result.getBoolean("require_email"),
+                        requireEmail,
                         new ThirdPartyConfig.UserInfoMap(
                                 new ThirdPartyConfig.UserInfoMapKeyValue(
                                         result.getString("user_info_map_from_id_token_payload_user_id"),
@@ -128,7 +128,11 @@ public class ThirdPartyProviderSQLHelper {
             pst.setString(12, JsonUtils.jsonObjectToString(provider.userInfoEndpointHeaders));
             pst.setString(13, provider.jwksURI);
             pst.setString(14, provider.oidcDiscoveryEndpoint);
-            pst.setBoolean(15, provider.requireEmail);
+            if (provider.requireEmail == null) {
+                pst.setNull(15, Types.BOOLEAN);
+            } else {
+                pst.setBoolean(15, provider.requireEmail.booleanValue());
+            }
             pst.setString(16, provider.userInfoMap.fromIdTokenPayload.userId);
             pst.setString(17, provider.userInfoMap.fromIdTokenPayload.email);
             pst.setString(18, provider.userInfoMap.fromIdTokenPayload.emailVerified);
