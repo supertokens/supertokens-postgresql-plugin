@@ -89,6 +89,34 @@ public class GeneralQueries {
                 + "(time_joined DESC, user_id " + "DESC);";
     }
 
+    private static String getQueryToCreateAppsTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String appsTable = Config.getConfig(start).getAppsTable();
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + appsTable + " ("
+                + "app_id VARCHAR(64) NOT NULL DEFAULT 'public',"
+                + "created_at_time BIGINT ,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, appsTable, null, "pkey") + " PRIMARY KEY(app_id)" +
+                " );";
+        // @formatter:on
+    }
+
+    private static String getQueryToCreateTenantsTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String tenantsTable = Config.getConfig(start).getTenantsTable();
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + tenantsTable + " ("
+                + "app_id VARCHAR(64) NOT NULL DEFAULT 'public',"
+                + "tenant_id VARCHAR(64) NOT NULL DEFAULT 'public',"
+                + "created_at_time BIGINT ,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tenantsTable, null, "pkey") + " PRIMARY KEY(app_id, tenant_id) ,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tenantsTable, "app_id", "fkey")
+                + " FOREIGN KEY(app_id)"
+                + " REFERENCES " + Config.getConfig(start).getAppsTable() + " (app_id) ON DELETE CASCADE"
+                + ");";
+        // @formatter:on
+    }
+
     private static String getQueryToCreateKeyValueTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String keyValueTable = Config.getConfig(start).getKeyValueTable();
@@ -102,12 +130,37 @@ public class GeneralQueries {
         // @formatter:on
     }
 
+    private static String getQueryToCreateAppIdToUserIdTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String appToUserTable = Config.getConfig(start).getAppIdToUserIdTable();
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + appToUserTable + " ("
+                + "app_id VARCHAR(64) NOT NULL DEFAULT 'public',"
+                + "user_id CHAR(36) NOT NULL,"
+                + "recipe_id VARCHAR(128) NOT NULL,"
+                + "time_joined BIGINT NOT NULL,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, null, "pkey") + " PRIMARY KEY (app_id, user_id), "
+                + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, "app_id", "fkey") + " FOREIGN KEY(app_id) REFERENCES " + Config.getConfig(start).getAppsTable() + "(app_id) ON DELETE CASCADE"
+                + ");";
+        // @formatter:on
+    }
+
     public static void createTablesIfNotExists(Start start) throws SQLException, StorageQueryException {
         int numberOfRetries = 0;
         boolean retry = true;
         while (retry) {
             retry = false;
             try {
+                if (!doesTableExists(start, Config.getConfig(start).getAppsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreateAppsTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getTenantsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreateTenantsTable(start), NO_OP_SETTER);
+                }
+
                 if (!doesTableExists(start, Config.getConfig(start).getKeyValueTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateKeyValueTable(start), NO_OP_SETTER);
@@ -121,6 +174,11 @@ public class GeneralQueries {
                     update(start, getQueryToCreateUserPaginationIndex(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getAppIdToUserIdTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreateAppIdToUserIdTable(start), NO_OP_SETTER);
+                }
+
                 if (!doesTableExists(start, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateAccessTokenSigningKeysTable(start), NO_OP_SETTER);
@@ -129,6 +187,21 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getSessionInfoTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateSessionInfoTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getTenantConfigsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, MultitenancyQueries.getQueryToCreateTenantConfigsTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getTenantThirdPartyProvidersTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, MultitenancyQueries.getQueryToCreateTenantThirdPartyProvidersTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getTenantThirdPartyProviderClientsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, MultitenancyQueries.getQueryToCreateTenantThirdPartyProviderClientsTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getEmailPasswordUsersTable())) {
@@ -253,18 +326,30 @@ public class GeneralQueries {
         }
 
         {
-            String DROP_QUERY = "DROP TABLE IF EXISTS " + getConfig(start).getKeyValueTable() + ","
-                    + getConfig(start).getUserIdMappingTable() + "," + getConfig(start).getUsersTable() + ","
-                    + getConfig(start).getAccessTokenSigningKeysTable() + "," + getConfig(start).getSessionInfoTable()
-                    + "," + getConfig(start).getEmailPasswordUsersTable() + ","
+            String DROP_QUERY = "DROP TABLE IF EXISTS "
+                    + getConfig(start).getAppsTable() + ","
+                    + getConfig(start).getTenantsTable() + ","
+                    + getConfig(start).getKeyValueTable() + ","
+                    + getConfig(start).getAppIdToUserIdTable() + ","
+                    + getConfig(start).getUserIdMappingTable() + ","
+                    + getConfig(start).getUsersTable() + ","
+                    + getConfig(start).getAccessTokenSigningKeysTable() + ","
+                    + getConfig(start).getTenantConfigsTable() + ","
+                    + getConfig(start).getTenantThirdPartyProvidersTable() + ","
+                    + getConfig(start).getTenantThirdPartyProviderClientsTable() + ","
+                    + getConfig(start).getSessionInfoTable() + ","
+                    + getConfig(start).getEmailPasswordUsersTable() + ","
                     + getConfig(start).getPasswordResetTokensTable() + ","
                     + getConfig(start).getEmailVerificationTokensTable() + ","
-                    + getConfig(start).getEmailVerificationTable() + "," + getConfig(start).getThirdPartyUsersTable()
-                    + "," + getConfig(start).getJWTSigningKeysTable() + ","
+                    + getConfig(start).getEmailVerificationTable() + ","
+                    + getConfig(start).getThirdPartyUsersTable() + ","
+                    + getConfig(start).getJWTSigningKeysTable() + ","
                     + getConfig(start).getPasswordlessCodesTable() + ","
                     + getConfig(start).getPasswordlessDevicesTable() + ","
-                    + getConfig(start).getPasswordlessUsersTable() + "," + getConfig(start).getUserMetadataTable() + ","
-                    + getConfig(start).getRolesTable() + "," + getConfig(start).getUserRolesPermissionsTable() + ","
+                    + getConfig(start).getPasswordlessUsersTable() + ","
+                    + getConfig(start).getUserMetadataTable() + ","
+                    + getConfig(start).getRolesTable() + ","
+                    + getConfig(start).getUserRolesPermissionsTable() + ","
                     + getConfig(start).getUserRolesTable();
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
@@ -272,7 +357,7 @@ public class GeneralQueries {
 
     public static void setKeyValue_Transaction(Start start, Connection con, String key, KeyValueInfo info)
             throws SQLException, StorageQueryException {
-        String QUERY = "INSERT INTO " + getConfig(start).getKeyValueTable()
+                String QUERY = "INSERT INTO " + getConfig(start).getKeyValueTable()
                 + "(name, value, created_at_time) VALUES(?, ?, ?) "
                 + "ON CONFLICT (name) DO UPDATE SET value = ?, created_at_time = ?";
 

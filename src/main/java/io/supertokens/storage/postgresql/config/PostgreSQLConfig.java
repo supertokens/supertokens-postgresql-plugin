@@ -215,12 +215,42 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("all_auth_recipe_users");
     }
 
+    public String getAppsTable() {
+        String tableName = "apps";
+        return addSchemaAndPrefixToTableName(tableName);
+    }
+
+    public String getTenantsTable() {
+        String tableName = "tenants";
+        return addSchemaAndPrefixToTableName(tableName);
+    }
+
+    public String getTenantConfigsTable() {
+        String tableName = "tenant_configs";
+        return addSchemaAndPrefixToTableName(tableName);
+    }
+
+    public String getTenantThirdPartyProvidersTable() {
+        String tableName = "tenant_thirdparty_providers";
+        return addSchemaAndPrefixToTableName(tableName);
+    }
+
+    public String getTenantThirdPartyProviderClientsTable() {
+        String tableName = "tenant_thirdparty_provider_clients";
+        return addSchemaAndPrefixToTableName(tableName);
+    }
+
+
     public String getKeyValueTable() {
         String tableName = "key_value";
         if (postgresql_key_value_table_name != null) {
             return addSchemaToTableName(postgresql_key_value_table_name);
         }
         return addSchemaAndPrefixToTableName(tableName);
+    }
+
+    public String getAppIdToUserIdTable() {
+        return addSchemaAndPrefixToTableName("app_id_to_user_id");
     }
 
     public String getAccessTokenSigningKeysTable() {
@@ -409,5 +439,4 @@ public class PostgreSQLConfig {
                             " for the same user pool");
         }
     }
-
 }
