@@ -45,16 +45,9 @@ import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import static io.supertokens.storage.postgresql.queries.EmailPasswordQueries.getQueryToCreatePasswordResetTokenExpiryIndex;
 import static io.supertokens.storage.postgresql.queries.EmailPasswordQueries.getQueryToCreatePasswordResetTokensTable;
-import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.getQueryToCreateEmailVerificationTable;
-import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.getQueryToCreateEmailVerificationTokenExpiryIndex;
-import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.getQueryToCreateEmailVerificationTokensTable;
+import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.*;
 import static io.supertokens.storage.postgresql.queries.JWTSigningQueries.getQueryToCreateJWTSigningTable;
-import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateCodeCreatedAtIndex;
-import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateCodeDeviceIdHashIndex;
-import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateCodesTable;
-import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateDeviceEmailIndex;
-import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateDevicePhoneNumberIndex;
-import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateDevicesTable;
+import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.*;
 import static io.supertokens.storage.postgresql.queries.SessionQueries.getQueryToCreateAccessTokenSigningKeysTable;
 import static io.supertokens.storage.postgresql.queries.SessionQueries.getQueryToCreateSessionInfoTable;
 import static io.supertokens.storage.postgresql.queries.UserMetadataQueries.getQueryToCreateUserMetadataTable;
@@ -109,7 +102,8 @@ public class GeneralQueries {
                 + "app_id VARCHAR(64) NOT NULL DEFAULT 'public',"
                 + "tenant_id VARCHAR(64) NOT NULL DEFAULT 'public',"
                 + "created_at_time BIGINT ,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tenantsTable, null, "pkey") + " PRIMARY KEY(app_id, tenant_id) ,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tenantsTable, null, "pkey") +
+                " PRIMARY KEY(app_id, tenant_id) ,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tenantsTable, "app_id", "fkey")
                 + " FOREIGN KEY(app_id)"
                 + " REFERENCES " + Config.getConfig(start).getAppsTable() + " (app_id) ON DELETE CASCADE"
@@ -139,8 +133,11 @@ public class GeneralQueries {
                 + "user_id CHAR(36) NOT NULL,"
                 + "recipe_id VARCHAR(128) NOT NULL,"
                 + "time_joined BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, null, "pkey") + " PRIMARY KEY (app_id, user_id), "
-                + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, "app_id", "fkey") + " FOREIGN KEY(app_id) REFERENCES " + Config.getConfig(start).getAppsTable() + "(app_id) ON DELETE CASCADE"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, null, "pkey") +
+                " PRIMARY KEY (app_id, user_id), "
+                + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, "app_id", "fkey") +
+                " FOREIGN KEY(app_id) REFERENCES " + Config.getConfig(start).getAppsTable() +
+                "(app_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
     }
@@ -196,12 +193,14 @@ public class GeneralQueries {
 
                 if (!doesTableExists(start, Config.getConfig(start).getTenantThirdPartyProvidersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, MultitenancyQueries.getQueryToCreateTenantThirdPartyProvidersTable(start), NO_OP_SETTER);
+                    update(start, MultitenancyQueries.getQueryToCreateTenantThirdPartyProvidersTable(start),
+                            NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getTenantThirdPartyProviderClientsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, MultitenancyQueries.getQueryToCreateTenantThirdPartyProviderClientsTable(start), NO_OP_SETTER);
+                    update(start, MultitenancyQueries.getQueryToCreateTenantThirdPartyProviderClientsTable(start),
+                            NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getEmailPasswordUsersTable())) {
@@ -258,9 +257,11 @@ public class GeneralQueries {
                     update(start, getQueryToCreateCodeCreatedAtIndex(start), NO_OP_SETTER);
                 }
 
-                // This PostgreSQL specific, because it's created automatically in MySQL and it doesn't support "create
+                // This PostgreSQL specific, because it's created automatically in MySQL and it
+                // doesn't support "create
                 // index if not exists"
-                // We missed creating this earlier for the codes table, so it may be missing even if the table exists
+                // We missed creating this earlier for the codes table, so it may be missing
+                // even if the table exists
                 update(start, getQueryToCreateCodeDeviceIdHashIndex(start), NO_OP_SETTER);
 
                 if (!doesTableExists(start, Config.getConfig(start).getUserMetadataTable())) {
@@ -290,6 +291,19 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getUserIdMappingTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, UserIdMappingQueries.getQueryToCreateUserIdMappingTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getDashboardUsersTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, DashboardQueries.getQueryToCreateDashboardUsersTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getDashboardSessionsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, DashboardQueries.getQueryToCreateDashboardUserSessionsTable(start), NO_OP_SETTER);
+                    // index
+                    update(start, DashboardQueries.getQueryToCreateDashboardUserSessionsExpiryIndex(start),
+                            NO_OP_SETTER);
                 }
 
             } catch (Exception e) {
@@ -350,14 +364,16 @@ public class GeneralQueries {
                     + getConfig(start).getUserMetadataTable() + ","
                     + getConfig(start).getRolesTable() + ","
                     + getConfig(start).getUserRolesPermissionsTable() + ","
-                    + getConfig(start).getUserRolesTable();
+                    + getConfig(start).getUserRolesTable() + ","
+                    + getConfig(start).getDashboardUsersTable() + ","
+                    + getConfig(start).getDashboardSessionsTable();
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
     }
 
     public static void setKeyValue_Transaction(Start start, Connection con, String key, KeyValueInfo info)
             throws SQLException, StorageQueryException {
-                String QUERY = "INSERT INTO " + getConfig(start).getKeyValueTable()
+        String QUERY = "INSERT INTO " + getConfig(start).getKeyValueTable()
                 + "(name, value, created_at_time) VALUES(?, ?, ?) "
                 + "ON CONFLICT (name) DO UPDATE SET value = ?, created_at_time = ?";
 
@@ -440,7 +456,8 @@ public class GeneralQueries {
     }
 
     public static AuthRecipeUserInfo[] getUsers(Start start, @NotNull Integer limit, @NotNull String timeJoinedOrder,
-            @Nullable RECIPE_ID[] includeRecipeIds, @Nullable String userId, @Nullable Long timeJoined)
+                                                @Nullable RECIPE_ID[] includeRecipeIds, @Nullable String userId,
+                                                @Nullable Long timeJoined)
             throws SQLException, StorageQueryException {
 
         // This list will be used to keep track of the result's order from the db
@@ -524,7 +541,8 @@ public class GeneralQueries {
             List<? extends AuthRecipeUserInfo> users = getUserInfoForRecipeIdFromUserIds(start, recipeId,
                     recipeIdToUserIdListMap.get(recipeId));
 
-            // we fill in all the slots in finalResult based on their position in usersFromQuery
+            // we fill in all the slots in finalResult based on their position in
+            // usersFromQuery
             Map<String, AuthRecipeUserInfo> userIdToInfoMap = new HashMap<>();
             for (AuthRecipeUserInfo user : users) {
                 userIdToInfoMap.put(user.id, user);
@@ -540,7 +558,8 @@ public class GeneralQueries {
     }
 
     private static List<? extends AuthRecipeUserInfo> getUserInfoForRecipeIdFromUserIds(Start start, RECIPE_ID recipeId,
-            List<String> userIds) throws StorageQueryException, SQLException {
+                                                                                        List<String> userIds)
+            throws StorageQueryException, SQLException {
         if (recipeId == RECIPE_ID.EMAIL_PASSWORD) {
             return EmailPasswordQueries.getUsersInfoUsingIdList(start, userIds);
         } else if (recipeId == RECIPE_ID.THIRD_PARTY) {

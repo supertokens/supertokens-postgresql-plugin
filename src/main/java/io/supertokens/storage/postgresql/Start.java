@@ -25,6 +25,10 @@ import io.supertokens.pluginInterface.LOG_LEVEL;
 import io.supertokens.pluginInterface.RECIPE_ID;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
+import io.supertokens.pluginInterface.dashboard.DashboardSessionInfo;
+import io.supertokens.pluginInterface.dashboard.DashboardUser;
+import io.supertokens.pluginInterface.dashboard.exceptions.UserIdNotFoundException;
+import io.supertokens.pluginInterface.dashboard.sqlStorage.DashboardSQLStorage;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
 import io.supertokens.pluginInterface.emailpassword.UserInfo;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
@@ -44,7 +48,10 @@ import io.supertokens.pluginInterface.jwt.JWTRecipeStorage;
 import io.supertokens.pluginInterface.jwt.JWTSigningKeyInfo;
 import io.supertokens.pluginInterface.jwt.exceptions.DuplicateKeyIdException;
 import io.supertokens.pluginInterface.jwt.sqlstorage.JWTRecipeSQLStorage;
-import io.supertokens.pluginInterface.multitenancy.*;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.pluginInterface.multitenancy.MultitenancyStorage;
+import io.supertokens.pluginInterface.multitenancy.TenantConfig;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateClientTypeException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateTenantException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateThirdPartyIdException;
@@ -92,7 +99,7 @@ import java.util.Set;
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
-        MultitenancyStorage {
+        MultitenancyStorage, DashboardSQLStorage {
 
     private static final Object appenderLock = new Object();
     public static boolean silent = false;
@@ -255,7 +262,8 @@ public class Start
                     } catch (InterruptedException ignored) {
                     }
                     ProcessState.getInstance(this).addState(ProcessState.PROCESS_STATE.DEADLOCK_FOUND, e);
-                    // this because deadlocks are not necessarily a result of faulty logic. They can happen
+                    // this because deadlocks are not necessarily a result of faulty logic. They can
+                    // happen
                     continue;
                 }
                 if (e instanceof StorageQueryException) {
@@ -2044,17 +2052,19 @@ public class Start
         } catch (StorageTransactionLogicException e) {
             if (e.actualException instanceof PSQLException) {
                 PostgreSQLConfig config = Config.getConfig(this);
-                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantConfigsTable())) {
+                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(),
+                        config.getTenantConfigsTable())) {
                     throw new DuplicateTenantException();
                 }
-                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantThirdPartyProvidersTable())) {
+                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(),
+                        config.getTenantThirdPartyProvidersTable())) {
                     throw new DuplicateThirdPartyIdException();
                 }
-                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantThirdPartyProviderClientsTable())) {
+                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(),
+                        config.getTenantThirdPartyProviderClientsTable())) {
                     throw new DuplicateClientTypeException();
                 }
             }
-
             throw new StorageQueryException(e.actualException);
         }
     }
@@ -2077,7 +2087,8 @@ public class Start
     }
 
     @Override
-    public void deleteTenantIdInUserPool(TenantIdentifier tenantIdentifier) throws TenantOrAppNotFoundException {
+    public void deleteTenantIdInUserPool(TenantIdentifier tenantIdentifier) throws
+            TenantOrAppNotFoundException {
         // TODO:
     }
 
@@ -2093,10 +2104,12 @@ public class Start
             }
             if (e.actualException instanceof PSQLException) {
                 PostgreSQLConfig config = Config.getConfig(this);
-                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantThirdPartyProvidersTable())) {
+                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(),
+                        config.getTenantThirdPartyProvidersTable())) {
                     throw new DuplicateThirdPartyIdException();
                 }
-                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(), config.getTenantThirdPartyProviderClientsTable())) {
+                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(),
+                        config.getTenantThirdPartyProviderClientsTable())) {
                     throw new DuplicateClientTypeException();
                 }
             }
@@ -2105,12 +2118,14 @@ public class Start
     }
 
     @Override
-    public void deleteTenant(TenantIdentifier tenantIdentifier) throws TenantOrAppNotFoundException {
+    public void deleteTenant(TenantIdentifier tenantIdentifier) throws
+            TenantOrAppNotFoundException {
         // TODO:
     }
 
     @Override
-    public void deleteApp(TenantIdentifier tenantIdentifier) throws TenantOrAppNotFoundException {
+    public void deleteApp(TenantIdentifier tenantIdentifier) throws
+            TenantOrAppNotFoundException {
         // TODO:
     }
 
@@ -2143,7 +2158,191 @@ public class Start
     }
 
     @Override
-    public void deleteConnectionUriDomain(String connectionUriDomain) throws TenantOrAppNotFoundException {
+    public void deleteConnectionUriDomain(String connectionUriDomain) throws
+            TenantOrAppNotFoundException {
         // TODO:
+    }
+
+    @Override
+    public boolean deleteDashboardUserWithUserId(AppIdentifier appIdentifier, String userId) throws
+            StorageQueryException {
+        // TODO..
+        try {
+            return DashboardQueries.deleteDashboardUserWithUserId(this, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void createNewDashboardUserSession(AppIdentifier appIdentifier, String userId, String sessionId,
+                                              long timeCreated, long expiry)
+            throws StorageQueryException, UserIdNotFoundException {
+        // TODO..
+        try {
+            DashboardQueries.createDashboardSession(this, userId, sessionId, timeCreated,
+                    expiry);
+        } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                ServerErrorMessage serverMessage =
+                        ((PSQLException) e).getServerErrorMessage();
+
+                if (isForeignKeyConstraintError(serverMessage,
+                        Config.getConfig(this).getDashboardSessionsTable(), "user_id")) {
+                    throw new UserIdNotFoundException();
+                }
+            }
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public DashboardSessionInfo[] getAllSessionsForUserId(AppIdentifier appIdentifier, String userId) throws
+            StorageQueryException {
+        // TODO..
+        try {
+            return DashboardQueries.getAllSessionsForUserId(this, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public DashboardSessionInfo getSessionInfoWithSessionId(AppIdentifier appIdentifier, String sessionId) throws
+            StorageQueryException {
+        // TODO..
+        try {
+            return DashboardQueries.getSessionInfoWithSessionId(this, sessionId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean revokeSessionWithSessionId(AppIdentifier appIdentifier, String sessionId) throws
+            StorageQueryException {
+        // TODO..
+        try {
+            return DashboardQueries.deleteDashboardUserSessionWithSessionId(this,
+                    sessionId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void revokeExpiredSessions() throws StorageQueryException {
+        try {
+            DashboardQueries.deleteExpiredSessions(this);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+
+    }
+
+    @Override
+    public void updateDashboardUsersEmailWithUserId_Transaction(AppIdentifier appIdentifier, TransactionConnection
+            con, String userId,
+                                                                String newEmail) throws StorageQueryException,
+            io.supertokens.pluginInterface.dashboard.exceptions.DuplicateEmailException,
+            UserIdNotFoundException {
+        // TODO..
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            if (!DashboardQueries.updateDashboardUsersEmailWithUserId_Transaction(this,
+                    sqlCon, userId, newEmail)) {
+                throw new UserIdNotFoundException();
+            }
+        } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isUniqueConstraintError(serverErrorMessage,
+                        config.getDashboardUsersTable(),
+                        "email")) {
+                    throw new io.supertokens.pluginInterface.dashboard.exceptions.DuplicateEmailException();
+                }
+            }
+            throw new StorageQueryException(e);
+        }
+
+    }
+
+    @Override
+    public void updateDashboardUsersPasswordWithUserId_Transaction(AppIdentifier appIdentifier,
+                                                                   TransactionConnection con, String userId,
+                                                                   String newPassword)
+            throws StorageQueryException, UserIdNotFoundException {
+        // TODO..
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            if (!DashboardQueries.updateDashboardUsersPasswordWithUserId_Transaction(this,
+                    sqlCon, userId,
+                    newPassword)) {
+                throw new UserIdNotFoundException();
+            }
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public DashboardUser[] getAllDashboardUsers(AppIdentifier appIdentifier) throws StorageQueryException {
+        try {
+            // TODO..
+            return DashboardQueries.getAllDashBoardUsers(this);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public DashboardUser getDashboardUserByUserId(AppIdentifier appIdentifier, String userId)
+            throws StorageQueryException {
+        try {
+            // TODO..
+            return DashboardQueries.getDashboardUserByUserId(this, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void createNewDashboardUser(AppIdentifier appIdentifier, DashboardUser userInfo)
+            throws StorageQueryException, io.supertokens.pluginInterface.dashboard.exceptions.DuplicateUserIdException,
+            io.supertokens.pluginInterface.dashboard.exceptions.DuplicateEmailException {
+        // TODO..
+        try {
+            DashboardQueries.createDashboardUser(this, userInfo.userId, userInfo.email, userInfo.passwordHash,
+                    userInfo.timeJoined);
+        } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isPrimaryKeyError(serverErrorMessage, config.getDashboardUsersTable())) {
+                    throw new io.supertokens.pluginInterface.dashboard.exceptions.DuplicateUserIdException();
+                }
+                if (isUniqueConstraintError(serverErrorMessage, config.getDashboardUsersTable(),
+                        "email")) {
+                    throw new io.supertokens.pluginInterface.dashboard.exceptions.DuplicateEmailException();
+
+                }
+            }
+            throw new StorageQueryException(e);
+        }
+
+    }
+
+    @Override
+    public DashboardUser getDashboardUserByEmail(AppIdentifier appIdentifier, String email)
+            throws StorageQueryException {
+        try {
+            // TODO..
+            return DashboardQueries.getDashboardUserByEmail(this, email);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 }
