@@ -74,8 +74,15 @@ public class GeneralQueries {
                 + "user_id CHAR(36) NOT NULL,"
                 + "recipe_id VARCHAR(128) NOT NULL,"
                 + "time_joined BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, null, "pkey") +
-                " PRIMARY KEY (app_id, tenant_id, user_id));";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, null, "pkey")
+                + " PRIMARY KEY (app_id, tenant_id, user_id),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "tenant_id", "fkey")
+                + " FOREIGN KEY(app_id, tenant_id)"
+                + " REFERENCES " + Config.getConfig(start).getTenantsTable() +  " (app_id, tenant_id) ON DELETE CASCADE,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "user_id", "fkey")
+                + " FOREIGN KEY(app_id, user_id)"
+                + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +  " (app_id, user_id) ON DELETE CASCADE"
+                + ");";
         // @formatter:on
     }
 
@@ -139,7 +146,7 @@ public class GeneralQueries {
                 " PRIMARY KEY (app_id, user_id), "
                 + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, "app_id", "fkey") +
                 " FOREIGN KEY(app_id) REFERENCES " + Config.getConfig(start).getAppsTable() +
-                "(app_id) ON DELETE CASCADE"
+                " (app_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
     }
@@ -165,17 +172,17 @@ public class GeneralQueries {
                     update(start, getQueryToCreateKeyValueTable(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getAppIdToUserIdTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreateAppIdToUserIdTable(start), NO_OP_SETTER);
+                }
+
                 if (!doesTableExists(start, Config.getConfig(start).getUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateUsersTable(start), NO_OP_SETTER);
 
                     // index
                     update(start, getQueryToCreateUserPaginationIndex(start), NO_OP_SETTER);
-                }
-
-                if (!doesTableExists(start, Config.getConfig(start).getAppIdToUserIdTable())) {
-                    getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, getQueryToCreateAppIdToUserIdTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
@@ -205,14 +212,14 @@ public class GeneralQueries {
                             NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getEmailPasswordUserToTenantTable())) {
-                    getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, EmailPasswordQueries.getQueryToCreateEmailPasswordUserToTenantTable(start), NO_OP_SETTER);
-                }
-
                 if (!doesTableExists(start, Config.getConfig(start).getEmailPasswordUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, EmailPasswordQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getEmailPasswordUserToTenantTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, EmailPasswordQueries.getQueryToCreateEmailPasswordUserToTenantTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordResetTokensTable())) {
@@ -242,6 +249,11 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getJWTSigningKeysTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateJWTSigningTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getPasswordlessUserToTenantTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, PasswordlessQueries.getQueryToCreatePasswordlessUserToTenantTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessUsersTable())) {
@@ -368,6 +380,7 @@ public class GeneralQueries {
                     + getConfig(start).getJWTSigningKeysTable() + ","
                     + getConfig(start).getPasswordlessCodesTable() + ","
                     + getConfig(start).getPasswordlessDevicesTable() + ","
+                    + getConfig(start).getPasswordlessUserToTenantTable() + ","
                     + getConfig(start).getPasswordlessUsersTable() + ","
                     + getConfig(start).getUserMetadataTable() + ","
                     + getConfig(start).getRolesTable() + ","

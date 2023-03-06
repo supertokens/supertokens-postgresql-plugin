@@ -41,23 +41,6 @@ import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import static java.lang.System.currentTimeMillis;
 
 public class EmailPasswordQueries {
-    static String getQueryToCreateEmailPasswordUserToTenantTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String emailPasswordUserToTenantTable = Config.getConfig(start).getEmailPasswordUserToTenantTable();
-        // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + emailPasswordUserToTenantTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
-                + "tenant_id VARCHAR(64) DEFAULT 'public',"
-                + "user_id CHAR(36) NOT NULL,"
-                + "email VARCHAR(256) NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUserToTenantTable, "email", null)
-                + " UNIQUE (app_id, tenant_id, email),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUserToTenantTable, null, "pkey")
-                + " PRIMARY KEY (app_id, tenant_id, user_id));";
-        // @formatter:on
-        // TODO: constraint on all auth users table
-    }
-
     static String getQueryToCreateUsersTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String emailPasswordUsersTable = Config.getConfig(start).getEmailPasswordUsersTable();
@@ -76,6 +59,30 @@ public class EmailPasswordQueries {
                 " PRIMARY KEY (app_id, user_id));";
         // @formatter:on
     }
+
+    static String getQueryToCreateEmailPasswordUserToTenantTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String emailPasswordUserToTenantTable = Config.getConfig(start).getEmailPasswordUserToTenantTable();
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + emailPasswordUserToTenantTable + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "tenant_id VARCHAR(64) DEFAULT 'public',"
+                + "user_id CHAR(36) NOT NULL,"
+                + "email VARCHAR(256) NOT NULL,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUserToTenantTable, "email", null)
+                + " UNIQUE (app_id, tenant_id, email),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUserToTenantTable, null, "pkey")
+                + " PRIMARY KEY (app_id, tenant_id, user_id),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUserToTenantTable, "user_id", "fkey")
+                + " FOREIGN KEY (app_id, tenant_id, user_id)"
+                + " REFERENCES " + Config.getConfig(start).getUsersTable() + "(app_id, tenant_id, user_id) ON DELETE CASCADE,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUserToTenantTable, "app_id", "fkey")
+                + " FOREIGN KEY(app_id, user_id)"
+                + " REFERENCES " + Config.getConfig(start).getEmailPasswordUsersTable() +  " (app_id, user_id) ON DELETE CASCADE"
+                + ");";
+        // @formatter:on
+    }
+
 
     static String getQueryToCreatePasswordResetTokensTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
@@ -214,7 +221,18 @@ public class EmailPasswordQueries {
         start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try {
-                {
+                { // app_id_to_user_id
+                    String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
+                            + "(app_id, user_id, recipe_id, time_joined)" + " VALUES(?, ?, ?, ?)";
+                    update(sqlCon, QUERY, pst -> {
+                        pst.setString(1, tenantIdentifier.getAppId());
+                        pst.setString(2, userId);
+                        pst.setString(3, EMAIL_PASSWORD.toString());
+                        pst.setLong(4, timeJoined);
+                    });
+                }
+
+                { // all_auth_recipe_users
                     String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
                             + "(app_id, tenant_id, user_id, recipe_id, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
                     update(sqlCon, QUERY, pst -> {
@@ -226,18 +244,7 @@ public class EmailPasswordQueries {
                     });
                 }
 
-                {
-                    String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                            + "(app_id, user_id, recipe_id, time_joined)" + " VALUES(?, ?, ?, ?)";
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, userId);
-                        pst.setString(3, EMAIL_PASSWORD.toString());
-                        pst.setLong(4, timeJoined);
-                    });
-                }
-
-                {
+                { // emailpassword_users
                     String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUsersTable()
                             + "(app_id, user_id, email, password_hash, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
 
@@ -247,6 +254,18 @@ public class EmailPasswordQueries {
                         pst.setString(3, email);
                         pst.setString(4, passwordHash);
                         pst.setLong(5, timeJoined);
+                    });
+                }
+
+                { // emailpassword_user_to_tenant
+                    String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUserToTenantTable()
+                            + "(app_id, tenant_id, user_id, email)" + " VALUES(?, ?, ?, ?)";
+
+                    update(sqlCon, QUERY, pst -> {
+                        pst.setString(1, tenantIdentifier.getAppId());
+                        pst.setString(2, tenantIdentifier.getTenantId());
+                        pst.setString(3, userId);
+                        pst.setString(4, email);
                     });
                 }
 
@@ -264,7 +283,7 @@ public class EmailPasswordQueries {
             Connection sqlCon = (Connection) con.getConnection();
             try {
                 {
-                    String QUERY = "DELETE FROM " + getConfig(start).getUsersTable()
+                    String QUERY = "DELETE FROM " + getConfig(start).getAppIdToUserIdTable()
                             + " WHERE app_id = ? AND user_id = ? AND recipe_id = ?";
 
                     update(sqlCon, QUERY, pst -> {
@@ -274,15 +293,6 @@ public class EmailPasswordQueries {
                     });
                 }
 
-                {
-                    String QUERY = "DELETE FROM " + getConfig(start).getEmailPasswordUsersTable()
-                            + " WHERE app_id = ? AND user_id = ?";
-
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, appIdentifier.getAppId());
-                        pst.setString(2, userId);
-                    });
-                }
                 sqlCon.commit();
             } catch (SQLException throwables) {
                 throw new StorageTransactionLogicException(throwables);
