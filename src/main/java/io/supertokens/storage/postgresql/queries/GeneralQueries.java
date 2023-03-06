@@ -76,17 +76,19 @@ public class GeneralQueries {
         String usersTable = Config.getConfig(start).getUsersTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + usersTable + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "tenant_id VARCHAR(64) DEFAULT 'public',"
                 + "user_id CHAR(36) NOT NULL,"
                 + "recipe_id VARCHAR(128) NOT NULL,"
                 + "time_joined BIGINT NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, null, "pkey") +
-                " PRIMARY KEY (user_id));";
+                " PRIMARY KEY (app_id, tenant_id, user_id));";
         // @formatter:on
     }
 
     static String getQueryToCreateUserPaginationIndex(Start start) {
         return "CREATE INDEX all_auth_recipe_users_pagination_index ON " + Config.getConfig(start).getUsersTable()
-                + "(time_joined DESC, user_id " + "DESC);";
+                + "(time_joined DESC, user_id DESC, tenant_id DESC, app_id DESC);";
     }
 
     private static String getQueryToCreateAppsTable(Start start) {
@@ -202,6 +204,11 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getTenantThirdPartyProviderClientsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, MultitenancyQueries.getQueryToCreateTenantThirdPartyProviderClientsTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getEmailPasswordUserToTenantTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, EmailPasswordQueries.getQueryToCreateEmailPasswordUserToTenantTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getEmailPasswordUsersTable())) {
@@ -338,6 +345,7 @@ public class GeneralQueries {
                     + getConfig(start).getTenantThirdPartyProvidersTable() + ","
                     + getConfig(start).getTenantThirdPartyProviderClientsTable() + ","
                     + getConfig(start).getSessionInfoTable() + ","
+                    + getConfig(start).getEmailPasswordUserToTenantTable() + ","
                     + getConfig(start).getEmailPasswordUsersTable() + ","
                     + getConfig(start).getPasswordResetTokensTable() + ","
                     + getConfig(start).getEmailVerificationTokensTable() + ","

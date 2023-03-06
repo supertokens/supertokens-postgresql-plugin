@@ -45,11 +45,13 @@ public class UserIdMappingQueries {
                 + " CONSTRAINT " + Utils.getConstraintName(schema, userIdMappingTable, "external_user_id", "key") + " UNIQUE,"
                 + "external_user_id_info TEXT,"
                 + " CONSTRAINT " + Utils.getConstraintName(schema, userIdMappingTable, null, "pkey") +
-                " PRIMARY KEY(supertokens_user_id, external_user_id),"
-                + ("CONSTRAINT " + Utils.getConstraintName(schema, userIdMappingTable, "supertokens_user_id", "fkey") +
-                " FOREIGN KEY (supertokens_user_id)"
-                + " REFERENCES " + Config.getConfig(start).getUsersTable() + "(user_id)"
-                + " ON DELETE CASCADE);");
+                " PRIMARY KEY(supertokens_user_id, external_user_id)"
+                // TODO: restore constraint
+//                + ("CONSTRAINT " + Utils.getConstraintName(schema, userIdMappingTable, "supertokens_user_id", "fkey") +
+//                " FOREIGN KEY (supertokens_user_id)"
+//                + " REFERENCES " + Config.getConfig(start).getUsersTable() + "(user_id)"
+//                + " ON DELETE CASCADE"
+                + ");";
         // @formatter:on
     }
 

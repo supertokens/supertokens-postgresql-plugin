@@ -717,7 +717,7 @@ public class Start
             throws StorageQueryException, DuplicateUserIdException, DuplicateEmailException {
         // TODO..
         try {
-            EmailPasswordQueries.signUp(this, userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined);
+            EmailPasswordQueries.signUp(this, tenantIdentifier, userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined);
         } catch (StorageTransactionLogicException eTemp) {
             Exception e = eTemp.actualException;
             if (e instanceof PSQLException) {
@@ -749,7 +749,7 @@ public class Start
     public void deleteEmailPasswordUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
         // TODO..
         try {
-            EmailPasswordQueries.deleteUser(this, userId);
+            EmailPasswordQueries.deleteUser(this, appIdentifier, userId);
         } catch (StorageTransactionLogicException e) {
             throw new StorageQueryException(e.actualException);
         }
