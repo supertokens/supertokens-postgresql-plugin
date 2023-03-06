@@ -354,6 +354,14 @@ public class PostgreSQLConfig {
         return postgresql_table_names_prefix.trim();
     }
 
+    public String getDashboardUsersTable() {
+        return addSchemaAndPrefixToTableName("dashboard_users");
+    }
+
+    public String getDashboardSessionsTable() {
+        return addSchemaAndPrefixToTableName("dashboard_user_sessions");
+    }
+
     private String addSchemaAndPrefixToTableName(String tableName) {
         String name = tableName;
         if (!getTablePrefix().equals("")) {
