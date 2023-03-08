@@ -140,8 +140,6 @@ public class GeneralQueries {
         return "CREATE TABLE IF NOT EXISTS " + appToUserTable + " ("
                 + "app_id VARCHAR(64) NOT NULL DEFAULT 'public',"
                 + "user_id CHAR(36) NOT NULL,"
-                + "recipe_id VARCHAR(128) NOT NULL,"
-                + "time_joined BIGINT NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, null, "pkey") +
                 " PRIMARY KEY (app_id, user_id), "
                 + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, "app_id", "fkey") +

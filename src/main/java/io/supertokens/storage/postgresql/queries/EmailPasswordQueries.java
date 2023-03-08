@@ -223,12 +223,10 @@ public class EmailPasswordQueries {
             try {
                 { // app_id_to_user_id
                     String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                            + "(app_id, user_id, recipe_id, time_joined)" + " VALUES(?, ?, ?, ?)";
+                            + "(app_id, user_id)" + " VALUES(?, ?)";
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
                         pst.setString(2, userId);
-                        pst.setString(3, EMAIL_PASSWORD.toString());
-                        pst.setLong(4, timeJoined);
                     });
                 }
 
