@@ -576,11 +576,11 @@ public class GeneralQueries {
                                                                                         List<String> userIds)
             throws StorageQueryException, SQLException {
         if (recipeId == RECIPE_ID.EMAIL_PASSWORD) {
-            return EmailPasswordQueries.getUsersInfoUsingIdList(start, tenantIdentifier, userIds);
+            return EmailPasswordQueries.getUsersInfoUsingIdList(start, tenantIdentifier.toAppIdentifier(), userIds);
         } else if (recipeId == RECIPE_ID.THIRD_PARTY) {
-            return ThirdPartyQueries.getUsersInfoUsingIdList(start, userIds); // TODO pass tenantIdentifier
+            return ThirdPartyQueries.getUsersInfoUsingIdList(start, userIds); // TODO pass appIdentifier
         } else if (recipeId == RECIPE_ID.PASSWORDLESS) {
-            return PasswordlessQueries.getUsersByIdList(start, userIds); // TODO pass tenantIdentifier
+            return PasswordlessQueries.getUsersByIdList(start, userIds); // TODO pass appIdentifier
         } else {
             throw new IllegalArgumentException("No implementation of get users for recipe: " + recipeId.toString());
         }

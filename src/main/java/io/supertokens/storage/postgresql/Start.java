@@ -764,9 +764,9 @@ public class Start
     }
 
     @Override
-    public UserInfo getUserInfoUsingId(TenantIdentifier tenantIdentifier, String id) throws StorageQueryException {
+    public UserInfo getUserInfoUsingId(AppIdentifier appIdentifier, String id) throws StorageQueryException {
         try {
-            return EmailPasswordQueries.getUserInfoUsingId(this, tenantIdentifier, id);
+            return EmailPasswordQueries.getUserInfoUsingId(this, appIdentifier, id);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -893,12 +893,12 @@ public class Start
     }
 
     @Override
-    public UserInfo getUserInfoUsingId_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
+    public UserInfo getUserInfoUsingId_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
                                                    String userId)
             throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return EmailPasswordQueries.getUserInfoUsingId_Transaction(this, sqlCon, tenantIdentifier, userId);
+            return EmailPasswordQueries.getUserInfoUsingId_Transaction(this, sqlCon, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

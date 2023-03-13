@@ -203,39 +203,32 @@ public class EmailPasswordQueries {
         });
     }
 
-    public static UserInfo getUserInfoUsingId_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,
+    public static UserInfo getUserInfoUsingId_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                           String id)
             throws SQLException, StorageQueryException {
-        String userId = null;
         {
             // check if user exists for the provided tenant
             String QUERY = "SELECT user_id FROM "
                     + getConfig(start).getEmailPasswordUserToTenantTable()
-                    + " WHERE app_id = ? AND tenant_id = ? AND user_id = ? FOR UPDATE";
+                    + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
 
-            userId = execute(start, QUERY, pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, tenantIdentifier.getTenantId());
-                pst.setString(3, id);
+            execute(start, QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, id);
             }, result -> {
                 if (result.next()) {
                     return result.getString("user_id");
                 }
                 return null;
             });
-
-            if (userId == null) {
-                return null;
-            }
         }
         {
             String QUERY = "SELECT user_id, email, password_hash, time_joined FROM "
                     + getConfig(start).getEmailPasswordUsersTable()
                     + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
-            final String userIdToQuery = userId;
             return execute(con, QUERY, pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, userIdToQuery);
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, id);
             }, result -> {
                 if (result.next()) {
                     return UserInfoRowMapper.getInstance().mapOrThrow(result);
@@ -356,27 +349,23 @@ public class EmailPasswordQueries {
         });
     }
 
-    public static UserInfo getUserInfoUsingId(Start start, TenantIdentifier tenantIdentifier, String id) throws SQLException, StorageQueryException {
+    public static UserInfo getUserInfoUsingId(Start start, AppIdentifier appIdentifier, String id) throws SQLException, StorageQueryException {
         List<String> input = new ArrayList<>();
         input.add(id);
-        List<UserInfo> result = getUsersInfoUsingIdList(start, tenantIdentifier, input);
+        List<UserInfo> result = getUsersInfoUsingIdList(start, appIdentifier, input);
         if (result.size() == 1) {
             return result.get(0);
         }
         return null;
     }
 
-    public static List<UserInfo> getUsersInfoUsingIdList(Start start, TenantIdentifier tenantIdentifier, List<String> ids)
+    public static List<UserInfo> getUsersInfoUsingIdList(Start start, AppIdentifier appIdentifier, List<String> ids)
             throws SQLException, StorageQueryException {
         if (ids.size() > 0) {
             StringBuilder QUERY = new StringBuilder(
-                    "SELECT ep_users.user_id as user_id, ep_users.email as email, ep_users.password_hash as password_hash, "
-                            + "ep_users.time_joined as time_joined, ep_users_to_tenant.app_id, ep_users_to_tenant.tenant_id, ep_users_to_tenant.user_id "
-                            + "FROM " + getConfig(start).getEmailPasswordUsersTable() + " AS ep_users "
-                            + "JOIN " + getConfig(start).getEmailPasswordUserToTenantTable() + " AS ep_users_to_tenant "
-                            + "ON ep_users.app_id = ep_users_to_tenant.app_id AND ep_users.user_id = ep_users_to_tenant.user_id"
+                    "SELECT user_id, email, password_hash, time_joined FROM " + getConfig(start).getEmailPasswordUsersTable()
             );
-            QUERY.append(" WHERE ep_users_to_tenant.app_id = ? AND ep_users_to_tenant.tenant_id = ? AND ep_users_to_tenant.user_id IN (");
+            QUERY.append(" WHERE app_id = ? AND user_id IN (");
             for (int i = 0; i < ids.size(); i++) {
 
                 QUERY.append("?");
@@ -388,10 +377,9 @@ public class EmailPasswordQueries {
             QUERY.append(")");
 
             return execute(start, QUERY.toString(), pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(1, appIdentifier.getAppId());
                 for (int i = 0; i < ids.size(); i++) {
-                    // i+3 cause this starts with 1 and not 0, and 1 is used for app_id, 2 is used for tenant_id
+                    // i+2 cause this starts with 1 and not 0, and 1 is used for app_id
                     pst.setString(i + 3, ids.get(i));
                 }
             }, result -> {
