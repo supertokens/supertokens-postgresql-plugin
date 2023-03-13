@@ -756,7 +756,6 @@ public class Start
 
     @Override
     public void deleteEmailPasswordUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
-        // TODO..
         try {
             EmailPasswordQueries.deleteUser(this, appIdentifier, userId);
         } catch (StorageTransactionLogicException e) {
