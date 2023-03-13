@@ -723,7 +723,6 @@ public class Start
     @Override
     public void signUp(TenantIdentifier tenantIdentifier, UserInfo userInfo)
             throws StorageQueryException, DuplicateUserIdException, DuplicateEmailException {
-        // TODO..
         try {
             EmailPasswordQueries.signUp(this, tenantIdentifier, userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined);
         } catch (StorageTransactionLogicException eTemp) {
@@ -732,7 +731,7 @@ public class Start
                 PostgreSQLConfig config = Config.getConfig(this);
                 ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
 
-                if (isUniqueConstraintError(serverMessage, config.getEmailPasswordUsersTable(), "email")) {
+                if (isUniqueConstraintError(serverMessage, config.getEmailPasswordUserToTenantTable(), "email")) {
                     throw new DuplicateEmailException();
                 } else if (isPrimaryKeyError(serverMessage, config.getEmailPasswordUsersTable())
                         || isPrimaryKeyError(serverMessage, config.getUsersTable())
@@ -766,10 +765,9 @@ public class Start
     }
 
     @Override
-    public UserInfo getUserInfoUsingId(AppIdentifier appIdentifier, String id) throws StorageQueryException {
-        // TODO..
+    public UserInfo getUserInfoUsingId(TenantIdentifier tenantIdentifier, String id) throws StorageQueryException {
         try {
-            return EmailPasswordQueries.getUserInfoUsingId(this, id);
+            return EmailPasswordQueries.getUserInfoUsingId(this, tenantIdentifier, id);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -778,9 +776,8 @@ public class Start
     @Override
     public UserInfo getUserInfoUsingEmail(TenantIdentifier tenantIdentifier, String email)
             throws StorageQueryException {
-        // TODO..
         try {
-            return EmailPasswordQueries.getUserInfoUsingEmail(this, email);
+            return EmailPasswordQueries.getUserInfoUsingEmail(this, tenantIdentifier, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -789,9 +786,8 @@ public class Start
     @Override
     public void addPasswordResetToken(AppIdentifier appIdentifier, PasswordResetTokenInfo passwordResetTokenInfo)
             throws StorageQueryException, UnknownUserIdException, DuplicatePasswordResetTokenException {
-        // TODO..
         try {
-            EmailPasswordQueries.addPasswordResetToken(this, passwordResetTokenInfo.userId,
+            EmailPasswordQueries.addPasswordResetToken(this, appIdentifier, passwordResetTokenInfo.userId,
                     passwordResetTokenInfo.token, passwordResetTokenInfo.tokenExpiry);
         } catch (SQLException e) {
             if (e instanceof PSQLException) {
@@ -820,9 +816,8 @@ public class Start
     @Override
     public PasswordResetTokenInfo getPasswordResetTokenInfo(AppIdentifier appIdentifier, String token)
             throws StorageQueryException {
-        // TODO..
         try {
-            return EmailPasswordQueries.getPasswordResetTokenInfo(this, token);
+            return EmailPasswordQueries.getPasswordResetTokenInfo(this, appIdentifier, token);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -831,9 +826,8 @@ public class Start
     @Override
     public PasswordResetTokenInfo[] getAllPasswordResetTokenInfoForUser(AppIdentifier appIdentifier,
                                                                         String userId) throws StorageQueryException {
-        // TODO..
         try {
-            return EmailPasswordQueries.getAllPasswordResetTokenInfoForUser(this, userId);
+            return EmailPasswordQueries.getAllPasswordResetTokenInfoForUser(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -844,10 +838,9 @@ public class Start
                                                                                     TransactionConnection con,
                                                                                     String userId)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return EmailPasswordQueries.getAllPasswordResetTokenInfoForUser_Transaction(this, sqlCon, userId);
+            return EmailPasswordQueries.getAllPasswordResetTokenInfoForUser_Transaction(this, sqlCon, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -857,10 +850,9 @@ public class Start
     public void deleteAllPasswordResetTokensForUser_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
                                                                 String userId)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            EmailPasswordQueries.deleteAllPasswordResetTokensForUser_Transaction(this, sqlCon, userId);
+            EmailPasswordQueries.deleteAllPasswordResetTokensForUser_Transaction(this, sqlCon, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -870,10 +862,9 @@ public class Start
     public void updateUsersPassword_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String userId,
                                                 String newPassword)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            EmailPasswordQueries.updateUsersPassword_Transaction(this, sqlCon, userId, newPassword);
+            EmailPasswordQueries.updateUsersPassword_Transaction(this, sqlCon, appIdentifier, userId, newPassword);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -883,13 +874,12 @@ public class Start
     public void updateUsersEmail_Transaction(AppIdentifier appIdentifier, TransactionConnection conn, String userId,
                                              String email)
             throws StorageQueryException, DuplicateEmailException {
-        // TODO...
         Connection sqlCon = (Connection) conn.getConnection();
         try {
-            EmailPasswordQueries.updateUsersEmail_Transaction(this, sqlCon, userId, email);
+            EmailPasswordQueries.updateUsersEmail_Transaction(this, sqlCon, appIdentifier, userId, email);
         } catch (SQLException e) {
             if (e instanceof PSQLException && isUniqueConstraintError(((PSQLException) e).getServerErrorMessage(),
-                    Config.getConfig(this).getEmailPasswordUsersTable(), "email")) {
+                    Config.getConfig(this).getEmailPasswordUserToTenantTable(), "email")) {
                 throw new DuplicateEmailException();
             }
 
@@ -904,13 +894,12 @@ public class Start
     }
 
     @Override
-    public UserInfo getUserInfoUsingId_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+    public UserInfo getUserInfoUsingId_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                                    String userId)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return EmailPasswordQueries.getUserInfoUsingId_Transaction(this, sqlCon, userId);
+            return EmailPasswordQueries.getUserInfoUsingId_Transaction(this, sqlCon, tenantIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1201,9 +1190,8 @@ public class Start
                                          @Nullable RECIPE_ID[] includeRecipeIds, @Nullable String userId,
                                          @Nullable Long timeJoined)
             throws StorageQueryException {
-        // TODO..
         try {
-            return GeneralQueries.getUsers(this, limit, timeJoinedOrder, includeRecipeIds, userId, timeJoined);
+            return GeneralQueries.getUsers(this, tenantIdentifier, limit, timeJoinedOrder, includeRecipeIds, userId, timeJoined);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

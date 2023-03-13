@@ -21,6 +21,8 @@ import io.supertokens.pluginInterface.RECIPE_ID;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -140,11 +142,11 @@ public class GeneralQueries {
         return "CREATE TABLE IF NOT EXISTS " + appToUserTable + " ("
                 + "app_id VARCHAR(64) NOT NULL DEFAULT 'public',"
                 + "user_id CHAR(36) NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, null, "pkey") +
-                " PRIMARY KEY (app_id, user_id), "
-                + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, "app_id", "fkey") +
-                " FOREIGN KEY(app_id) REFERENCES " + Config.getConfig(start).getAppsTable() +
-                " (app_id) ON DELETE CASCADE"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, null, "pkey")
+                + " PRIMARY KEY (app_id, user_id), "
+                + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, "app_id", "fkey")
+                + " FOREIGN KEY(app_id) REFERENCES " + Config.getConfig(start).getAppsTable()
+                + " (app_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
     }
@@ -468,7 +470,7 @@ public class GeneralQueries {
 
     }
 
-    public static AuthRecipeUserInfo[] getUsers(Start start, @NotNull Integer limit, @NotNull String timeJoinedOrder,
+    public static AuthRecipeUserInfo[] getUsers(Start start, TenantIdentifier tenantIdentifier, @NotNull Integer limit, @NotNull String timeJoinedOrder,
                                                 @Nullable RECIPE_ID[] includeRecipeIds, @Nullable String userId,
                                                 @Nullable Long timeJoined)
             throws SQLException, StorageQueryException {
@@ -551,8 +553,8 @@ public class GeneralQueries {
 
         // we give the userId[] for each recipe to fetch all those user's details
         for (RECIPE_ID recipeId : recipeIdToUserIdListMap.keySet()) {
-            List<? extends AuthRecipeUserInfo> users = getUserInfoForRecipeIdFromUserIds(start, recipeId,
-                    recipeIdToUserIdListMap.get(recipeId));
+            List<? extends AuthRecipeUserInfo> users = getUserInfoForRecipeIdFromUserIds(start,
+                    tenantIdentifier, recipeId, recipeIdToUserIdListMap.get(recipeId));
 
             // we fill in all the slots in finalResult based on their position in
             // usersFromQuery
@@ -570,15 +572,15 @@ public class GeneralQueries {
         return finalResult;
     }
 
-    private static List<? extends AuthRecipeUserInfo> getUserInfoForRecipeIdFromUserIds(Start start, RECIPE_ID recipeId,
+    private static List<? extends AuthRecipeUserInfo> getUserInfoForRecipeIdFromUserIds(Start start, TenantIdentifier tenantIdentifier, RECIPE_ID recipeId,
                                                                                         List<String> userIds)
             throws StorageQueryException, SQLException {
         if (recipeId == RECIPE_ID.EMAIL_PASSWORD) {
-            return EmailPasswordQueries.getUsersInfoUsingIdList(start, userIds);
+            return EmailPasswordQueries.getUsersInfoUsingIdList(start, tenantIdentifier, userIds);
         } else if (recipeId == RECIPE_ID.THIRD_PARTY) {
-            return ThirdPartyQueries.getUsersInfoUsingIdList(start, userIds);
+            return ThirdPartyQueries.getUsersInfoUsingIdList(start, userIds); // TODO pass tenantIdentifier
         } else if (recipeId == RECIPE_ID.PASSWORDLESS) {
-            return PasswordlessQueries.getUsersByIdList(start, userIds);
+            return PasswordlessQueries.getUsersByIdList(start, userIds); // TODO pass tenantIdentifier
         } else {
             throw new IllegalArgumentException("No implementation of get users for recipe: " + recipeId.toString());
         }
