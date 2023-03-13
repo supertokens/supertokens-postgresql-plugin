@@ -380,7 +380,7 @@ public class EmailPasswordQueries {
                 pst.setString(1, appIdentifier.getAppId());
                 for (int i = 0; i < ids.size(); i++) {
                     // i+2 cause this starts with 1 and not 0, and 1 is used for app_id
-                    pst.setString(i + 3, ids.get(i));
+                    pst.setString(i + 2, ids.get(i));
                 }
             }, result -> {
                 List<UserInfo> finalResult = new ArrayList<>();
