@@ -90,7 +90,7 @@ public class EmailPasswordQueries {
                 + " CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, "token", "key") + " UNIQUE,"
                 + "token_expiry BIGINT NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, null, "pkey")
-                + " PRIMARY KEY (user_id, token),"
+                + " PRIMARY KEY (app_id, user_id, token),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, "user_id", "fkey")
                 + " FOREIGN KEY (app_id, user_id)"
                 + " REFERENCES " + Config.getConfig(start).getEmailPasswordUsersTable() + "(app_id, user_id)"
@@ -206,36 +206,18 @@ public class EmailPasswordQueries {
     public static UserInfo getUserInfoUsingId_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                           String id)
             throws SQLException, StorageQueryException {
-        {
-            // check if user exists for the provided tenant
-            String QUERY = "SELECT user_id FROM "
-                    + getConfig(start).getEmailPasswordUserToTenantTable()
-                    + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
-
-            execute(start, QUERY, pst -> {
-                pst.setString(1, appIdentifier.getAppId());
-                pst.setString(2, id);
-            }, result -> {
-                if (result.next()) {
-                    return result.getString("user_id");
-                }
-                return null;
-            });
-        }
-        {
-            String QUERY = "SELECT user_id, email, password_hash, time_joined FROM "
-                    + getConfig(start).getEmailPasswordUsersTable()
-                    + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
-            return execute(con, QUERY, pst -> {
-                pst.setString(1, appIdentifier.getAppId());
-                pst.setString(2, id);
-            }, result -> {
-                if (result.next()) {
-                    return UserInfoRowMapper.getInstance().mapOrThrow(result);
-                }
-                return null;
-            });
-        }
+        String QUERY = "SELECT user_id, email, password_hash, time_joined FROM "
+                + getConfig(start).getEmailPasswordUsersTable()
+                + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, id);
+        }, result -> {
+            if (result.next()) {
+                return UserInfoRowMapper.getInstance().mapOrThrow(result);
+            }
+            return null;
+        });
     }
 
     public static PasswordResetTokenInfo getPasswordResetTokenInfo(Start start, AppIdentifier appIdentifier, String token)
@@ -350,22 +332,31 @@ public class EmailPasswordQueries {
     }
 
     public static UserInfo getUserInfoUsingId(Start start, AppIdentifier appIdentifier, String id) throws SQLException, StorageQueryException {
-        List<String> input = new ArrayList<>();
-        input.add(id);
-        List<UserInfo> result = getUsersInfoUsingIdList(start, appIdentifier, input);
-        if (result.size() == 1) {
-            return result.get(0);
-        }
-        return null;
+        String QUERY = "SELECT user_id, email, password_hash, time_joined FROM "
+                + getConfig(start).getEmailPasswordUsersTable() + " WHERE app_id = ? AND user_id = ?";
+
+        return execute(start, QUERY.toString(), pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, id);
+        }, result -> {
+            if (result.next()) {
+                return UserInfoRowMapper.getInstance().mapOrThrow(result);
+            }
+            return null;
+        });
     }
 
-    public static List<UserInfo> getUsersInfoUsingIdList(Start start, AppIdentifier appIdentifier, List<String> ids)
+    public static List<UserInfo> getUsersInfoUsingIdList(Start start, TenantIdentifier tenantIdentifier, List<String> ids)
             throws SQLException, StorageQueryException {
         if (ids.size() > 0) {
             StringBuilder QUERY = new StringBuilder(
-                    "SELECT user_id, email, password_hash, time_joined FROM " + getConfig(start).getEmailPasswordUsersTable()
+                    "SELECT ep_users.user_id as user_id, ep_users.email as email, ep_users.password_hash as password_hash, "
+                            + "ep_users.time_joined as time_joined, ep_users_to_tenant.app_id, ep_users_to_tenant.tenant_id, ep_users_to_tenant.user_id "
+                            + "FROM " + getConfig(start).getEmailPasswordUsersTable() + " AS ep_users "
+                            + "JOIN " + getConfig(start).getEmailPasswordUserToTenantTable() + " AS ep_users_to_tenant "
+                            + "ON ep_users.app_id = ep_users_to_tenant.app_id AND ep_users.user_id = ep_users_to_tenant.user_id"
             );
-            QUERY.append(" WHERE app_id = ? AND user_id IN (");
+            QUERY.append(" WHERE ep_users_to_tenant.app_id = ? AND ep_users_to_tenant.tenant_id = ? AND ep_users_to_tenant.user_id IN (");
             for (int i = 0; i < ids.size(); i++) {
 
                 QUERY.append("?");
@@ -377,10 +368,11 @@ public class EmailPasswordQueries {
             QUERY.append(")");
 
             return execute(start, QUERY.toString(), pst -> {
-                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
                 for (int i = 0; i < ids.size(); i++) {
-                    // i+2 cause this starts with 1 and not 0, and 1 is used for app_id
-                    pst.setString(i + 2, ids.get(i));
+                    // i+3 cause this starts with 1 and not 0, and 1 is used for app_id, 2 is used for tenant_id
+                    pst.setString(i + 3, ids.get(i));
                 }
             }, result -> {
                 List<UserInfo> finalResult = new ArrayList<>();

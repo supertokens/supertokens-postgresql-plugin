@@ -1530,9 +1530,7 @@ public class Start
                 if (isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
                         Config.getConfig(this).getPasswordlessUsersTable())
                         || isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
-                        Config.getConfig(this).getUsersTable())
-                        || isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
-                        Config.getConfig(this).getAppIdToUserIdTable())) {
+                        Config.getConfig(this).getUsersTable())) {
                     throw new DuplicateUserIdException();
                 }
 
