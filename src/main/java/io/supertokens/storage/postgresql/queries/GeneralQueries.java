@@ -234,6 +234,23 @@ public class GeneralQueries {
                             NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getTotpUsersTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, TOTPQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getTotpUserDevicesTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, TOTPQueries.getQueryToCreateUserDevicesTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getTotpUsedCodesTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, TOTPQueries.getQueryToCreateUsedCodesTable(start), NO_OP_SETTER);
+                    // index:
+                    update(start, TOTPQueries.getQueryToCreateUsedCodesExpiryTimeIndex(start), NO_OP_SETTER);
+                }
+
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
@@ -281,7 +298,9 @@ public class GeneralQueries {
                     + getConfig(start).getPasswordlessUsersTable() + "," + getConfig(start).getUserMetadataTable() + ","
                     + getConfig(start).getRolesTable() + "," + getConfig(start).getUserRolesPermissionsTable() + ","
                     + getConfig(start).getUserRolesTable() + "," + getConfig(start).getDashboardUsersTable() + ","
-                    + getConfig(start).getDashboardSessionsTable();
+                    + getConfig(start).getDashboardSessionsTable() + ","
+                    + getConfig(start).getTotpUsedCodesTable() + "," + getConfig(start).getTotpUserDevicesTable() + ","
+                    + getConfig(start).getTotpUsersTable();
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
     }
