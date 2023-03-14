@@ -265,6 +265,11 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName(tableName);
     }
 
+    public String getEmailPasswordUserToTenantTable() {
+        String tableName = "emailpassword_user_to_tenant";
+        return addSchemaAndPrefixToTableName(tableName);
+    }
+
     public String getEmailPasswordUsersTable() {
         String tableName = "emailpassword_users";
         if (postgresql_emailpassword_users_table_name != null) {
@@ -308,7 +313,6 @@ public class PostgreSQLConfig {
     public String getPasswordlessUsersTable() {
         String tableName = "passwordless_users";
         return addSchemaAndPrefixToTableName(tableName);
-
     }
 
     public String getPasswordlessDevicesTable() {
