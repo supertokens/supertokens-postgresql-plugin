@@ -741,15 +741,6 @@ public class Start
                 }
             }
 
-            // We keep the old exception detection logic to ensure backwards compatibility.
-            // We could get here if the new logic hits a false negative,
-            // e.g., in case someone renamed constraints/tables
-            if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (email)")) {
-                throw new DuplicateEmailException();
-            } else if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (user_id)")) {
-                throw new DuplicateUserIdException();
-            }
-
             throw new StorageQueryException(e);
         }
     }
@@ -800,14 +791,6 @@ public class Start
                 }
             }
 
-            // We keep the old exception detection logic to ensure backwards compatibility.
-            // We could get here if the new logic hits a false negative,
-            // e.g., in case someone renamed constraints/tables
-            if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (user_id, token)")) {
-                throw new DuplicatePasswordResetTokenException();
-            } else if (e.getMessage().contains("foreign key") && e.getMessage().contains("user_id")) {
-                throw new UnknownUserIdException();
-            }
             throw new StorageQueryException(e);
         }
     }
@@ -882,12 +865,6 @@ public class Start
                 throw new DuplicateEmailException();
             }
 
-            // We keep the old exception detection logic to ensure backwards compatibility.
-            // We could get here if the new logic hits a false negative,
-            // e.g., in case someone renamed constraints/tables
-            if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (email)")) {
-                throw new DuplicateEmailException();
-            }
             throw new StorageQueryException(e);
         }
     }
