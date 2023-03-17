@@ -314,12 +314,11 @@ public class EmailPasswordQueries {
             try {
                 {
                     String QUERY = "DELETE FROM " + getConfig(start).getAppIdToUserIdTable()
-                            + " WHERE app_id = ? AND user_id = ? AND recipe_id = ?";
+                            + " WHERE app_id = ? AND user_id = ?";
 
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, appIdentifier.getAppId());
                         pst.setString(2, userId);
-                        pst.setString(3, EMAIL_PASSWORD.toString());
                     });
                 }
 
