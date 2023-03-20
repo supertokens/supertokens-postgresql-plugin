@@ -7,6 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Support for TOTP recipe
+
+# Database changes
+- Add new tables for TOTP recipe:
+  - `totp_users` that stores the users that have enabled TOTP
+  - `totp_user_devices` that stores devices (each device has its own secret) for each user
+  - `totp_used_codes` that stores used codes for each user. This is to implement rate limiting and prevent replay attacks.
+
 ## [2.2.0] - 2023-02-21
 
 - Adds support for Dashboard recipe

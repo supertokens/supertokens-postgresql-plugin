@@ -226,6 +226,7 @@ public class Start
                 // e.g., in case someone renamed constraints/tables
                 boolean isDeadlockException = actualException instanceof SQLTransactionRollbackException
                         || exceptionMessage.toLowerCase().contains("concurrent update")
+                        || exceptionMessage.toLowerCase().contains("concurrent delete")
                         || exceptionMessage.toLowerCase().contains("the transaction might succeed if retried") ||
 
                         // we have deadlock as well due to the DeadlockTest.java
