@@ -9,7 +9,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Support for TOTP recipe
 
-# Database changes
+### Database changes
 - Add new tables for TOTP recipe:
   - `totp_users` that stores the users that have enabled TOTP
   - `totp_user_devices` that stores devices (each device has its own secret) for each user
