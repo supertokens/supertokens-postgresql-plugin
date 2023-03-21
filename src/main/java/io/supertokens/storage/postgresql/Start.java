@@ -650,7 +650,7 @@ public class Start
             return userMetadata != null;
         } else if (className.equals(EmailVerificationStorage.class.getName())) {
             try {
-                return EmailVerificationQueries.isUserIdBeingUsedForEmailVerification(this, userId);
+                return EmailVerificationQueries.isUserIdBeingUsedForEmailVerification(this, appIdentifier, userId);
             } catch (SQLException e) {
                 throw new StorageQueryException(e);
             }
@@ -895,11 +895,10 @@ public class Start
                                                                                             TransactionConnection con,
                                                                                             String userId, String email)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return EmailVerificationQueries.getAllEmailVerificationTokenInfoForUser_Transaction(this, sqlCon, userId,
-                    email);
+            return EmailVerificationQueries.getAllEmailVerificationTokenInfoForUser_Transaction(this, sqlCon,
+                    appIdentifier, userId, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -909,10 +908,9 @@ public class Start
     public void deleteAllEmailVerificationTokensForUser_Transaction(AppIdentifier appIdentifier,
                                                                     TransactionConnection con, String userId,
                                                                     String email) throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            EmailVerificationQueries.deleteAllEmailVerificationTokensForUser_Transaction(this, sqlCon, userId, email);
+            EmailVerificationQueries.deleteAllEmailVerificationTokensForUser_Transaction(this, sqlCon, appIdentifier, userId, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -922,10 +920,9 @@ public class Start
     public void updateIsEmailVerified_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String userId,
                                                   String email,
                                                   boolean isEmailVerified) throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            EmailVerificationQueries.updateUsersIsEmailVerified_Transaction(this, sqlCon, userId, email,
+            EmailVerificationQueries.updateUsersIsEmailVerified_Transaction(this, sqlCon, appIdentifier, userId, email,
                     isEmailVerified);
         } catch (SQLException e) {
             boolean isPSQLPrimKeyError = e instanceof PSQLException && isPrimaryKeyError(
@@ -948,8 +945,7 @@ public class Start
     public void deleteEmailVerificationUserInfo(AppIdentifier appIdentifier, String userId)
             throws StorageQueryException {
         try {
-            // TODO..
-            EmailVerificationQueries.deleteUserInfo(this, userId);
+            EmailVerificationQueries.deleteUserInfo(this, appIdentifier, userId);
         } catch (StorageTransactionLogicException e) {
             throw new StorageQueryException(e.actualException);
         }
@@ -959,8 +955,7 @@ public class Start
     public void addEmailVerificationToken(AppIdentifier appIdentifier, EmailVerificationTokenInfo emailVerificationInfo)
             throws StorageQueryException, DuplicateEmailVerificationTokenException {
         try {
-            // TODO..
-            EmailVerificationQueries.addEmailVerificationToken(this, emailVerificationInfo.userId,
+            EmailVerificationQueries.addEmailVerificationToken(this, appIdentifier, emailVerificationInfo.userId,
                     emailVerificationInfo.token, emailVerificationInfo.tokenExpiry, emailVerificationInfo.email);
         } catch (SQLException e) {
             if (e instanceof PSQLException && isPrimaryKeyError(((PSQLException) e).getServerErrorMessage(),
@@ -983,8 +978,7 @@ public class Start
     public EmailVerificationTokenInfo getEmailVerificationTokenInfo(AppIdentifier appIdentifier, String token)
             throws StorageQueryException {
         try {
-            // TODO..
-            return EmailVerificationQueries.getEmailVerificationTokenInfo(this, token);
+            return EmailVerificationQueries.getEmailVerificationTokenInfo(this, appIdentifier, token);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -993,8 +987,7 @@ public class Start
     @Override
     public void revokeAllTokens(AppIdentifier appIdentifier, String userId, String email) throws StorageQueryException {
         try {
-            // TODO..
-            EmailVerificationQueries.revokeAllTokens(this, userId, email);
+            EmailVerificationQueries.revokeAllTokens(this, appIdentifier, userId, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1003,8 +996,7 @@ public class Start
     @Override
     public void unverifyEmail(AppIdentifier appIdentifier, String userId, String email) throws StorageQueryException {
         try {
-            // TODO..
-            EmailVerificationQueries.unverifyEmail(this, userId, email);
+            EmailVerificationQueries.unverifyEmail(this, appIdentifier, userId, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1014,9 +1006,8 @@ public class Start
     public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser(AppIdentifier appIdentifier,
                                                                                 String userId, String email)
             throws StorageQueryException {
-        // TODO..
         try {
-            return EmailVerificationQueries.getAllEmailVerificationTokenInfoForUser(this, userId, email);
+            return EmailVerificationQueries.getAllEmailVerificationTokenInfoForUser(this, appIdentifier, userId, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1026,8 +1017,7 @@ public class Start
     public boolean isEmailVerified(AppIdentifier appIdentifier, String userId, String email)
             throws StorageQueryException {
         try {
-            // TODO..
-            return EmailVerificationQueries.isEmailVerified(this, userId, email);
+            return EmailVerificationQueries.isEmailVerified(this, appIdentifier, userId, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1250,10 +1240,9 @@ public class Start
     public PasswordlessDevice getDevice_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                                     String deviceIdHash)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return PasswordlessQueries.getDevice_Transaction(this, sqlCon, deviceIdHash);
+            return PasswordlessQueries.getDevice_Transaction(this, sqlCon, tenantIdentifier, deviceIdHash);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1263,10 +1252,9 @@ public class Start
     public void incrementDeviceFailedAttemptCount_Transaction(TenantIdentifier tenantIdentifier,
                                                               TransactionConnection con, String deviceIdHash)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            PasswordlessQueries.incrementDeviceFailedAttemptCount_Transaction(this, sqlCon, deviceIdHash);
+            PasswordlessQueries.incrementDeviceFailedAttemptCount_Transaction(this, sqlCon, tenantIdentifier, deviceIdHash);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1277,10 +1265,9 @@ public class Start
     public PasswordlessCode[] getCodesOfDevice_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                                            String deviceIdHash)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return PasswordlessQueries.getCodesOfDevice_Transaction(this, sqlCon, deviceIdHash);
+            return PasswordlessQueries.getCodesOfDevice_Transaction(this, sqlCon, tenantIdentifier, deviceIdHash);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1289,10 +1276,9 @@ public class Start
     @Override
     public void deleteDevice_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                          String deviceIdHash) throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            PasswordlessQueries.deleteDevice_Transaction(this, sqlCon, deviceIdHash);
+            PasswordlessQueries.deleteDevice_Transaction(this, sqlCon, tenantIdentifier, deviceIdHash);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1303,10 +1289,9 @@ public class Start
     public void deleteDevicesByPhoneNumber_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                                        @Nonnull String phoneNumber)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            PasswordlessQueries.deleteDevicesByPhoneNumber_Transaction(this, sqlCon, phoneNumber);
+            PasswordlessQueries.deleteDevicesByPhoneNumber_Transaction(this, sqlCon, tenantIdentifier, phoneNumber);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1316,34 +1301,31 @@ public class Start
     public void deleteDevicesByEmail_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                                  @Nonnull String email)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            PasswordlessQueries.deleteDevicesByEmail_Transaction(this, sqlCon, email);
+            PasswordlessQueries.deleteDevicesByEmail_Transaction(this, sqlCon, tenantIdentifier, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
 
     @Override
-    public void deleteDevicesByPhoneNumber_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+    public void deleteDevicesByPhoneNumber_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                                        String phoneNumber, String userId) throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            PasswordlessQueries.deleteDevicesByPhoneNumber_Transaction(this, sqlCon, phoneNumber);
+            PasswordlessQueries.deleteDevicesByPhoneNumber_Transaction(this, sqlCon, tenantIdentifier, phoneNumber);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
 
     @Override
-    public void deleteDevicesByEmail_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String email,
+    public void deleteDevicesByEmail_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con, String email,
                                                  String userId) throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            PasswordlessQueries.deleteDevicesByEmail_Transaction(this, sqlCon, email);
+            PasswordlessQueries.deleteDevicesByEmail_Transaction(this, sqlCon, tenantIdentifier, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1353,10 +1335,9 @@ public class Start
     public PasswordlessCode getCodeByLinkCodeHash_Transaction(TenantIdentifier tenantIdentifier,
                                                               TransactionConnection con, String linkCodeHash)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return PasswordlessQueries.getCodeByLinkCodeHash_Transaction(this, sqlCon, linkCodeHash);
+            return PasswordlessQueries.getCodeByLinkCodeHash_Transaction(this, sqlCon, tenantIdentifier, linkCodeHash);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1365,10 +1346,9 @@ public class Start
     @Override
     public void deleteCode_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                        String deviceIdHash) throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            PasswordlessQueries.deleteCode_Transaction(this, sqlCon, deviceIdHash);
+            PasswordlessQueries.deleteCode_Transaction(this, sqlCon, tenantIdentifier, deviceIdHash);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1378,10 +1358,9 @@ public class Start
     public void updateUserEmail_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String userId,
                                             String email)
             throws StorageQueryException, UnknownUserIdException, DuplicateEmailException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            int updated_rows = PasswordlessQueries.updateUserEmail_Transaction(this, sqlCon, userId, email);
+            int updated_rows = PasswordlessQueries.updateUserEmail_Transaction(this, sqlCon, appIdentifier, userId, email);
             if (updated_rows != 1) {
                 throw new UnknownUserIdException();
             }
@@ -1389,7 +1368,7 @@ public class Start
 
             if (e instanceof PSQLException) {
                 if (isUniqueConstraintError(((PSQLException) e).getServerErrorMessage(),
-                        Config.getConfig(this).getPasswordlessUsersTable(), "email")) {
+                        Config.getConfig(this).getPasswordlessUserToTenantTable(), "email")) {
                     throw new DuplicateEmailException();
 
                 }
@@ -1403,10 +1382,9 @@ public class Start
     public void updateUserPhoneNumber_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String userId,
                                                   String phoneNumber)
             throws StorageQueryException, UnknownUserIdException, DuplicatePhoneNumberException {
-        // TODO...
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            int updated_rows = PasswordlessQueries.updateUserPhoneNumber_Transaction(this, sqlCon, userId, phoneNumber);
+            int updated_rows = PasswordlessQueries.updateUserPhoneNumber_Transaction(this, sqlCon, appIdentifier, userId, phoneNumber);
 
             if (updated_rows != 1) {
                 throw new UnknownUserIdException();
@@ -1416,7 +1394,7 @@ public class Start
 
             if (e instanceof PSQLException) {
                 if (isUniqueConstraintError(((PSQLException) e).getServerErrorMessage(),
-                        Config.getConfig(this).getPasswordlessUsersTable(), "phone_number")) {
+                        Config.getConfig(this).getPasswordlessUserToTenantTable(), "phone_number")) {
                     throw new DuplicatePhoneNumberException();
 
                 }
@@ -1437,7 +1415,7 @@ public class Start
             throw new IllegalArgumentException("Both email and phoneNumber can't be null");
         }
         try {
-            PasswordlessQueries.createDeviceWithCode(this, email, phoneNumber, linkCodeSalt, code);
+            PasswordlessQueries.createDeviceWithCode(this, tenantIdentifier, email, phoneNumber, linkCodeSalt, code);
         } catch (StorageTransactionLogicException e) {
             Exception actualException = e.actualException;
 
@@ -1465,9 +1443,8 @@ public class Start
     public void createCode(TenantIdentifier tenantIdentifier, PasswordlessCode code)
             throws StorageQueryException, UnknownDeviceIdHash,
             DuplicateCodeIdException, DuplicateLinkCodeHashException {
-        // TODO..
         try {
-            PasswordlessQueries.createCode(this, code);
+            PasswordlessQueries.createCode(this, tenantIdentifier, code);
         } catch (StorageTransactionLogicException e) {
 
             Exception actualException = e.actualException;
@@ -1496,28 +1473,29 @@ public class Start
             throws StorageQueryException,
             DuplicateEmailException, DuplicatePhoneNumberException, DuplicateUserIdException {
         try {
-            // TODO..
-            PasswordlessQueries.createUser(this, user);
+            PasswordlessQueries.createUser(this, tenantIdentifier, user);
         } catch (StorageTransactionLogicException e) {
 
-            String message = e.actualException.getMessage();
             Exception actualException = e.actualException;
 
             if (actualException instanceof PSQLException) {
-                if (isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
-                        Config.getConfig(this).getPasswordlessUsersTable())
-                        || isPrimaryKeyError(((PSQLException) actualException).getServerErrorMessage(),
-                        Config.getConfig(this).getUsersTable())) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) actualException).getServerErrorMessage();
+
+                if (isPrimaryKeyError(serverMessage, config.getPasswordlessUsersTable())
+                        || isPrimaryKeyError(serverMessage, config.getUsersTable())
+                        || isPrimaryKeyError(serverMessage, config.getPasswordlessUserToTenantTable())
+                        || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
                     throw new DuplicateUserIdException();
                 }
 
                 if (isUniqueConstraintError(((PSQLException) actualException).getServerErrorMessage(),
-                        Config.getConfig(this).getPasswordlessUsersTable(), "email")) {
+                        Config.getConfig(this).getPasswordlessUserToTenantTable(), "email")) {
                     throw new DuplicateEmailException();
                 }
 
                 if (isUniqueConstraintError(((PSQLException) actualException).getServerErrorMessage(),
-                        Config.getConfig(this).getPasswordlessUsersTable(), "phone_number")) {
+                        Config.getConfig(this).getPasswordlessUserToTenantTable(), "phone_number")) {
                     throw new DuplicatePhoneNumberException();
                 }
 
@@ -1573,8 +1551,7 @@ public class Start
     public PasswordlessCode[] getCodesOfDevice(TenantIdentifier tenantIdentifier, String deviceIdHash)
             throws StorageQueryException {
         try {
-            // TODO..
-            return PasswordlessQueries.getCodesOfDevice(this, deviceIdHash);
+            return PasswordlessQueries.getCodesOfDevice(this, tenantIdentifier, deviceIdHash);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1584,8 +1561,7 @@ public class Start
     public PasswordlessCode[] getCodesBefore(TenantIdentifier tenantIdentifier, long time)
             throws StorageQueryException {
         try {
-            // TODO..
-            return PasswordlessQueries.getCodesBefore(this, time);
+            return PasswordlessQueries.getCodesBefore(this, tenantIdentifier, time);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1594,8 +1570,7 @@ public class Start
     @Override
     public PasswordlessCode getCode(TenantIdentifier tenantIdentifier, String codeId) throws StorageQueryException {
         try {
-            // TODO..
-            return PasswordlessQueries.getCode(this, codeId);
+            return PasswordlessQueries.getCode(this, tenantIdentifier, codeId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1605,8 +1580,7 @@ public class Start
     public PasswordlessCode getCodeByLinkCodeHash(TenantIdentifier tenantIdentifier, String linkCodeHash)
             throws StorageQueryException {
         try {
-            // TODO..
-            return PasswordlessQueries.getCodeByLinkCodeHash(this, linkCodeHash);
+            return PasswordlessQueries.getCodeByLinkCodeHash(this, tenantIdentifier, linkCodeHash);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

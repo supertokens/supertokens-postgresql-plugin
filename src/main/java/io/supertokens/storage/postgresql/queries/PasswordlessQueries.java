@@ -19,6 +19,8 @@ package io.supertokens.storage.postgresql.queries;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.UserInfo;
@@ -46,47 +48,93 @@ public class PasswordlessQueries {
         String schema = Config.getConfig(start).getTableSchema();
         String usersTable = Config.getConfig(start).getPasswordlessUsersTable();
 
-        return "CREATE TABLE IF NOT EXISTS " + usersTable + " (" + "user_id CHAR(36) NOT NULL,"
-                + "email VARCHAR(256) CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "email", "key")
-                + " UNIQUE," + "phone_number VARCHAR(256) CONSTRAINT "
-                + Utils.getConstraintName(schema, usersTable, "phone_number", "key") + " UNIQUE,"
-                + "time_joined BIGINT NOT NULL, " + "CONSTRAINT "
-                + Utils.getConstraintName(schema, usersTable, null, "pkey") + " PRIMARY KEY (user_id)" + ");";
+        return "CREATE TABLE IF NOT EXISTS " + usersTable + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "user_id CHAR(36) NOT NULL,"
+                + "email VARCHAR(256),"
+                + "phone_number VARCHAR(256),"
+                + "time_joined BIGINT NOT NULL, "
+                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "app_id", "fkey")
+                + " FOREIGN KEY(app_id, user_id)"
+                + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +  " (app_id, user_id) ON DELETE CASCADE,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, null, "pkey")
+                + " PRIMARY KEY (app_id, user_id)"
+                + ");";
+    }
+
+    static String getQueryToCreatePasswordlessUserToTenantTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String passwordlessUserToTenantTable = Config.getConfig(start).getPasswordlessUserToTenantTable();
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + passwordlessUserToTenantTable + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "tenant_id VARCHAR(64) DEFAULT 'public',"
+                + "user_id CHAR(36) NOT NULL,"
+                + "email VARCHAR(256),"
+                + "phone_number VARCHAR(256),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, passwordlessUserToTenantTable, "email", "key")
+                + " UNIQUE (app_id, tenant_id, email),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, passwordlessUserToTenantTable, "phone_number", "key")
+                + " UNIQUE (app_id, tenant_id, phone_number),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, passwordlessUserToTenantTable, null, "pkey")
+                + " PRIMARY KEY (app_id, tenant_id, user_id),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, passwordlessUserToTenantTable, "user_id", "fkey")
+                + " FOREIGN KEY (app_id, tenant_id, user_id)"
+                + " REFERENCES " + Config.getConfig(start).getUsersTable() + "(app_id, tenant_id, user_id) ON DELETE CASCADE"
+                + ");";
+        // @formatter:on
     }
 
     public static String getQueryToCreateDevicesTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String devicesTable = Config.getConfig(start).getPasswordlessDevicesTable();
 
-        return "CREATE TABLE IF NOT EXISTS " + devicesTable + " (" + "device_id_hash CHAR(44) NOT NULL,"
-                + "email VARCHAR(256), " + "phone_number VARCHAR(256)," + "link_code_salt CHAR(44) NOT NULL,"
-                + "failed_attempts INT NOT NULL," + "CONSTRAINT "
-                + Utils.getConstraintName(schema, devicesTable, null, "pkey") + " PRIMARY KEY (device_id_hash));";
+        return "CREATE TABLE IF NOT EXISTS " + devicesTable + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "tenant_id VARCHAR(64) DEFAULT 'public',"
+                + "device_id_hash CHAR(44) NOT NULL,"
+                + "email VARCHAR(256), "
+                + "phone_number VARCHAR(256),"
+                + "link_code_salt CHAR(44) NOT NULL,"
+                + "failed_attempts INT NOT NULL,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, devicesTable, "tenant_id", "fkey")
+                + " FOREIGN KEY(app_id, tenant_id)"
+                + " REFERENCES " + Config.getConfig(start).getTenantsTable() +  " (app_id, tenant_id) ON DELETE CASCADE,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, devicesTable, null, "pkey")
+                + " PRIMARY KEY (app_id, tenant_id, device_id_hash)"
+                + ");";
     }
 
     public static String getQueryToCreateCodesTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String codesTable = Config.getConfig(start).getPasswordlessCodesTable();
 
-        return "CREATE TABLE IF NOT EXISTS " + codesTable + " (" + "code_id CHAR(36) NOT NULL,"
-                + "device_id_hash CHAR(44) NOT NULL," + "link_code_hash CHAR(44) NOT NULL CONSTRAINT "
-                + Utils.getConstraintName(schema, codesTable, "link_code_hash", "key") + " UNIQUE,"
-                + "created_at BIGINT NOT NULL," + "CONSTRAINT "
-                + Utils.getConstraintName(schema, codesTable, null, "pkey") + " PRIMARY KEY (code_id)," + "CONSTRAINT "
-                + Utils.getConstraintName(schema, codesTable, "device_id_hash", "fkey")
-                + " FOREIGN KEY (device_id_hash) " + "REFERENCES "
-                + Config.getConfig(start).getPasswordlessDevicesTable()
-                + "(device_id_hash) ON DELETE CASCADE ON UPDATE CASCADE);";
+        return "CREATE TABLE IF NOT EXISTS " + codesTable + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "tenant_id VARCHAR(64) DEFAULT 'public',"
+                + "code_id CHAR(36) NOT NULL,"
+                + "device_id_hash CHAR(44) NOT NULL,"
+                + "link_code_hash CHAR(44) NOT NULL,"
+                + "created_at BIGINT NOT NULL,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, codesTable, "link_code_hash", "key")
+                + " UNIQUE (app_id, tenant_id, link_code_hash),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, codesTable, null, "pkey")
+                + " PRIMARY KEY (app_id, tenant_id, code_id),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, codesTable, "device_id_hash", "fkey")
+                + " FOREIGN KEY (app_id, tenant_id, device_id_hash)"
+                + " REFERENCES " + Config.getConfig(start).getPasswordlessDevicesTable() + "(app_id, tenant_id, device_id_hash)"
+                + " ON DELETE CASCADE ON UPDATE CASCADE"
+                + ");";
     }
 
     public static String getQueryToCreateDeviceEmailIndex(Start start) {
         return "CREATE INDEX passwordless_devices_email_index ON "
-                + Config.getConfig(start).getPasswordlessDevicesTable() + " (email);"; // USING hash
+                + Config.getConfig(start).getPasswordlessDevicesTable() + " (app_id, tenant_id, email);"; // USING hash
     }
 
     public static String getQueryToCreateDevicePhoneNumberIndex(Start start) {
         return "CREATE INDEX passwordless_devices_phone_number_index ON "
-                + Config.getConfig(start).getPasswordlessDevicesTable() + " (phone_number);"; // USING hash
+                + Config.getConfig(start).getPasswordlessDevicesTable() + " (app_id, tenant_id, phone_number);"; // USING hash
     }
 
     public static String getQueryToCreateCodeDeviceIdHashIndex(Start start) {
@@ -96,25 +144,27 @@ public class PasswordlessQueries {
 
     public static String getQueryToCreateCodeCreatedAtIndex(Start start) {
         return "CREATE INDEX passwordless_codes_created_at_index ON "
-                + Config.getConfig(start).getPasswordlessCodesTable() + "(created_at);";
+                + Config.getConfig(start).getPasswordlessCodesTable() + "(app_id, tenant_id, created_at);";
     }
 
-    public static void createDeviceWithCode(Start start, String email, String phoneNumber, String linkCodeSalt,
-            PasswordlessCode code) throws StorageTransactionLogicException, StorageQueryException {
+    public static void createDeviceWithCode(Start start, TenantIdentifier tenantIdentifier, String email, String phoneNumber, String linkCodeSalt,
+                                            PasswordlessCode code) throws StorageTransactionLogicException, StorageQueryException {
         start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try {
                 String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessDevicesTable()
-                        + "(device_id_hash, email, phone_number, link_code_salt, failed_attempts)"
-                        + " VALUES(?, ?, ?, ?, 0)";
+                        + "(app_id, tenant_id, device_id_hash, email, phone_number, link_code_salt, failed_attempts)"
+                        + " VALUES(?, ?, ?, ?, ?, ?, 0)";
                 update(sqlCon, QUERY, pst -> {
-                    pst.setString(1, code.deviceIdHash);
-                    pst.setString(2, email);
-                    pst.setString(3, phoneNumber);
-                    pst.setString(4, linkCodeSalt);
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, tenantIdentifier.getTenantId());
+                    pst.setString(3, code.deviceIdHash);
+                    pst.setString(4, email);
+                    pst.setString(5, phoneNumber);
+                    pst.setString(6, linkCodeSalt);
                 });
 
-                createCode_Transaction(start, sqlCon, code);
+                createCode_Transaction(start, sqlCon, tenantIdentifier, code);
                 sqlCon.commit();
             } catch (SQLException throwables) {
                 throw new StorageTransactionLogicException(throwables);
@@ -123,12 +173,18 @@ public class PasswordlessQueries {
         }, TransactionIsolationLevel.REPEATABLE_READ);
     }
 
-    public static PasswordlessDevice getDevice_Transaction(Start start, Connection con, String deviceIdHash)
+    public static PasswordlessDevice getDevice_Transaction(Start start, Connection con,
+                                                           TenantIdentifier tenantIdentifier, String deviceIdHash)
             throws StorageQueryException, SQLException {
 
         String QUERY = "SELECT device_id_hash, email, phone_number, link_code_salt, failed_attempts FROM "
-                + getConfig(start).getPasswordlessDevicesTable() + " WHERE device_id_hash = ? FOR UPDATE";
-        return execute(con, QUERY, pst -> pst.setString(1, deviceIdHash), result -> {
+                + getConfig(start).getPasswordlessDevicesTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND device_id_hash = ? FOR UPDATE";
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, deviceIdHash);
+        }, result -> {
             if (result.next()) {
                 return PasswordlessDeviceRowMapper.getInstance().mapOrThrow(result);
             }
@@ -136,55 +192,79 @@ public class PasswordlessQueries {
         });
     }
 
-    public static void incrementDeviceFailedAttemptCount_Transaction(Start start, Connection con, String deviceIdHash)
+    public static void incrementDeviceFailedAttemptCount_Transaction(Start start, Connection con,
+                                                                     TenantIdentifier tenantIdentifier, String deviceIdHash)
             throws SQLException, StorageQueryException {
         String QUERY = "UPDATE " + getConfig(start).getPasswordlessDevicesTable()
-                + " SET failed_attempts = failed_attempts + 1 WHERE device_id_hash = ?";
+                + " SET failed_attempts = failed_attempts + 1"
+                + " WHERE app_id = ? AND tenant_id = ? AND device_id_hash = ?";
 
-        update(con, QUERY, pst -> pst.setString(1, deviceIdHash));
-    }
-
-    public static void deleteDevice_Transaction(Start start, Connection con, String deviceIdHash)
-            throws SQLException, StorageQueryException {
-        String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable() + " WHERE device_id_hash = ?";
-        update(con, QUERY, pst -> pst.setString(1, deviceIdHash));
-    }
-
-    public static void deleteDevicesByPhoneNumber_Transaction(Start start, Connection con, @Nonnull String phoneNumber)
-            throws SQLException, StorageQueryException {
-
-        String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable() + " WHERE phone_number = ?";
-
-        update(con, QUERY, pst -> pst.setString(1, phoneNumber));
-    }
-
-    public static void deleteDevicesByEmail_Transaction(Start start, Connection con, @Nonnull String email)
-            throws SQLException, StorageQueryException {
-
-        String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable() + " WHERE email = ?";
-
-        update(con, QUERY, pst -> pst.setString(1, email));
-    }
-
-    private static void createCode_Transaction(Start start, Connection con, PasswordlessCode code)
-            throws SQLException, StorageQueryException {
-        String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessCodesTable()
-                + "(code_id, device_id_hash, link_code_hash, created_at)" + " VALUES(?, ?, ?, ?)";
         update(con, QUERY, pst -> {
-            pst.setString(1, code.id);
-            pst.setString(2, code.deviceIdHash);
-            pst.setString(3, code.linkCodeHash);
-            pst.setLong(4, code.createdAt);
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, deviceIdHash);
         });
     }
 
-    public static void createCode(Start start, PasswordlessCode code)
+    public static void deleteDevice_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier, String deviceIdHash)
+            throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND device_id_hash = ?";
+        update(con, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, deviceIdHash);
+        });
+    }
+
+    public static void deleteDevicesByPhoneNumber_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier, @Nonnull String phoneNumber)
+            throws SQLException, StorageQueryException {
+
+        String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND phone_number = ?";
+
+        update(con, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, phoneNumber);
+        });
+    }
+
+    public static void deleteDevicesByEmail_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier, @Nonnull String email)
+            throws SQLException, StorageQueryException {
+
+        String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND email = ?";
+
+        update(con, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, email);
+        });
+    }
+
+    private static void createCode_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier, PasswordlessCode code)
+            throws SQLException, StorageQueryException {
+        String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessCodesTable()
+                + "(app_id, tenant_id, code_id, device_id_hash, link_code_hash, created_at)"
+                + " VALUES(?, ?, ?, ?, ?, ?)";
+        update(con, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, code.id);
+            pst.setString(4, code.deviceIdHash);
+            pst.setString(5, code.linkCodeHash);
+            pst.setLong(6, code.createdAt);
+        });
+    }
+
+    public static void createCode(Start start, TenantIdentifier tenantIdentifier, PasswordlessCode code)
             throws StorageTransactionLogicException, StorageQueryException {
         start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
 
             try {
-                PasswordlessQueries.createCode_Transaction(start, sqlCon, code);
+                PasswordlessQueries.createCode_Transaction(start, sqlCon, tenantIdentifier, code);
                 sqlCon.commit();
             } catch (SQLException e) {
                 throw new StorageTransactionLogicException(e);
@@ -193,13 +273,18 @@ public class PasswordlessQueries {
         });
     }
 
-    public static PasswordlessCode[] getCodesOfDevice_Transaction(Start start, Connection con, String deviceIdHash)
+    public static PasswordlessCode[] getCodesOfDevice_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier, String deviceIdHash)
             throws StorageQueryException, SQLException {
         // We do not lock here, since the device is already locked earlier in the transaction.
         String QUERY = "SELECT code_id, device_id_hash, link_code_hash, created_at FROM "
-                + getConfig(start).getPasswordlessCodesTable() + " WHERE device_id_hash = ?";
+                + getConfig(start).getPasswordlessCodesTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND device_id_hash = ?";
 
-        return execute(con, QUERY, pst -> pst.setString(1, deviceIdHash), result -> {
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, deviceIdHash);
+        }, result -> {
             List<PasswordlessCode> temp = new ArrayList<>();
             while (result.next()) {
                 temp.add(PasswordlessCodeRowMapper.getInstance().mapOrThrow(result));
@@ -212,13 +297,18 @@ public class PasswordlessQueries {
         });
     }
 
-    public static PasswordlessCode getCodeByLinkCodeHash_Transaction(Start start, Connection con, String linkCodeHash)
+    public static PasswordlessCode getCodeByLinkCodeHash_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier, String linkCodeHash)
             throws StorageQueryException, SQLException {
         // We do not lock here, since the device is already locked earlier in the transaction.
         String QUERY = "SELECT code_id, device_id_hash, link_code_hash, created_at FROM "
-                + getConfig(start).getPasswordlessCodesTable() + " WHERE link_code_hash = ?";
+                + getConfig(start).getPasswordlessCodesTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND link_code_hash = ?";
 
-        return execute(con, QUERY, pst -> pst.setString(1, linkCodeHash), result -> {
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, linkCodeHash);
+        }, result -> {
             if (result.next()) {
                 return PasswordlessCodeRowMapper.getInstance().mapOrThrow(result);
             }
@@ -226,36 +316,66 @@ public class PasswordlessQueries {
         });
     }
 
-    public static void deleteCode_Transaction(Start start, Connection con, String codeId)
+    public static void deleteCode_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier, String codeId)
             throws SQLException, StorageQueryException {
-        String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessCodesTable() + " WHERE code_id = ?";
+        String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessCodesTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND code_id = ?";
 
-        update(con, QUERY, pst -> pst.setString(1, codeId));
+        update(con, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, codeId);
+        });
     }
 
-    public static void createUser(Start start, UserInfo user)
+    public static void createUser(Start start, TenantIdentifier tenantIdentifier, UserInfo user)
             throws StorageTransactionLogicException, StorageQueryException {
         start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try {
-                {
-                    String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
-                            + "(user_id, recipe_id, time_joined)" + " VALUES(?, ?, ?)";
+                { // app_id_to_user_id
+                    String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
+                            + "(app_id, user_id)" + " VALUES(?, ?)";
                     update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, user.id);
-                        pst.setString(2, PASSWORDLESS.toString());
-                        pst.setLong(3, user.timeJoined);
+                        pst.setString(1, tenantIdentifier.getAppId());
+                        pst.setString(2, user.id);
                     });
                 }
 
-                {
-                    String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUsersTable()
-                            + "(user_id, email, phone_number, time_joined)" + " VALUES(?, ?, ?, ?)";
+                { // all_auth_recipe_users
+                    String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
+                            + "(app_id, tenant_id, user_id, recipe_id, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
                     update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, user.id);
-                        pst.setString(2, user.email);
-                        pst.setString(3, user.phoneNumber);
-                        pst.setLong(4, user.timeJoined);
+                        pst.setString(1, tenantIdentifier.getAppId());
+                        pst.setString(2, tenantIdentifier.getTenantId());
+                        pst.setString(3, user.id);
+                        pst.setString(4, PASSWORDLESS.toString());
+                        pst.setLong(5, user.timeJoined);
+                    });
+                }
+
+                { // passwordless_users
+                    String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUsersTable()
+                            + "(app_id, user_id, email, phone_number, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
+                    update(sqlCon, QUERY, pst -> {
+                        pst.setString(1, tenantIdentifier.getAppId());
+                        pst.setString(2, user.id);
+                        pst.setString(3, user.email);
+                        pst.setString(4, user.phoneNumber);
+                        pst.setLong(5, user.timeJoined);
+                    });
+                }
+
+                { // passwordless_user_to_tenant
+                    String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUserToTenantTable()
+                            + "(app_id, tenant_id, user_id, email, phone_number)" + " VALUES(?, ?, ?, ?, ?)";
+
+                    update(sqlCon, QUERY, pst -> {
+                        pst.setString(1, tenantIdentifier.getAppId());
+                        pst.setString(2, tenantIdentifier.getTenantId());
+                        pst.setString(3, user.id);
+                        pst.setString(4, user.email);
+                        pst.setString(5, user.phoneNumber);
                     });
                 }
                 sqlCon.commit();
@@ -296,12 +416,15 @@ public class PasswordlessQueries {
                 }
 
                 if (user != null) {
+                    // TODO fix this, not a good idea to delete devices app wide
+                    /*
                     if (user.email != null) {
                         deleteDevicesByEmail_Transaction(start, sqlCon, user.email);
                     }
                     if (user.phoneNumber != null) {
                         deleteDevicesByPhoneNumber_Transaction(start, sqlCon, user.phoneNumber);
                     }
+                   */
                 }
 
                 sqlCon.commit();
@@ -312,26 +435,52 @@ public class PasswordlessQueries {
         });
     }
 
-    public static int updateUserEmail_Transaction(Start start, Connection con, String userId, String email)
+    public static int updateUserEmail_Transaction(Start start, Connection con, AppIdentifier appIdentifier, String userId, String email)
             throws SQLException, StorageQueryException {
-        String QUERY = "UPDATE " + Config.getConfig(start).getPasswordlessUsersTable()
-                + " SET email = ? WHERE user_id = ?";
+        {
+            String QUERY = "UPDATE " + Config.getConfig(start).getPasswordlessUserToTenantTable()
+                    + " SET email = ? WHERE app_id = ? AND user_id = ?";
 
-        return update(con, QUERY, pst -> {
-            pst.setString(1, email);
-            pst.setString(2, userId);
-        });
+            update(con, QUERY, pst -> {
+                pst.setString(1, email);
+                pst.setString(2, appIdentifier.getAppId());
+                pst.setString(3, userId);
+            });
+        }
+        {
+            String QUERY = "UPDATE " + Config.getConfig(start).getPasswordlessUsersTable()
+                    + " SET email = ? WHERE app_id = ? AND user_id = ?";
+
+            return update(con, QUERY, pst -> {
+                pst.setString(1, email);
+                pst.setString(2, appIdentifier.getAppId());
+                pst.setString(3, userId);
+            });
+        }
     }
 
-    public static int updateUserPhoneNumber_Transaction(Start start, Connection con, String userId, String phoneNumber)
+    public static int updateUserPhoneNumber_Transaction(Start start, Connection con, AppIdentifier appIdentifier, String userId, String phoneNumber)
             throws SQLException, StorageQueryException {
-        String QUERY = "UPDATE " + Config.getConfig(start).getPasswordlessUsersTable()
-                + " SET phone_number = ? WHERE user_id = ?";
+        {
+            String QUERY = "UPDATE " + Config.getConfig(start).getPasswordlessUserToTenantTable()
+                    + " SET phone_number = ? WHERE app_id = ? AND user_id = ?";
 
-        return update(con, QUERY, pst -> {
-            pst.setString(1, phoneNumber);
-            pst.setString(2, userId);
-        });
+            update(con, QUERY, pst -> {
+                pst.setString(1, phoneNumber);
+                pst.setString(2, appIdentifier.getAppId());
+                pst.setString(3, userId);
+            });
+        }
+        {
+            String QUERY = "UPDATE " + Config.getConfig(start).getPasswordlessUsersTable()
+                    + " SET phone_number = ? WHERE app_id = ? AND user_id = ?";
+
+            return update(con, QUERY, pst -> {
+                pst.setString(1, phoneNumber);
+                pst.setString(2, appIdentifier.getAppId());
+                pst.setString(3, userId);
+            });
+        }
     }
 
     public static PasswordlessDevice getDevice(Start start, String deviceIdHash)
@@ -384,19 +533,24 @@ public class PasswordlessQueries {
         });
     }
 
-    public static PasswordlessCode[] getCodesOfDevice(Start start, String deviceIdHash)
+    public static PasswordlessCode[] getCodesOfDevice(Start start, TenantIdentifier tenantIdentifier, String deviceIdHash)
             throws StorageQueryException, SQLException {
         try (Connection con = ConnectionPool.getConnection(start)) {
             // We can call the transaction version here because it doesn't lock anything.
-            return PasswordlessQueries.getCodesOfDevice_Transaction(start, con, deviceIdHash);
+            return PasswordlessQueries.getCodesOfDevice_Transaction(start, con, tenantIdentifier, deviceIdHash);
         }
     }
 
-    public static PasswordlessCode[] getCodesBefore(Start start, long time) throws StorageQueryException, SQLException {
+    public static PasswordlessCode[] getCodesBefore(Start start, TenantIdentifier tenantIdentifier, long time) throws StorageQueryException, SQLException {
         String QUERY = "SELECT code_id, device_id_hash, link_code_hash, created_at FROM "
-                + getConfig(start).getPasswordlessCodesTable() + " WHERE created_at < ?";
+                + getConfig(start).getPasswordlessCodesTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND created_at < ?";
 
-        return execute(start, QUERY, pst -> pst.setLong(1, time), result -> {
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setLong(3, time);
+        }, result -> {
             List<PasswordlessCode> temp = new ArrayList<>();
             while (result.next()) {
                 temp.add(PasswordlessCodeRowMapper.getInstance().mapOrThrow(result));
@@ -409,11 +563,16 @@ public class PasswordlessQueries {
         });
     }
 
-    public static PasswordlessCode getCode(Start start, String codeId) throws StorageQueryException, SQLException {
+    public static PasswordlessCode getCode(Start start, TenantIdentifier tenantIdentifier, String codeId) throws StorageQueryException, SQLException {
         String QUERY = "SELECT code_id, device_id_hash, link_code_hash, created_at FROM "
-                + getConfig(start).getPasswordlessCodesTable() + " WHERE code_id = ?";
+                + getConfig(start).getPasswordlessCodesTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND code_id = ?";
 
-        return execute(start, QUERY, pst -> pst.setString(1, codeId), result -> {
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, codeId);
+        }, result -> {
             if (result.next()) {
                 return PasswordlessCodeRowMapper.getInstance().mapOrThrow(result);
             }
@@ -421,11 +580,11 @@ public class PasswordlessQueries {
         });
     }
 
-    public static PasswordlessCode getCodeByLinkCodeHash(Start start, String linkCodeHash)
+    public static PasswordlessCode getCodeByLinkCodeHash(Start start, TenantIdentifier tenantIdentifier, String linkCodeHash)
             throws StorageQueryException, SQLException {
         try (Connection con = ConnectionPool.getConnection(start)) {
             // We can call the transaction version here because it doesn't lock anything.
-            return PasswordlessQueries.getCodeByLinkCodeHash_Transaction(start, con, linkCodeHash);
+            return PasswordlessQueries.getCodeByLinkCodeHash_Transaction(start, con, tenantIdentifier, linkCodeHash);
         }
     }
 

@@ -256,6 +256,11 @@ public class GeneralQueries {
                     update(start, PasswordlessQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getPasswordlessUserToTenantTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, PasswordlessQueries.getQueryToCreatePasswordlessUserToTenantTable(start), NO_OP_SETTER);
+                }
+
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessDevicesTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateDevicesTable(start), NO_OP_SETTER);
@@ -375,6 +380,7 @@ public class GeneralQueries {
                     + getConfig(start).getJWTSigningKeysTable() + ","
                     + getConfig(start).getPasswordlessCodesTable() + ","
                     + getConfig(start).getPasswordlessDevicesTable() + ","
+                    + getConfig(start).getPasswordlessUserToTenantTable() + ","
                     + getConfig(start).getPasswordlessUsersTable() + ","
                     + getConfig(start).getUserMetadataTable() + ","
                     + getConfig(start).getRolesTable() + ","

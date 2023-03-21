@@ -315,6 +315,11 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName(tableName);
     }
 
+    public String getPasswordlessUserToTenantTable() {
+        String tableName = "passwordless_user_to_tenant";
+        return addSchemaAndPrefixToTableName(tableName);
+    }
+
     public String getPasswordlessDevicesTable() {
         String tableName = "passwordless_devices";
         return addSchemaAndPrefixToTableName(tableName);
