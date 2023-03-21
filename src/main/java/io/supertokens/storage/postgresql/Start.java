@@ -746,15 +746,6 @@ public class Start
     }
 
     @Override
-    public void deleteEmailPasswordUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
-        try {
-            EmailPasswordQueries.deleteUser(this, appIdentifier, userId);
-        } catch (StorageTransactionLogicException e) {
-            throw new StorageQueryException(e.actualException);
-        }
-    }
-
-    @Override
     public UserInfo getUserInfoUsingId(AppIdentifier appIdentifier, String id) throws StorageQueryException {
         try {
             return EmailPasswordQueries.getUserInfoUsingId(this, appIdentifier, id);
@@ -1040,8 +1031,8 @@ public class Start
             throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            // TODO..
-            return ThirdPartyQueries.getUserInfoUsingId_Transaction(this, sqlCon, thirdPartyId, thirdPartyUserId);
+            return ThirdPartyQueries.getUserInfoUsingId_Transaction(this, sqlCon, tenantIdentifier, thirdPartyId,
+                    thirdPartyUserId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1052,9 +1043,9 @@ public class Start
                                             String thirdPartyId, String thirdPartyUserId,
                                             String newEmail) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
-        // TODO..
         try {
-            ThirdPartyQueries.updateUserEmail_Transaction(this, sqlCon, thirdPartyId, thirdPartyUserId, newEmail);
+            ThirdPartyQueries.updateUserEmail_Transaction(this, sqlCon, tenantIdentifier, thirdPartyId,
+                    thirdPartyUserId, newEmail);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1064,16 +1055,17 @@ public class Start
     public void signUp(TenantIdentifier tenantIdentifier, io.supertokens.pluginInterface.thirdparty.UserInfo userInfo)
             throws StorageQueryException, io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException,
             DuplicateThirdPartyUserException {
-        // TODO..
         try {
-            ThirdPartyQueries.signUp(this, userInfo);
+            ThirdPartyQueries.signUp(this, tenantIdentifier, userInfo);
         } catch (StorageTransactionLogicException eTemp) {
             Exception e = eTemp.actualException;
             if (e instanceof PSQLException) {
                 ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
-                if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getThirdPartyUsersTable())) {
+
+                if (isUniqueConstraintError(serverMessage, Config.getConfig(this).getThirdPartyUserToTenantTable(), "third_party_user_id")) {
                     throw new DuplicateThirdPartyUserException();
-                } else if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getUsersTable())) {
+
+                } else if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getAppIdToUserIdTable())) {
                     throw new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException();
                 }
             }
@@ -1093,23 +1085,12 @@ public class Start
     }
 
     @Override
-    public void deleteThirdPartyUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
-        try {
-            // TODO..
-            ThirdPartyQueries.deleteUser(this, userId);
-        } catch (StorageTransactionLogicException e) {
-            throw new StorageQueryException(e.actualException);
-        }
-    }
-
-    @Override
     public io.supertokens.pluginInterface.thirdparty.UserInfo getThirdPartyUserInfoUsingId(
             TenantIdentifier tenantIdentifier, String thirdPartyId,
             String thirdPartyUserId)
             throws StorageQueryException {
-        // TODO..
         try {
-            return ThirdPartyQueries.getThirdPartyUserInfoUsingId(this, thirdPartyId, thirdPartyUserId);
+            return ThirdPartyQueries.getThirdPartyUserInfoUsingId(this, tenantIdentifier, thirdPartyId, thirdPartyUserId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1119,9 +1100,8 @@ public class Start
     public io.supertokens.pluginInterface.thirdparty.UserInfo getThirdPartyUserInfoUsingId(AppIdentifier appIdentifier,
                                                                                            String id)
             throws StorageQueryException {
-        // TODO..
         try {
-            return ThirdPartyQueries.getThirdPartyUserInfoUsingId(this, id);
+            return ThirdPartyQueries.getThirdPartyUserInfoUsingId(this, appIdentifier, id);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1131,9 +1111,8 @@ public class Start
     public io.supertokens.pluginInterface.thirdparty.UserInfo[] getThirdPartyUsersByEmail(
             TenantIdentifier tenantIdentifier, @NotNull String email)
             throws StorageQueryException {
-        // TODO..
         try {
-            return ThirdPartyQueries.getThirdPartyUsersByEmail(this, email);
+            return ThirdPartyQueries.getThirdPartyUsersByEmail(this, tenantIdentifier, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1181,6 +1160,15 @@ public class Start
             return GeneralQueries.doesUserIdExist(this, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void deleteAuthRecipeUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
+        try {
+            GeneralQueries.deleteUser(this, appIdentifier, userId);
+        } catch (StorageTransactionLogicException e) {
+            throw new StorageQueryException(e.actualException);
         }
     }
 
@@ -1505,21 +1493,10 @@ public class Start
     }
 
     @Override
-    public void deletePasswordlessUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
-        try {
-            // TODO..
-            PasswordlessQueries.deleteUser(this, userId);
-        } catch (StorageTransactionLogicException e) {
-            throw new StorageQueryException(e.actualException);
-        }
-    }
-
-    @Override
     public PasswordlessDevice getDevice(TenantIdentifier tenantIdentifier, String deviceIdHash)
             throws StorageQueryException {
         try {
-            // TODO..
-            return PasswordlessQueries.getDevice(this, deviceIdHash);
+            return PasswordlessQueries.getDevice(this, tenantIdentifier, deviceIdHash);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1529,8 +1506,7 @@ public class Start
     public PasswordlessDevice[] getDevicesByEmail(TenantIdentifier tenantIdentifier, String email)
             throws StorageQueryException {
         try {
-            // TODO..
-            return PasswordlessQueries.getDevicesByEmail(this, email);
+            return PasswordlessQueries.getDevicesByEmail(this, tenantIdentifier, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1540,8 +1516,7 @@ public class Start
     public PasswordlessDevice[] getDevicesByPhoneNumber(TenantIdentifier tenantIdentifier, String phoneNumber)
             throws StorageQueryException {
         try {
-            // TODO..
-            return PasswordlessQueries.getDevicesByPhoneNumber(this, phoneNumber);
+            return PasswordlessQueries.getDevicesByPhoneNumber(this, tenantIdentifier, phoneNumber);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

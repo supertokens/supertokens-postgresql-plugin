@@ -21,6 +21,7 @@ import io.supertokens.pluginInterface.RECIPE_ID;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ConnectionPool;
@@ -246,6 +247,11 @@ public class GeneralQueries {
                     update(start, ThirdPartyQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getThirdPartyUserToTenantTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, ThirdPartyQueries.getQueryToCreateThirdPartyUserToTenantTable(start), NO_OP_SETTER);
+                }
+
                 if (!doesTableExists(start, Config.getConfig(start).getJWTSigningKeysTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateJWTSigningTable(start), NO_OP_SETTER);
@@ -377,6 +383,7 @@ public class GeneralQueries {
                     + getConfig(start).getEmailVerificationTokensTable() + ","
                     + getConfig(start).getEmailVerificationTable() + ","
                     + getConfig(start).getThirdPartyUsersTable() + ","
+                    + getConfig(start).getThirdPartyUserToTenantTable() + ","
                     + getConfig(start).getJWTSigningKeysTable() + ","
                     + getConfig(start).getPasswordlessCodesTable() + ","
                     + getConfig(start).getPasswordlessDevicesTable() + ","
@@ -474,6 +481,29 @@ public class GeneralQueries {
         String QUERY = "SELECT 1 FROM " + getConfig(start).getUsersTable() + " WHERE user_id = ?";
         return execute(start, QUERY, pst -> pst.setString(1, userId), ResultSet::next);
 
+    }
+
+    public static void deleteUser(Start start, AppIdentifier appIdentifier, String userId)
+            throws StorageQueryException, StorageTransactionLogicException {
+        start.startTransaction(con -> {
+            Connection sqlCon = (Connection) con.getConnection();
+            try {
+                {
+                    String QUERY = "DELETE FROM " + getConfig(start).getAppIdToUserIdTable()
+                            + " WHERE app_id = ? AND user_id = ?";
+
+                    update(sqlCon, QUERY, pst -> {
+                        pst.setString(1, appIdentifier.getAppId());
+                        pst.setString(2, userId);
+                    });
+                }
+
+                sqlCon.commit();
+            } catch (SQLException throwables) {
+                throw new StorageTransactionLogicException(throwables);
+            }
+            return null;
+        });
     }
 
     public static AuthRecipeUserInfo[] getUsers(Start start, TenantIdentifier tenantIdentifier, @NotNull Integer limit, @NotNull String timeJoinedOrder,
@@ -584,7 +614,7 @@ public class GeneralQueries {
         if (recipeId == RECIPE_ID.EMAIL_PASSWORD) {
             return EmailPasswordQueries.getUsersInfoUsingIdList(start, tenantIdentifier, userIds);
         } else if (recipeId == RECIPE_ID.THIRD_PARTY) {
-            return ThirdPartyQueries.getUsersInfoUsingIdList(start, userIds); // TODO pass tenantIdentifier
+            return ThirdPartyQueries.getUsersInfoUsingIdList(start, tenantIdentifier, userIds); // TODO pass tenantIdentifier
         } else if (recipeId == RECIPE_ID.PASSWORDLESS) {
             return PasswordlessQueries.getUsersByIdList(start, userIds); // TODO pass tenantIdentifier
         } else {

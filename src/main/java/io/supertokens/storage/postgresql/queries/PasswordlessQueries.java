@@ -386,55 +386,6 @@ public class PasswordlessQueries {
         });
     }
 
-    public static void deleteUser(Start start, String userId)
-            throws StorageQueryException, StorageTransactionLogicException {
-        start.startTransaction(con -> {
-            Connection sqlCon = (Connection) con.getConnection();
-            try {
-                {
-                    String QUERY = "DELETE FROM " + getConfig(start).getUsersTable()
-                            + " WHERE user_id = ? AND recipe_id = ?";
-
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, userId);
-                        pst.setString(2, PASSWORDLESS.toString());
-                    });
-                }
-
-                UserInfo user;
-                {
-                    String QUERY = "DELETE FROM " + Config.getConfig(start).getPasswordlessUsersTable()
-                            + " WHERE user_id = ? RETURNING user_id, email, phone_number, time_joined";
-
-                    user = execute(sqlCon, QUERY, pst -> pst.setString(1, userId), result -> {
-                        if (result.next()) {
-                            return UserInfoRowMapper.getInstance().mapOrThrow(result);
-                        }
-                        return null;
-                    });
-
-                }
-
-                if (user != null) {
-                    // TODO fix this, not a good idea to delete devices app wide
-                    /*
-                    if (user.email != null) {
-                        deleteDevicesByEmail_Transaction(start, sqlCon, user.email);
-                    }
-                    if (user.phoneNumber != null) {
-                        deleteDevicesByPhoneNumber_Transaction(start, sqlCon, user.phoneNumber);
-                    }
-                   */
-                }
-
-                sqlCon.commit();
-            } catch (SQLException throwables) {
-                throw new StorageTransactionLogicException(throwables);
-            }
-            return null;
-        });
-    }
-
     public static int updateUserEmail_Transaction(Start start, Connection con, AppIdentifier appIdentifier, String userId, String email)
             throws SQLException, StorageQueryException {
         {
@@ -483,12 +434,17 @@ public class PasswordlessQueries {
         }
     }
 
-    public static PasswordlessDevice getDevice(Start start, String deviceIdHash)
+    public static PasswordlessDevice getDevice(Start start, TenantIdentifier tenantIdentifier, String deviceIdHash)
             throws StorageQueryException, SQLException {
         try (Connection con = ConnectionPool.getConnection(start)) {
             String QUERY = "SELECT device_id_hash, email, phone_number, link_code_salt, failed_attempts FROM "
-                    + getConfig(start).getPasswordlessDevicesTable() + " WHERE device_id_hash = ?";
-            return execute(con, QUERY, pst -> pst.setString(1, deviceIdHash), result -> {
+                    + getConfig(start).getPasswordlessDevicesTable()
+                    + " WHERE app_id = ? AND tenant_id = ? AND device_id_hash = ?";
+            return execute(con, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, deviceIdHash);
+            }, result -> {
                 if (result.next()) {
                     return PasswordlessDeviceRowMapper.getInstance().mapOrThrow(result);
                 }
@@ -497,12 +453,17 @@ public class PasswordlessQueries {
         }
     }
 
-    public static PasswordlessDevice[] getDevicesByEmail(Start start, @Nonnull String email)
+    public static PasswordlessDevice[] getDevicesByEmail(Start start, TenantIdentifier tenantIdentifier, @Nonnull String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT device_id_hash, email, phone_number, link_code_salt, failed_attempts FROM "
-                + getConfig(start).getPasswordlessDevicesTable() + " WHERE email = ?";
+                + getConfig(start).getPasswordlessDevicesTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND email = ?";
 
-        return execute(start, QUERY, pst -> pst.setString(1, email), result -> {
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, email);
+        }, result -> {
             List<PasswordlessDevice> temp = new ArrayList<>();
             while (result.next()) {
                 temp.add(PasswordlessDeviceRowMapper.getInstance().mapOrThrow(result));
@@ -515,12 +476,18 @@ public class PasswordlessQueries {
         });
     }
 
-    public static PasswordlessDevice[] getDevicesByPhoneNumber(Start start, @Nonnull String phoneNumber)
+    public static PasswordlessDevice[] getDevicesByPhoneNumber(Start start, TenantIdentifier tenantIdentifier,
+                                                               @Nonnull String phoneNumber)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT device_id_hash, email, phone_number, link_code_salt, failed_attempts FROM "
-                + getConfig(start).getPasswordlessDevicesTable() + " WHERE phone_number = ?";
+                + getConfig(start).getPasswordlessDevicesTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND phone_number = ?";
 
-        return execute(start, QUERY, pst -> pst.setString(1, phoneNumber), result -> {
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, phoneNumber);
+        }, result -> {
             List<PasswordlessDevice> temp = new ArrayList<>();
             while (result.next()) {
                 temp.add(PasswordlessDeviceRowMapper.getInstance().mapOrThrow(result));
