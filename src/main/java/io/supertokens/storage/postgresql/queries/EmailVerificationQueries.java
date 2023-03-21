@@ -138,7 +138,7 @@ public class EmailVerificationQueries {
     public static void addEmailVerificationToken(Start start, AppIdentifier appIdentifier, String userId, String tokenHash, long expiry,
                                                  String email) throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getEmailVerificationTokensTable()
-                + "(app_id, user_id, token, token_expiry, email)" + " VALUES(?, ?, ?, ?)";
+                + "(app_id, user_id, token, token_expiry, email)" + " VALUES(?, ?, ?, ?, ?)";
 
         update(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
@@ -179,7 +179,7 @@ public class EmailVerificationQueries {
                                                                                        String userId,
                                                                                        String email) throws SQLException, StorageQueryException {
         String QUERY = "SELECT user_id, token, token_expiry, email FROM "
-                + getConfig(start).getEmailVerificationTokensTable() + " WHERE app_id AND user_id = ? AND email = ?";
+                + getConfig(start).getEmailVerificationTokensTable() + " WHERE app_id = ? AND user_id = ? AND email = ?";
 
         return execute(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
