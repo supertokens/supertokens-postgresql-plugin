@@ -19,6 +19,8 @@ package io.supertokens.storage.postgresql;
 
 import ch.qos.logback.classic.Logger;
 import com.google.gson.JsonObject;
+
+import io.supertokens.pluginInterface.ActiveUsersStorage;
 import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.LOG_LEVEL;
 import io.supertokens.pluginInterface.RECIPE_ID;
@@ -96,7 +98,7 @@ import java.util.Set;
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
-        DashboardSQLStorage, TOTPSQLStorage {
+        DashboardSQLStorage, TOTPSQLStorage, ActiveUsersStorage {
 
     private static final Object appenderLock = new Object();
     public static boolean silent = false;
@@ -1136,6 +1138,24 @@ public class Start
     public boolean doesUserIdExist(String userId) throws StorageQueryException {
         try {
             return GeneralQueries.doesUserIdExist(this, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void updateLastActive(String userId) throws StorageQueryException {
+        try {
+            ActiveUsersQueries.updateUserLastActive(this, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public int countUsersActiveSince(long time) throws StorageQueryException {
+        try {
+            return ActiveUsersQueries.countUsersActiveSince(this, time);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
