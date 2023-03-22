@@ -121,6 +121,11 @@ public class GeneralQueries {
                     update(start, getQueryToCreateUserPaginationIndex(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getUserLastActiveTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, ActiveUsersQueries.getQueryToCreateUserLastActiveTable(start), NO_OP_SETTER);
+                }
+                
                 if (!doesTableExists(start, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateAccessTokenSigningKeysTable(start), NO_OP_SETTER);
@@ -286,6 +291,7 @@ public class GeneralQueries {
 
         {
             String DROP_QUERY = "DROP TABLE IF EXISTS " + getConfig(start).getKeyValueTable() + ","
+                    + getConfig(start).getUserLastActiveTable() + ","
                     + getConfig(start).getUserIdMappingTable() + "," + getConfig(start).getUsersTable() + ","
                     + getConfig(start).getAccessTokenSigningKeysTable() + "," + getConfig(start).getSessionInfoTable()
                     + "," + getConfig(start).getEmailPasswordUsersTable() + ","
