@@ -386,6 +386,53 @@ public class PasswordlessQueries {
         });
     }
 
+    public static void deleteUser(Start start, AppIdentifier appIdentifier, String userId)
+            throws StorageQueryException, StorageTransactionLogicException {
+        start.startTransaction(con -> {
+            Connection sqlCon = (Connection) con.getConnection();
+            try {
+                {
+                    String QUERY = "DELETE FROM " + getConfig(start).getUsersTable()
+                            + " WHERE user_id = ? AND recipe_id = ?";
+
+                    update(sqlCon, QUERY, pst -> {
+                        pst.setString(1, userId);
+                        pst.setString(2, PASSWORDLESS.toString());
+                    });
+                }
+
+                UserInfo user;
+                {
+                    String QUERY = "DELETE FROM " + Config.getConfig(start).getPasswordlessUsersTable()
+                            + " WHERE user_id = ? RETURNING user_id, email, phone_number, time_joined";
+
+                    user = execute(sqlCon, QUERY, pst -> pst.setString(1, userId), result -> {
+                        if (result.next()) {
+                            return UserInfoRowMapper.getInstance().mapOrThrow(result);
+                        }
+                        return null;
+                    });
+
+                }
+
+                if (user != null) {
+                    // TODO find right tenants
+//                    if (user.email != null) {
+//                        deleteDevicesByEmail_Transaction(start, sqlCon, user.email);
+//                    }
+//                    if (user.phoneNumber != null) {
+//                        deleteDevicesByPhoneNumber_Transaction(start, sqlCon, user.phoneNumber);
+//                    }
+                }
+
+                sqlCon.commit();
+            } catch (SQLException throwables) {
+                throw new StorageTransactionLogicException(throwables);
+            }
+            return null;
+        });
+    }
+
     public static int updateUserEmail_Transaction(Start start, Connection con, AppIdentifier appIdentifier, String userId, String email)
             throws SQLException, StorageQueryException {
         {

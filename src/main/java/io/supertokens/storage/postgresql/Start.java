@@ -746,6 +746,15 @@ public class Start
     }
 
     @Override
+    public void deleteEmailPasswordUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
+        try {
+            EmailPasswordQueries.deleteUser(this, appIdentifier, userId);
+        } catch (StorageTransactionLogicException e) {
+            throw new StorageQueryException(e.actualException);
+        }
+    }
+
+    @Override
     public UserInfo getUserInfoUsingId(AppIdentifier appIdentifier, String id) throws StorageQueryException {
         try {
             return EmailPasswordQueries.getUserInfoUsingId(this, appIdentifier, id);
@@ -1085,6 +1094,15 @@ public class Start
     }
 
     @Override
+    public void deleteThirdPartyUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
+        try {
+            ThirdPartyQueries.deleteUser(this, appIdentifier, userId);
+        } catch (StorageTransactionLogicException e) {
+            throw new StorageQueryException(e.actualException);
+        }
+    }
+
+    @Override
     public io.supertokens.pluginInterface.thirdparty.UserInfo getThirdPartyUserInfoUsingId(
             TenantIdentifier tenantIdentifier, String thirdPartyId,
             String thirdPartyUserId)
@@ -1160,15 +1178,6 @@ public class Start
             return GeneralQueries.doesUserIdExist(this, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public void deleteAuthRecipeUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
-        try {
-            GeneralQueries.deleteUser(this, appIdentifier, userId);
-        } catch (StorageTransactionLogicException e) {
-            throw new StorageQueryException(e.actualException);
         }
     }
 
@@ -1488,6 +1497,15 @@ public class Start
                 }
 
             }
+            throw new StorageQueryException(e.actualException);
+        }
+    }
+
+    @Override
+    public void deletePasswordlessUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
+        try {
+            PasswordlessQueries.deleteUser(this, appIdentifier, userId);
+        } catch (StorageTransactionLogicException e) {
             throw new StorageQueryException(e.actualException);
         }
     }
