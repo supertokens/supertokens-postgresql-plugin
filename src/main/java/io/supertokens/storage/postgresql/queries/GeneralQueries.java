@@ -614,9 +614,9 @@ public class GeneralQueries {
         if (recipeId == RECIPE_ID.EMAIL_PASSWORD) {
             return EmailPasswordQueries.getUsersInfoUsingIdList(start, tenantIdentifier, userIds);
         } else if (recipeId == RECIPE_ID.THIRD_PARTY) {
-            return ThirdPartyQueries.getUsersInfoUsingIdList(start, tenantIdentifier, userIds); // TODO pass tenantIdentifier
+            return ThirdPartyQueries.getUsersInfoUsingIdList(start, tenantIdentifier, userIds);
         } else if (recipeId == RECIPE_ID.PASSWORDLESS) {
-            return PasswordlessQueries.getUsersByIdList(start, userIds); // TODO pass tenantIdentifier
+            return PasswordlessQueries.getUsersByIdList(start, tenantIdentifier, userIds);
         } else {
             throw new IllegalArgumentException("No implementation of get users for recipe: " + recipeId.toString());
         }

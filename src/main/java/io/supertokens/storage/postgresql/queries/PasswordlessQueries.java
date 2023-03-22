@@ -386,11 +386,40 @@ public class PasswordlessQueries {
         });
     }
 
+    private static UserInfoWithTenantId[] getUserInfosWithTenant(Start start, Connection con, AppIdentifier appIdentifier, String userId)
+            throws StorageQueryException, SQLException {
+        String QUERY = "SELECT pl_users.user_id as user_id, pl_users.email as email, "
+                + "pl_users.phone_number as phone_number, pl_users_to_tenant.tenant_id as tenant_id "
+                + "FROM " + getConfig(start).getPasswordlessUsersTable() + " AS pl_users "
+                + "JOIN " + getConfig(start).getPasswordlessUserToTenantTable() + " AS pl_users_to_tenant "
+                + "ON pl_users.app_id = pl_users_to_tenant.app_id AND pl_users.user_id = pl_users_to_tenant.user_id "
+                + "WHERE pl_users_to_tenant.app_id = ? AND pl_users_to_tenant.user_id = ?";
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, result -> {
+            List<UserInfoWithTenantId> userInfos = new ArrayList<>();
+
+            while (result.next()) {
+                userInfos.add(new UserInfoWithTenantId(
+                        result.getString("user_id"),
+                        result.getString("tenant_id"),
+                        result.getString("email"),
+                        result.getString("phoneNumber")
+                ));
+                PasswordlessDeviceRowMapper.getInstance().mapOrThrow(result);
+            }
+            return userInfos.toArray(new UserInfoWithTenantId[0]);
+        });
+    }
+
     public static void deleteUser(Start start, AppIdentifier appIdentifier, String userId)
             throws StorageQueryException, StorageTransactionLogicException {
         start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try {
+                UserInfoWithTenantId[] userInfos = getUserInfosWithTenant(start, sqlCon, appIdentifier, userId);
+
                 {
                     String QUERY = "DELETE FROM " + getConfig(start).getUsersTable()
                             + " WHERE user_id = ? AND recipe_id = ?";
@@ -401,28 +430,21 @@ public class PasswordlessQueries {
                     });
                 }
 
-                UserInfo user;
-                {
-                    String QUERY = "DELETE FROM " + Config.getConfig(start).getPasswordlessUsersTable()
-                            + " WHERE user_id = ? RETURNING user_id, email, phone_number, time_joined";
-
-                    user = execute(sqlCon, QUERY, pst -> pst.setString(1, userId), result -> {
-                        if (result.next()) {
-                            return UserInfoRowMapper.getInstance().mapOrThrow(result);
-                        }
-                        return null;
-                    });
-
-                }
-
-                if (user != null) {
-                    // TODO find right tenants
-//                    if (user.email != null) {
-//                        deleteDevicesByEmail_Transaction(start, sqlCon, user.email);
-//                    }
-//                    if (user.phoneNumber != null) {
-//                        deleteDevicesByPhoneNumber_Transaction(start, sqlCon, user.phoneNumber);
-//                    }
+                for (UserInfoWithTenantId userInfo : userInfos) {
+                    if (userInfo.email != null) {
+                        deleteDevicesByEmail_Transaction(start, sqlCon,
+                                new TenantIdentifier(
+                                        appIdentifier.getConnectionUriDomain(), appIdentifier.getAppId(),
+                                        userInfo.tenantId, appIdentifier.getStorage()),
+                                userInfo.email);
+                    }
+                    if (userInfo.phoneNumber != null) {
+                        deleteDevicesByPhoneNumber_Transaction(start, sqlCon,
+                                new TenantIdentifier(
+                                        appIdentifier.getConnectionUriDomain(), appIdentifier.getAppId(),
+                                        userInfo.tenantId, appIdentifier.getStorage()),
+                                userInfo.phoneNumber);
+                    }
                 }
 
                 sqlCon.commit();
@@ -602,11 +624,16 @@ public class PasswordlessQueries {
         }
     }
 
-    public static List<UserInfo> getUsersByIdList(Start start, List<String> ids)
+    public static List<UserInfo> getUsersByIdList(Start start, TenantIdentifier tenantIdentifier, List<String> ids)
             throws SQLException, StorageQueryException {
         if (ids.size() > 0) {
-            StringBuilder QUERY = new StringBuilder("SELECT user_id, email, phone_number, time_joined FROM "
-                    + getConfig(start).getPasswordlessUsersTable());
+            StringBuilder QUERY = new StringBuilder(
+                    "SELECT pl_users.user_id as user_id, pl_users.email as email, "
+                            + "pl_users.phone_number as phone_number, pl_users.time_joined as time_joined "
+                            + "FROM " + getConfig(start).getPasswordlessUsersTable() + " AS pl_users "
+                            + "JOIN " + getConfig(start).getPasswordlessUserToTenantTable() + " AS pl_users_to_tenant "
+                            + "ON pl_users.app_id = pl_users_to_tenant.app_id AND pl_users.user_id = pl_users_to_tenant.user_id"
+            );
             QUERY.append(" WHERE user_id IN (");
             for (int i = 0; i < ids.size(); i++) {
 
@@ -619,9 +646,11 @@ public class PasswordlessQueries {
             QUERY.append(")");
 
             return execute(start, QUERY.toString(), pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
                 for (int i = 0; i < ids.size(); i++) {
-                    // i+1 cause this starts with 1 and not 0
-                    pst.setString(i + 1, ids.get(i));
+                    // i+3 cause this starts with 1 and not 0, and 1 is used for app_id, 2 is used for tenant_id
+                    pst.setString(i + 3, ids.get(i));
                 }
             }, result -> {
                 List<UserInfo> finalResult = new ArrayList<>();
@@ -634,22 +663,14 @@ public class PasswordlessQueries {
         return Collections.emptyList();
     }
 
-    public static UserInfo getUserById(Start start, String userId) throws StorageQueryException, SQLException {
-        List<String> input = new ArrayList<>();
-        input.add(userId);
-        List<UserInfo> result = getUsersByIdList(start, input);
-        if (result.size() == 1) {
-            return result.get(0);
-        }
-        return null;
-    }
-
-    public static UserInfo getUserByEmail(Start start, @Nonnull String email)
-            throws StorageQueryException, SQLException {
+    public static UserInfo getUserById(Start start, AppIdentifier appIdentifier, String userId) throws StorageQueryException, SQLException {
         String QUERY = "SELECT user_id, email, phone_number, time_joined FROM "
-                + getConfig(start).getPasswordlessUsersTable() + " WHERE email = ?";
+                + getConfig(start).getPasswordlessUsersTable() + " WHERE app_id = ? AND user_id = ?";
 
-        return execute(start, QUERY, pst -> pst.setString(1, email), result -> {
+        return execute(start, QUERY.toString(), pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, result -> {
             if (result.next()) {
                 return UserInfoRowMapper.getInstance().mapOrThrow(result);
             }
@@ -657,12 +678,41 @@ public class PasswordlessQueries {
         });
     }
 
-    public static UserInfo getUserByPhoneNumber(Start start, @Nonnull String phoneNumber)
+    public static UserInfo getUserByEmail(Start start, TenantIdentifier tenantIdentifier, @Nonnull String email)
             throws StorageQueryException, SQLException {
-        String QUERY = "SELECT user_id, email, phone_number, time_joined FROM "
-                + getConfig(start).getPasswordlessUsersTable() + " WHERE phone_number = ?";
+        String QUERY = "SELECT pl_users.user_id as user_id, pl_users.email as email, "
+                + "pl_users.phone_number as phone_number, pl_users.time_joined as time_joined "
+                + "FROM " + getConfig(start).getPasswordlessUsersTable() + " AS pl_users "
+                + "JOIN " + getConfig(start).getPasswordlessUserToTenantTable() + " AS pl_users_to_tenant "
+                + "ON pl_users.app_id = pl_users_to_tenant.app_id AND pl_users.user_id = pl_users_to_tenant.user_id "
+                + "WHERE pl_users_to_tenant.app_id = ? AND pl_users_to_tenant.tenant_id = ? AND pl_users.email = ? ";
 
-        return execute(start, QUERY, pst -> pst.setString(1, phoneNumber), result -> {
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, email);
+        }, result -> {
+            if (result.next()) {
+                return UserInfoRowMapper.getInstance().mapOrThrow(result);
+            }
+            return null;
+        });
+    }
+
+    public static UserInfo getUserByPhoneNumber(Start start, TenantIdentifier tenantIdentifier, @Nonnull String phoneNumber)
+            throws StorageQueryException, SQLException {
+        String QUERY = "SELECT pl_users.user_id as user_id, pl_users.email as email, "
+                + "pl_users.phone_number as phone_number, pl_users.time_joined as time_joined "
+                + "FROM " + getConfig(start).getPasswordlessUsersTable() + " AS pl_users "
+                + "JOIN " + getConfig(start).getPasswordlessUserToTenantTable() + " AS pl_users_to_tenant "
+                + "ON pl_users.app_id = pl_users_to_tenant.app_id AND pl_users.user_id = pl_users_to_tenant.user_id "
+                + "WHERE pl_users_to_tenant.app_id = ? AND pl_users_to_tenant.tenant_id = ? AND pl_users.phone_number = ? ";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, phoneNumber);
+        }, result -> {
             if (result.next()) {
                 return UserInfoRowMapper.getInstance().mapOrThrow(result);
             }
@@ -719,6 +769,20 @@ public class PasswordlessQueries {
         public UserInfo map(ResultSet result) throws Exception {
             return new UserInfo(result.getString("user_id"), result.getString("email"),
                     result.getString("phone_number"), result.getLong("time_joined"));
+        }
+    }
+
+    private static class UserInfoWithTenantId {
+        public final String userId;
+        public final String tenantId;
+        public final String email;
+        public final String phoneNumber;
+
+        public UserInfoWithTenantId(String userId, String tenantId, String email, String phoneNumber) {
+            this.userId = userId;
+            this.tenantId = tenantId;
+            this.email = email;
+            this.phoneNumber = phoneNumber;
         }
     }
 }

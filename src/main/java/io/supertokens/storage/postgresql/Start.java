@@ -1583,9 +1583,8 @@ public class Start
     public io.supertokens.pluginInterface.passwordless.UserInfo getUserById(AppIdentifier appIdentifier,
                                                                             String userId)
             throws StorageQueryException {
-        // TODO..
         try {
-            return PasswordlessQueries.getUserById(this, userId);
+            return PasswordlessQueries.getUserById(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1595,9 +1594,8 @@ public class Start
     public io.supertokens.pluginInterface.passwordless.UserInfo getUserByEmail(TenantIdentifier tenantIdentifier,
                                                                                String email)
             throws StorageQueryException {
-        // TODO..
         try {
-            return PasswordlessQueries.getUserByEmail(this, email);
+            return PasswordlessQueries.getUserByEmail(this, tenantIdentifier, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1607,9 +1605,8 @@ public class Start
     public io.supertokens.pluginInterface.passwordless.UserInfo getUserByPhoneNumber(TenantIdentifier tenantIdentifier,
                                                                                      String phoneNumber)
             throws StorageQueryException {
-        // TODO...
         try {
-            return PasswordlessQueries.getUserByPhoneNumber(this, phoneNumber);
+            return PasswordlessQueries.getUserByPhoneNumber(this, tenantIdentifier, phoneNumber);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
