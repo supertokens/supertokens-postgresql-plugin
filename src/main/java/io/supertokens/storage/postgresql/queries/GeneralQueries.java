@@ -291,6 +291,7 @@ public class GeneralQueries {
 
         {
             String DROP_QUERY = "DROP TABLE IF EXISTS " + getConfig(start).getKeyValueTable() + ","
+                    + getConfig(start).getUserLastActiveTable() + ","
                     + getConfig(start).getUserIdMappingTable() + "," + getConfig(start).getUsersTable() + ","
                     + getConfig(start).getAccessTokenSigningKeysTable() + "," + getConfig(start).getSessionInfoTable()
                     + "," + getConfig(start).getEmailPasswordUsersTable() + ","
