@@ -421,12 +421,12 @@ public class PasswordlessQueries {
                 UserInfoWithTenantId[] userInfos = getUserInfosWithTenant(start, sqlCon, appIdentifier, userId);
 
                 {
-                    String QUERY = "DELETE FROM " + getConfig(start).getUsersTable()
-                            + " WHERE user_id = ? AND recipe_id = ?";
+                    String QUERY = "DELETE FROM " + getConfig(start).getAppIdToUserIdTable()
+                            + " WHERE app_id = ? AND user_id = ?";
 
                     update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, userId);
-                        pst.setString(2, PASSWORDLESS.toString());
+                        pst.setString(1, appIdentifier.getAppId());
+                        pst.setString(2, userId);
                     });
                 }
 

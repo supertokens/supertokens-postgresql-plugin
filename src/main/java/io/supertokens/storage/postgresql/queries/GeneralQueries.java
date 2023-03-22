@@ -483,29 +483,6 @@ public class GeneralQueries {
 
     }
 
-    public static void deleteUser(Start start, AppIdentifier appIdentifier, String userId)
-            throws StorageQueryException, StorageTransactionLogicException {
-        start.startTransaction(con -> {
-            Connection sqlCon = (Connection) con.getConnection();
-            try {
-                {
-                    String QUERY = "DELETE FROM " + getConfig(start).getAppIdToUserIdTable()
-                            + " WHERE app_id = ? AND user_id = ?";
-
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, appIdentifier.getAppId());
-                        pst.setString(2, userId);
-                    });
-                }
-
-                sqlCon.commit();
-            } catch (SQLException throwables) {
-                throw new StorageTransactionLogicException(throwables);
-            }
-            return null;
-        });
-    }
-
     public static AuthRecipeUserInfo[] getUsers(Start start, TenantIdentifier tenantIdentifier, @NotNull Integer limit, @NotNull String timeJoinedOrder,
                                                 @Nullable RECIPE_ID[] includeRecipeIds, @Nullable String userId,
                                                 @Nullable Long timeJoined)
