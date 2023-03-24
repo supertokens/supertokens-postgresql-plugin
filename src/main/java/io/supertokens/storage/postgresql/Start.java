@@ -745,11 +745,6 @@ public class Start
                     throw new TenantOrAppNotFoundException(tenantIdentifier.toAppIdentifier());
                 } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
                     throw new TenantOrAppNotFoundException(tenantIdentifier);
-                } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "user_id")
-                        || isForeignKeyConstraintError(serverMessage, config.getEmailPasswordUsersTable(), "user_id")
-                        || isForeignKeyConstraintError(serverMessage, config.getEmailPasswordUserToTenantTable(), "user_id")) {
-                    // should never come here as insert queries are in the right order
-                    throw new IllegalStateException("should never come here");
                 }
             }
 
@@ -1102,11 +1097,6 @@ public class Start
                 } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
                     throw new TenantOrAppNotFoundException(tenantIdentifier);
 
-                } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "user_id")
-                        || isForeignKeyConstraintError(serverMessage, config.getEmailPasswordUsersTable(), "user_id")
-                        || isForeignKeyConstraintError(serverMessage, config.getEmailPasswordUserToTenantTable(), "user_id")) {
-                    // should never come here as insert queries are in the right order
-                    throw new IllegalStateException("should never come here");
                 }
 
 
@@ -1329,47 +1319,24 @@ public class Start
         }
     }
 
+
     @Override
     public void deleteDevicesByPhoneNumber_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
-                                                       @Nonnull String phoneNumber)
-            throws StorageQueryException {
-        Connection sqlCon = (Connection) con.getConnection();
-        try {
-            PasswordlessQueries.deleteDevicesByPhoneNumber_Transaction(this, sqlCon, appIdentifier, phoneNumber);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public void deleteDevicesByEmail_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
-                                                 @Nonnull String email)
-            throws StorageQueryException {
-        Connection sqlCon = (Connection) con.getConnection();
-        try {
-            PasswordlessQueries.deleteDevicesByEmail_Transaction(this, sqlCon, appIdentifier, email);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public void deleteDevicesByPhoneNumber_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                                        String phoneNumber, String userId) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            PasswordlessQueries.deleteDevicesByPhoneNumber_Transaction(this, sqlCon, tenantIdentifier, phoneNumber);
+            PasswordlessQueries.deleteDevicesByPhoneNumber_Transaction(this, sqlCon, appIdentifier, phoneNumber, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
 
     @Override
-    public void deleteDevicesByEmail_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con, String email,
+    public void deleteDevicesByEmail_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String email,
                                                  String userId) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            PasswordlessQueries.deleteDevicesByEmail_Transaction(this, sqlCon, tenantIdentifier, email);
+            PasswordlessQueries.deleteDevicesByEmail_Transaction(this, sqlCon, appIdentifier, email, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1551,13 +1518,6 @@ public class Start
 
                 if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
                     throw new TenantOrAppNotFoundException(tenantIdentifier);
-                }
-
-                if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "user_id")
-                        || isForeignKeyConstraintError(serverMessage, config.getPasswordlessUsersTable(), "user_id")
-                        || isForeignKeyConstraintError(serverMessage, config.getPasswordlessUserToTenantTable(), "user_id")) {
-                    // should never come here as insert queries are in the right order
-                    throw new IllegalStateException("should never come here");
                 }
 
             }

@@ -230,15 +230,20 @@ public class PasswordlessQueries {
         });
     }
 
-    public static void deleteDevicesByPhoneNumber_Transaction(Start start, Connection con, AppIdentifier appIdentifier, @Nonnull String phoneNumber)
+    public static void deleteDevicesByPhoneNumber_Transaction(Start start, Connection con, AppIdentifier appIdentifier, @Nonnull String phoneNumber, String userId)
             throws SQLException, StorageQueryException {
 
         String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable()
-                + " WHERE app_id = ? AND phone_number = ?";
+                + " WHERE app_id = ? AND phone_number = ? AND tenant_id IN ("
+                + "    SELECT tenant_id FROM " + getConfig(start).getPasswordlessUserToTenantTable()
+                + "    WHERE app_id = ? AND user_id = ?"
+                + ")";
 
         update(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, phoneNumber);
+            pst.setString(3, appIdentifier.getAppId());
+            pst.setString(4, userId);
         });
     }
 
@@ -255,15 +260,20 @@ public class PasswordlessQueries {
         });
     }
 
-    public static void deleteDevicesByEmail_Transaction(Start start, Connection con, AppIdentifier appIdentifier, @Nonnull String email)
+    public static void deleteDevicesByEmail_Transaction(Start start, Connection con, AppIdentifier appIdentifier, @Nonnull String email, String userId)
             throws SQLException, StorageQueryException {
 
         String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable()
-                + " WHERE app_id = ? AND email = ?";
+                + " WHERE app_id = ? AND email = ? AND tenant_id IN ("
+                + "    SELECT tenant_id FROM " + getConfig(start).getPasswordlessUserToTenantTable()
+                + "    WHERE app_id = ? AND user_id = ?"
+                + ")";
 
         update(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, email);
+            pst.setString(3, appIdentifier.getAppId());
+            pst.setString(4, userId);
         });
     }
 

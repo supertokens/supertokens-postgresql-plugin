@@ -64,7 +64,7 @@ public class ThirdPartyQueries {
 
     public static String getQueryToThirdPartyUserEmailIndex(Start start) {
         return "CREATE INDEX IF NOT EXISTS thirdparty_users_email_index ON "
-                + Config.getConfig(start).getThirdPartyUsersTable() + " (app_id, email);"; // USING hash
+                + Config.getConfig(start).getThirdPartyUsersTable() + " (app_id, email);";
     }
 
     static String getQueryToCreateThirdPartyUserToTenantTable(Start start) {
