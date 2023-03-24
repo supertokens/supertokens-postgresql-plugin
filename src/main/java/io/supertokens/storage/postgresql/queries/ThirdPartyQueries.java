@@ -62,6 +62,11 @@ public class ThirdPartyQueries {
         // @formatter:on
     }
 
+    public static String getQueryToThirdPartyUserEmailIndex(Start start) {
+        return "CREATE INDEX IF NOT EXISTS thirdparty_users_email_index ON "
+                + Config.getConfig(start).getThirdPartyUsersTable() + " (app_id, email);"; // USING hash
+    }
+
     static String getQueryToCreateThirdPartyUserToTenantTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String thirdPartyUserToTenantTable = Config.getConfig(start).getThirdPartyUserToTenantTable();
@@ -183,18 +188,14 @@ public class ThirdPartyQueries {
         });
     }
 
-    public static List<UserInfo> getUsersInfoUsingIdList(Start start, TenantIdentifier tenantIdentifier, List<String> ids)
+    public static List<UserInfo> getUsersInfoUsingIdList(Start start, List<String> ids)
             throws SQLException, StorageQueryException {
         if (ids.size() > 0) {
+            // No need to filter based on tenantId because the id list is already filtered for a tenant
             StringBuilder QUERY = new StringBuilder(
-                    "SELECT tp_users.user_id as user_id, tp_users.third_party_id as third_party_id, "
-                            + "tp_users.third_party_user_id as third_party_user_id, tp_users.email as email, "
-                            + "tp_users.time_joined as time_joined "
-                            + "FROM " + getConfig(start).getThirdPartyUsersTable() + " AS tp_users "
-                            + "JOIN " + getConfig(start).getThirdPartyUserToTenantTable() + " AS tp_users_to_tenant "
-                            + "ON tp_users.app_id = tp_users_to_tenant.app_id AND tp_users.user_id = tp_users_to_tenant.user_id"
-            );
-            QUERY.append(" WHERE tp_users_to_tenant.app_id = ? AND tp_users_to_tenant.tenant_id = ? AND tp_users_to_tenant.user_id IN (");
+                    "SELECT user_id, third_party_id, third_party_user_id, email, time_joined "
+                            + "FROM " + getConfig(start).getThirdPartyUsersTable());
+            QUERY.append(" WHERE user_id IN (");
             for (int i = 0; i < ids.size(); i++) {
 
                 QUERY.append("?");
@@ -206,11 +207,9 @@ public class ThirdPartyQueries {
             QUERY.append(")");
 
             return execute(start, QUERY.toString(), pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, tenantIdentifier.getTenantId());
                 for (int i = 0; i < ids.size(); i++) {
-                    // i+3 cause this starts with 1 and not 0, and 1 is used for app_id, 2 is used for tenant_id
-                    pst.setString(i + 3, ids.get(i));
+                    // i+1 cause this starts with 1 and not 0
+                    pst.setString(i + 1, ids.get(i));
                 }
             }, result -> {
                 List<UserInfo> finalResult = new ArrayList<>();

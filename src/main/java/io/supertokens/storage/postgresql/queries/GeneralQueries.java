@@ -245,6 +245,8 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getThirdPartyUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, ThirdPartyQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
+                    // index
+                    update(start, ThirdPartyQueries.getQueryToThirdPartyUserEmailIndex(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getThirdPartyUserToTenantTable())) {
@@ -589,11 +591,11 @@ public class GeneralQueries {
                                                                                         List<String> userIds)
             throws StorageQueryException, SQLException {
         if (recipeId == RECIPE_ID.EMAIL_PASSWORD) {
-            return EmailPasswordQueries.getUsersInfoUsingIdList(start, tenantIdentifier, userIds);
+            return EmailPasswordQueries.getUsersInfoUsingIdList(start, userIds);
         } else if (recipeId == RECIPE_ID.THIRD_PARTY) {
-            return ThirdPartyQueries.getUsersInfoUsingIdList(start, tenantIdentifier, userIds);
+            return ThirdPartyQueries.getUsersInfoUsingIdList(start, userIds);
         } else if (recipeId == RECIPE_ID.PASSWORDLESS) {
-            return PasswordlessQueries.getUsersByIdList(start, tenantIdentifier, userIds);
+            return PasswordlessQueries.getUsersByIdList(start, userIds);
         } else {
             throw new IllegalArgumentException("No implementation of get users for recipe: " + recipeId.toString());
         }

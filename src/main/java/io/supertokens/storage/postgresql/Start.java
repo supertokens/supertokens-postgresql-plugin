@@ -722,7 +722,8 @@ public class Start
 
     @Override
     public void signUp(TenantIdentifier tenantIdentifier, UserInfo userInfo)
-            throws StorageQueryException, DuplicateUserIdException, DuplicateEmailException {
+            throws StorageQueryException, DuplicateUserIdException, DuplicateEmailException,
+            TenantOrAppNotFoundException {
         try {
             EmailPasswordQueries.signUp(this, tenantIdentifier, userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined);
         } catch (StorageTransactionLogicException eTemp) {
@@ -738,6 +739,15 @@ public class Start
                         || isPrimaryKeyError(serverMessage, config.getEmailPasswordUserToTenantTable())
                         || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
                     throw new DuplicateUserIdException();
+                } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(tenantIdentifier.toAppIdentifier());
+                } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
+                    throw new TenantOrAppNotFoundException(tenantIdentifier);
+                } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "user_id")
+                        || isForeignKeyConstraintError(serverMessage, config.getEmailPasswordUsersTable(), "user_id")
+                        || isForeignKeyConstraintError(serverMessage, config.getEmailPasswordUserToTenantTable(), "user_id")) {
+                    // should never come here as insert queries are in the right order
+                    throw new IllegalStateException("should never come here");
                 }
             }
 
@@ -1301,6 +1311,30 @@ public class Start
         Connection sqlCon = (Connection) con.getConnection();
         try {
             PasswordlessQueries.deleteDevicesByEmail_Transaction(this, sqlCon, tenantIdentifier, email);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void deleteDevicesByPhoneNumber_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                       @Nonnull String phoneNumber)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            PasswordlessQueries.deleteDevicesByPhoneNumber_Transaction(this, sqlCon, appIdentifier, phoneNumber);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void deleteDevicesByEmail_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                 @Nonnull String email)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            PasswordlessQueries.deleteDevicesByEmail_Transaction(this, sqlCon, appIdentifier, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

@@ -139,7 +139,7 @@ public class PasswordlessQueries {
 
     public static String getQueryToCreateCodeDeviceIdHashIndex(Start start) {
         return "CREATE INDEX IF NOT EXISTS passwordless_codes_device_id_hash_index ON "
-                + Config.getConfig(start).getPasswordlessCodesTable() + "(device_id_hash);";
+                + Config.getConfig(start).getPasswordlessCodesTable() + "(app_id, tenant_id, device_id_hash);";
     }
 
     public static String getQueryToCreateCodeCreatedAtIndex(Start start) {
@@ -230,6 +230,18 @@ public class PasswordlessQueries {
         });
     }
 
+    public static void deleteDevicesByPhoneNumber_Transaction(Start start, Connection con, AppIdentifier appIdentifier, @Nonnull String phoneNumber)
+            throws SQLException, StorageQueryException {
+
+        String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable()
+                + " WHERE app_id = ? AND phone_number = ?";
+
+        update(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, phoneNumber);
+        });
+    }
+
     public static void deleteDevicesByEmail_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier, @Nonnull String email)
             throws SQLException, StorageQueryException {
 
@@ -240,6 +252,18 @@ public class PasswordlessQueries {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, email);
+        });
+    }
+
+    public static void deleteDevicesByEmail_Transaction(Start start, Connection con, AppIdentifier appIdentifier, @Nonnull String email)
+            throws SQLException, StorageQueryException {
+
+        String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable()
+                + " WHERE app_id = ? AND email = ?";
+
+        update(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, email);
         });
     }
 
@@ -624,19 +648,14 @@ public class PasswordlessQueries {
         }
     }
 
-    public static List<UserInfo> getUsersByIdList(Start start, TenantIdentifier tenantIdentifier, List<String> ids)
+    public static List<UserInfo> getUsersByIdList(Start start, List<String> ids)
             throws SQLException, StorageQueryException {
         if (ids.size() > 0) {
-            StringBuilder QUERY = new StringBuilder(
-                    "SELECT pl_users.user_id as user_id, pl_users.email as email, "
-                            + "pl_users.phone_number as phone_number, pl_users.time_joined as time_joined "
-                            + "FROM " + getConfig(start).getPasswordlessUsersTable() + " AS pl_users "
-                            + "JOIN " + getConfig(start).getPasswordlessUserToTenantTable() + " AS pl_users_to_tenant "
-                            + "ON pl_users.app_id = pl_users_to_tenant.app_id AND pl_users.user_id = pl_users_to_tenant.user_id"
-            );
+            // No need to filter based on tenantId because the id list is already filtered for a tenant
+            StringBuilder QUERY = new StringBuilder("SELECT user_id, email, phone_number, time_joined "
+                    + "FROM " + getConfig(start).getPasswordlessUsersTable());
             QUERY.append(" WHERE user_id IN (");
             for (int i = 0; i < ids.size(); i++) {
-
                 QUERY.append("?");
                 if (i != ids.size() - 1) {
                     // not the last element
@@ -646,11 +665,9 @@ public class PasswordlessQueries {
             QUERY.append(")");
 
             return execute(start, QUERY.toString(), pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, tenantIdentifier.getTenantId());
                 for (int i = 0; i < ids.size(); i++) {
-                    // i+3 cause this starts with 1 and not 0, and 1 is used for app_id, 2 is used for tenant_id
-                    pst.setString(i + 3, ids.get(i));
+                    // i+1 cause this starts with 1 and not 0
+                    pst.setString(i + 1, ids.get(i));
                 }
             }, result -> {
                 List<UserInfo> finalResult = new ArrayList<>();
