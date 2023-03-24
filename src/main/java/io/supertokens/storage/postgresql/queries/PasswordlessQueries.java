@@ -699,10 +699,10 @@ public class PasswordlessQueries {
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT pl_users.user_id as user_id, pl_users.email as email, "
                 + "pl_users.phone_number as phone_number, pl_users.time_joined as time_joined "
-                + "FROM " + getConfig(start).getPasswordlessUsersTable() + " AS pl_users "
-                + "JOIN " + getConfig(start).getPasswordlessUserToTenantTable() + " AS pl_users_to_tenant "
+                + "FROM " + getConfig(start).getPasswordlessUserToTenantTable() + " AS pl_users_to_tenant "
+                + "JOIN " + getConfig(start).getPasswordlessUsersTable() + " AS pl_users "
                 + "ON pl_users.app_id = pl_users_to_tenant.app_id AND pl_users.user_id = pl_users_to_tenant.user_id "
-                + "WHERE pl_users_to_tenant.app_id = ? AND pl_users_to_tenant.tenant_id = ? AND pl_users.email = ? ";
+                + "WHERE pl_users_to_tenant.app_id = ? AND pl_users_to_tenant.tenant_id = ? AND pl_users_to_tenant.email = ? ";
 
         return execute(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
@@ -720,10 +720,10 @@ public class PasswordlessQueries {
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT pl_users.user_id as user_id, pl_users.email as email, "
                 + "pl_users.phone_number as phone_number, pl_users.time_joined as time_joined "
-                + "FROM " + getConfig(start).getPasswordlessUsersTable() + " AS pl_users "
-                + "JOIN " + getConfig(start).getPasswordlessUserToTenantTable() + " AS pl_users_to_tenant "
+                + "FROM " + getConfig(start).getPasswordlessUserToTenantTable() + " AS pl_users_to_tenant "
+                + "JOIN " + getConfig(start).getPasswordlessUsersTable() + " AS pl_users "
                 + "ON pl_users.app_id = pl_users_to_tenant.app_id AND pl_users.user_id = pl_users_to_tenant.user_id "
-                + "WHERE pl_users_to_tenant.app_id = ? AND pl_users_to_tenant.tenant_id = ? AND pl_users.phone_number = ? ";
+                + "WHERE pl_users_to_tenant.app_id = ? AND pl_users_to_tenant.tenant_id = ? AND pl_users_to_tenant.phone_number = ? ";
 
         return execute(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
