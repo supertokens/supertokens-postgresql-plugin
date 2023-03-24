@@ -34,6 +34,7 @@ import io.supertokens.pluginInterface.jwt.exceptions.DuplicateKeyIdException;
 import io.supertokens.pluginInterface.jwt.sqlstorage.JWTRecipeSQLStorage;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.storageLayer.StorageLayer;
 import org.junit.AfterClass;
@@ -156,7 +157,8 @@ public class ExceptionParsingTest {
             throws InterruptedException, StorageQueryException, NoSuchAlgorithmException, InvalidKeyException,
             SignatureException, InvalidAlgorithmParameterException, NoSuchPaddingException, BadPaddingException,
             UnsupportedEncodingException, InvalidKeySpecException, IllegalBlockSizeException,
-            StorageTransactionLogicException, DuplicateUserIdException, DuplicateEmailException {
+            StorageTransactionLogicException, DuplicateUserIdException, DuplicateEmailException,
+            TenantOrAppNotFoundException {
         {
             String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -219,9 +221,14 @@ public class ExceptionParsingTest {
             String userEmail = "useremail@asdf.fdas";
 
             storage.startTransaction(conn -> {
-                storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail, true);
+                try {
+                    storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail,
+                                true);
+                    storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail, true);
+                } catch (TenantOrAppNotFoundException e) {
+                    throw new RuntimeException(e);
+                }
                 // The insert in this call throws, but it's swallowed in the method
-                storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail, true);
                 return true;
             });
 
@@ -233,13 +240,19 @@ public class ExceptionParsingTest {
                     throw new StorageTransactionLogicException(new Exception("This should throw"));
                 } catch (StorageQueryException ex) {
                     // expected
+                } catch (TenantOrAppNotFoundException e) {
+                    throw new RuntimeException(e);
                 }
                 return true;
             });
 
             storage.startTransaction(conn -> {
-                storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail,
-                        false);
+                try {
+                    storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail,
+                            false);
+                } catch (TenantOrAppNotFoundException e) {
+                    throw new RuntimeException(e);
+                }
                 return true;
             });
 

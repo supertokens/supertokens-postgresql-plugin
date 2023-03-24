@@ -21,6 +21,7 @@ import io.supertokens.pluginInterface.RECIPE_ID;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ConnectionPool;
@@ -244,6 +245,13 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getThirdPartyUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, ThirdPartyQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
+                    // index
+                    update(start, ThirdPartyQueries.getQueryToThirdPartyUserEmailIndex(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getThirdPartyUserToTenantTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, ThirdPartyQueries.getQueryToCreateThirdPartyUserToTenantTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getJWTSigningKeysTable())) {
@@ -254,6 +262,11 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, PasswordlessQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getPasswordlessUserToTenantTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, PasswordlessQueries.getQueryToCreatePasswordlessUserToTenantTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessDevicesTable())) {
@@ -372,9 +385,11 @@ public class GeneralQueries {
                     + getConfig(start).getEmailVerificationTokensTable() + ","
                     + getConfig(start).getEmailVerificationTable() + ","
                     + getConfig(start).getThirdPartyUsersTable() + ","
+                    + getConfig(start).getThirdPartyUserToTenantTable() + ","
                     + getConfig(start).getJWTSigningKeysTable() + ","
                     + getConfig(start).getPasswordlessCodesTable() + ","
                     + getConfig(start).getPasswordlessDevicesTable() + ","
+                    + getConfig(start).getPasswordlessUserToTenantTable() + ","
                     + getConfig(start).getPasswordlessUsersTable() + ","
                     + getConfig(start).getUserMetadataTable() + ","
                     + getConfig(start).getRolesTable() + ","
@@ -576,11 +591,11 @@ public class GeneralQueries {
                                                                                         List<String> userIds)
             throws StorageQueryException, SQLException {
         if (recipeId == RECIPE_ID.EMAIL_PASSWORD) {
-            return EmailPasswordQueries.getUsersInfoUsingIdList(start, tenantIdentifier, userIds);
+            return EmailPasswordQueries.getUsersInfoUsingIdList(start, userIds);
         } else if (recipeId == RECIPE_ID.THIRD_PARTY) {
-            return ThirdPartyQueries.getUsersInfoUsingIdList(start, userIds); // TODO pass tenantIdentifier
+            return ThirdPartyQueries.getUsersInfoUsingIdList(start, userIds);
         } else if (recipeId == RECIPE_ID.PASSWORDLESS) {
-            return PasswordlessQueries.getUsersByIdList(start, userIds); // TODO pass tenantIdentifier
+            return PasswordlessQueries.getUsersByIdList(start, userIds);
         } else {
             throw new IllegalArgumentException("No implementation of get users for recipe: " + recipeId.toString());
         }
