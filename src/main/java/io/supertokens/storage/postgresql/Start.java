@@ -696,6 +696,8 @@ public class Start
 
             } catch (DuplicateEmailVerificationTokenException e) {
                 throw new StorageQueryException(e);
+            } catch (TenantOrAppNotFoundException e) {
+                throw new IllegalStateException(e);
             }
         } else if (className.equals(UserMetadataStorage.class.getName())) {
             JsonObject data = new JsonObject();
@@ -963,24 +965,23 @@ public class Start
 
     @Override
     public void addEmailVerificationToken(AppIdentifier appIdentifier, EmailVerificationTokenInfo emailVerificationInfo)
-            throws StorageQueryException, DuplicateEmailVerificationTokenException {
+            throws StorageQueryException, DuplicateEmailVerificationTokenException, TenantOrAppNotFoundException {
         try {
             EmailVerificationQueries.addEmailVerificationToken(this, appIdentifier, emailVerificationInfo.userId,
                     emailVerificationInfo.token, emailVerificationInfo.tokenExpiry, emailVerificationInfo.email);
         } catch (SQLException e) {
-            if (e instanceof PSQLException && isPrimaryKeyError(((PSQLException) e).getServerErrorMessage(),
-                    Config.getConfig(this).getEmailVerificationTokensTable())) {
-                throw new DuplicateEmailVerificationTokenException();
-            }
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
 
-            // We keep the old exception detection logic to ensure backwards compatibility.
-            // We could get here if the new logic hits a false negative,
-            // e.g., in case someone renamed constraints/tables
-            if (e.getMessage().contains("ERROR: duplicate key")
-                    && e.getMessage().contains("Key (user_id, email, token)")) {
-                throw new DuplicateEmailVerificationTokenException();
+                if (isPrimaryKeyError(serverMessage, config.getEmailVerificationTokensTable())) {
+                    throw new DuplicateEmailVerificationTokenException();
+                }
+
+                if (isForeignKeyConstraintError(serverMessage, config.getEmailVerificationTokensTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
             }
-            throw new StorageQueryException(e);
         }
     }
 
