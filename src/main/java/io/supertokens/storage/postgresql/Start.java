@@ -1073,30 +1073,38 @@ public class Start
     @Override
     public void signUp(TenantIdentifier tenantIdentifier, io.supertokens.pluginInterface.thirdparty.UserInfo userInfo)
             throws StorageQueryException, io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException,
-            DuplicateThirdPartyUserException {
+            DuplicateThirdPartyUserException, TenantOrAppNotFoundException {
         try {
             ThirdPartyQueries.signUp(this, tenantIdentifier, userInfo);
         } catch (StorageTransactionLogicException eTemp) {
             Exception e = eTemp.actualException;
             if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
                 ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
 
-                if (isUniqueConstraintError(serverMessage, Config.getConfig(this).getThirdPartyUserToTenantTable(), "third_party_user_id")) {
+                if (isUniqueConstraintError(serverMessage, config.getThirdPartyUserToTenantTable(), "third_party_user_id")) {
                     throw new DuplicateThirdPartyUserException();
 
-                } else if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getAppIdToUserIdTable())) {
+                } else if (isPrimaryKeyError(serverMessage, config.getThirdPartyUsersTable())
+                        || isPrimaryKeyError(serverMessage, config.getUsersTable())
+                        || isPrimaryKeyError(serverMessage, config.getThirdPartyUserToTenantTable())
+                        || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
                     throw new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException();
-                }
-            }
 
-            // We keep the old exception detection logic to ensure backwards compatibility.
-            // We could get here if the new logic hits a false negative,
-            // e.g., in case someone renamed constraints/tables
-            if (e.getMessage().contains("ERROR: duplicate key")
-                    && e.getMessage().contains("Key (third_party_id, third_party_user_id)")) {
-                throw new DuplicateThirdPartyUserException();
-            } else if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (user_id)")) {
-                throw new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException();
+                } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(tenantIdentifier.toAppIdentifier());
+
+                } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
+                    throw new TenantOrAppNotFoundException(tenantIdentifier);
+
+                } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "user_id")
+                        || isForeignKeyConstraintError(serverMessage, config.getEmailPasswordUsersTable(), "user_id")
+                        || isForeignKeyConstraintError(serverMessage, config.getEmailPasswordUserToTenantTable(), "user_id")) {
+                    // should never come here as insert queries are in the right order
+                    throw new IllegalStateException("should never come here");
+                }
+
+
             }
 
             throw new StorageQueryException(eTemp.actualException);
