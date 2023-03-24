@@ -379,42 +379,23 @@ public class EmailPasswordQueries {
     }
 
     public static UserInfo getUserInfoUsingEmail(Start start, TenantIdentifier tenantIdentifier, String email) throws StorageQueryException, SQLException {
-        String userId = null;
-        {
-            // check if user exists for the provided tenant
-            String QUERY = "SELECT user_id FROM "
-                    + getConfig(start).getEmailPasswordUserToTenantTable()
-                    + " WHERE app_id = ? AND tenant_id = ? AND email = ?";
+        String QUERY = "SELECT ep_users_to_tenant.user_id as user_id, ep_users_to_tenant.email as email, "
+                + "ep_users.password_hash as password_hash, ep_users.time_joined as time_joined "
+                + "FROM " + getConfig(start).getEmailPasswordUserToTenantTable() + " AS ep_users_to_tenant "
+                + "JOIN " + getConfig(start).getEmailPasswordUsersTable() + " AS ep_users "
+                + "ON ep_users.app_id = ep_users_to_tenant.app_id AND ep_users.user_id = ep_users_to_tenant.user_id "
+                + "WHERE ep_users_to_tenant.app_id = ? AND ep_users_to_tenant.tenant_id = ? AND ep_users_to_tenant.email = ?";
 
-            userId = execute(start, QUERY, pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, tenantIdentifier.getTenantId());
-                pst.setString(3, email);
-            }, result -> {
-                if (result.next()) {
-                    return result.getString("user_id");
-                }
-                return null;
-            });
-
-            if (userId == null) {
-                return null;
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, email);
+        }, result -> {
+            if (result.next()) {
+                return UserInfoRowMapper.getInstance().mapOrThrow(result);
             }
-        }
-        {
-            String QUERY = "SELECT user_id, email, password_hash, time_joined FROM "
-                    + getConfig(start).getEmailPasswordUsersTable() + " WHERE app_id = ? AND user_id = ?";
-            final String userIdToQuery = userId;
-            return execute(start, QUERY, pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, userIdToQuery);
-            }, result -> {
-                if (result.next()) {
-                    return UserInfoRowMapper.getInstance().mapOrThrow(result);
-                }
-                return null;
-            });
-        }
+            return null;
+        });
     }
 
     private static class PasswordResetRowMapper implements RowMapper<PasswordResetTokenInfo, ResultSet> {
