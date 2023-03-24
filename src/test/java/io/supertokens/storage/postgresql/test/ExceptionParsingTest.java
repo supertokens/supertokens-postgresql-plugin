@@ -34,6 +34,7 @@ import io.supertokens.pluginInterface.jwt.exceptions.DuplicateKeyIdException;
 import io.supertokens.pluginInterface.jwt.sqlstorage.JWTRecipeSQLStorage;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.storageLayer.StorageLayer;
 import org.junit.AfterClass;
@@ -156,7 +157,8 @@ public class ExceptionParsingTest {
             throws InterruptedException, StorageQueryException, NoSuchAlgorithmException, InvalidKeyException,
             SignatureException, InvalidAlgorithmParameterException, NoSuchPaddingException, BadPaddingException,
             UnsupportedEncodingException, InvalidKeySpecException, IllegalBlockSizeException,
-            StorageTransactionLogicException, DuplicateUserIdException, DuplicateEmailException {
+            StorageTransactionLogicException, DuplicateUserIdException, DuplicateEmailException,
+            TenantOrAppNotFoundException {
         {
             String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
