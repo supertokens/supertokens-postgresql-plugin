@@ -221,9 +221,14 @@ public class ExceptionParsingTest {
             String userEmail = "useremail@asdf.fdas";
 
             storage.startTransaction(conn -> {
-                storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail, true);
+                try {
+                    storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail,
+                                true);
+                    storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail, true);
+                } catch (TenantOrAppNotFoundException e) {
+                    throw new RuntimeException(e);
+                }
                 // The insert in this call throws, but it's swallowed in the method
-                storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail, true);
                 return true;
             });
 
@@ -235,13 +240,19 @@ public class ExceptionParsingTest {
                     throw new StorageTransactionLogicException(new Exception("This should throw"));
                 } catch (StorageQueryException ex) {
                     // expected
+                } catch (TenantOrAppNotFoundException e) {
+                    throw new RuntimeException(e);
                 }
                 return true;
             });
 
             storage.startTransaction(conn -> {
-                storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail,
-                        false);
+                try {
+                    storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail,
+                            false);
+                } catch (TenantOrAppNotFoundException e) {
+                    throw new RuntimeException(e);
+                }
                 return true;
             });
 
