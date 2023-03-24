@@ -469,14 +469,14 @@ public class PasswordlessQueries {
                         deleteDevicesByEmail_Transaction(start, sqlCon,
                                 new TenantIdentifier(
                                         appIdentifier.getConnectionUriDomain(), appIdentifier.getAppId(),
-                                        userInfo.tenantId, appIdentifier.getStorage()),
+                                        userInfo.tenantId),
                                 userInfo.email);
                     }
                     if (userInfo.phoneNumber != null) {
                         deleteDevicesByPhoneNumber_Transaction(start, sqlCon,
                                 new TenantIdentifier(
                                         appIdentifier.getConnectionUriDomain(), appIdentifier.getAppId(),
-                                        userInfo.tenantId, appIdentifier.getStorage()),
+                                        userInfo.tenantId),
                                 userInfo.phoneNumber);
                     }
                 }
@@ -694,7 +694,7 @@ public class PasswordlessQueries {
         String QUERY = "SELECT user_id, email, phone_number, time_joined FROM "
                 + getConfig(start).getPasswordlessUsersTable() + " WHERE app_id = ? AND user_id = ?";
 
-        return execute(start, QUERY.toString(), pst -> {
+        return execute(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, userId);
         }, result -> {
