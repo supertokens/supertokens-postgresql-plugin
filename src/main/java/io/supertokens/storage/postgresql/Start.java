@@ -931,22 +931,26 @@ public class Start
     @Override
     public void updateIsEmailVerified_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String userId,
                                                   String email,
-                                                  boolean isEmailVerified) throws StorageQueryException {
+                                                  boolean isEmailVerified)
+            throws StorageQueryException, TenantOrAppNotFoundException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             EmailVerificationQueries.updateUsersIsEmailVerified_Transaction(this, sqlCon, appIdentifier, userId, email,
                     isEmailVerified);
         } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isForeignKeyConstraintError(serverMessage, config.getEmailVerificationTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
+            }
+
             boolean isPSQLPrimKeyError = e instanceof PSQLException && isPrimaryKeyError(
                     ((PSQLException) e).getServerErrorMessage(), Config.getConfig(this).getEmailVerificationTable());
 
-            // We keep the old exception detection logic to ensure backwards compatibility.
-            // We could get here if the new logic hits a false negative,
-            // e.g., in case someone renamed constraints/tables
-            boolean isDuplicateKeyError = e.getMessage().contains("ERROR: duplicate key")
-                    && e.getMessage().contains("Key (user_id, email)");
-
-            if (!isEmailVerified || (!isPSQLPrimKeyError && !isDuplicateKeyError)) {
+            if (!isEmailVerified || !isPSQLPrimKeyError) {
                 throw new StorageQueryException(e);
             }
             // we do not throw an error since the email is already verified

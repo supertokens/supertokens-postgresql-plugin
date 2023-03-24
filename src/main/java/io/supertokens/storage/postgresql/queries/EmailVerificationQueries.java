@@ -66,7 +66,11 @@ public class EmailVerificationQueries {
                 + "token VARCHAR(128) NOT NULL CONSTRAINT " + Utils.getConstraintName(schema, emailVerificationTokensTable, "token", "key") + " UNIQUE,"
                 + "token_expiry BIGINT NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, emailVerificationTokensTable, null, "pkey")
-                + " PRIMARY KEY (app_id, user_id, email, token))";
+                + " PRIMARY KEY (app_id, user_id, email, token), "
+                + "CONSTRAINT " + Utils.getConstraintName(schema, emailVerificationTokensTable, "app_id", "fkey")
+                + " FOREIGN KEY(app_id)"
+                + " REFERENCES " + Config.getConfig(start).getAppsTable() +  " (app_id) ON DELETE CASCADE"
+                + ")";
         // @formatter:on
     }
 
