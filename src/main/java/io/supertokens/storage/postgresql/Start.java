@@ -1440,8 +1440,7 @@ public class Start
                                      @Nullable String phoneNumber, @NotNull String linkCodeSalt,
                                      PasswordlessCode code)
             throws StorageQueryException, DuplicateDeviceIdHashException,
-            DuplicateCodeIdException, DuplicateLinkCodeHashException {
-        // TODO..
+            DuplicateCodeIdException, DuplicateLinkCodeHashException, TenantOrAppNotFoundException {
         if (email == null && phoneNumber == null) {
             throw new IllegalArgumentException("Both email and phoneNumber can't be null");
         }
@@ -1462,7 +1461,10 @@ public class Start
                 if (isUniqueConstraintError(((PSQLException) actualException).getServerErrorMessage(),
                         Config.getConfig(this).getPasswordlessCodesTable(), "link_code_hash")) {
                     throw new DuplicateLinkCodeHashException();
-
+                }
+                if (isForeignKeyConstraintError(((PSQLException) actualException).getServerErrorMessage(),
+                        Config.getConfig(this).getPasswordlessDevicesTable(), "tenant_id")) {
+                    throw new TenantOrAppNotFoundException(tenantIdentifier);
                 }
             }
 
@@ -1492,7 +1494,6 @@ public class Start
                 if (isUniqueConstraintError(((PSQLException) actualException).getServerErrorMessage(),
                         Config.getConfig(this).getPasswordlessCodesTable(), "link_code_hash")) {
                     throw new DuplicateLinkCodeHashException();
-
                 }
             }
             throw new StorageQueryException(e.actualException);
@@ -1502,7 +1503,8 @@ public class Start
     @Override
     public void createUser(TenantIdentifier tenantIdentifier, io.supertokens.pluginInterface.passwordless.UserInfo user)
             throws StorageQueryException,
-            DuplicateEmailException, DuplicatePhoneNumberException, DuplicateUserIdException {
+            DuplicateEmailException, DuplicatePhoneNumberException, DuplicateUserIdException,
+            TenantOrAppNotFoundException {
         try {
             PasswordlessQueries.createUser(this, tenantIdentifier, user);
         } catch (StorageTransactionLogicException e) {
@@ -1528,6 +1530,21 @@ public class Start
                 if (isUniqueConstraintError(((PSQLException) actualException).getServerErrorMessage(),
                         Config.getConfig(this).getPasswordlessUserToTenantTable(), "phone_number")) {
                     throw new DuplicatePhoneNumberException();
+                }
+
+                if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(tenantIdentifier.toAppIdentifier());
+                }
+
+                if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
+                    throw new TenantOrAppNotFoundException(tenantIdentifier);
+                }
+
+                if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "user_id")
+                        || isForeignKeyConstraintError(serverMessage, config.getPasswordlessUsersTable(), "user_id")
+                        || isForeignKeyConstraintError(serverMessage, config.getPasswordlessUserToTenantTable(), "user_id")) {
+                    // should never come here as insert queries are in the right order
+                    throw new IllegalStateException("should never come here");
                 }
 
             }
