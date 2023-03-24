@@ -120,16 +120,16 @@ public class UserIdMappingQueries {
 
     }
 
-    public static HashMap<String, String> getUserIdMappingWithUserIds(Start start, AppIdentifier appIdentifier,
-                                                                      ArrayList<String> userIds)
+    public static HashMap<String, String> getUserIdMappingWithUserIds(Start start, ArrayList<String> userIds)
             throws SQLException, StorageQueryException {
 
         if (userIds.size() == 0) {
             return new HashMap<>();
         }
 
+        // No need to filter based on tenantId because the id list is already filtered for a tenant
         StringBuilder QUERY = new StringBuilder(
-                "SELECT * FROM " + Config.getConfig(start).getUserIdMappingTable() + " WHERE app_id = ? AND supertokens_user_id IN (");
+                "SELECT * FROM " + Config.getConfig(start).getUserIdMappingTable() + " WHERE supertokens_user_id IN (");
         for (int i = 0; i < userIds.size(); i++) {
             QUERY.append("?");
             if (i != userIds.size() - 1) {
@@ -139,10 +139,9 @@ public class UserIdMappingQueries {
         }
         QUERY.append(")");
         return execute(start, QUERY.toString(), pst -> {
-            pst.setString(1, appIdentifier.getAppId());
             for (int i = 0; i < userIds.size(); i++) {
                 // i+1 cause this starts with 1 and not 0
-                pst.setString(i + 2, userIds.get(i));
+                pst.setString(i + 1, userIds.get(i));
             }
         }, result -> {
             HashMap<String, String> userIdMappings = new HashMap<>();
