@@ -101,7 +101,7 @@ public class SessionQueries {
     public static SessionInfo getSessionInfo_Transaction(Start start, Connection con, String sessionHandle)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT session_handle, user_id, refresh_token_hash_2, session_data, expires_at, "
-                + "created_at_time, jwt_user_payload FROM " + getConfig(start).getSessionInfoTable()
+                + "created_at_time, jwt_user_payload, use_static_key FROM " + getConfig(start).getSessionInfoTable()
                 + " WHERE session_handle = ? FOR UPDATE";
         return execute(con, QUERY, pst -> pst.setString(1, sessionHandle), result -> {
             if (result.next()) {
@@ -222,7 +222,7 @@ public class SessionQueries {
 
     public static SessionInfo getSession(Start start, String sessionHandle) throws SQLException, StorageQueryException {
         String QUERY = "SELECT session_handle, user_id, refresh_token_hash_2, session_data, expires_at, "
-                + "created_at_time, jwt_user_payload FROM " + getConfig(start).getSessionInfoTable()
+                + "created_at_time, jwt_user_payload, use_static_key FROM " + getConfig(start).getSessionInfoTable()
                 + " WHERE session_handle = ?";
         return execute(start, QUERY, pst -> pst.setString(1, sessionHandle), result -> {
             if (result.next()) {
