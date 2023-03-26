@@ -7,6 +7,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [3.0.0] - XXX
+
+- Adds `use_static_key` `BOOLEAN` column into `session_info`
+- Adds support for plugin inteface version 2.21
+
+### Migration
+
+- If using `access_token_signing_key_dynamic` false in the core:
+  - `ALTER TABLE session_info ADD COLUMN use_static_key BOOLEAN NOT NULL DEFAULT(true);`
+  - ```sql
+    INSERT INTO jwt_signing_keys(key_id, key_string, algorithm, created_at)
+      select CONCAT('s-', created_at_time) as key_id, value as key_string, 'RS256' as algorithm, created_at_time as created_at
+      from session_access_token_signing_keys;
+    ```
+- If using `access_token_signing_key_dynamic` true in the core:
+  - `ALTER TABLE session_info ADD COLUMN use_static_key BOOLEAN NOT NULL DEFAULT(false);`
+
 ## [2.2.0] - 2023-02-21
 
 - Adds support for Dashboard recipe

@@ -53,6 +53,7 @@ public class SessionQueries {
                 + "expires_at BIGINT NOT NULL,"
                 + "created_at_time BIGINT NOT NULL,"
                 + "jwt_user_payload TEXT,"
+                + "use_static_key BOOLEAN NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, sessionInfoTable, null, "pkey") +
                 " PRIMARY KEY(session_handle)" + " );";
         // @formatter:on
@@ -72,11 +73,11 @@ public class SessionQueries {
     }
 
     public static void createNewSession(Start start, String sessionHandle, String userId, String refreshTokenHash2,
-            JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT, long createdAtTime)
+            JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT, long createdAtTime, boolean useStaticKey)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getSessionInfoTable()
                 + "(session_handle, user_id, refresh_token_hash_2, session_data, expires_at, jwt_user_payload, "
-                + "created_at_time)" + " VALUES(?, ?, ?, ?, ?, ?, ?)";
+                + "created_at_time, use_static_key)" + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
 
         update(start, QUERY, pst -> {
             pst.setString(1, sessionHandle);
@@ -86,6 +87,7 @@ public class SessionQueries {
             pst.setLong(5, expiry);
             pst.setString(6, userDataInJWT.toString());
             pst.setLong(7, createdAtTime);
+            pst.setBoolean(8, useStaticKey);
         });
     }
 
@@ -283,7 +285,7 @@ public class SessionQueries {
                     result.getString("refresh_token_hash_2"),
                     jp.parse(result.getString("session_data")).getAsJsonObject(), result.getLong("expires_at"),
                     jp.parse(result.getString("jwt_user_payload")).getAsJsonObject(),
-                    result.getLong("created_at_time"));
+                    result.getLong("created_at_time"), result.getBoolean("use_static_key"));
         }
     }
 
