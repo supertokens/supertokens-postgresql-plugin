@@ -19,6 +19,8 @@ package io.supertokens.storage.postgresql;
 
 import ch.qos.logback.classic.Logger;
 import com.google.gson.JsonObject;
+
+import io.supertokens.pluginInterface.ActiveUsersStorage;
 import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.LOG_LEVEL;
 import io.supertokens.pluginInterface.RECIPE_ID;
@@ -56,6 +58,13 @@ import io.supertokens.pluginInterface.session.sqlStorage.SessionSQLStorage;
 import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.pluginInterface.thirdparty.sqlStorage.ThirdPartySQLStorage;
+import io.supertokens.pluginInterface.totp.TOTPDevice;
+import io.supertokens.pluginInterface.totp.TOTPUsedCode;
+import io.supertokens.pluginInterface.totp.exception.DeviceAlreadyExistsException;
+import io.supertokens.pluginInterface.totp.exception.TotpNotEnabledException;
+import io.supertokens.pluginInterface.totp.exception.UnknownDeviceException;
+import io.supertokens.pluginInterface.totp.exception.UsedCodeAlreadyExistsException;
+import io.supertokens.pluginInterface.totp.sqlStorage.TOTPSQLStorage;
 import io.supertokens.pluginInterface.useridmapping.UserIdMapping;
 import io.supertokens.pluginInterface.useridmapping.UserIdMappingStorage;
 import io.supertokens.pluginInterface.useridmapping.exception.UnknownSuperTokensUserIdException;
@@ -89,7 +98,7 @@ import java.util.Set;
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
-        DashboardSQLStorage {
+        DashboardSQLStorage, TOTPSQLStorage, ActiveUsersStorage {
 
     private static final Object appenderLock = new Object();
     public static boolean silent = false;
@@ -219,6 +228,7 @@ public class Start
                 // e.g., in case someone renamed constraints/tables
                 boolean isDeadlockException = actualException instanceof SQLTransactionRollbackException
                         || exceptionMessage.toLowerCase().contains("concurrent update")
+                        || exceptionMessage.toLowerCase().contains("concurrent delete")
                         || exceptionMessage.toLowerCase().contains("the transaction might succeed if retried") ||
 
                         // we have deadlock as well due to the DeadlockTest.java
@@ -1134,6 +1144,41 @@ public class Start
     }
 
     @Override
+    public void updateLastActive(String userId) throws StorageQueryException {
+        try {
+            ActiveUsersQueries.updateUserLastActive(this, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public int countUsersActiveSince(long time) throws StorageQueryException {
+        try {
+            return ActiveUsersQueries.countUsersActiveSince(this, time);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public int countUsersEnabledTotp() throws StorageQueryException {
+        try {
+            return ActiveUsersQueries.countUsersEnabledTotp(this);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public int countUsersEnabledTotpAndActiveSince(long time) throws StorageQueryException {
+        try {
+            return ActiveUsersQueries.countUsersEnabledTotpAndActiveSince(this, time);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+    @Override
     public List<JWTSigningKeyInfo> getJWTSigningKeys_Transaction(TransactionConnection con)
             throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
@@ -1974,5 +2019,142 @@ public class Start
             throw new StorageQueryException(e);
         }
 
+    }
+
+    // TOTP recipe:
+    @Override
+    public void createDevice(TOTPDevice device) throws StorageQueryException, DeviceAlreadyExistsException {
+        try {
+            TOTPQueries.createDevice(this, device);
+        } catch (StorageTransactionLogicException e) {
+            Exception actualException = e.actualException;
+
+            if (actualException instanceof PSQLException) {
+                ServerErrorMessage errMsg = ((PSQLException) actualException).getServerErrorMessage();
+
+                if (isPrimaryKeyError(errMsg, Config.getConfig(this).getTotpUserDevicesTable())) {
+                    throw new DeviceAlreadyExistsException();
+                }
+            }
+
+            throw new StorageQueryException(e.actualException);
+        }
+    }
+
+    @Override
+    public void markDeviceAsVerified(String userId, String deviceName)
+            throws StorageQueryException, UnknownDeviceException {
+        try {
+            int matchedCount = TOTPQueries.markDeviceAsVerified(this, userId, deviceName);
+            if (matchedCount == 0) {
+                // Note matchedCount != updatedCount
+                throw new UnknownDeviceException();
+            }
+            return; // Device was marked as verified
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public int deleteDevice_Transaction(TransactionConnection con, String userId, String deviceName)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return TOTPQueries.deleteDevice_Transaction(this, sqlCon, userId, deviceName);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void removeUser_Transaction(TransactionConnection con, String userId)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            TOTPQueries.removeUser_Transaction(this, sqlCon, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void updateDeviceName(String userId, String oldDeviceName, String newDeviceName)
+            throws StorageQueryException, DeviceAlreadyExistsException,
+            UnknownDeviceException {
+        try {
+            int updatedCount = TOTPQueries.updateDeviceName(this, userId, oldDeviceName, newDeviceName);
+            if (updatedCount == 0) {
+                throw new UnknownDeviceException();
+            }
+        } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                ServerErrorMessage errMsg = ((PSQLException) e).getServerErrorMessage();
+                if (isPrimaryKeyError(errMsg, Config.getConfig(this).getTotpUserDevicesTable())) {
+                    throw new DeviceAlreadyExistsException();
+                }
+            }
+        }
+    }
+
+    @Override
+    public TOTPDevice[] getDevices(String userId)
+            throws StorageQueryException {
+        try {
+            return TOTPQueries.getDevices(this, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public TOTPDevice[] getDevices_Transaction(TransactionConnection con, String userId)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return TOTPQueries.getDevices_Transaction(this, sqlCon, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void insertUsedCode_Transaction(TransactionConnection con, TOTPUsedCode usedCodeObj)
+            throws StorageQueryException, TotpNotEnabledException, UsedCodeAlreadyExistsException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            TOTPQueries.insertUsedCode_Transaction(this, sqlCon, usedCodeObj);
+        } catch (SQLException e) {
+            ServerErrorMessage err = ((PSQLException) e).getServerErrorMessage();
+
+            if (isPrimaryKeyError(err, Config.getConfig(this).getTotpUsedCodesTable())) {
+                throw new UsedCodeAlreadyExistsException();
+            } else if (isForeignKeyConstraintError(err, Config.getConfig(this).getTotpUsedCodesTable(), "user_id")) {
+                throw new TotpNotEnabledException();
+            }
+
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public TOTPUsedCode[] getAllUsedCodesDescOrder_Transaction(TransactionConnection con, String userId)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return TOTPQueries.getAllUsedCodesDescOrder_Transaction(this, sqlCon, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public int removeExpiredCodes(long expiredBefore)
+            throws StorageQueryException {
+        try {
+            return TOTPQueries.removeExpiredCodes(this, expiredBefore);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 }
