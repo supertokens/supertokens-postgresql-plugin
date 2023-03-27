@@ -1162,6 +1162,23 @@ public class Start
     }
 
     @Override
+    public int countUsersEnabledTotp() throws StorageQueryException {
+        try {
+            return ActiveUsersQueries.countUsersEnabledTotp(this);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public int countUsersEnabledTotpAndActiveSince(long time) throws StorageQueryException {
+        try {
+            return ActiveUsersQueries.countUsersEnabledTotpAndActiveSince(this, time);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+    @Override
     public List<JWTSigningKeyInfo> getJWTSigningKeys_Transaction(TransactionConnection con)
             throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
