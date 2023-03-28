@@ -20,7 +20,10 @@ package io.supertokens.storage.postgresql;
 import ch.qos.logback.classic.Logger;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import io.supertokens.pluginInterface.*;
+import io.supertokens.pluginInterface.KeyValueInfo;
+import io.supertokens.pluginInterface.LOG_LEVEL;
+import io.supertokens.pluginInterface.RECIPE_ID;
+import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.dashboard.DashboardSessionInfo;
 import io.supertokens.pluginInterface.dashboard.DashboardUser;
@@ -705,10 +708,17 @@ public class Start
             data.addProperty("test", "testData");
             try {
                 this.startTransaction(con -> {
-                    setUserMetadata_Transaction(new AppIdentifier(null, null), con, userId, data);
+                    try {
+                        setUserMetadata_Transaction(new AppIdentifier(null, null), con, userId, data);
+                    } catch (TenantOrAppNotFoundException e) {
+                        throw new StorageTransactionLogicException(e);
+                    }
                     return null;
                 });
             } catch (StorageTransactionLogicException e) {
+                if (e.actualException instanceof TenantOrAppNotFoundException) {
+                    throw new IllegalStateException(e);
+                }
                 throw new StorageQueryException(e);
             }
         } else if (className.equals(JWTRecipeStorage.class.getName())) {
@@ -1651,8 +1661,7 @@ public class Start
     @Override
     public JsonObject getUserMetadata(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
         try {
-            // TODO..
-            return UserMetadataQueries.getUserMetadata(this, userId);
+            return UserMetadataQueries.getUserMetadata(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1661,10 +1670,9 @@ public class Start
     @Override
     public JsonObject getUserMetadata_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String userId)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return UserMetadataQueries.getUserMetadata_Transaction(this, sqlCon, userId);
+            return UserMetadataQueries.getUserMetadata_Transaction(this, sqlCon, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1673,12 +1681,19 @@ public class Start
     @Override
     public int setUserMetadata_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String userId,
                                            JsonObject metadata)
-            throws StorageQueryException {
-        // TODO..
+            throws StorageQueryException, TenantOrAppNotFoundException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return UserMetadataQueries.setUserMetadata_Transaction(this, sqlCon, userId, metadata);
+            return UserMetadataQueries.setUserMetadata_Transaction(this, sqlCon, appIdentifier, userId, metadata);
         } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isForeignKeyConstraintError(serverMessage, config.getUserMetadataTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
+            }
             throw new StorageQueryException(e);
         }
     }
@@ -1686,8 +1701,7 @@ public class Start
     @Override
     public int deleteUserMetadata(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
         try {
-            // TODO..
-            return UserMetadataQueries.deleteUserMetadata(this, userId);
+            return UserMetadataQueries.deleteUserMetadata(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1695,8 +1709,7 @@ public class Start
 
     @Override
     public void addRoleToUser(TenantIdentifier tenantIdentifier, String userId, String role)
-            throws StorageQueryException, UnknownRoleException, DuplicateUserRoleMappingException,
-            TenantOrAppNotFoundException {
+            throws StorageQueryException, UnknownRoleException, DuplicateUserRoleMappingException {
         try {
             UserRolesQueries.addRoleToUser(this, tenantIdentifier, userId, role);
         } catch (SQLException e) {
@@ -1708,9 +1721,6 @@ public class Start
                 }
                 if (isPrimaryKeyError(serverErrorMessage, config.getUserRolesTable())) {
                     throw new DuplicateUserRoleMappingException();
-                }
-                if (isForeignKeyConstraintError(serverErrorMessage, config.getUserRolesTable(), "tenant_id")) {
-                    throw new TenantOrAppNotFoundException(tenantIdentifier);
                 }
             }
             throw new StorageQueryException(e);
