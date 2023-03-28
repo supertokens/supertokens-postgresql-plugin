@@ -1828,9 +1828,17 @@ public class Start
         Connection sqlCon = (Connection) con.getConnection();
 
         try {
-            return UserRolesQueries.createNewRole_Transaction(
+            return UserRolesQueries.createNewRoleOrDoNothingIfExists_Transaction(
                     this, sqlCon, appIdentifier, role);
         } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isForeignKeyConstraintError(serverMessage, config.getRolesTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
+            }
             throw new StorageQueryException(e);
         }
     }
