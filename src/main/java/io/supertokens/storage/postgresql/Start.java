@@ -59,6 +59,7 @@ import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.pluginInterface.thirdparty.sqlStorage.ThirdPartySQLStorage;
 import io.supertokens.pluginInterface.totp.TOTPDevice;
+import io.supertokens.pluginInterface.totp.TOTPStorage;
 import io.supertokens.pluginInterface.totp.TOTPUsedCode;
 import io.supertokens.pluginInterface.totp.exception.DeviceAlreadyExistsException;
 import io.supertokens.pluginInterface.totp.exception.TotpNotEnabledException;
@@ -87,6 +88,7 @@ import org.postgresql.util.ServerErrorMessage;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
@@ -582,7 +584,16 @@ public class Start
             } catch (SQLException e) {
                 throw new StorageQueryException(e);
             }
-        } else if (className.equals(JWTRecipeStorage.class.getName())) {
+        } else if (className.equals(TOTPStorage.class.getName())) {
+            try{
+                TOTPDevice[] devices = TOTPQueries.getDevices(this, userId);
+                return devices.length > 0;
+            }
+            catch (SQLException e){
+                throw new StorageQueryException(e);
+            }
+        }
+        else if (className.equals(JWTRecipeStorage.class.getName())) {
             return false;
         } else {
             throw new IllegalStateException("ClassName: " + className + " is not part of NonAuthRecipeStorage");
@@ -633,9 +644,20 @@ public class Start
                     return null;
                 });
             } catch (StorageTransactionLogicException e) {
-                throw new StorageQueryException(e);
+                throw new StorageQueryException(e.actualException);
             }
-        } else if (className.equals(JWTRecipeStorage.class.getName())) {
+        }
+        else if (className.equals(TOTPStorage.class.getName())) {
+            try {
+                TOTPDevice device = new TOTPDevice(userId, "testDevice", "secret", 0, 30, false);
+                TOTPQueries.createDevice(this, device);
+            }
+            catch (StorageTransactionLogicException e) {
+                throw new StorageQueryException(e.actualException);
+            }
+        }
+
+        else if (className.equals(JWTRecipeStorage.class.getName())) {
             /* Since JWT recipe tables do not store userId we do not add any data to them */
         } else {
             throw new IllegalStateException("ClassName: " + className + " is not part of NonAuthRecipeStorage");

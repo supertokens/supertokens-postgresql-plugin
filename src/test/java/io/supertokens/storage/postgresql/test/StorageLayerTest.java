@@ -65,8 +65,9 @@ public class StorageLayerTest {
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
         if (StorageLayer.getStorage(process.getProcess()).getType() != STORAGE_TYPE.SQL) {
-            assert (false);
+            return;
         }
+
         TOTPSQLStorage storage = StorageLayer.getTOTPStorage(process.getProcess());
         long now = System.currentTimeMillis();
         long nextDay = now + 1000 * 60 * 60 * 24; // 1 day from now
