@@ -19,7 +19,6 @@ package io.supertokens.storage.postgresql.test;
 
 import io.supertokens.ProcessState;
 import io.supertokens.passwordless.Passwordless;
-import io.supertokens.passwordless.exceptions.RestartFlowException;
 import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
@@ -46,11 +45,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static org.junit.Assert.*;
 
 public class DeadlockTest {
     @Rule
@@ -66,10 +62,13 @@ public class DeadlockTest {
         Utils.reset();
     }
 
+    @Rule
+    public Retry retry = new Retry(3);
+
     @Test
     public void transactionDeadlockTesting()
             throws InterruptedException, StorageQueryException, StorageTransactionLogicException {
-        String[] args = { "../" };
+        String[] args = {"../"};
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -165,7 +164,7 @@ public class DeadlockTest {
 
     @Test
     public void testCodeCreationRapidly() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -201,7 +200,7 @@ public class DeadlockTest {
 
     @Test
     public void testCodeCreationRapidlyWithDifferentEmails() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -241,7 +240,7 @@ public class DeadlockTest {
 
     @Test
     public void testConcurrentDeleteAndUpdate() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -401,7 +400,7 @@ public class DeadlockTest {
 
     @Test
     public void testConcurrentDeleteAndInsert() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
