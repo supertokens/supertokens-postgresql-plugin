@@ -1831,19 +1831,6 @@ public class Start
             return UserRolesQueries.createNewRole_Transaction(
                     this, sqlCon, appIdentifier, role);
         } catch (SQLException e) {
-            if (e instanceof PSQLException) {
-                PostgreSQLConfig config = Config.getConfig(this);
-                ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
-
-                if (isPrimaryKeyError(serverErrorMessage, config.getRolesTable())) {
-                    return false; // role already exists
-                }
-
-                if (isForeignKeyConstraintError(serverErrorMessage, config.getRolesTable(), "app_id")) {
-                    throw new TenantOrAppNotFoundException(appIdentifier);
-                }
-
-            }
             throw new StorageQueryException(e);
         }
     }
@@ -1853,7 +1840,6 @@ public class Start
                                                                    TransactionConnection con, String role,
                                                                    String permission)
             throws StorageQueryException, UnknownRoleException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             UserRolesQueries.addPermissionToRoleOrDoNothingIfExists_Transaction(this, sqlCon, appIdentifier,
