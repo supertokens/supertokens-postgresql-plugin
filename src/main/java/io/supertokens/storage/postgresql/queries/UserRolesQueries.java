@@ -98,11 +98,11 @@ public class UserRolesQueries {
                 + "(app_id, tenant_id, role);";
     }
 
-    public static boolean createNewRoleOrDoNothingIfExists_Transaction(Start start, Connection con,
-                                                                       AppIdentifier appIdentifier, String role)
+    public static boolean createNewRole_Transaction(Start start, Connection con,
+                                                    AppIdentifier appIdentifier, String role)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getRolesTable()
-                + "(app_id, role) VALUES (?, ?) ON CONFLICT DO NOTHING;";
+                + "(app_id, role) VALUES (?, ?);";
         int rowsUpdated = update(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, role);

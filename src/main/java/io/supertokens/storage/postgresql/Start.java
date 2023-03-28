@@ -20,10 +20,7 @@ package io.supertokens.storage.postgresql;
 import ch.qos.logback.classic.Logger;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import io.supertokens.pluginInterface.KeyValueInfo;
-import io.supertokens.pluginInterface.LOG_LEVEL;
-import io.supertokens.pluginInterface.RECIPE_ID;
-import io.supertokens.pluginInterface.STORAGE_TYPE;
+import io.supertokens.pluginInterface.*;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.dashboard.DashboardSessionInfo;
 import io.supertokens.pluginInterface.dashboard.DashboardUser;
@@ -677,7 +674,11 @@ public class Start
             try {
                 String role = "testRole";
                 this.startTransaction(con -> {
-                    createNewRoleOrDoNothingIfExists_Transaction(new AppIdentifier(null, null), con, role);
+                    try {
+                        createNewRoleOrDoNothingIfExists_Transaction(new AppIdentifier(null, null), con, role);
+                    } catch (TenantOrAppNotFoundException e) {
+                        throw new IllegalStateException(e);
+                    }
                     return null;
                 });
                 try {
@@ -1694,7 +1695,8 @@ public class Start
 
     @Override
     public void addRoleToUser(TenantIdentifier tenantIdentifier, String userId, String role)
-            throws StorageQueryException, UnknownRoleException, DuplicateUserRoleMappingException {
+            throws StorageQueryException, UnknownRoleException, DuplicateUserRoleMappingException,
+            TenantOrAppNotFoundException {
         try {
             UserRolesQueries.addRoleToUser(this, tenantIdentifier, userId, role);
         } catch (SQLException e) {
@@ -1706,6 +1708,9 @@ public class Start
                 }
                 if (isPrimaryKeyError(serverErrorMessage, config.getUserRolesTable())) {
                     throw new DuplicateUserRoleMappingException();
+                }
+                if (isForeignKeyConstraintError(serverErrorMessage, config.getUserRolesTable(), "tenant_id")) {
+                    throw new TenantOrAppNotFoundException(tenantIdentifier);
                 }
             }
             throw new StorageQueryException(e);
@@ -1819,13 +1824,26 @@ public class Start
     @Override
     public boolean createNewRoleOrDoNothingIfExists_Transaction(AppIdentifier appIdentifier,
                                                                 TransactionConnection con, String role)
-            throws StorageQueryException {
+            throws StorageQueryException, TenantOrAppNotFoundException {
         Connection sqlCon = (Connection) con.getConnection();
 
         try {
-            return UserRolesQueries.createNewRoleOrDoNothingIfExists_Transaction(
+            return UserRolesQueries.createNewRole_Transaction(
                     this, sqlCon, appIdentifier, role);
         } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isPrimaryKeyError(serverErrorMessage, config.getRolesTable())) {
+                    return false; // role already exists
+                }
+
+                if (isForeignKeyConstraintError(serverErrorMessage, config.getRolesTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
+
+            }
             throw new StorageQueryException(e);
         }
     }
