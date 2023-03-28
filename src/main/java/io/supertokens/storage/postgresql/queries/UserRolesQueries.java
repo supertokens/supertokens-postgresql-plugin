@@ -19,6 +19,7 @@ package io.supertokens.storage.postgresql.queries;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -100,14 +101,32 @@ public class UserRolesQueries {
 
     public static boolean createNewRole_Transaction(Start start, Connection con,
                                                     AppIdentifier appIdentifier, String role)
-            throws SQLException, StorageQueryException {
-        String QUERY = "INSERT INTO " + getConfig(start).getRolesTable()
-                + "(app_id, role) VALUES (?, ?);";
-        int rowsUpdated = update(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, role);
-        });
-        return rowsUpdated > 0;
+            throws SQLException, StorageQueryException, TenantOrAppNotFoundException {
+        {
+            // Checking if app_id exists because in the next query conflicts are ignored
+            String QUERY = "SELECT app_id FROM " + getConfig(start).getAppsTable()
+                    + " WHERE app_id = ?;";
+            String returnedAppId = execute(con, QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+            }, result -> {
+                if (result.next()) {
+                    return result.getString("app_id");
+                }
+                return null;
+            });
+            if (returnedAppId == null) {
+                throw new TenantOrAppNotFoundException(appIdentifier);
+            }
+        }
+        {
+            String QUERY = "INSERT INTO " + getConfig(start).getRolesTable()
+                    + "(app_id, role) VALUES (?, ?) ON CONFLICT DO NOTHING;";
+            int rowsUpdated = update(con, QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, role);
+            });
+            return rowsUpdated > 0;
+        }
     }
 
     public static void addPermissionToRoleOrDoNothingIfExists_Transaction(Start start, Connection con,
