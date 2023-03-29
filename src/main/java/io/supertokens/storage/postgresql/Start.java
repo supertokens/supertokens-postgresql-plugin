@@ -20,10 +20,7 @@ package io.supertokens.storage.postgresql;
 import ch.qos.logback.classic.Logger;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import io.supertokens.pluginInterface.KeyValueInfo;
-import io.supertokens.pluginInterface.LOG_LEVEL;
-import io.supertokens.pluginInterface.RECIPE_ID;
-import io.supertokens.pluginInterface.STORAGE_TYPE;
+import io.supertokens.pluginInterface.*;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.dashboard.DashboardSessionInfo;
 import io.supertokens.pluginInterface.dashboard.DashboardUser;
@@ -1709,7 +1706,8 @@ public class Start
 
     @Override
     public void addRoleToUser(TenantIdentifier tenantIdentifier, String userId, String role)
-            throws StorageQueryException, UnknownRoleException, DuplicateUserRoleMappingException {
+            throws StorageQueryException, UnknownRoleException, DuplicateUserRoleMappingException,
+            TenantOrAppNotFoundException {
         try {
             UserRolesQueries.addRoleToUser(this, tenantIdentifier, userId, role);
         } catch (SQLException e) {
@@ -1721,6 +1719,9 @@ public class Start
                 }
                 if (isPrimaryKeyError(serverErrorMessage, config.getUserRolesTable())) {
                     throw new DuplicateUserRoleMappingException();
+                }
+                if (isForeignKeyConstraintError(serverErrorMessage, config.getUserRolesTable(), "tenant_id")) {
+                    throw new TenantOrAppNotFoundException(tenantIdentifier);
                 }
             }
             throw new StorageQueryException(e);
