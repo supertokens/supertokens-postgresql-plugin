@@ -25,6 +25,7 @@ import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailExc
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicatePasswordResetTokenException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateUserIdException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
+import io.supertokens.pluginInterface.emailpassword.sqlStorage.EmailPasswordSQLStorage;
 import io.supertokens.pluginInterface.emailverification.EmailVerificationTokenInfo;
 import io.supertokens.pluginInterface.emailverification.exception.DuplicateEmailVerificationTokenException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
@@ -120,7 +121,7 @@ public class ExceptionParsingTest {
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-            var storage = StorageLayer.getEmailPasswordStorage(process.getProcess());
+            EmailPasswordSQLStorage storage = (EmailPasswordSQLStorage) StorageLayer.getStorage(process.getProcess());
 
             String userId = "userId";
             String userId2 = "userId2";
@@ -164,7 +165,7 @@ public class ExceptionParsingTest {
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-            var storage = StorageLayer.getEmailPasswordStorage(process.getProcess());
+            EmailPasswordSQLStorage storage = (EmailPasswordSQLStorage) StorageLayer.getStorage(process.getProcess());
 
             String userId = "userId";
             String userId2 = "userId2";
@@ -277,7 +278,7 @@ public class ExceptionParsingTest {
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-            var storage = StorageLayer.getEmailPasswordStorage(process.getProcess());
+            EmailPasswordSQLStorage storage = (EmailPasswordSQLStorage) StorageLayer.getStorage(process.getProcess());
 
             String userId = "userId";
             String tokenHash = "fakehash";
@@ -338,7 +339,7 @@ public class ExceptionParsingTest {
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-            var storage = StorageLayer.getEmailPasswordStorage(process.getProcess());
+            EmailPasswordSQLStorage storage = (EmailPasswordSQLStorage) StorageLayer.getStorage(process.getProcess());
 
             String userId = "userId";
             String userId2 = "userId2";
