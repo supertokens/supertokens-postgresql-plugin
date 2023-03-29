@@ -20,6 +20,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -38,37 +39,52 @@ public class UserMetadataQueries {
         String tableName = Config.getConfig(start).getUserMetadataTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "user_id VARCHAR(128) NOT NULL,"
                 + "user_metadata TEXT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey") + " PRIMARY KEY(user_id)" + " );";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
+                + " PRIMARY KEY(app_id, user_id),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "app_id", "fkey")
+                + " FOREIGN KEY(app_id)"
+                + " REFERENCES " + Config.getConfig(start).getAppsTable() +  " (app_id) ON DELETE CASCADE"
+                + ");";
         // @formatter:on
 
     }
 
-    public static int deleteUserMetadata(Start start, String userId) throws SQLException, StorageQueryException {
-        String QUERY = "DELETE FROM " + getConfig(start).getUserMetadataTable() + " WHERE user_id = ?";
+    public static int deleteUserMetadata(Start start, AppIdentifier appIdentifier, String userId) throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + getConfig(start).getUserMetadataTable()
+                + " WHERE app_id = ? AND user_id = ?";
 
-        return update(start, QUERY.toString(), pst -> pst.setString(1, userId));
-    }
-
-    public static int setUserMetadata_Transaction(Start start, Connection con, String userId, JsonObject metadata)
-            throws SQLException, StorageQueryException {
-
-        String QUERY = "INSERT INTO " + getConfig(start).getUserMetadataTable()
-                + "(user_id, user_metadata) VALUES(?, ?) "
-                + "ON CONFLICT(user_id) DO UPDATE SET user_metadata=excluded.user_metadata;";
-
-        return update(con, QUERY, pst -> {
-            pst.setString(1, userId);
-            pst.setString(2, metadata.toString());
+        return update(start, QUERY.toString(), pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
         });
     }
 
-    public static JsonObject getUserMetadata_Transaction(Start start, Connection con, String userId)
+    public static int setUserMetadata_Transaction(Start start, Connection con, AppIdentifier appIdentifier, String userId, JsonObject metadata)
+            throws SQLException, StorageQueryException {
+
+        String QUERY = "INSERT INTO " + getConfig(start).getUserMetadataTable()
+                + "(app_id, user_id, user_metadata) VALUES(?, ?, ?) "
+                + "ON CONFLICT(app_id, user_id) DO UPDATE SET user_metadata=excluded.user_metadata;";
+
+        return update(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+            pst.setString(3, metadata.toString());
+        });
+    }
+
+    public static JsonObject getUserMetadata_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
+                                                         String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT user_metadata FROM " + getConfig(start).getUserMetadataTable()
-                + " WHERE user_id = ? FOR UPDATE";
-        return execute(con, QUERY, pst -> pst.setString(1, userId), result -> {
+                + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, result -> {
             if (result.next()) {
                 JsonParser jp = new JsonParser();
                 return jp.parse(result.getString("user_metadata")).getAsJsonObject();
@@ -77,9 +93,13 @@ public class UserMetadataQueries {
         });
     }
 
-    public static JsonObject getUserMetadata(Start start, String userId) throws SQLException, StorageQueryException {
-        String QUERY = "SELECT user_metadata FROM " + getConfig(start).getUserMetadataTable() + " WHERE user_id = ?";
-        return execute(start, QUERY, pst -> pst.setString(1, userId), result -> {
+    public static JsonObject getUserMetadata(Start start, AppIdentifier appIdentifier, String userId) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT user_metadata FROM " + getConfig(start).getUserMetadataTable()
+                + " WHERE app_id = ? AND user_id = ?";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, result -> {
             if (result.next()) {
                 JsonParser jp = new JsonParser();
                 return jp.parse(result.getString("user_metadata")).getAsJsonObject();
