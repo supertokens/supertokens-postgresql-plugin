@@ -534,7 +534,7 @@ public class GeneralQueries {
                                     .append(" LIMIT 1000) AS passwordlessResultTable");
 
                         } else {
-                            USER_SEARCH_TAG_CONDITION.append("SELECT * FROM ( ").append(QUERY).append(" LIMIT 1000) passwordlessResultTable");
+                            USER_SEARCH_TAG_CONDITION.append("SELECT * FROM ( ").append(QUERY).append(" LIMIT 1000) AS passwordlessResultTable");
 
                         }
                     }
