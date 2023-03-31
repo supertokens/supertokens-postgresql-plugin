@@ -37,6 +37,7 @@ import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
+import io.supertokens.pluginInterface.thirdparty.sqlStorage.ThirdPartySQLStorage;
 import io.supertokens.storageLayer.StorageLayer;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -78,7 +79,7 @@ public class ExceptionParsingTest {
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-            var storage = StorageLayer.getThirdPartyStorage(process.getProcess());
+            ThirdPartySQLStorage storage = (ThirdPartySQLStorage) StorageLayer.getStorage(process.getProcess());
 
             String userId = "userId";
             String userId2 = "userId2";
