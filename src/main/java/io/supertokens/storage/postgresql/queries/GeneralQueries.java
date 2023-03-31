@@ -442,7 +442,7 @@ public class GeneralQueries {
                         // check if email tag is present
                         if (dashboardSearchTags.emails != null) {
 
-                            QUERY += " WHERE thirdPartyTable.email LIKE ? OR thirdPartyTable.email LIKE ?";
+                            QUERY += " WHERE ( thirdPartyTable.email LIKE ? OR thirdPartyTable.email LIKE ?";
                             queryList.add(dashboardSearchTags.emails.get(0) + "%");
                             queryList.add("%@" + dashboardSearchTags.emails.get(0) + "%");
 
@@ -451,6 +451,8 @@ public class GeneralQueries {
                                 queryList.add(dashboardSearchTags.emails.get(i) + "%");
                                 queryList.add("%@" + dashboardSearchTags.emails.get(i) + "%");
                             }
+
+                            QUERY += " )";
 
                         }
 
@@ -462,12 +464,14 @@ public class GeneralQueries {
                                 QUERY += " WHERE ";
                             }
 
-                            QUERY += " thirdPartyTable.third_party_id LIKE ?";
+                            QUERY += " ( thirdPartyTable.third_party_id LIKE ?";
                             queryList.add(dashboardSearchTags.providers.get(0) + "%");
                             for (int i = 1; i < dashboardSearchTags.providers.size(); i++) {
                                 QUERY += " OR thirdPartyTable.third_party_id LIKE ?";
                                 queryList.add(dashboardSearchTags.providers.get(i) + "%");
                             }
+
+                            QUERY += " )";
                         }
 
                         // check if we need to append this to an existing search query
@@ -493,7 +497,7 @@ public class GeneralQueries {
                         // check if email tag is present
                         if (dashboardSearchTags.emails != null) {
 
-                            QUERY = QUERY + " WHERE passwordlessTable.email LIKE ? OR passwordlessTable.email LIKE ?";
+                            QUERY = QUERY + " WHERE ( passwordlessTable.email LIKE ? OR passwordlessTable.email LIKE ?";
                             queryList.add(dashboardSearchTags.emails.get(0) + "%");
                             queryList.add("%@" + dashboardSearchTags.emails.get(0) + "%");
                             for (int i = 1; i < dashboardSearchTags.emails.size(); i++) {
@@ -501,6 +505,8 @@ public class GeneralQueries {
                                 queryList.add(dashboardSearchTags.emails.get(i) + "%");
                                 queryList.add("%@" + dashboardSearchTags.emails.get(i) + "%");
                             }
+
+                            QUERY += " )";
                         }
 
                         // check if phone tag is present
@@ -512,20 +518,14 @@ public class GeneralQueries {
                                 QUERY += " WHERE ";
                             }
 
-                            QUERY += " passwordlessTable.phone_number LIKE ?";
-                            if (dashboardSearchTags.phoneNumbers.get(0).startsWith("+")) {
-                                queryList.add(dashboardSearchTags.phoneNumbers.get(0) + "%");
-                            } else {
-                                queryList.add("+" + dashboardSearchTags.phoneNumbers.get(0) + "%");
-                            }
+                            QUERY += " ( passwordlessTable.phone_number LIKE ?";
+                            queryList.add(dashboardSearchTags.phoneNumbers.get(0) + "%");
                             for (int i = 1; i < dashboardSearchTags.phoneNumbers.size(); i++) {
                                 QUERY += " OR passwordlessTable.phone_number LIKE ?";
-                                if (dashboardSearchTags.phoneNumbers.get(i).startsWith("+")) {
-                                    queryList.add(dashboardSearchTags.phoneNumbers.get(i) + "%");
-                                } else {
-                                    queryList.add("+" + dashboardSearchTags.phoneNumbers.get(i) + "%");
-                                }
+                                queryList.add(dashboardSearchTags.phoneNumbers.get(i) + "%");
                             }
+
+                            QUERY += " )";
                         }
 
                         // check if we need to append this to an existing search query
