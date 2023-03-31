@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.4.1] - 2023-03-31
+
+- Fixes bug in dashboard search query 
+
 ## [2.4.0] - 2023-03-30
 
 - Support for Dashboard Search
