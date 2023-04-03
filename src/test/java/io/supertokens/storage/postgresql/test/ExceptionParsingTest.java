@@ -28,6 +28,7 @@ import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdExce
 import io.supertokens.pluginInterface.emailpassword.sqlStorage.EmailPasswordSQLStorage;
 import io.supertokens.pluginInterface.emailverification.EmailVerificationTokenInfo;
 import io.supertokens.pluginInterface.emailverification.exception.DuplicateEmailVerificationTokenException;
+import io.supertokens.pluginInterface.emailverification.sqlStorage.EmailVerificationSQLStorage;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.jwt.JWTSymmetricSigningKeyInfo;
@@ -217,7 +218,7 @@ public class ExceptionParsingTest {
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-            var storage = StorageLayer.getEmailVerificationStorage(process.getProcess());
+            EmailVerificationSQLStorage storage = (EmailVerificationSQLStorage) StorageLayer.getStorage(process.getProcess());
 
             String userId = "userId";
             String userEmail = "useremail@asdf.fdas";
@@ -313,16 +314,16 @@ public class ExceptionParsingTest {
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-            var storage = StorageLayer.getEmailVerificationStorage(process.getProcess());
+            EmailVerificationSQLStorage storage = (EmailVerificationSQLStorage) StorageLayer.getStorage(process.getProcess());
 
             String userId = "userId";
             String tokenHash = "fakehash";
             String userEmail = "useremail@asdf.fdas";
 
             var info = new EmailVerificationTokenInfo(userId, tokenHash, System.currentTimeMillis() + 10000, userEmail);
-            storage.addEmailVerificationToken(new AppIdentifier(null, null), info);
+            storage.addEmailVerificationToken(new TenantIdentifier(null, null, null), info);
             try {
-                storage.addEmailVerificationToken(new AppIdentifier(null, null), info);
+                storage.addEmailVerificationToken(new TenantIdentifier(null, null, null), info);
                 throw new Exception("This should throw");
             } catch (DuplicateEmailVerificationTokenException ex) {
                 // expected
