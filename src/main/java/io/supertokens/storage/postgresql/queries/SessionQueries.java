@@ -21,6 +21,8 @@ import com.google.gson.JsonParser;
 import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.session.SessionInfo;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -33,7 +35,6 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
@@ -46,6 +47,8 @@ public class SessionQueries {
         String sessionInfoTable = Config.getConfig(start).getSessionInfoTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + sessionInfoTable + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "tenant_id VARCHAR(64) DEFAULT 'public',"
                 + "session_handle VARCHAR(255) NOT NULL,"
                 + "user_id VARCHAR(128) NOT NULL,"
                 + "refresh_token_hash_2 VARCHAR(128) NOT NULL,"
@@ -53,8 +56,12 @@ public class SessionQueries {
                 + "expires_at BIGINT NOT NULL,"
                 + "created_at_time BIGINT NOT NULL,"
                 + "jwt_user_payload TEXT,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, sessionInfoTable, null, "pkey") +
-                " PRIMARY KEY(session_handle)" + " );";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, sessionInfoTable, null, "pkey")
+                + " PRIMARY KEY(app_id, tenant_id, session_handle),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, sessionInfoTable, "tenant_id", "fkey")
+                + " FOREIGN KEY (app_id, tenant_id)"
+                + " REFERENCES " + Config.getConfig(start).getTenantsTable() + "(app_id, tenant_id) ON DELETE CASCADE"
+                + ");";
         // @formatter:on
 
     }
@@ -64,28 +71,35 @@ public class SessionQueries {
         String accessTokenSigningKeysTable = Config.getConfig(start).getAccessTokenSigningKeysTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + accessTokenSigningKeysTable + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "created_at_time BIGINT NOT NULL,"
                 + "value TEXT,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, accessTokenSigningKeysTable, null, "pkey") +
-                " PRIMARY KEY(created_at_time)" + " );";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, accessTokenSigningKeysTable, null, "pkey")
+                + " PRIMARY KEY(app_id, created_at_time),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, accessTokenSigningKeysTable, "app_id", "fkey")
+                + " FOREIGN KEY (app_id)"
+                + " REFERENCES " + Config.getConfig(start).getAppsTable() + "(app_id) ON DELETE CASCADE"
+                + ");";
         // @formatter:on
     }
 
-    public static void createNewSession(Start start, String sessionHandle, String userId, String refreshTokenHash2,
-            JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT, long createdAtTime)
+    public static void createNewSession(Start start, TenantIdentifier tenantIdentifier, String sessionHandle, String userId, String refreshTokenHash2,
+                                        JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT, long createdAtTime)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getSessionInfoTable()
-                + "(session_handle, user_id, refresh_token_hash_2, session_data, expires_at, jwt_user_payload, "
-                + "created_at_time)" + " VALUES(?, ?, ?, ?, ?, ?, ?)";
+                + "(app_id, tenant_id, session_handle, user_id, refresh_token_hash_2, session_data, expires_at,"
+                + " jwt_user_payload, created_at_time)" + " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         update(start, QUERY, pst -> {
-            pst.setString(1, sessionHandle);
-            pst.setString(2, userId);
-            pst.setString(3, refreshTokenHash2);
-            pst.setString(4, userDataInDatabase.toString());
-            pst.setLong(5, expiry);
-            pst.setString(6, userDataInJWT.toString());
-            pst.setLong(7, createdAtTime);
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getAppId());
+            pst.setString(3, sessionHandle);
+            pst.setString(4, userId);
+            pst.setString(5, refreshTokenHash2);
+            pst.setString(6, userDataInDatabase.toString());
+            pst.setLong(7, expiry);
+            pst.setString(8, userDataInJWT.toString());
+            pst.setLong(9, createdAtTime);
         });
     }
 
@@ -96,12 +110,17 @@ public class SessionQueries {
         return execute(start, QUERY, pst -> pst.setString(1, sessionHandle), result -> !result.next());
     }
 
-    public static SessionInfo getSessionInfo_Transaction(Start start, Connection con, String sessionHandle)
+    public static SessionInfo getSessionInfo_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,
+                                                         String sessionHandle)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT session_handle, user_id, refresh_token_hash_2, session_data, expires_at, "
                 + "created_at_time, jwt_user_payload FROM " + getConfig(start).getSessionInfoTable()
-                + " WHERE session_handle = ? FOR UPDATE";
-        return execute(con, QUERY, pst -> pst.setString(1, sessionHandle), result -> {
+                + " WHERE app_id = ? AND tenant_id = ? AND session_handle = ? FOR UPDATE";
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, sessionHandle);
+        }, result -> {
             if (result.next()) {
                 return SessionInfoRowMapper.getInstance().mapOrThrow(result);
             }
@@ -109,22 +128,30 @@ public class SessionQueries {
         });
     }
 
-    public static void updateSessionInfo_Transaction(Start start, Connection con, String sessionHandle,
-            String refreshTokenHash2, long expiry) throws SQLException, StorageQueryException {
+    public static void updateSessionInfo_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,
+                                                     String sessionHandle,
+                                                     String refreshTokenHash2, long expiry) throws SQLException, StorageQueryException {
         String QUERY = "UPDATE " + getConfig(start).getSessionInfoTable()
-                + " SET refresh_token_hash_2 = ?, expires_at = ?" + " WHERE session_handle = ?";
+                + " SET refresh_token_hash_2 = ?, expires_at = ?"
+                + " WHERE app_id = ? AND tenant_id = ? AND session_handle = ?";
 
         update(con, QUERY, pst -> {
             pst.setString(1, refreshTokenHash2);
             pst.setLong(2, expiry);
-            pst.setString(3, sessionHandle);
+            pst.setString(3, tenantIdentifier.getAppId());
+            pst.setString(4, tenantIdentifier.getTenantId());
+            pst.setString(5, sessionHandle);
         });
     }
 
-    public static int getNumberOfSessions(Start start) throws SQLException, StorageQueryException {
-        String QUERY = "SELECT count(*) as num FROM " + getConfig(start).getSessionInfoTable();
+    public static int getNumberOfSessions(Start start, TenantIdentifier tenantIdentifier) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT count(*) as num FROM " + getConfig(start).getSessionInfoTable()
+                + " WHERE app_id = ? AND tenant_id = ?";
 
-        return execute(start, QUERY, NO_OP_SETTER, result -> {
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+        }, result -> {
             if (result.next()) {
                 return result.getInt("num");
             }
@@ -132,12 +159,13 @@ public class SessionQueries {
         });
     }
 
-    public static int deleteSession(Start start, String[] sessionHandles) throws SQLException, StorageQueryException {
+    public static int deleteSession(Start start, TenantIdentifier tenantIdentifier, String[] sessionHandles) throws SQLException, StorageQueryException {
         if (sessionHandles.length == 0) {
             return 0;
         }
         StringBuilder QUERY = new StringBuilder(
-                "DELETE FROM " + Config.getConfig(start).getSessionInfoTable() + " WHERE session_handle IN (");
+                "DELETE FROM " + Config.getConfig(start).getSessionInfoTable()
+                        + " WHERE app_id = ? AND tenant_id = ? AND session_handle IN (");
         for (int i = 0; i < sessionHandles.length; i++) {
             if (i == sessionHandles.length - 1) {
                 QUERY.append("?)");
@@ -147,26 +175,56 @@ public class SessionQueries {
         }
 
         return update(start, QUERY.toString(), pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
             for (int i = 0; i < sessionHandles.length; i++) {
-                pst.setString(i + 1, sessionHandles[i]);
+                pst.setString(i + 3, sessionHandles[i]);
             }
         });
     }
 
-    public static void deleteSessionsOfUser(Start start, String userId) throws SQLException, StorageQueryException {
-        String QUERY = "DELETE FROM " + getConfig(start).getSessionInfoTable() + " WHERE user_id = ?";
+    public static void deleteSessionsOfUser(Start start, AppIdentifier appIdentifier, String userId) throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + getConfig(start).getSessionInfoTable()
+                + " WHERE app_id = ? AND user_id = ?";
 
-        update(start, QUERY.toString(), pst -> pst.setString(1, userId));
+        update(start, QUERY.toString(), pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        });
     }
 
-    public static String[] getAllNonExpiredSessionHandlesForUser(Start start, String userId)
+    public static String[] getAllNonExpiredSessionHandlesForUser(Start start, TenantIdentifier tenantIdentifier, String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT session_handle FROM " + getConfig(start).getSessionInfoTable()
-                + " WHERE user_id = ? AND expires_at >= ?";
+                + " WHERE app_id = ? AND tenant_id = ? AND user_id = ? AND expires_at >= ?";
 
         return execute(start, QUERY, pst -> {
-            pst.setString(1, userId);
-            pst.setLong(2, currentTimeMillis());
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, userId);
+            pst.setLong(4, currentTimeMillis());
+        }, result -> {
+            List<String> temp = new ArrayList<>();
+            while (result.next()) {
+                temp.add(result.getString("session_handle"));
+            }
+            String[] finalResult = new String[temp.size()];
+            for (int i = 0; i < temp.size(); i++) {
+                finalResult[i] = temp.get(i);
+            }
+            return finalResult;
+        });
+    }
+
+    public static String[] getAllNonExpiredSessionHandlesForUser(Start start, AppIdentifier appIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT session_handle FROM " + getConfig(start).getSessionInfoTable()
+                + " WHERE app_id = ? AND user_id = ? AND expires_at >= ?";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+            pst.setLong(3, currentTimeMillis());
         }, result -> {
             List<String> temp = new ArrayList<>();
             while (result.next()) {
@@ -186,8 +244,8 @@ public class SessionQueries {
         update(start, QUERY, pst -> pst.setLong(1, currentTimeMillis()));
     }
 
-    public static int updateSession(Start start, String sessionHandle, @Nullable JsonObject sessionData,
-            @Nullable JsonObject jwtPayload) throws SQLException, StorageQueryException {
+    public static int updateSession(Start start, TenantIdentifier tenantIdentifier, String sessionHandle, @Nullable JsonObject sessionData,
+                                    @Nullable JsonObject jwtPayload) throws SQLException, StorageQueryException {
 
         if (sessionData == null && jwtPayload == null) {
             throw new SQLException("sessionData and jwtPayload are null when updating session info");
@@ -202,7 +260,7 @@ public class SessionQueries {
         if (jwtPayload != null) {
             QUERY += (somethingBefore ? "," : "") + " jwt_user_payload = ?";
         }
-        QUERY += " WHERE session_handle = ?";
+        QUERY += " WHERE app_id = ? AND tenant_id = ? AND session_handle = ?";
 
         return update(start, QUERY, pst -> {
             int currIndex = 1;
@@ -214,15 +272,21 @@ public class SessionQueries {
                 pst.setString(currIndex, jwtPayload.toString());
                 currIndex++;
             }
+            pst.setString(currIndex++, tenantIdentifier.getAppId());
+            pst.setString(currIndex++, tenantIdentifier.getTenantId());
             pst.setString(currIndex, sessionHandle);
         });
     }
 
-    public static SessionInfo getSession(Start start, String sessionHandle) throws SQLException, StorageQueryException {
+    public static SessionInfo getSession(Start start, TenantIdentifier tenantIdentifier, String sessionHandle) throws SQLException, StorageQueryException {
         String QUERY = "SELECT session_handle, user_id, refresh_token_hash_2, session_data, expires_at, "
                 + "created_at_time, jwt_user_payload FROM " + getConfig(start).getSessionInfoTable()
-                + " WHERE session_handle = ?";
-        return execute(start, QUERY, pst -> pst.setString(1, sessionHandle), result -> {
+                + " WHERE app_id = ? AND tenant_id = ? AND session_handle = ?";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, sessionHandle);
+        }, result -> {
             if (result.next()) {
                 return SessionInfoRowMapper.getInstance().mapOrThrow(result);
             }
@@ -230,22 +294,29 @@ public class SessionQueries {
         });
     }
 
-    public static void addAccessTokenSigningKey_Transaction(Start start, Connection con, long createdAtTime,
-            String value) throws SQLException, StorageQueryException {
-        String QUERY = "INSERT INTO " + getConfig(start).getAccessTokenSigningKeysTable() + "(created_at_time, value)"
-                + " VALUES(?, ?)";
+    public static void addAccessTokenSigningKey_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
+                                                            long createdAtTime,
+                                                            String value) throws SQLException, StorageQueryException {
+        String QUERY = "INSERT INTO " + getConfig(start).getAccessTokenSigningKeysTable()
+                + "(app_id, created_at_time, value)"
+                + " VALUES(?, ?, ?)";
 
         update(con, QUERY, pst -> {
-            pst.setLong(1, createdAtTime);
-            pst.setString(2, value);
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setLong(2, createdAtTime);
+            pst.setString(3, value);
         });
     }
 
-    public static KeyValueInfo[] getAccessTokenSigningKeys_Transaction(Start start, Connection con)
+    public static KeyValueInfo[] getAccessTokenSigningKeys_Transaction(Start start, Connection con,
+                                                                       AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT * FROM " + getConfig(start).getAccessTokenSigningKeysTable() + " FOR UPDATE";
+        String QUERY = "SELECT * FROM " + getConfig(start).getAccessTokenSigningKeysTable()
+                + " WHERE app_id = ? FOR UPDATE";
 
-        return execute(con, QUERY, NO_OP_SETTER, result -> {
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+        }, result -> {
             List<KeyValueInfo> temp = new ArrayList<>();
             while (result.next()) {
                 temp.add(AccessTokenSigningKeyRowMapper.getInstance().mapOrThrow(result));
@@ -258,12 +329,15 @@ public class SessionQueries {
         });
     }
 
-    public static void removeAccessTokenSigningKeysBefore(Start start, long time)
+    public static void removeAccessTokenSigningKeysBefore(Start start, AppIdentifier appIdentifier, long time)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getAccessTokenSigningKeysTable()
-                + " WHERE created_at_time < ?";
+                + " WHERE app_id = ? AND created_at_time < ?";
 
-        update(start, QUERY, pst -> pst.setLong(1, time));
+        update(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setLong(2, time);
+        });
     }
 
     static class SessionInfoRowMapper implements RowMapper<SessionInfo, ResultSet> {

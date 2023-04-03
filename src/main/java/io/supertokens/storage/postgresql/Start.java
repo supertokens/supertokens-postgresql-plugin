@@ -357,10 +357,9 @@ public class Start
     public KeyValueInfo[] getAccessTokenSigningKeys_Transaction(AppIdentifier appIdentifier,
                                                                 TransactionConnection con)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return SessionQueries.getAccessTokenSigningKeys_Transaction(this, sqlCon);
+            return SessionQueries.getAccessTokenSigningKeys_Transaction(this, sqlCon, appIdentifier);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -369,12 +368,19 @@ public class Start
     @Override
     public void addAccessTokenSigningKey_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
                                                      KeyValueInfo info)
-            throws StorageQueryException {
-        // TODO..
+            throws StorageQueryException, TenantOrAppNotFoundException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            SessionQueries.addAccessTokenSigningKey_Transaction(this, sqlCon, info.createdAtTime, info.value);
+            SessionQueries.addAccessTokenSigningKey_Transaction(this, sqlCon, appIdentifier, info.createdAtTime, info.value);
         } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isForeignKeyConstraintError(serverMessage, config.getAccessTokenSigningKeysTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
+            }
             throw new StorageQueryException(e);
         }
     }
@@ -383,8 +389,7 @@ public class Start
     public void removeAccessTokenSigningKeysBefore(AppIdentifier appIdentifier, long time)
             throws StorageQueryException {
         try {
-            // TODO..
-            SessionQueries.removeAccessTokenSigningKeysBefore(this, time);
+            SessionQueries.removeAccessTokenSigningKeysBefore(this, appIdentifier, time);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -435,22 +440,28 @@ public class Start
                                  String refreshTokenHash2,
                                  JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT,
                                  long createdAtTime)
-            throws StorageQueryException {
-        // TODO..
+            throws StorageQueryException, TenantOrAppNotFoundException {
         try {
-            SessionQueries.createNewSession(this, sessionHandle, userId, refreshTokenHash2, userDataInDatabase, expiry,
-                    userDataInJWT, createdAtTime);
+            SessionQueries.createNewSession(this, tenantIdentifier, sessionHandle, userId, refreshTokenHash2,
+                    userDataInDatabase, expiry, userDataInJWT, createdAtTime);
         } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isForeignKeyConstraintError(serverMessage, config.getSessionInfoTable(), "tenant_id")) {
+                    throw new TenantOrAppNotFoundException(tenantIdentifier);
+                }
+            }
             throw new StorageQueryException(e);
         }
     }
 
     @Override
-    public void deleteSessionsOfUser(AppIdentifier appIdentifierIdentifier, String userId)
+    public void deleteSessionsOfUser(AppIdentifier appIdentifier, String userId)
             throws StorageQueryException {
         try {
-            // TODO..
-            SessionQueries.deleteSessionsOfUser(this, userId);
+            SessionQueries.deleteSessionsOfUser(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -459,8 +470,7 @@ public class Start
     @Override
     public int getNumberOfSessions(TenantIdentifier tenantIdentifier) throws StorageQueryException {
         try {
-            // TODO..
-            return SessionQueries.getNumberOfSessions(this);
+            return SessionQueries.getNumberOfSessions(this, tenantIdentifier);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -469,8 +479,7 @@ public class Start
     @Override
     public int deleteSession(TenantIdentifier tenantIdentifier, String[] sessionHandles) throws StorageQueryException {
         try {
-            // TODO..
-            return SessionQueries.deleteSession(this, sessionHandles);
+            return SessionQueries.deleteSession(this, tenantIdentifier, sessionHandles);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -480,8 +489,7 @@ public class Start
     public String[] getAllNonExpiredSessionHandlesForUser(TenantIdentifier tenantIdentifier, String userId)
             throws StorageQueryException {
         try {
-            // TODO..
-            return SessionQueries.getAllNonExpiredSessionHandlesForUser(this, userId);
+            return SessionQueries.getAllNonExpiredSessionHandlesForUser(this, tenantIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -491,7 +499,7 @@ public class Start
             throws StorageQueryException {
         try {
             // TODO..
-            return SessionQueries.getAllNonExpiredSessionHandlesForUser(this, userId);
+            return SessionQueries.getAllNonExpiredSessionHandlesForUser(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -536,8 +544,7 @@ public class Start
     public SessionInfo getSession(TenantIdentifier tenantIdentifier, String sessionHandle)
             throws StorageQueryException {
         try {
-            // TODO..
-            return SessionQueries.getSession(this, sessionHandle);
+            return SessionQueries.getSession(this, tenantIdentifier, sessionHandle);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -548,8 +555,7 @@ public class Start
                              JsonObject jwtPayload)
             throws StorageQueryException {
         try {
-            // TODO..
-            return SessionQueries.updateSession(this, sessionHandle, sessionData, jwtPayload);
+            return SessionQueries.updateSession(this, tenantIdentifier, sessionHandle, sessionData, jwtPayload);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -559,10 +565,9 @@ public class Start
     public SessionInfo getSessionInfo_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                                   String sessionHandle)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return SessionQueries.getSessionInfo_Transaction(this, sqlCon, sessionHandle);
+            return SessionQueries.getSessionInfo_Transaction(this, sqlCon, tenantIdentifier, sessionHandle);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -574,8 +579,8 @@ public class Start
                                               long expiry) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            // TODO..
-            SessionQueries.updateSessionInfo_Transaction(this, sqlCon, sessionHandle, refreshTokenHash2, expiry);
+            SessionQueries.updateSessionInfo_Transaction(this, sqlCon, tenantIdentifier, sessionHandle,
+                    refreshTokenHash2, expiry);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
