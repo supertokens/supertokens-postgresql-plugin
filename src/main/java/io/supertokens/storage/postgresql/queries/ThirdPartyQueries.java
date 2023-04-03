@@ -67,6 +67,11 @@ public class ThirdPartyQueries {
                 + Config.getConfig(start).getThirdPartyUsersTable() + " (app_id, email);";
     }
 
+    public static String getQueryToThirdPartyUserIdIndex(Start start) {
+        return "CREATE INDEX IF NOT EXISTS thirdparty_users_thirdparty_user_id_index ON "
+                + Config.getConfig(start).getThirdPartyUsersTable() + " (app_id, third_party_id, third_party_user_id);";
+    }
+
     static String getQueryToCreateThirdPartyUserToTenantTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String thirdPartyUserToTenantTable = Config.getConfig(start).getThirdPartyUserToTenantTable();
@@ -248,42 +253,32 @@ public class ThirdPartyQueries {
         });
     }
 
-    public static void updateUserEmail_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,
+    public static void updateUserEmail_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                    String thirdPartyId, String thirdPartyUserId, String newEmail)
             throws SQLException, StorageQueryException {
         String QUERY = "UPDATE " + getConfig(start).getThirdPartyUsersTable()
-                + " SET email = ? WHERE app_id = ? AND user_id IN ("
-                + "    SELECT user_id FROM " + getConfig(start).getThirdPartyUserToTenantTable()
-                + "    WHERE app_id = ? AND tenant_id = ? AND third_party_id = ? AND third_party_user_id = ?"
-                + ")";
+                + " SET email = ? WHERE app_id = ? AND third_party_id = ? AND third_party_user_id = ?";
 
         update(con, QUERY, pst -> {
             pst.setString(1, newEmail);
-            pst.setString(2, tenantIdentifier.getAppId());
-            pst.setString(3, tenantIdentifier.getAppId());
-            pst.setString(4, tenantIdentifier.getTenantId());
-            pst.setString(5, thirdPartyId);
-            pst.setString(6, thirdPartyUserId);
+            pst.setString(2, appIdentifier.getAppId());
+            pst.setString(3, thirdPartyId);
+            pst.setString(4, thirdPartyUserId);
         });
     }
 
     public static UserInfo getUserInfoUsingId_Transaction(Start start, Connection con,
-                                                          TenantIdentifier tenantIdentifier, String thirdPartyId,
+                                                          AppIdentifier appIdentifier, String thirdPartyId,
                                                           String thirdPartyUserId)
             throws SQLException, StorageQueryException {
 
         String QUERY = "SELECT user_id, third_party_id, third_party_user_id, email, time_joined FROM "
                 + getConfig(start).getThirdPartyUsersTable()
-                + " WHERE app_id = ? AND user_id IN ("
-                + "    SELECT user_id FROM " + getConfig(start).getThirdPartyUserToTenantTable()
-                + "    WHERE app_id = ? AND tenant_id = ? AND third_party_id = ? AND third_party_user_id = ?"
-                + ") FOR UPDATE";
+                + " WHERE app_id = ?  AND third_party_id = ? AND third_party_user_id = ? FOR UPDATE";
         return execute(con, QUERY, pst -> {
-            pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, tenantIdentifier.getAppId());
-            pst.setString(3, tenantIdentifier.getTenantId());
-            pst.setString(4, thirdPartyId);
-            pst.setString(5, thirdPartyUserId);
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, thirdPartyId);
+            pst.setString(3, thirdPartyUserId);
         }, result -> {
             if (result.next()) {
                 return UserInfoRowMapper.getInstance().mapOrThrow(result);
