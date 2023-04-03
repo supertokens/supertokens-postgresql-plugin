@@ -693,7 +693,7 @@ public class Start
             try {
                 EmailVerificationTokenInfo info = new EmailVerificationTokenInfo(userId, "someToken", 10000,
                         "test123@example.com");
-                addEmailVerificationToken(new AppIdentifier(null, null), info);
+                addEmailVerificationToken(new TenantIdentifier(null, null, null), info);
 
             } catch (DuplicateEmailVerificationTokenException e) {
                 throw new StorageQueryException(e);
@@ -906,26 +906,27 @@ public class Start
     }
 
     @Override
-    public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser_Transaction(AppIdentifier appIdentifier,
-                                                                                            TransactionConnection con,
-                                                                                            String userId, String email)
+    public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser_Transaction(
+            TenantIdentifier tenantIdentifier,
+            TransactionConnection con,
+            String userId, String email)
             throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return EmailVerificationQueries.getAllEmailVerificationTokenInfoForUser_Transaction(this, sqlCon,
-                    appIdentifier, userId, email);
+                    tenantIdentifier, userId, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
 
     @Override
-    public void deleteAllEmailVerificationTokensForUser_Transaction(AppIdentifier appIdentifier,
+    public void deleteAllEmailVerificationTokensForUser_Transaction(TenantIdentifier tenantIdentifier,
                                                                     TransactionConnection con, String userId,
                                                                     String email) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            EmailVerificationQueries.deleteAllEmailVerificationTokensForUser_Transaction(this, sqlCon, appIdentifier, userId, email);
+            EmailVerificationQueries.deleteAllEmailVerificationTokensForUser_Transaction(this, sqlCon, tenantIdentifier, userId, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -971,10 +972,10 @@ public class Start
     }
 
     @Override
-    public void addEmailVerificationToken(AppIdentifier appIdentifier, EmailVerificationTokenInfo emailVerificationInfo)
+    public void addEmailVerificationToken(TenantIdentifier tenantIdentifier, EmailVerificationTokenInfo emailVerificationInfo)
             throws StorageQueryException, DuplicateEmailVerificationTokenException, TenantOrAppNotFoundException {
         try {
-            EmailVerificationQueries.addEmailVerificationToken(this, appIdentifier, emailVerificationInfo.userId,
+            EmailVerificationQueries.addEmailVerificationToken(this, tenantIdentifier, emailVerificationInfo.userId,
                     emailVerificationInfo.token, emailVerificationInfo.tokenExpiry, emailVerificationInfo.email);
         } catch (SQLException e) {
             if (e instanceof PSQLException) {
@@ -985,27 +986,27 @@ public class Start
                     throw new DuplicateEmailVerificationTokenException();
                 }
 
-                if (isForeignKeyConstraintError(serverMessage, config.getEmailVerificationTokensTable(), "app_id")) {
-                    throw new TenantOrAppNotFoundException(appIdentifier);
+                if (isForeignKeyConstraintError(serverMessage, config.getEmailVerificationTokensTable(), "tenant_id")) {
+                    throw new TenantOrAppNotFoundException(tenantIdentifier);
                 }
             }
         }
     }
 
     @Override
-    public EmailVerificationTokenInfo getEmailVerificationTokenInfo(AppIdentifier appIdentifier, String token)
+    public EmailVerificationTokenInfo getEmailVerificationTokenInfo(TenantIdentifier tenantIdentifier, String token)
             throws StorageQueryException {
         try {
-            return EmailVerificationQueries.getEmailVerificationTokenInfo(this, appIdentifier, token);
+            return EmailVerificationQueries.getEmailVerificationTokenInfo(this, tenantIdentifier, token);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
 
     @Override
-    public void revokeAllTokens(AppIdentifier appIdentifier, String userId, String email) throws StorageQueryException {
+    public void revokeAllTokens(TenantIdentifier tenantIdentifier, String userId, String email) throws StorageQueryException {
         try {
-            EmailVerificationQueries.revokeAllTokens(this, appIdentifier, userId, email);
+            EmailVerificationQueries.revokeAllTokens(this, tenantIdentifier, userId, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1021,11 +1022,11 @@ public class Start
     }
 
     @Override
-    public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser(AppIdentifier appIdentifier,
+    public EmailVerificationTokenInfo[] getAllEmailVerificationTokenInfoForUser(TenantIdentifier tenantIdentifier,
                                                                                 String userId, String email)
             throws StorageQueryException {
         try {
-            return EmailVerificationQueries.getAllEmailVerificationTokenInfoForUser(this, appIdentifier, userId, email);
+            return EmailVerificationQueries.getAllEmailVerificationTokenInfoForUser(this, tenantIdentifier, userId, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
