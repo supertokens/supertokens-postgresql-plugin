@@ -67,6 +67,11 @@ public class ThirdPartyQueries {
                 + Config.getConfig(start).getThirdPartyUsersTable() + " (app_id, email);";
     }
 
+    public static String getQueryToThirdPartyUserIdIndex(Start start) {
+        return "CREATE INDEX IF NOT EXISTS thirdparty_users_thirdparty_user_id_index ON "
+                + Config.getConfig(start).getThirdPartyUsersTable() + " (app_id, third_party_id, third_party_user_id);";
+    }
+
     static String getQueryToCreateThirdPartyUserToTenantTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String thirdPartyUserToTenantTable = Config.getConfig(start).getThirdPartyUserToTenantTable();
