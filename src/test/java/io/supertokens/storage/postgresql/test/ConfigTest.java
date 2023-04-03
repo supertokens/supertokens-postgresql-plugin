@@ -22,6 +22,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.gson.JsonObject;
 import io.supertokens.ProcessState;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.session.SessionStorage;
 import io.supertokens.session.Session;
 import io.supertokens.session.info.SessionInformationHolder;
 import io.supertokens.storage.postgresql.ConnectionPoolTestContent;
@@ -311,7 +312,7 @@ public class ConfigTest {
         assert sessionInfo.accessToken != null;
         assert sessionInfo.refreshToken != null;
 
-        TestCase.assertEquals(StorageLayer.getSessionStorage(process.getProcess())
+        TestCase.assertEquals(((SessionStorage) StorageLayer.getStorage(process.getProcess()))
                 .getNumberOfSessions(new TenantIdentifier(null, null, null)), 1);
 
         process.kill();
@@ -355,7 +356,7 @@ public class ConfigTest {
         assert sessionInfo.accessToken != null;
         assert sessionInfo.refreshToken != null;
 
-        TestCase.assertEquals(StorageLayer.getSessionStorage(process.getProcess())
+        TestCase.assertEquals(((SessionStorage) StorageLayer.getStorage(process.getProcess()))
                 .getNumberOfSessions(new TenantIdentifier(null, null, null)), 1);
 
         process.kill();
@@ -399,7 +400,7 @@ public class ConfigTest {
         assert sessionInfo.accessToken != null;
         assert sessionInfo.refreshToken != null;
 
-        TestCase.assertEquals(StorageLayer.getSessionStorage(process.getProcess())
+        TestCase.assertEquals(((SessionStorage) StorageLayer.getStorage(process.getProcess()))
                 .getNumberOfSessions(new TenantIdentifier(null, null, null)), 1);
 
         process.kill();
@@ -443,7 +444,7 @@ public class ConfigTest {
         assert sessionInfo.accessToken != null;
         assert sessionInfo.refreshToken != null;
 
-        TestCase.assertEquals(StorageLayer.getSessionStorage(process.getProcess())
+        TestCase.assertEquals(((SessionStorage) StorageLayer.getStorage(process.getProcess()))
                 .getNumberOfSessions(new TenantIdentifier(null, null, null)), 1);
 
         process.kill();
