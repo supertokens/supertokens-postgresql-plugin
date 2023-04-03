@@ -247,6 +247,7 @@ public class GeneralQueries {
                     update(start, ThirdPartyQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
                     // index
                     update(start, ThirdPartyQueries.getQueryToThirdPartyUserEmailIndex(start), NO_OP_SETTER);
+                    update(start, ThirdPartyQueries.getQueryToThirdPartyUserIdIndex(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getThirdPartyUserToTenantTable())) {
