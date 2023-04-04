@@ -92,7 +92,7 @@ public class SessionQueries {
 
         update(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, sessionHandle);
             pst.setString(4, userId);
             pst.setString(5, refreshTokenHash2);
@@ -101,13 +101,6 @@ public class SessionQueries {
             pst.setString(8, userDataInJWT.toString());
             pst.setLong(9, createdAtTime);
         });
-    }
-
-    static boolean isSessionBlacklisted(Start start, String sessionHandle) throws SQLException, StorageQueryException {
-        String QUERY = "SELECT session_handle FROM " + getConfig(start).getSessionInfoTable()
-                + " WHERE session_handle = ?";
-
-        return execute(start, QUERY, pst -> pst.setString(1, sessionHandle), result -> !result.next());
     }
 
     public static SessionInfo getSessionInfo_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,

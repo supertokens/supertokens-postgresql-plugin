@@ -498,7 +498,6 @@ public class Start
     private String[] getAllNonExpiredSessionHandlesForUser(AppIdentifier appIdentifier, String userId)
             throws StorageQueryException {
         try {
-            // TODO..
             return SessionQueries.getAllNonExpiredSessionHandlesForUser(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
