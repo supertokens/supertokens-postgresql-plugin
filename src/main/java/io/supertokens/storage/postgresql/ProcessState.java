@@ -52,6 +52,10 @@ public class ProcessState extends ResourceDistributor.SingletonResource {
         }
     }
 
+    public synchronized void clear() {
+        history.clear();
+    }
+
     /**
      * CREATING_NEW_TABLE: When the program is attempting to create new tables.
      * DEADLOCK_FOUND: In case of a deadlock situation, we put this event

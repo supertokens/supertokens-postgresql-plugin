@@ -100,7 +100,8 @@ public class PostgreSQLConfig {
         if (postgresql_connection_uri != null) {
             URI uri = URI.create(postgresql_connection_uri);
 
-            // sometimes if the scheme is missing, the host is returned as the scheme. To prevent that,
+            // sometimes if the scheme is missing, the host is returned as the scheme. To
+            // prevent that,
             // we have a check
             String host = this.getHostName();
             if (uri.getScheme() != null && !uri.getScheme().equals(host)) {
@@ -253,6 +254,10 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("app_id_to_user_id");
     }
 
+    public String getUserLastActiveTable() {
+        return addSchemaAndPrefixToTableName("user_last_active");
+    }
+
     public String getAccessTokenSigningKeysTable() {
         return addSchemaAndPrefixToTableName("session_access_token_signing_keys");
     }
@@ -369,6 +374,18 @@ public class PostgreSQLConfig {
 
     public String getDashboardSessionsTable() {
         return addSchemaAndPrefixToTableName("dashboard_user_sessions");
+    }
+
+    public String getTotpUsersTable() {
+        return addSchemaAndPrefixToTableName("totp_users");
+    }
+
+    public String getTotpUserDevicesTable() {
+        return addSchemaAndPrefixToTableName("totp_user_devices");
+    }
+
+    public String getTotpUsedCodesTable() {
+        return addSchemaAndPrefixToTableName("totp_used_codes");
     }
 
     private String addSchemaAndPrefixToTableName(String tableName) {
