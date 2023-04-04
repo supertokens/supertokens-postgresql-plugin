@@ -4,13 +4,14 @@ import io.supertokens.ProcessState;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.totp.TOTPDevice;
 import io.supertokens.pluginInterface.totp.TOTPUsedCode;
 import io.supertokens.pluginInterface.totp.exception.TotpNotEnabledException;
 import io.supertokens.pluginInterface.totp.exception.UsedCodeAlreadyExistsException;
 import io.supertokens.pluginInterface.totp.sqlStorage.TOTPSQLStorage;
 import io.supertokens.storageLayer.StorageLayer;
-
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Rule;
@@ -40,7 +41,7 @@ public class StorageLayerTest {
         try {
             storage.startTransaction(con -> {
                 try {
-                    storage.insertUsedCode_Transaction(con, usedCode);
+                    storage.insertUsedCode_Transaction(con, new TenantIdentifier(null, null, null), usedCode);
                     storage.commitTransaction(con);
                     return null;
                 } catch (TotpNotEnabledException | UsedCodeAlreadyExistsException e) {
@@ -59,7 +60,7 @@ public class StorageLayerTest {
 
     @Test
     public void totpCodeLengthTest() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -68,12 +69,12 @@ public class StorageLayerTest {
             return;
         }
 
-        TOTPSQLStorage storage = StorageLayer.getTOTPStorage(process.getProcess());
+        TOTPSQLStorage storage = (TOTPSQLStorage) StorageLayer.getStorage(process.getProcess());
         long now = System.currentTimeMillis();
         long nextDay = now + 1000 * 60 * 60 * 24; // 1 day from now
 
         TOTPDevice d1 = new TOTPDevice("user", "d1", "secret", 30, 1, false);
-        storage.createDevice(d1);
+        storage.createDevice(new AppIdentifier(null, null), d1);
 
         // Try code with length > 8
         try {

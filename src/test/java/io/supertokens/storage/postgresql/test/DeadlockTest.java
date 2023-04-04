@@ -23,6 +23,7 @@ import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.sqlStorage.SQLStorage;
 import io.supertokens.pluginInterface.sqlStorage.SQLStorage.TransactionIsolationLevel;
@@ -46,10 +47,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-<<<<<<< HEAD
-=======
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
->>>>>>> 2.4
 import static org.junit.Assert.*;
 
 public class DeadlockTest {
@@ -254,16 +252,16 @@ public class DeadlockTest {
         SQLStorage sqlStorage = (SQLStorage) storage;
 
         // Create a device as well as a user:
-        TOTPSQLStorage totpStorage = StorageLayer.getTOTPStorage(process.getProcess());
+        TOTPSQLStorage totpStorage = (TOTPSQLStorage) StorageLayer.getStorage(process.getProcess());
         TOTPDevice device = new TOTPDevice("user", "d1", "secret", 30, 1, false);
-        totpStorage.createDevice(device);
+        totpStorage.createDevice(new AppIdentifier(null, null), device);
 
         long now = System.currentTimeMillis();
         long nextDay = now + 1000 * 60 * 60 * 24; // 1 day from now
         TOTPUsedCode code = new TOTPUsedCode("user", "1234", true, nextDay, now);
         totpStorage.startTransaction(con -> {
             try {
-                totpStorage.insertUsedCode_Transaction(con, code);
+                totpStorage.insertUsedCode_Transaction(con, new TenantIdentifier(null, null, null), code);
                 totpStorage.commitTransaction(con);
             } catch (TotpNotEnabledException | UsedCodeAlreadyExistsException e) {
                 // This should not happen
@@ -414,16 +412,16 @@ public class DeadlockTest {
         SQLStorage sqlStorage = (SQLStorage) storage;
 
         // Create a device as well as a user:
-        TOTPSQLStorage totpStorage = StorageLayer.getTOTPStorage(process.getProcess());
+        TOTPSQLStorage totpStorage = (TOTPSQLStorage) StorageLayer.getStorage(process.getProcess());
         TOTPDevice device = new TOTPDevice("user", "d1", "secret", 30, 1, false);
-        totpStorage.createDevice(device);
+        totpStorage.createDevice(new AppIdentifier(null, null), device);
 
         long now = System.currentTimeMillis();
         long nextDay = now + 1000 * 60 * 60 * 24; // 1 day from now
         TOTPUsedCode code = new TOTPUsedCode("user", "1234", true, nextDay, now);
         totpStorage.startTransaction(con -> {
             try {
-                totpStorage.insertUsedCode_Transaction(con, code);
+                totpStorage.insertUsedCode_Transaction(con, new TenantIdentifier(null, null, null), code);
                 totpStorage.commitTransaction(con);
             } catch (TotpNotEnabledException | UsedCodeAlreadyExistsException e) {
                 // This should not happen
@@ -525,7 +523,7 @@ public class DeadlockTest {
 
                     TOTPUsedCode code2 = new TOTPUsedCode("user", "1234", false, nextDay, now + 1);
                     try {
-                        totpStorage.insertUsedCode_Transaction(con, code2);
+                        totpStorage.insertUsedCode_Transaction(con, new TenantIdentifier(null, null, null), code2);
                     } catch (TotpNotEnabledException | UsedCodeAlreadyExistsException e) {
                         // This should not happen
                         throw new StorageTransactionLogicException(e);
