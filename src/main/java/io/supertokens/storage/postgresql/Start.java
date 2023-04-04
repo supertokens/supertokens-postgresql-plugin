@@ -261,8 +261,7 @@ public class Start
 
                         // we have deadlock as well due to the DeadlockTest.java
                         exceptionMessage.toLowerCase().contains("deadlock");
-
-                if ((isPSQLRollbackException || isDeadlockException) && tries < 3) {
+                if ((isPSQLRollbackException || isDeadlockException) && tries < 50) {
                     try {
                         Thread.sleep((long) (10 + (Math.random() * 20)));
                     } catch (InterruptedException ignored) {

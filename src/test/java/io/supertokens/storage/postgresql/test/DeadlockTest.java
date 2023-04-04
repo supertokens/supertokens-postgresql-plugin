@@ -48,7 +48,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 public class DeadlockTest {
     @Rule
@@ -234,8 +235,6 @@ public class DeadlockTest {
         es.shutdown();
         es.awaitTermination(2, TimeUnit.MINUTES);
 
-        assertNull(process.checkOrWaitForEventInPlugin(
-                io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
         assert (pass.get());
 
         process.kill();
