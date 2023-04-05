@@ -61,7 +61,6 @@ public class Config extends ResourceDistributor.SingletonResource {
     }
 
     public static String getUserPoolId(Start start) {
-        // this function returns a unique string per connection pool.
         // TODO: The way things are implemented right now, this function has the issue that if the user points to the
         //  same database, but with a different host (cause the db is reachable via two hosts as an example),
         //  then it will return two different user pool IDs - which is technically the wrong thing to do.
