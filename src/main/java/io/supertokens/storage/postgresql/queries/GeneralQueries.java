@@ -20,9 +20,8 @@ import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.RECIPE_ID;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
+import io.supertokens.pluginInterface.dashboard.DashboardSearchTags;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
-import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
-import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
@@ -81,10 +80,11 @@ public class GeneralQueries {
                 + " PRIMARY KEY (app_id, tenant_id, user_id),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "tenant_id", "fkey")
                 + " FOREIGN KEY(app_id, tenant_id)"
-                + " REFERENCES " + Config.getConfig(start).getTenantsTable() +  " (app_id, tenant_id) ON DELETE CASCADE,"
+                + " REFERENCES " + Config.getConfig(start).getTenantsTable() + " (app_id, tenant_id) ON DELETE CASCADE,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "user_id", "fkey")
                 + " FOREIGN KEY(app_id, user_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +  " (app_id, user_id) ON DELETE CASCADE"
+                + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +
+                " (app_id, user_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
     }
@@ -192,6 +192,11 @@ public class GeneralQueries {
                     update(start, getQueryToCreateUserPaginationIndex(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getUserLastActiveTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, ActiveUsersQueries.getQueryToCreateUserLastActiveTable(start), NO_OP_SETTER);
+                }
+
                 if (!doesTableExists(start, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateAccessTokenSigningKeysTable(start), NO_OP_SETTER);
@@ -226,7 +231,8 @@ public class GeneralQueries {
 
                 if (!doesTableExists(start, Config.getConfig(start).getEmailPasswordUserToTenantTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, EmailPasswordQueries.getQueryToCreateEmailPasswordUserToTenantTable(start), NO_OP_SETTER);
+                    update(start, EmailPasswordQueries.getQueryToCreateEmailPasswordUserToTenantTable(start),
+                            NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordResetTokensTable())) {
@@ -273,7 +279,8 @@ public class GeneralQueries {
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessUserToTenantTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, PasswordlessQueries.getQueryToCreatePasswordlessUserToTenantTable(start), NO_OP_SETTER);
+                    update(start, PasswordlessQueries.getQueryToCreatePasswordlessUserToTenantTable(start),
+                            NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessDevicesTable())) {
@@ -340,6 +347,23 @@ public class GeneralQueries {
                             NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getTotpUsersTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, TOTPQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getTotpUserDevicesTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, TOTPQueries.getQueryToCreateUserDevicesTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getTotpUsedCodesTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, TOTPQueries.getQueryToCreateUsedCodesTable(start), NO_OP_SETTER);
+                    // index:
+                    update(start, TOTPQueries.getQueryToCreateUsedCodesExpiryTimeIndex(start), NO_OP_SETTER);
+                }
+
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
@@ -376,6 +400,7 @@ public class GeneralQueries {
         {
             String DROP_QUERY = "DROP TABLE IF EXISTS "
                     + getConfig(start).getAppsTable() + ","
+                    + getConfig(start).getUserLastActiveTable() + ","
                     + getConfig(start).getTenantsTable() + ","
                     + getConfig(start).getKeyValueTable() + ","
                     + getConfig(start).getAppIdToUserIdTable() + ","
@@ -403,7 +428,9 @@ public class GeneralQueries {
                     + getConfig(start).getUserRolesPermissionsTable() + ","
                     + getConfig(start).getUserRolesTable() + ","
                     + getConfig(start).getDashboardUsersTable() + ","
-                    + getConfig(start).getDashboardSessionsTable();
+                    + getConfig(start).getDashboardSessionsTable() + ","
+                    + getConfig(start).getTotpUsedCodesTable() + "," + getConfig(start).getTotpUserDevicesTable() + ","
+                    + getConfig(start).getTotpUsersTable();
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
     }
@@ -508,15 +535,178 @@ public class GeneralQueries {
 
     }
 
-    public static AuthRecipeUserInfo[] getUsers(Start start, TenantIdentifier tenantIdentifier, @NotNull Integer limit, @NotNull String timeJoinedOrder,
+    public static AuthRecipeUserInfo[] getUsers(Start start, TenantIdentifier tenantIdentifier, @NotNull Integer limit,
+                                                @NotNull String timeJoinedOrder,
                                                 @Nullable RECIPE_ID[] includeRecipeIds, @Nullable String userId,
-                                                @Nullable Long timeJoined)
+                                                @Nullable Long timeJoined,
+                                                @Nullable DashboardSearchTags dashboardSearchTags)
             throws SQLException, StorageQueryException {
 
         // This list will be used to keep track of the result's order from the db
         List<UserInfoPaginationResultHolder> usersFromQuery;
 
-        {
+        if (dashboardSearchTags != null) {
+            ArrayList<String> queryList = new ArrayList<>();
+            {
+                StringBuilder USER_SEARCH_TAG_CONDITION = new StringBuilder();
+
+                {
+                    // check if we should search through the emailpassword table
+                    if (dashboardSearchTags.shouldEmailPasswordTableBeSearched()) {
+                        String QUERY = "SELECT  allAuthUsersTable.*" + " FROM " + getConfig(start).getUsersTable()
+                                + " AS allAuthUsersTable" +
+                                " JOIN " + getConfig(start).getEmailPasswordUsersTable()
+                                + " AS emailpasswordTable ON allAuthUsersTable.user_id = emailpasswordTable.user_id";
+
+                        // attach email tags to queries
+                        QUERY = QUERY + " WHERE emailpasswordTable.email LIKE ? OR emailpasswordTable.email LIKE ?";
+                        queryList.add(dashboardSearchTags.emails.get(0) + "%");
+                        queryList.add("%@" + dashboardSearchTags.emails.get(0) + "%");
+                        for (int i = 1; i < dashboardSearchTags.emails.size(); i++) {
+                            QUERY += " OR emailpasswordTable.email LIKE ? OR emailpasswordTable.email LIKE ?";
+                            queryList.add(dashboardSearchTags.emails.get(i) + "%");
+                            queryList.add("%@" + dashboardSearchTags.emails.get(i) + "%");
+                        }
+
+                        USER_SEARCH_TAG_CONDITION.append("SELECT * FROM ( ").append(QUERY)
+                                .append(" LIMIT 1000) AS emailpasswordResultTable");
+                    }
+                }
+
+                {
+                    // check if we should search through the thirdparty table
+                    if (dashboardSearchTags.shouldThirdPartyTableBeSearched()) {
+                        String QUERY = "SELECT  allAuthUsersTable.*" + " FROM " + getConfig(start).getUsersTable()
+                                + " AS allAuthUsersTable" +
+                                " JOIN " + getConfig(start).getThirdPartyUsersTable()
+                                + " AS thirdPartyTable ON allAuthUsersTable.user_id = thirdPartyTable.user_id";
+
+                        // check if email tag is present
+                        if (dashboardSearchTags.emails != null) {
+
+                            QUERY += " WHERE ( thirdPartyTable.email LIKE ? OR thirdPartyTable.email LIKE ?";
+                            queryList.add(dashboardSearchTags.emails.get(0) + "%");
+                            queryList.add("%@" + dashboardSearchTags.emails.get(0) + "%");
+
+                            for (int i = 1; i < dashboardSearchTags.emails.size(); i++) {
+                                QUERY += " OR thirdPartyTable.email LIKE ? OR thirdPartyTable.email LIKE ?";
+                                queryList.add(dashboardSearchTags.emails.get(i) + "%");
+                                queryList.add("%@" + dashboardSearchTags.emails.get(i) + "%");
+                            }
+
+                            QUERY += " )";
+
+                        }
+
+                        // check if providers tag is present
+                        if (dashboardSearchTags.providers != null) {
+                            if (dashboardSearchTags.emails != null) {
+                                QUERY += " AND ";
+                            } else {
+                                QUERY += " WHERE ";
+                            }
+
+                            QUERY += " ( thirdPartyTable.third_party_id LIKE ?";
+                            queryList.add(dashboardSearchTags.providers.get(0) + "%");
+                            for (int i = 1; i < dashboardSearchTags.providers.size(); i++) {
+                                QUERY += " OR thirdPartyTable.third_party_id LIKE ?";
+                                queryList.add(dashboardSearchTags.providers.get(i) + "%");
+                            }
+
+                            QUERY += " )";
+                        }
+
+                        // check if we need to append this to an existing search query
+                        if (USER_SEARCH_TAG_CONDITION.length() != 0) {
+                            USER_SEARCH_TAG_CONDITION.append(" UNION ").append("SELECT * FROM ( ").append(QUERY)
+                                    .append(" LIMIT 1000) AS thirdPartyResultTable");
+
+                        } else {
+                            USER_SEARCH_TAG_CONDITION.append("SELECT * FROM ( ").append(QUERY)
+                                    .append(" LIMIT 1000) AS thirdPartyResultTable");
+
+                        }
+                    }
+                }
+
+                {
+                    // check if we should search through the passwordless table
+                    if (dashboardSearchTags.shouldPasswordlessTableBeSearched()) {
+                        String QUERY = "SELECT  allAuthUsersTable.*" + " FROM " + getConfig(start).getUsersTable()
+                                + " AS allAuthUsersTable" +
+                                " JOIN " + getConfig(start).getPasswordlessUsersTable()
+                                + " AS passwordlessTable ON allAuthUsersTable.user_id = passwordlessTable.user_id";
+
+                        // check if email tag is present
+                        if (dashboardSearchTags.emails != null) {
+
+                            QUERY = QUERY + " WHERE ( passwordlessTable.email LIKE ? OR passwordlessTable.email LIKE ?";
+                            queryList.add(dashboardSearchTags.emails.get(0) + "%");
+                            queryList.add("%@" + dashboardSearchTags.emails.get(0) + "%");
+                            for (int i = 1; i < dashboardSearchTags.emails.size(); i++) {
+                                QUERY += " OR passwordlessTable.email LIKE ? OR passwordlessTable.email LIKE ?";
+                                queryList.add(dashboardSearchTags.emails.get(i) + "%");
+                                queryList.add("%@" + dashboardSearchTags.emails.get(i) + "%");
+                            }
+
+                            QUERY += " )";
+                        }
+
+                        // check if phone tag is present
+                        if (dashboardSearchTags.phoneNumbers != null) {
+
+                            if (dashboardSearchTags.emails != null) {
+                                QUERY += " AND ";
+                            } else {
+                                QUERY += " WHERE ";
+                            }
+
+                            QUERY += " ( passwordlessTable.phone_number LIKE ?";
+                            queryList.add(dashboardSearchTags.phoneNumbers.get(0) + "%");
+                            for (int i = 1; i < dashboardSearchTags.phoneNumbers.size(); i++) {
+                                QUERY += " OR passwordlessTable.phone_number LIKE ?";
+                                queryList.add(dashboardSearchTags.phoneNumbers.get(i) + "%");
+                            }
+
+                            QUERY += " )";
+                        }
+
+                        // check if we need to append this to an existing search query
+                        if (USER_SEARCH_TAG_CONDITION.length() != 0) {
+                            USER_SEARCH_TAG_CONDITION.append(" UNION ").append("SELECT * FROM ( ").append(QUERY)
+                                    .append(" LIMIT 1000) AS passwordlessResultTable");
+
+                        } else {
+                            USER_SEARCH_TAG_CONDITION.append("SELECT * FROM ( ").append(QUERY)
+                                    .append(" LIMIT 1000) AS passwordlessResultTable");
+
+                        }
+                    }
+                }
+
+                if (USER_SEARCH_TAG_CONDITION.toString().length() == 0) {
+                    usersFromQuery = new ArrayList<>();
+                } else {
+
+                    String finalQuery = "SELECT * FROM ( " + USER_SEARCH_TAG_CONDITION.toString() + " )"
+                            + " AS finalResultTable ORDER BY time_joined " + timeJoinedOrder + ", user_id DESC ";
+                    usersFromQuery = execute(start, finalQuery, pst -> {
+                        for (int i = 1; i <= queryList.size(); i++) {
+                            pst.setString(i, queryList.get(i - 1));
+                        }
+                    }, result -> {
+                        List<UserInfoPaginationResultHolder> temp = new ArrayList<>();
+                        while (result.next()) {
+                            temp.add(new UserInfoPaginationResultHolder(result.getString("user_id"),
+                                    result.getString("recipe_id")));
+                        }
+                        return temp;
+                    });
+                }
+
+            }
+
+        } else {
             StringBuilder RECIPE_ID_CONDITION = new StringBuilder();
             if (includeRecipeIds != null && includeRecipeIds.length > 0) {
                 RECIPE_ID_CONDITION.append("recipe_id IN (");
@@ -610,7 +800,9 @@ public class GeneralQueries {
         return finalResult;
     }
 
-    private static List<? extends AuthRecipeUserInfo> getUserInfoForRecipeIdFromUserIds(Start start, TenantIdentifier tenantIdentifier, RECIPE_ID recipeId,
+    private static List<? extends AuthRecipeUserInfo> getUserInfoForRecipeIdFromUserIds(Start start,
+                                                                                        TenantIdentifier tenantIdentifier,
+                                                                                        RECIPE_ID recipeId,
                                                                                         List<String> userIds)
             throws StorageQueryException, SQLException {
         if (recipeId == RECIPE_ID.EMAIL_PASSWORD) {
