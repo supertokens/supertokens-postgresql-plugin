@@ -398,11 +398,11 @@ public class Start
     @Override
     public void createNewSession(String sessionHandle, String userId, String refreshTokenHash2,
                                  JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT,
-                                 long createdAtTime)
+                                 long createdAtTime, boolean useStaticKey)
             throws StorageQueryException {
         try {
             SessionQueries.createNewSession(this, sessionHandle, userId, refreshTokenHash2, userDataInDatabase, expiry,
-                    userDataInJWT, createdAtTime);
+                    userDataInJWT, createdAtTime, useStaticKey);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -602,7 +602,7 @@ public class Start
         if (className.equals(SessionStorage.class.getName())) {
             try {
                 createNewSession("sessionHandle", userId, "refreshTokenHash", new JsonObject(),
-                        System.currentTimeMillis() + 1000000, new JsonObject(), System.currentTimeMillis());
+                        System.currentTimeMillis() + 1000000, new JsonObject(), System.currentTimeMillis(), false);
             } catch (Exception e) {
                 throw new StorageQueryException(e);
             }
