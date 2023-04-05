@@ -24,6 +24,7 @@ import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.pluginInterface.sqlStorage.SQLStorage;
 import io.supertokens.storageLayer.StorageLayer;
 import org.junit.AfterClass;
@@ -64,10 +65,14 @@ public class DeadlockTest {
         Storage storage = StorageLayer.getStorage(process.getProcess());
         SQLStorage sqlStorage = (SQLStorage) storage;
         sqlStorage.startTransaction(con -> {
-            sqlStorage.setKeyValue_Transaction(new TenantIdentifier(null, null, null), con, "Key",
-                    new KeyValueInfo("Value"));
-            sqlStorage.setKeyValue_Transaction(new TenantIdentifier(null, null, null), con, "Key1",
-                    new KeyValueInfo("Value1"));
+            try {
+                sqlStorage.setKeyValue_Transaction(new TenantIdentifier(null, null, null), con, "Key",
+                        new KeyValueInfo("Value"));
+                sqlStorage.setKeyValue_Transaction(new TenantIdentifier(null, null, null), con, "Key1",
+                        new KeyValueInfo("Value1"));
+            } catch (TenantOrAppNotFoundException e) {
+                throw new IllegalStateException(e);
+            }
             sqlStorage.commitTransaction(con);
             return null;
         });

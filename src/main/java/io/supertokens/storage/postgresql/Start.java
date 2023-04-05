@@ -332,10 +332,10 @@ public class Start
     public KeyValueInfo getLegacyAccessTokenSigningKey_Transaction(AppIdentifier appIdentifier,
                                                                    TransactionConnection con)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return GeneralQueries.getKeyValue_Transaction(this, sqlCon, ACCESS_TOKEN_SIGNING_KEY_NAME);
+            return GeneralQueries.getKeyValue_Transaction(this, sqlCon,
+                    appIdentifier.getAsPublicTenantIdentifier(), ACCESS_TOKEN_SIGNING_KEY_NAME);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -344,10 +344,10 @@ public class Start
     @Override
     public void removeLegacyAccessTokenSigningKey_Transaction(AppIdentifier appIdentifier,
                                                               TransactionConnection con) throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            GeneralQueries.deleteKeyValue_Transaction(this, sqlCon, ACCESS_TOKEN_SIGNING_KEY_NAME);
+            GeneralQueries.deleteKeyValue_Transaction(this, sqlCon,
+                    appIdentifier.getAsPublicTenantIdentifier(), ACCESS_TOKEN_SIGNING_KEY_NAME);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -398,10 +398,10 @@ public class Start
     @Override
     public KeyValueInfo getRefreshTokenSigningKey_Transaction(AppIdentifier appIdentifier,
                                                               TransactionConnection con) throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return GeneralQueries.getKeyValue_Transaction(this, sqlCon, REFRESH_TOKEN_KEY_NAME);
+            return GeneralQueries.getKeyValue_Transaction(this, sqlCon,
+                    appIdentifier.getAsPublicTenantIdentifier(), REFRESH_TOKEN_KEY_NAME);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -410,11 +410,11 @@ public class Start
     @Override
     public void setRefreshTokenSigningKey_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
                                                       KeyValueInfo info)
-            throws StorageQueryException {
-        // TODO..
+            throws StorageQueryException, TenantOrAppNotFoundException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            GeneralQueries.setKeyValue_Transaction(this, sqlCon, REFRESH_TOKEN_KEY_NAME, info);
+            GeneralQueries.setKeyValue_Transaction(this, sqlCon,
+                    appIdentifier.getAsPublicTenantIdentifier(), REFRESH_TOKEN_KEY_NAME, info);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -515,9 +515,8 @@ public class Start
 
     @Override
     public KeyValueInfo getKeyValue(TenantIdentifier tenantIdentifier, String key) throws StorageQueryException {
-        // TODO..
         try {
-            return GeneralQueries.getKeyValue(this, key);
+            return GeneralQueries.getKeyValue(this, tenantIdentifier, key);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -525,11 +524,18 @@ public class Start
 
     @Override
     public void setKeyValue(TenantIdentifier tenantIdentifier, String key, KeyValueInfo info)
-            throws StorageQueryException {
-        // TODO..
+            throws StorageQueryException, TenantOrAppNotFoundException {
         try {
-            GeneralQueries.setKeyValue(this, key, info);
+            GeneralQueries.setKeyValue(this, tenantIdentifier, key, info);
         } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isForeignKeyConstraintError(serverMessage, config.getKeyValueTable(), "tenant_id")) {
+                    throw new TenantOrAppNotFoundException(tenantIdentifier);
+                }
+            }
             throw new StorageQueryException(e);
         }
     }
@@ -588,12 +594,19 @@ public class Start
     @Override
     public void setKeyValue_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con, String key,
                                         KeyValueInfo info)
-            throws StorageQueryException {
-        // TODO..
+            throws StorageQueryException, TenantOrAppNotFoundException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            GeneralQueries.setKeyValue_Transaction(this, sqlCon, key, info);
+            GeneralQueries.setKeyValue_Transaction(this, sqlCon, tenantIdentifier, key, info);
         } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isForeignKeyConstraintError(serverMessage, config.getKeyValueTable(), "tenant_id")) {
+                    throw new TenantOrAppNotFoundException(tenantIdentifier);
+                }
+            }
             throw new StorageQueryException(e);
         }
     }
@@ -601,10 +614,9 @@ public class Start
     @Override
     public KeyValueInfo getKeyValue_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                                 String key) throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return GeneralQueries.getKeyValue_Transaction(this, sqlCon, key);
+            return GeneralQueries.getKeyValue_Transaction(this, sqlCon, tenantIdentifier, key);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

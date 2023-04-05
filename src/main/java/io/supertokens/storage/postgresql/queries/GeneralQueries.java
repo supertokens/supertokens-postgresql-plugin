@@ -128,11 +128,17 @@ public class GeneralQueries {
         String keyValueTable = Config.getConfig(start).getKeyValueTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + keyValueTable + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "tenant_id VARCHAR(64) DEFAULT 'public',"
                 + "name VARCHAR(128),"
                 + "value TEXT,"
                 + "created_at_time BIGINT ,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, keyValueTable, null, "pkey") + " PRIMARY KEY(name)" +
-                " );";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, keyValueTable, null, "pkey")
+                + " PRIMARY KEY(app_id, tenant_id, name),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, keyValueTable, "tenant_id", "fkey")
+                + " FOREIGN KEY(app_id, tenant_id)"
+                + " REFERENCES " + Config.getConfig(start).getTenantsTable() +  " (app_id, tenant_id) ON DELETE CASCADE"
+                + ");";
         // @formatter:on
     }
 
@@ -402,32 +408,39 @@ public class GeneralQueries {
         }
     }
 
-    public static void setKeyValue_Transaction(Start start, Connection con, String key, KeyValueInfo info)
+    public static void setKeyValue_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier, String key, KeyValueInfo info)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getKeyValueTable()
-                + "(name, value, created_at_time) VALUES(?, ?, ?) "
-                + "ON CONFLICT (name) DO UPDATE SET value = ?, created_at_time = ?";
+                + "(app_id, tenant_id, name, value, created_at_time) VALUES(?, ?, ?, ?, ?) "
+                + "ON CONFLICT (app_id, tenant_id, name) DO UPDATE SET value = ?, created_at_time = ?";
 
         update(con, QUERY, pst -> {
-            pst.setString(1, key);
-            pst.setString(2, info.value);
-            pst.setLong(3, info.createdAtTime);
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, key);
             pst.setString(4, info.value);
             pst.setLong(5, info.createdAtTime);
+            pst.setString(6, info.value);
+            pst.setLong(7, info.createdAtTime);
         });
     }
 
-    public static void setKeyValue(Start start, String key, KeyValueInfo info)
+    public static void setKeyValue(Start start, TenantIdentifier tenantIdentifier, String key, KeyValueInfo info)
             throws SQLException, StorageQueryException {
         try (Connection con = ConnectionPool.getConnection(start)) {
-            setKeyValue_Transaction(start, con, key, info);
+            setKeyValue_Transaction(start, con, tenantIdentifier, key, info);
         }
     }
 
-    public static KeyValueInfo getKeyValue(Start start, String key) throws SQLException, StorageQueryException {
-        String QUERY = "SELECT value, created_at_time FROM " + getConfig(start).getKeyValueTable() + " WHERE name = ?";
+    public static KeyValueInfo getKeyValue(Start start, TenantIdentifier tenantIdentifier, String key) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT value, created_at_time FROM " + getConfig(start).getKeyValueTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND name = ?";
 
-        return execute(start, QUERY, pst -> pst.setString(1, key), result -> {
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, key);
+        }, result -> {
             if (result.next()) {
                 return KeyValueInfoRowMapper.getInstance().mapOrThrow(result);
             }
@@ -435,12 +448,16 @@ public class GeneralQueries {
         });
     }
 
-    public static KeyValueInfo getKeyValue_Transaction(Start start, Connection con, String key)
+    public static KeyValueInfo getKeyValue_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier, String key)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT value, created_at_time FROM " + getConfig(start).getKeyValueTable()
-                + " WHERE name = ? FOR UPDATE";
+                + " WHERE app_id = ? AND tenant_id = ? AND name = ? FOR UPDATE";
 
-        return execute(con, QUERY, pst -> pst.setString(1, key), result -> {
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, key);
+        }, result -> {
             if (result.next()) {
                 return KeyValueInfoRowMapper.getInstance().mapOrThrow(result);
             }
@@ -448,11 +465,16 @@ public class GeneralQueries {
         });
     }
 
-    public static void deleteKeyValue_Transaction(Start start, Connection con, String key)
+    public static void deleteKeyValue_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier, String key)
             throws SQLException, StorageQueryException {
-        String QUERY = "DELETE FROM " + getConfig(start).getKeyValueTable() + " WHERE name = ?";
+        String QUERY = "DELETE FROM " + getConfig(start).getKeyValueTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND name = ?";
 
-        update(con, QUERY, pst -> pst.setString(1, key));
+        update(con, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, key);
+        });
     }
 
     public static long getUsersCount(Start start, RECIPE_ID[] includeRecipeIds)
