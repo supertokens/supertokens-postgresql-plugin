@@ -524,10 +524,18 @@ public class Start
 
     @Override
     public void setKeyValue(TenantIdentifier tenantIdentifier, String key, KeyValueInfo info)
-            throws StorageQueryException {
+            throws StorageQueryException, TenantOrAppNotFoundException {
         try {
             GeneralQueries.setKeyValue(this, tenantIdentifier, key, info);
         } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isForeignKeyConstraintError(serverMessage, config.getKeyValueTable(), "tenant_id")) {
+                    throw new TenantOrAppNotFoundException(tenantIdentifier);
+                }
+            }
             throw new StorageQueryException(e);
         }
     }
