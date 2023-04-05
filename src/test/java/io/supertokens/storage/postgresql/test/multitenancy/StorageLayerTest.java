@@ -19,13 +19,14 @@ package io.supertokens.storage.postgresql.test.multitenancy;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import io.supertokens.ProcessState;
+import io.supertokens.ResourceDistributor;
 import io.supertokens.config.Config;
 import io.supertokens.featureflag.EE_FEATURES;
 import io.supertokens.featureflag.FeatureFlagTestContent;
+import io.supertokens.multitenancy.Multitenancy;
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.exceptions.DbInitException;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
-import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.*;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.storage.postgresql.Start;
@@ -34,14 +35,14 @@ import io.supertokens.storage.postgresql.test.Utils;
 import io.supertokens.storageLayer.StorageLayer;
 import org.junit.*;
 import org.junit.rules.TestRule;
-import org.postgresql.util.PSQLException;
 
 import java.io.IOException;
-import java.sql.SQLTransientConnectionException;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.*;
 
@@ -717,6 +718,60 @@ public class StorageLayerTest {
         Assert.assertEquals(
                 process.getProcess().getResourceDistributor().getAllResourcesWithResourceKey(StorageLayer.RESOURCE_KEY)
                         .size(), 2);
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
+    public void testCreating50StorageLayersUsage()
+            throws InterruptedException {
+        String[] args = {"../"};
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        TenantConfig[] tenants = new TenantConfig[1000];
+
+        ExecutorService executor = Executors.newFixedThreadPool(50);
+        for (int i = 0; i < 50; i++) {
+            final int insideLoop = i;
+            executor.submit(() -> {
+                JsonObject config = new JsonObject();
+                config.addProperty("postgresql_database_name", "st" + insideLoop);
+                tenants[insideLoop] = new TenantConfig(new TenantIdentifier(null, "a" + insideLoop, null),
+                        new EmailPasswordConfig(false),
+                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new PasswordlessConfig(false),
+                        config);
+                try {
+                    Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantIdentifier(null, null, null),
+                            tenants[insideLoop]);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+
+        executor.shutdown();
+        executor.awaitTermination(5, TimeUnit.MINUTES);
+
+        Map<ResourceDistributor.KeyClass, ResourceDistributor.SingletonResource> map = process.getProcess()
+                .getResourceDistributor().getAllResourcesWithResourceKey(StorageLayer.RESOURCE_KEY);
+        Set<Storage> uniqueResources = new HashSet<>();
+        for (ResourceDistributor.SingletonResource resource : map.values()) {
+            StorageLayer storage = (StorageLayer) resource;
+            if (uniqueResources.contains(storage.getUnderlyingStorage())) {
+                continue;
+            }
+            uniqueResources.add(storage.getUnderlyingStorage());
+        }
+        assertEquals(uniqueResources.size(), 51);
+
+        // TODO: we need to test recipe usage for the apps + RAM usage.
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
