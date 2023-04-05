@@ -60,10 +60,7 @@ public class InMemoryDBTest {
     }
 
     @Test
-    public void checkThatInMemDVWorksEvenIfWrongConfig()
-            throws InterruptedException, StorageQueryException, NoSuchAlgorithmException, InvalidKeyException,
-            SignatureException, InvalidAlgorithmParameterException, NoSuchPaddingException, BadPaddingException,
-            IOException, InvalidKeySpecException, IllegalBlockSizeException, StorageTransactionLogicException {
+    public void checkThatInMemDVWorksEvenIfWrongConfig() throws Exception {
         {
             Utils.commentConfigValue("postgresql_user");
             Utils.commentConfigValue("postgresql_password");
@@ -104,10 +101,7 @@ public class InMemoryDBTest {
     }
 
     @Test
-    public void checkThatActualDBWorksIfCorrectConfigDev() throws InterruptedException, StorageQueryException,
-            NoSuchAlgorithmException, InvalidKeyException, SignatureException, InvalidAlgorithmParameterException,
-            NoSuchPaddingException, BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException,
-            IllegalBlockSizeException, StorageTransactionLogicException {
+    public void checkThatActualDBWorksIfCorrectConfigDev() throws Exception {
         {
             String[] args = { "../" };
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -143,10 +137,7 @@ public class InMemoryDBTest {
     }
 
     @Test
-    public void checkThatActualDBWorksIfCorrectConfigProduction() throws InterruptedException, StorageQueryException,
-            NoSuchAlgorithmException, InvalidKeyException, SignatureException, InvalidAlgorithmParameterException,
-            NoSuchPaddingException, BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException,
-            IllegalBlockSizeException, StorageTransactionLogicException {
+    public void checkThatActualDBWorksIfCorrectConfigProduction() throws Exception {
         {
             String[] args = { "../" };
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
