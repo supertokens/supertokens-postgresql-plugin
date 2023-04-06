@@ -383,7 +383,7 @@ public class ExceptionParsingTest {
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-            var storage = (JWTRecipeSQLStorage) StorageLayer.getJWTRecipeStorage(process.getProcess());
+            var storage = (JWTRecipeSQLStorage) StorageLayer.getStorage(process.getProcess());
 
             String keyId = "testkeyId";
             String algorithm = "testalgo";
@@ -396,6 +396,8 @@ public class ExceptionParsingTest {
                     storage.setJWTSigningKey_Transaction(new AppIdentifier(null, null), con, info);
                 } catch (DuplicateKeyIdException e) {
                     throw new StorageTransactionLogicException(e);
+                } catch (TenantOrAppNotFoundException e) {
+                    throw new IllegalStateException(e);
                 }
 
                 try {
@@ -403,6 +405,8 @@ public class ExceptionParsingTest {
                     throw new StorageTransactionLogicException(new Exception("This should throw"));
                 } catch (DuplicateKeyIdException e) {
                     // expected
+                } catch (TenantOrAppNotFoundException e) {
+                    throw new IllegalStateException(e);
                 }
 
                 return true;
