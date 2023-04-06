@@ -1328,10 +1328,9 @@ public class Start
     public List<JWTSigningKeyInfo> getJWTSigningKeys_Transaction(AppIdentifier
                                                                          appIdentifier, TransactionConnection con)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return JWTSigningQueries.getJWTSigningKeys_Transaction(this, sqlCon);
+            return JWTSigningQueries.getJWTSigningKeys_Transaction(this, sqlCon, appIdentifier);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1340,22 +1339,23 @@ public class Start
     @Override
     public void setJWTSigningKey_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
                                              JWTSigningKeyInfo info)
-            throws StorageQueryException, DuplicateKeyIdException {
-        // TODO...
+            throws StorageQueryException, DuplicateKeyIdException, TenantOrAppNotFoundException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            JWTSigningQueries.setJWTSigningKeyInfo_Transaction(this, sqlCon, info);
+            JWTSigningQueries.setJWTSigningKeyInfo_Transaction(this, sqlCon, appIdentifier, info);
         } catch (SQLException e) {
-            if (e instanceof PSQLException && isPrimaryKeyError(((PSQLException) e).getServerErrorMessage(),
-                    Config.getConfig(this).getJWTSigningKeysTable())) {
-                throw new DuplicateKeyIdException();
-            }
 
-            // We keep the old exception detection logic to ensure backwards compatibility.
-            // We could get here if the new logic hits a false negative,
-            // e.g., in case someone renamed constraints/tables
-            if (e.getMessage().contains("ERROR: duplicate key") && e.getMessage().contains("Key (key_id)")) {
-                throw new DuplicateKeyIdException();
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isPrimaryKeyError(serverMessage, config.getJWTSigningKeysTable())) {
+                    throw new DuplicateKeyIdException();
+                }
+
+                if (isForeignKeyConstraintError(serverMessage, config.getJWTSigningKeysTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
             }
 
             throw new StorageQueryException(e);
