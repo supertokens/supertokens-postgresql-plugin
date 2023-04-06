@@ -137,7 +137,7 @@ public class GeneralQueries {
                 + " PRIMARY KEY(app_id, tenant_id, name),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, keyValueTable, "tenant_id", "fkey")
                 + " FOREIGN KEY(app_id, tenant_id)"
-                + " REFERENCES " + Config.getConfig(start).getTenantsTable() +  " (app_id, tenant_id) ON DELETE CASCADE"
+                + " REFERENCES " + Config.getConfig(start).getTenantsTable() + " (app_id, tenant_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
     }
@@ -435,7 +435,8 @@ public class GeneralQueries {
         }
     }
 
-    public static void setKeyValue_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier, String key, KeyValueInfo info)
+    public static void setKeyValue_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,
+                                               String key, KeyValueInfo info)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getKeyValueTable()
                 + "(app_id, tenant_id, name, value, created_at_time) VALUES(?, ?, ?, ?, ?) "
@@ -459,7 +460,8 @@ public class GeneralQueries {
         }
     }
 
-    public static KeyValueInfo getKeyValue(Start start, TenantIdentifier tenantIdentifier, String key) throws SQLException, StorageQueryException {
+    public static KeyValueInfo getKeyValue(Start start, TenantIdentifier tenantIdentifier, String key)
+            throws SQLException, StorageQueryException {
         String QUERY = "SELECT value, created_at_time FROM " + getConfig(start).getKeyValueTable()
                 + " WHERE app_id = ? AND tenant_id = ? AND name = ?";
 
@@ -475,7 +477,8 @@ public class GeneralQueries {
         });
     }
 
-    public static KeyValueInfo getKeyValue_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier, String key)
+    public static KeyValueInfo getKeyValue_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,
+                                                       String key)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT value, created_at_time FROM " + getConfig(start).getKeyValueTable()
                 + " WHERE app_id = ? AND tenant_id = ? AND name = ? FOR UPDATE";
@@ -492,7 +495,8 @@ public class GeneralQueries {
         });
     }
 
-    public static void deleteKeyValue_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier, String key)
+    public static void deleteKeyValue_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,
+                                                  String key)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getKeyValueTable()
                 + " WHERE app_id = ? AND tenant_id = ? AND name = ?";

@@ -33,9 +33,17 @@ import java.util.Objects;
 public class ConnectionPool extends ResourceDistributor.SingletonResource {
 
     private static final String RESOURCE_KEY = "io.supertokens.storage.postgresql.ConnectionPool";
-    private final HikariDataSource hikariDataSource;
+    private HikariDataSource hikariDataSource;
+    private final Start start;
 
     private ConnectionPool(Start start) {
+        this.start = start;
+    }
+
+    private synchronized void initialiseHikariDataSource() throws SQLException {
+        if (this.hikariDataSource != null) {
+            return;
+        }
         if (!start.enabled) {
             throw new RuntimeException("Connection to refused"); // emulates exception thrown by Hikari
         }
@@ -82,7 +90,11 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         // - Failed to validate connection org.mariadb.jdbc.MariaDbConnection@79af83ae (Connection.setNetworkTimeout
         // cannot be called on a closed connection). Possibly consider using a shorter maxLifetime value.
         config.setPoolName(start.getUserPoolId() + "~" + start.getConnectionPoolId());
-        hikariDataSource = new HikariDataSource(config);
+        try {
+            hikariDataSource = new HikariDataSource(config);
+        } catch (Exception e) {
+            throw new SQLException(e);
+        }
     }
 
     private static int getTimeToWaitToInit(Start start) {
@@ -110,10 +122,10 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
     }
 
     static boolean isAlreadyInitialised(Start start) {
-        return getInstance(start) != null;
+        return getInstance(start) != null && getInstance(start).hikariDataSource != null;
     }
 
-    static void initPool(Start start) throws DbInitException {
+    static void initPool(Start start, boolean shouldWait) throws DbInitException {
         if (isAlreadyInitialised(start)) {
             return;
         }
@@ -129,11 +141,16 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
                         " specified the correct values for ('postgresql_host' and 'postgresql_port') or for "
                         + "'postgresql_connection_uri'";
         try {
+            ConnectionPool con = new ConnectionPool(start);
+            start.getResourceDistributor().setResource(RESOURCE_KEY, con);
             while (true) {
                 try {
-                    start.getResourceDistributor().setResource(RESOURCE_KEY, new ConnectionPool(start));
+                    con.initialiseHikariDataSource();
                     break;
                 } catch (Exception e) {
+                    if (!shouldWait) {
+                        throw new DbInitException(e);
+                    }
                     if (e.getMessage().contains("Connection to") && e.getMessage().contains("refused")
                             || e.getMessage().contains("the database system is starting up")) {
                         start.handleKillSignalForWhenItHappens();
@@ -158,7 +175,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
                             throw new DbInitException(errorMessage);
                         }
                     } else {
-                        throw e;
+                        throw new DbInitException(e);
                     }
                 }
             }
@@ -174,6 +191,9 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         if (!start.enabled) {
             throw new SQLException("Storage layer disabled");
         }
+        if (getInstance(start).hikariDataSource == null) {
+            getInstance(start).initialiseHikariDataSource();
+        }
         return getInstance(start).hikariDataSource.getConnection();
     }
 
@@ -181,6 +201,13 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         if (getInstance(start) == null) {
             return;
         }
-        getInstance(start).hikariDataSource.close();
+        if (getInstance(start).hikariDataSource != null) {
+            try {
+                getInstance(start).hikariDataSource.close();
+            } finally {
+                // we mark it as null so that next time it's being initialised, it will be initialised again
+                getInstance(start).hikariDataSource = null;
+            }
+        }
     }
 }

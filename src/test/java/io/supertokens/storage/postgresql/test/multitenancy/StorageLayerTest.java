@@ -21,18 +21,30 @@ import com.google.gson.JsonPrimitive;
 import io.supertokens.ProcessState;
 import io.supertokens.ResourceDistributor;
 import io.supertokens.config.Config;
+import io.supertokens.emailpassword.EmailPassword;
+import io.supertokens.emailpassword.exceptions.WrongCredentialsException;
 import io.supertokens.featureflag.EE_FEATURES;
 import io.supertokens.featureflag.FeatureFlagTestContent;
+import io.supertokens.featureflag.exceptions.FeatureNotEnabledException;
 import io.supertokens.multitenancy.Multitenancy;
+import io.supertokens.multitenancy.MultitenancyHelper;
+import io.supertokens.multitenancy.exception.BadPermissionException;
+import io.supertokens.multitenancy.exception.CannotModifyBaseConfigException;
+import io.supertokens.multitenancy.exception.DeletionInProgressException;
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.exceptions.DbInitException;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
+import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.*;
+import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateClientTypeException;
+import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateTenantException;
+import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateThirdPartyIdException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.test.TestingProcessManager;
 import io.supertokens.storage.postgresql.test.Utils;
 import io.supertokens.storageLayer.StorageLayer;
+import io.supertokens.thirdparty.InvalidProviderConfigException;
 import org.junit.*;
 import org.junit.rules.TestRule;
 
@@ -83,7 +95,7 @@ public class StorageLayerTest {
 
     @Test
     public void mergingTenantWithBaseConfigWorks()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException,
+            throws InterruptedException, IOException, InvalidConfigException,
             TenantOrAppNotFoundException {
         String[] args = {"../"};
 
@@ -127,41 +139,6 @@ public class StorageLayerTest {
         Assert.assertEquals(
                 process.getProcess().getResourceDistributor().getAllResourcesWithResourceKey(StorageLayer.RESOURCE_KEY)
                         .size(), 2);
-
-        process.kill();
-        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
-    }
-
-    @Test
-    public void creatingTenantWithNoExistingDbThrowsError()
-            throws InterruptedException, IOException, InvalidConfigException, DbInitException {
-        String[] args = {"../"};
-
-        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
-        FeatureFlagTestContent.getInstance(process.getProcess())
-                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
-        process.startProcess();
-        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
-
-        JsonObject tenantConfig = new JsonObject();
-        tenantConfig.add("postgresql_table_names_prefix", new JsonPrimitive("test"));
-        tenantConfig.add("postgresql_database_name", new JsonPrimitive("random"));
-
-        try {
-            TenantConfig[] tenants = new TenantConfig[]{
-                    new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
-                            new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
-                            new PasswordlessConfig(false),
-                            tenantConfig)};
-
-            Config.loadAllTenantConfig(process.getProcess(), tenants);
-
-            StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
-            fail();
-        } catch (DbInitException e) {
-            assertEquals(e.getMessage(), "com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to " +
-                    "initialize pool: FATAL: database \"random\" does not exist");
-        }
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -577,40 +554,6 @@ public class StorageLayerTest {
     }
 
     @Test
-    public void differentUserPoolCreatedBasedOnConnectionUri()
-            throws InterruptedException, IOException, InvalidConfigException {
-        String[] args = {"../"};
-
-        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
-        FeatureFlagTestContent.getInstance(process.getProcess())
-                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
-        process.startProcess();
-        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
-
-        JsonObject tenantConfig = new JsonObject();
-        tenantConfig.add("postgresql_connection_uri",
-                new JsonPrimitive("postgresql://root:root@localhost:5432/random"));
-
-        try {
-            TenantConfig[] tenants = new TenantConfig[]{
-                    new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
-                            new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
-                            new PasswordlessConfig(false),
-                            tenantConfig)};
-            Config.loadAllTenantConfig(process.getProcess(), tenants);
-
-            StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
-            fail();
-        } catch (DbInitException e) {
-            assertEquals(e.getMessage(), "com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to " +
-                    "initialize pool: FATAL: database \"random\" does not exist");
-        }
-
-        process.kill();
-        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
-    }
-
-    @Test
     public void differentUserPoolCreatedBasedOnSchemaInConnectionUri()
             throws InterruptedException, IOException, InvalidConfigException, DbInitException,
             TenantOrAppNotFoundException {
@@ -772,6 +715,169 @@ public class StorageLayerTest {
         assertEquals(uniqueResources.size(), 51);
 
         // TODO: we need to test recipe usage for the apps + RAM usage.
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
+    public void testCantCreateTenantWithUnknownDb()
+            throws InterruptedException, IOException, InvalidConfigException, TenantOrAppNotFoundException,
+            BadPermissionException, InvalidProviderConfigException,
+            DeletionInProgressException, FeatureNotEnabledException,
+            CannotModifyBaseConfigException {
+        String[] args = {"../"};
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        JsonObject tenantConfigJson = new JsonObject();
+        tenantConfigJson.add("postgresql_connection_uri",
+                new JsonPrimitive("postgresql://root:root@localhost:5432/random"));
+
+        TenantConfig tenantConfig = new TenantConfig(new TenantIdentifier("abc", null, null),
+                new EmailPasswordConfig(false),
+                new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                new PasswordlessConfig(false),
+                tenantConfigJson);
+
+        try {
+            Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantIdentifier(null, null, null),
+                    tenantConfig);
+            fail();
+        } catch (StorageQueryException e) {
+            assertEquals(e.getMessage(), "java.sql.SQLException: com.zaxxer.hikari.pool" +
+                    ".HikariPool$PoolInitializationException: Failed to initialize pool: FATAL: database \"random\" " +
+                    "does not exist");
+        }
+
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
+    public void testTenantCreationAndThenDbDownDbThrowsErrorInRecipesAndDoesntAffectCoreStart()
+            throws InterruptedException, TenantOrAppNotFoundException,
+            BadPermissionException, DuplicateThirdPartyIdException, DuplicateClientTypeException,
+            DuplicateTenantException, StorageQueryException, WrongCredentialsException {
+        {
+            String[] args = {"../"};
+
+            TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+            FeatureFlagTestContent.getInstance(process.getProcess())
+                    .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+            process.startProcess();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+            JsonObject tenantConfigJson = new JsonObject();
+            tenantConfigJson.add("postgresql_connection_uri",
+                    new JsonPrimitive("postgresql://root:root@localhost:5432/random"));
+
+            TenantIdentifier tid = new TenantIdentifier("abc", null, null);
+
+            TenantConfig tenantConfig = new TenantConfig(tid,
+                    new EmailPasswordConfig(true),
+                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                    new PasswordlessConfig(false),
+                    tenantConfigJson);
+
+            StorageLayer.getMultitenancyStorage(process.getProcess()).createTenant(tenantConfig);
+            MultitenancyHelper.getInstance(process.getProcess()).refreshTenantsInCoreIfRequired(true);
+
+            try {
+                EmailPassword.signIn(tid.withStorage(StorageLayer.getStorage(tid, process.getProcess())),
+                        process.getProcess(), "", "");
+                fail();
+            } catch (StorageQueryException e) {
+                assertEquals(e.getMessage(), "java.sql.SQLException: com.zaxxer.hikari.pool" +
+                        ".HikariPool$PoolInitializationException: Failed to initialize pool: FATAL: database " +
+                        "\"random\" " +
+                        "does not exist");
+            }
+
+            // we do this again just to check that if this function is called again, it fails again and there is no
+            // side effect of calling the above function
+            try {
+                EmailPassword.signIn(tid.withStorage(StorageLayer.getStorage(tid, process.getProcess())),
+                        process.getProcess(), "", "");
+                fail();
+            } catch (StorageQueryException e) {
+                assertEquals(e.getMessage(), "java.sql.SQLException: com.zaxxer.hikari.pool" +
+                        ".HikariPool$PoolInitializationException: Failed to initialize pool: FATAL: database " +
+                        "\"random\" " +
+                        "does not exist");
+            }
+
+            assertEquals(2,
+                    Multitenancy.getAllTenants(new TenantIdentifier(null, null, null), process.getProcess()).length);
+
+
+            process.kill(false);
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+
+        {
+            String[] args = {"../"};
+
+            TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+            FeatureFlagTestContent.getInstance(process.getProcess())
+                    .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+            process.startProcess();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+            assertEquals(2,
+                    Multitenancy.getAllTenants(new TenantIdentifier(null, null, null), process.getProcess()).length);
+
+            TenantIdentifier tid = new TenantIdentifier("abc", null, null);
+            try {
+                EmailPassword.signIn(tid.withStorage(StorageLayer.getStorage(tid, process.getProcess())),
+                        process.getProcess(), "", "");
+                fail();
+            } catch (StorageQueryException e) {
+                assertEquals(e.getMessage(), "java.sql.SQLException: com.zaxxer.hikari.pool" +
+                        ".HikariPool$PoolInitializationException: Failed to initialize pool: FATAL: database " +
+                        "\"random\" " +
+                        "does not exist");
+            }
+
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
+    @Test
+    public void testBadPortWithNewTenantShouldNotCauseItToWaitInput() throws Exception {
+        String[] args = {"../"};
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        JsonObject tenantConfigJson = new JsonObject();
+        tenantConfigJson.add("postgresql_port", new JsonPrimitive("8989"));
+
+        TenantConfig tenantConfig = new TenantConfig(new TenantIdentifier("abc", null, null),
+                new EmailPasswordConfig(false),
+                new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                new PasswordlessConfig(false),
+                tenantConfigJson);
+
+        try {
+            Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantIdentifier(null, null, null),
+                    tenantConfig);
+            fail();
+        } catch (StorageQueryException e) {
+            assertEquals(e.getMessage(),
+                    "java.sql.SQLException: com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to " +
+                            "initialize pool: Connection to localhost:8989 refused. Check that the hostname and port " +
+                            "are correct and that the postmaster is accepting TCP/IP connections.");
+        }
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));

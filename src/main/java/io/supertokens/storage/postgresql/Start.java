@@ -20,6 +20,7 @@ package io.supertokens.storage.postgresql;
 import ch.qos.logback.classic.Logger;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import com.zaxxer.hikari.pool.HikariPool;
 import io.supertokens.pluginInterface.*;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.dashboard.DashboardSearchTags;
@@ -201,12 +202,12 @@ public class Start
     }
 
     @Override
-    public void initStorage() throws DbInitException {
+    public void initStorage(boolean shouldWait) throws DbInitException {
         if (ConnectionPool.isAlreadyInitialised(this)) {
             return;
         }
         try {
-            ConnectionPool.initPool(this);
+            ConnectionPool.initPool(this, shouldWait);
             GeneralQueries.createTablesIfNotExists(this);
         } catch (Exception e) {
             throw new DbInitException(e);
@@ -261,9 +262,9 @@ public class Start
 
                         // we have deadlock as well due to the DeadlockTest.java
                         exceptionMessage.toLowerCase().contains("deadlock");
-                if ((isPSQLRollbackException || isDeadlockException) && tries < 50) {
+                if ((isPSQLRollbackException || isDeadlockException) && tries < 20) {
                     try {
-                        Thread.sleep((long) (10 + (Math.random() * 20)));
+                        Thread.sleep((long) (10 + Math.min(tries, 10) * (Math.random() * 20)));
                     } catch (InterruptedException ignored) {
                     }
                     ProcessState.getInstance(this).addState(ProcessState.PROCESS_STATE.DEADLOCK_FOUND, e);
@@ -379,7 +380,8 @@ public class Start
             throws StorageQueryException, TenantOrAppNotFoundException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            SessionQueries.addAccessTokenSigningKey_Transaction(this, sqlCon, appIdentifier, info.createdAtTime, info.value);
+            SessionQueries.addAccessTokenSigningKey_Transaction(this, sqlCon, appIdentifier, info.createdAtTime,
+                    info.value);
         } catch (SQLException e) {
             if (e instanceof PSQLException) {
                 PostgreSQLConfig config = Config.getConfig(this);
@@ -435,7 +437,13 @@ public class Start
         try {
             GeneralQueries.deleteAllTables(this);
         } catch (SQLException e) {
-            throw new StorageQueryException(e);
+            if (e.getCause() instanceof HikariPool.PoolInitializationException) {
+                // this can happen if the db being connected to is not actually present.
+                // So we ignore this since there are tests in which we are adding a non existent db for a tenant,
+                // and we want to not throw errors in the next test wherein this function is called.
+            } else {
+                throw new StorageQueryException(e);
+            }
         }
     }
 

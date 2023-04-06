@@ -88,6 +88,8 @@ public class ConfigTest {
         assertEquals(config.getConnectionPoolSize(), 5);
         assertEquals(config.getKeyValueTable(), "temp_name");
 
+        process.getProcess().deleteAllInformationForTesting();
+
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
@@ -218,7 +220,9 @@ public class ConfigTest {
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
         assertNotNull(e);
 
-        assertEquals("Failed to initialize pool: The connection attempt failed.",
+        assertEquals(
+                "java.sql.SQLException: com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to " +
+                        "initialize pool: The connection attempt failed.",
                 e.exception.getCause().getCause().getMessage());
 
         process.kill();
@@ -311,16 +315,17 @@ public class ConfigTest {
 
         assert sessionInfo.accessToken != null;
         assert sessionInfo.refreshToken != null;
+        try {
+            TestCase.assertEquals(((SessionStorage) StorageLayer.getStorage(process.getProcess()))
+                    .getNumberOfSessions(new TenantIdentifier(null, null, null)), 1);
 
-        TestCase.assertEquals(((SessionStorage) StorageLayer.getStorage(process.getProcess()))
-                .getNumberOfSessions(new TenantIdentifier(null, null, null)), 1);
-
-        process.kill();
-        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
-
-        // we call this here so that the database is cleared with the modified table names
-        // since in postgres, we delete all dbs one by one
-        TestingProcessManager.deleteAllInformation();
+            // we call this here so that the database is cleared with the modified table names
+            // since in postgres, we delete all dbs one by one
+        } finally {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+            TestingProcessManager.deleteAllInformation();
+        }
     }
 
     @Test
