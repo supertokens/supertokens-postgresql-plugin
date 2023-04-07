@@ -1221,9 +1221,8 @@ public class Start
     @Override
     public long getUsersCount(TenantIdentifier tenantIdentifier, RECIPE_ID[] includeRecipeIds)
             throws StorageQueryException {
-        // TODO..
         try {
-            return GeneralQueries.getUsersCount(this, includeRecipeIds);
+            return GeneralQueries.getUsersCount(this, tenantIdentifier, includeRecipeIds);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1234,7 +1233,7 @@ public class Start
             throws StorageQueryException {
         // TODO..
         try {
-            return GeneralQueries.getUsersCount(this, includeRecipeIds);
+            return GeneralQueries.getUsersCount(this, appIdentifier, includeRecipeIds);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1256,9 +1255,8 @@ public class Start
 
     @Override
     public boolean doesUserIdExist(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
-        // TODO..
         try {
-            return GeneralQueries.doesUserIdExist(this, userId);
+            return GeneralQueries.doesUserIdExist(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1316,9 +1314,8 @@ public class Start
     @Override
     public boolean doesUserIdExist(TenantIdentifier tenantIdentifierIdentifier, String userId)
             throws StorageQueryException {
-        // TODO:...
         try {
-            return GeneralQueries.doesUserIdExist(this, userId);
+            return GeneralQueries.doesUserIdExist(this, tenantIdentifierIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
