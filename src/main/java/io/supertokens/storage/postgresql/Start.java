@@ -1231,7 +1231,6 @@ public class Start
     @Override
     public long getUsersCount(AppIdentifier appIdentifier, RECIPE_ID[] includeRecipeIds)
             throws StorageQueryException {
-        // TODO..
         try {
             return GeneralQueries.getUsersCount(this, appIdentifier, includeRecipeIds);
         } catch (SQLException e) {

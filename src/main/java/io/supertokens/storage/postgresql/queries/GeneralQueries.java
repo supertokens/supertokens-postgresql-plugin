@@ -512,8 +512,9 @@ public class GeneralQueries {
     public static long getUsersCount(Start start, AppIdentifier appIdentifier, RECIPE_ID[] includeRecipeIds)
             throws SQLException, StorageQueryException {
         StringBuilder QUERY = new StringBuilder("SELECT COUNT(*) as total FROM " + getConfig(start).getUsersTable());
+        QUERY.append(" WHERE app_id = ?");
         if (includeRecipeIds != null && includeRecipeIds.length > 0) {
-            QUERY.append(" WHERE app_id = ? AND recipe_id IN (");
+            QUERY.append(" AND recipe_id IN (");
             for (int i = 0; i < includeRecipeIds.length; i++) {
                 QUERY.append("?");
                 if (i != includeRecipeIds.length - 1) {
@@ -526,9 +527,11 @@ public class GeneralQueries {
 
         return execute(start, QUERY.toString(), pst -> {
             pst.setString(1, appIdentifier.getAppId());
-            for (int i = 0; i < includeRecipeIds.length; i++) {
-                // i+2 cause this starts with 1 and not 0, and 1 is appId
-                pst.setString(i + 2, includeRecipeIds[i].toString());
+            if (includeRecipeIds != null) {
+                for (int i = 0; i < includeRecipeIds.length; i++) {
+                    // i+2 cause this starts with 1 and not 0, and 1 is appId
+                    pst.setString(i + 2, includeRecipeIds[i].toString());
+                }
             }
         }, result -> {
             if (result.next()) {
@@ -671,7 +674,9 @@ public class GeneralQueries {
                             if (dashboardSearchTags.emails != null) {
                                 QUERY += " AND ";
                             } else {
-                                QUERY += " WHERE ";
+                                QUERY += " WHERE (thirdPartyToTenantTable.app_id = ? AND thirdPartyToTenantTable.tenant_id = ?) AND ";
+                                queryList.add(tenantIdentifier.getAppId());
+                                queryList.add(tenantIdentifier.getTenantId());
                             }
 
                             QUERY += " ( thirdPartyTable.third_party_id LIKE ?";
@@ -730,7 +735,9 @@ public class GeneralQueries {
                             if (dashboardSearchTags.emails != null) {
                                 QUERY += " AND ";
                             } else {
-                                QUERY += " WHERE ";
+                                QUERY += " WHERE (passwordlessTable.app_id = ? AND passwordlessTable.tenant_id = ?) AND ";
+                                queryList.add(tenantIdentifier.getAppId());
+                                queryList.add(tenantIdentifier.getTenantId());
                             }
 
                             QUERY += " ( passwordlessTable.phone_number LIKE ?";
