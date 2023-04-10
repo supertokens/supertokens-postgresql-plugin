@@ -26,6 +26,7 @@ import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.dashboard.DashboardSessionInfo;
 import io.supertokens.pluginInterface.dashboard.DashboardUser;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.storage.postgresql.QueryExecutorTemplate;
 import io.supertokens.storage.postgresql.ResultSetValueExtractor;
 import io.supertokens.storage.postgresql.Start;
@@ -39,12 +40,15 @@ public class DashboardQueries {
         String dashboardUsersTable = Config.getConfig(start).getDashboardUsersTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + dashboardUsersTable + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "user_id CHAR(36) NOT NULL,"
-                + "email VARCHAR(256) NOT NULL CONSTRAINT " +
-                Utils.getConstraintName(schema, dashboardUsersTable, "email", "key") + " UNIQUE,"
-                + "password_hash VARCHAR(256) NOT NULL," + "time_joined BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, dashboardUsersTable, null, "pkey") +
-                " PRIMARY KEY (user_id));";
+                + "email VARCHAR(256) NOT NULL,"
+                + "password_hash VARCHAR(256) NOT NULL,"
+                + "time_joined BIGINT NOT NULL,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, dashboardUsersTable, "email", "key")
+                + " UNIQUE (app_id, email),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, dashboardUsersTable, null, "pkey")
+                + " PRIMARY KEY (app_id, user_id));";
         // @formatter:on
     }
 
@@ -53,57 +57,70 @@ public class DashboardQueries {
         String tableName = Config.getConfig(start).getDashboardSessionsTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "session_id CHAR(36) NOT NULL,"
                 + "user_id CHAR(36) NOT NULL,"
                 + "time_created BIGINT NOT NULL,"
                 + "expiry BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey") + " PRIMARY KEY(session_id),"
-                + ("CONSTRAINT " + Utils.getConstraintName(schema, tableName, "user_id", "fkey") + " FOREIGN KEY (user_id)"
-                + " REFERENCES " + Config.getConfig(start).getDashboardUsersTable() + "(user_id)"
-                + " ON DELETE CASCADE ON UPDATE CASCADE);");
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
+                + " PRIMARY KEY(app_id, session_id),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "user_id", "fkey")
+                + " FOREIGN KEY (app_id, user_id)"
+                + " REFERENCES " + Config.getConfig(start).getDashboardUsersTable() + "(app_id, user_id)"
+                + " ON DELETE CASCADE ON UPDATE CASCADE);";
         // @formatter:on
     }
 
     static String getQueryToCreateDashboardUserSessionsExpiryIndex(Start start) {
         return "CREATE INDEX dashboard_user_sessions_expiry_index ON "
-                + Config.getConfig(start).getDashboardSessionsTable() + "(expiry);";
+                + Config.getConfig(start).getDashboardSessionsTable() + "(app_id, expiry);";
     }
 
-    public static void createDashboardUser(Start start, String userId, String email, String passwordHash,
-            long timeJoined) throws SQLException, StorageQueryException {
+    public static void createDashboardUser(Start start, AppIdentifier appIdentifier, String userId, String email,
+                                           String passwordHash, long timeJoined)
+            throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + Config.getConfig(start).getDashboardUsersTable()
-                + "(user_id, email, password_hash, time_joined)" + " VALUES(?, ?, ?, ?)";
+                + "(app_id, user_id, email, password_hash, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
         QueryExecutorTemplate.update(start, QUERY, pst -> {
-            pst.setString(1, userId);
-            pst.setString(2, email);
-            pst.setString(3, passwordHash);
-            pst.setLong(4, timeJoined);
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+            pst.setString(3, email);
+            pst.setString(4, passwordHash);
+            pst.setLong(5, timeJoined);
         });
     }
 
-    public static boolean deleteDashboardUserWithUserId(Start start, String userId)
+    public static boolean deleteDashboardUserWithUserId(Start start, AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
 
         String QUERY = "DELETE FROM " + Config.getConfig(start).getDashboardUsersTable()
-                + " WHERE user_id = ?";
+                + " WHERE app_id = ? AND user_id = ?";
         // store the number of rows updated
-        int rowUpdatedCount = QueryExecutorTemplate.update(start, QUERY, pst -> pst.setString(1, userId));
+        int rowUpdatedCount = QueryExecutorTemplate.update(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        });
 
         return rowUpdatedCount > 0;
 
     };
 
-    public static DashboardUser[] getAllDashBoardUsers(Start start) throws SQLException, StorageQueryException {
+    public static DashboardUser[] getAllDashBoardUsers(Start start, AppIdentifier appIdentifier) throws SQLException, StorageQueryException {
         String QUERY = "SELECT * FROM "
-                + Config.getConfig(start).getDashboardUsersTable() + " ORDER BY time_joined ASC";
-        return QueryExecutorTemplate.execute(start, QUERY, null, new DashboardUserInfoResultExtractor());
+                + Config.getConfig(start).getDashboardUsersTable() + " WHERE app_id = ? ORDER BY time_joined ASC";
+        return QueryExecutorTemplate.execute(start, QUERY,
+                pst -> pst.setString(1, appIdentifier.getAppId()),
+                new DashboardUserInfoResultExtractor());
     }
 
-    public static DashboardUser getDashboardUserByUserId(Start start, String userId)
+    public static DashboardUser getDashboardUserByUserId(Start start, AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT * FROM "
-                + Config.getConfig(start).getDashboardUsersTable() + " WHERE user_id = ?";
-        return QueryExecutorTemplate.execute(start, QUERY, pst -> pst.setString(1, userId), result -> {
+                + Config.getConfig(start).getDashboardUsersTable() + " WHERE app_id = ? AND user_id = ?";
+        return QueryExecutorTemplate.execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, result -> {
             if (result.next()) {
                 return DashboardInfoMapper.getInstance().mapOrThrow(result);
             }
@@ -111,47 +128,57 @@ public class DashboardQueries {
         });
     }
 
-    public static boolean updateDashboardUsersEmailWithUserId_Transaction(Start start, Connection con, String userId,
-            String newEmail) throws SQLException, StorageQueryException {
+    public static boolean updateDashboardUsersEmailWithUserId_Transaction(Start start, Connection con,
+                                                                          AppIdentifier appIdentifier, String userId,
+                                                                          String newEmail)
+            throws SQLException, StorageQueryException {
         String QUERY = "UPDATE " + Config.getConfig(start).getDashboardUsersTable()
-                + " SET email = ? WHERE user_id = ?";
+                + " SET email = ? WHERE app_id = ? AND user_id = ?";
         int rowsUpdated = QueryExecutorTemplate.update(con, QUERY, pst -> {
             pst.setString(1, newEmail);
-            pst.setString(2, userId);
+            pst.setString(2, appIdentifier.getAppId());
+            pst.setString(3, userId);
         });
 
         return rowsUpdated > 0;
     }
 
-    public static boolean updateDashboardUsersPasswordWithUserId_Transaction(Start start, Connection con, String userId,
-            String newPassword) throws SQLException, StorageQueryException {
+    public static boolean updateDashboardUsersPasswordWithUserId_Transaction(Start start, Connection con,
+                                                                             AppIdentifier appIdentifier,
+                                                                             String userId, String newPassword)
+            throws SQLException, StorageQueryException {
         String QUERY = "UPDATE " + Config.getConfig(start).getDashboardUsersTable()
-                + " SET password_hash = ? WHERE user_id = ?";
+                + " SET password_hash = ? WHERE app_id = ? AND user_id = ?";
         int rowsUpdated = QueryExecutorTemplate.update(con, QUERY, pst -> {
             pst.setString(1, newPassword);
-            pst.setString(2, userId);
+            pst.setString(2, appIdentifier.getAppId());
+            pst.setString(3, userId);
         });
 
         return rowsUpdated > 0;
     }
 
-    public static void createDashboardSession(Start start, String userId, String sessionId, long timeCreated,
+    public static void createDashboardSession(Start start, AppIdentifier appIdentifier, String userId, String sessionId, long timeCreated,
             long expiry) throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + Config.getConfig(start).getDashboardSessionsTable()
-                + "(user_id, session_id, time_created, expiry)" + " VALUES(?, ?, ?, ?)";
+                + "(app_id, user_id, session_id, time_created, expiry)" + " VALUES(?, ?, ?, ?, ?)";
         QueryExecutorTemplate.update(start, QUERY, pst -> {
-            pst.setString(1, userId);
-            pst.setString(2, sessionId);
-            pst.setLong(3, timeCreated);
-            pst.setLong(4, expiry);
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+            pst.setString(3, sessionId);
+            pst.setLong(4, timeCreated);
+            pst.setLong(5, expiry);
         });
     }
 
-    public static DashboardSessionInfo getSessionInfoWithSessionId(Start start, String sessionId)
+    public static DashboardSessionInfo getSessionInfoWithSessionId(Start start, AppIdentifier appIdentifier, String sessionId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT * FROM "
-                + Config.getConfig(start).getDashboardSessionsTable() + " WHERE session_id = ?";
-        return QueryExecutorTemplate.execute(start, QUERY, pst -> pst.setString(1, sessionId), result -> {
+                + Config.getConfig(start).getDashboardSessionsTable() + " WHERE app_id = ? AND session_id = ?";
+        return QueryExecutorTemplate.execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, sessionId);
+        }, result -> {
             if (result.next()) {
                 return DashboardSessionInfoMapper.getInstance().mapOrThrow(result);
             }
@@ -159,11 +186,14 @@ public class DashboardQueries {
         });
     }
 
-    public static DashboardSessionInfo[] getAllSessionsForUserId(Start start, String userId)
+    public static DashboardSessionInfo[] getAllSessionsForUserId(Start start, AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT * FROM "
-                + Config.getConfig(start).getDashboardSessionsTable() + " WHERE user_id = ?";
-        return QueryExecutorTemplate.execute(start, QUERY, pst -> pst.setString(1, userId),
+                + Config.getConfig(start).getDashboardSessionsTable() + " WHERE app_id = ? AND user_id = ?";
+        return QueryExecutorTemplate.execute(start, QUERY, pst -> {
+                    pst.setString(1, appIdentifier.getAppId());
+                    pst.setString(2, userId);
+                },
                 new DashboardSessionInfoResultExtractor());
     }
 
@@ -175,11 +205,14 @@ public class DashboardQueries {
         QueryExecutorTemplate.update(start, QUERY, pst -> pst.setLong(1, currentTimeMillis));
     }
 
-    public static DashboardUser getDashboardUserByEmail(Start start, String email)
+    public static DashboardUser getDashboardUserByEmail(Start start, AppIdentifier appIdentifier, String email)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT * FROM "
-                + Config.getConfig(start).getDashboardUsersTable() + " WHERE email = ?";
-        return QueryExecutorTemplate.execute(start, QUERY, pst -> pst.setString(1, email), result -> {
+                + Config.getConfig(start).getDashboardUsersTable() + " WHERE app_id = ? AND email = ?";
+        return QueryExecutorTemplate.execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, email);
+        }, result -> {
             if (result.next()) {
                 return DashboardInfoMapper.getInstance().mapOrThrow(result);
             }
@@ -187,12 +220,15 @@ public class DashboardQueries {
         });
     }
 
-    public static boolean deleteDashboardUserSessionWithSessionId(Start start, String sessionId)
+    public static boolean deleteDashboardUserSessionWithSessionId(Start start, AppIdentifier appIdentifier, String sessionId)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + Config.getConfig(start).getDashboardSessionsTable()
-                + " WHERE session_id = ?";
+                + " WHERE app_id = ? AND session_id = ?";
         // store the number of rows updated
-        int rowUpdatedCount = QueryExecutorTemplate.update(start, QUERY, pst -> pst.setString(1, sessionId));
+        int rowUpdatedCount = QueryExecutorTemplate.update(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, sessionId);
+        });
 
         return rowUpdatedCount > 0;
     }
