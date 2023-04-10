@@ -22,6 +22,7 @@ import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.dashboard.DashboardSearchTags;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
@@ -508,14 +509,14 @@ public class GeneralQueries {
         });
     }
 
-    public static long getUsersCount(Start start, RECIPE_ID[] includeRecipeIds)
+    public static long getUsersCount(Start start, AppIdentifier appIdentifier, RECIPE_ID[] includeRecipeIds)
             throws SQLException, StorageQueryException {
         StringBuilder QUERY = new StringBuilder("SELECT COUNT(*) as total FROM " + getConfig(start).getUsersTable());
+        QUERY.append(" WHERE app_id = ?");
         if (includeRecipeIds != null && includeRecipeIds.length > 0) {
-            QUERY.append(" WHERE recipe_id IN (");
+            QUERY.append(" AND recipe_id IN (");
             for (int i = 0; i < includeRecipeIds.length; i++) {
-                String recipeId = includeRecipeIds[i].toString();
-                QUERY.append("'").append(recipeId).append("'");
+                QUERY.append("?");
                 if (i != includeRecipeIds.length - 1) {
                     // not the last element
                     QUERY.append(",");
@@ -524,7 +525,15 @@ public class GeneralQueries {
             QUERY.append(")");
         }
 
-        return execute(start, QUERY.toString(), NO_OP_SETTER, result -> {
+        return execute(start, QUERY.toString(), pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            if (includeRecipeIds != null) {
+                for (int i = 0; i < includeRecipeIds.length; i++) {
+                    // i+2 cause this starts with 1 and not 0, and 1 is appId
+                    pst.setString(i + 2, includeRecipeIds[i].toString());
+                }
+            }
+        }, result -> {
             if (result.next()) {
                 return result.getLong("total");
             }
@@ -532,11 +541,58 @@ public class GeneralQueries {
         });
     }
 
-    public static boolean doesUserIdExist(Start start, String userId) throws SQLException, StorageQueryException {
+    public static long getUsersCount(Start start, TenantIdentifier tenantIdentifier, RECIPE_ID[] includeRecipeIds)
+            throws SQLException, StorageQueryException {
+        StringBuilder QUERY = new StringBuilder("SELECT COUNT(*) as total FROM " + getConfig(start).getUsersTable());
+        QUERY.append(" WHERE app_id = ? AND tenant_id = ?");
+        if (includeRecipeIds != null && includeRecipeIds.length > 0) {
+            QUERY.append(" AND recipe_id IN (");
+            for (int i = 0; i < includeRecipeIds.length; i++) {
+                QUERY.append("?");
+                if (i != includeRecipeIds.length - 1) {
+                    // not the last element
+                    QUERY.append(",");
+                }
+            }
+            QUERY.append(")");
+        }
 
-        String QUERY = "SELECT 1 FROM " + getConfig(start).getUsersTable() + " WHERE user_id = ?";
-        return execute(start, QUERY, pst -> pst.setString(1, userId), ResultSet::next);
+        return execute(start, QUERY.toString(), pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            if (includeRecipeIds != null) {
+                for (int i = 0; i < includeRecipeIds.length; i++) {
+                    // i+3 cause this starts with 1 and not 0, and 1 is appId, 2 is tenantId
+                    pst.setString(i + 3, includeRecipeIds[i].toString());
+                }
+            }
+        }, result -> {
+            if (result.next()) {
+                return result.getLong("total");
+            }
+            return 0L;
+        });
+    }
 
+    public static boolean doesUserIdExist(Start start, AppIdentifier appIdentifier, String userId) throws SQLException, StorageQueryException {
+
+        String QUERY = "SELECT 1 FROM " + getConfig(start).getUsersTable()
+                + " WHERE app_id = ? AND user_id = ?";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, ResultSet::next);
+    }
+
+    public static boolean doesUserIdExist(Start start, TenantIdentifier tenantIdentifier, String userId) throws SQLException, StorageQueryException {
+
+        String QUERY = "SELECT 1 FROM " + getConfig(start).getUsersTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND user_id = ?";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, userId);
+        }, ResultSet::next);
     }
 
     public static AuthRecipeUserInfo[] getUsers(Start start, TenantIdentifier tenantIdentifier, @NotNull Integer limit,
@@ -559,11 +615,15 @@ public class GeneralQueries {
                     if (dashboardSearchTags.shouldEmailPasswordTableBeSearched()) {
                         String QUERY = "SELECT  allAuthUsersTable.*" + " FROM " + getConfig(start).getUsersTable()
                                 + " AS allAuthUsersTable" +
-                                " JOIN " + getConfig(start).getEmailPasswordUsersTable()
-                                + " AS emailpasswordTable ON allAuthUsersTable.user_id = emailpasswordTable.user_id";
+                                " JOIN " + getConfig(start).getEmailPasswordUserToTenantTable()
+                                + " AS emailpasswordTable ON allAuthUsersTable.app_id = emailpasswordTable.app_id AND "
+                                + "allAuthUsersTable.user_id = emailpasswordTable.user_id";
 
                         // attach email tags to queries
-                        QUERY = QUERY + " WHERE emailpasswordTable.email LIKE ? OR emailpasswordTable.email LIKE ?";
+                        QUERY = QUERY + " WHERE (emailpasswordTable.app_id = ? AND emailpasswordTable.tenant_id = ?) AND"
+                                + " (emailpasswordTable.email LIKE ? OR emailpasswordTable.email LIKE ?)";
+                        queryList.add(tenantIdentifier.getAppId());
+                        queryList.add(tenantIdentifier.getTenantId());
                         queryList.add(dashboardSearchTags.emails.get(0) + "%");
                         queryList.add("%@" + dashboardSearchTags.emails.get(0) + "%");
                         for (int i = 1; i < dashboardSearchTags.emails.size(); i++) {
@@ -583,12 +643,19 @@ public class GeneralQueries {
                         String QUERY = "SELECT  allAuthUsersTable.*" + " FROM " + getConfig(start).getUsersTable()
                                 + " AS allAuthUsersTable" +
                                 " JOIN " + getConfig(start).getThirdPartyUsersTable()
-                                + " AS thirdPartyTable ON allAuthUsersTable.user_id = thirdPartyTable.user_id";
+                                + " AS thirdPartyTable ON allAuthUsersTable.app_id = thirdPartyTable.app_id AND"
+                                + " allAuthUsersTable.user_id = thirdPartyTable.user_id"
+                                + " JOIN " + getConfig(start).getThirdPartyUserToTenantTable()
+                                + " AS thirdPartyToTenantTable ON thirdPartyTable.app_id = thirdPartyToTenantTable.app_id AND"
+                                + " thirdPartyTable.user_id = thirdPartyToTenantTable.user_id";
 
                         // check if email tag is present
                         if (dashboardSearchTags.emails != null) {
 
-                            QUERY += " WHERE ( thirdPartyTable.email LIKE ? OR thirdPartyTable.email LIKE ?";
+                            QUERY += " WHERE (thirdPartyToTenantTable.app_id = ? AND thirdPartyToTenantTable.tenant_id = ?)"
+                                    + " AND ( thirdPartyTable.email LIKE ? OR thirdPartyTable.email LIKE ?";
+                            queryList.add(tenantIdentifier.getAppId());
+                            queryList.add(tenantIdentifier.getTenantId());
                             queryList.add(dashboardSearchTags.emails.get(0) + "%");
                             queryList.add("%@" + dashboardSearchTags.emails.get(0) + "%");
 
@@ -607,7 +674,9 @@ public class GeneralQueries {
                             if (dashboardSearchTags.emails != null) {
                                 QUERY += " AND ";
                             } else {
-                                QUERY += " WHERE ";
+                                QUERY += " WHERE (thirdPartyToTenantTable.app_id = ? AND thirdPartyToTenantTable.tenant_id = ?) AND ";
+                                queryList.add(tenantIdentifier.getAppId());
+                                queryList.add(tenantIdentifier.getTenantId());
                             }
 
                             QUERY += " ( thirdPartyTable.third_party_id LIKE ?";
@@ -638,13 +707,17 @@ public class GeneralQueries {
                     if (dashboardSearchTags.shouldPasswordlessTableBeSearched()) {
                         String QUERY = "SELECT  allAuthUsersTable.*" + " FROM " + getConfig(start).getUsersTable()
                                 + " AS allAuthUsersTable" +
-                                " JOIN " + getConfig(start).getPasswordlessUsersTable()
-                                + " AS passwordlessTable ON allAuthUsersTable.user_id = passwordlessTable.user_id";
+                                " JOIN " + getConfig(start).getPasswordlessUserToTenantTable()
+                                + " AS passwordlessTable ON allAuthUsersTable.app_id = passwordlessTable.app_id AND"
+                                + " allAuthUsersTable.user_id = passwordlessTable.user_id";
 
                         // check if email tag is present
                         if (dashboardSearchTags.emails != null) {
 
-                            QUERY = QUERY + " WHERE ( passwordlessTable.email LIKE ? OR passwordlessTable.email LIKE ?";
+                            QUERY = QUERY + " WHERE (passwordlessTable.app_id = ? AND passwordlessTable.tenant_id = ?)"
+                                    + " AND ( passwordlessTable.email LIKE ? OR passwordlessTable.email LIKE ?";
+                            queryList.add(tenantIdentifier.getAppId());
+                            queryList.add(tenantIdentifier.getTenantId());
                             queryList.add(dashboardSearchTags.emails.get(0) + "%");
                             queryList.add("%@" + dashboardSearchTags.emails.get(0) + "%");
                             for (int i = 1; i < dashboardSearchTags.emails.size(); i++) {
@@ -662,7 +735,9 @@ public class GeneralQueries {
                             if (dashboardSearchTags.emails != null) {
                                 QUERY += " AND ";
                             } else {
-                                QUERY += " WHERE ";
+                                QUERY += " WHERE (passwordlessTable.app_id = ? AND passwordlessTable.tenant_id = ?) AND ";
+                                queryList.add(tenantIdentifier.getAppId());
+                                queryList.add(tenantIdentifier.getTenantId());
                             }
 
                             QUERY += " ( passwordlessTable.phone_number LIKE ?";
@@ -715,8 +790,8 @@ public class GeneralQueries {
             if (includeRecipeIds != null && includeRecipeIds.length > 0) {
                 RECIPE_ID_CONDITION.append("recipe_id IN (");
                 for (int i = 0; i < includeRecipeIds.length; i++) {
-                    String recipeId = includeRecipeIds[i].toString();
-                    RECIPE_ID_CONDITION.append("'").append(recipeId).append("'");
+
+                    RECIPE_ID_CONDITION.append("?");
                     if (i != includeRecipeIds.length - 1) {
                         // not the last element
                         RECIPE_ID_CONDITION.append(",");
@@ -733,13 +808,23 @@ public class GeneralQueries {
                 String timeJoinedOrderSymbol = timeJoinedOrder.equals("ASC") ? ">" : "<";
                 String QUERY = "SELECT user_id, recipe_id FROM " + getConfig(start).getUsersTable() + " WHERE "
                         + recipeIdCondition + " (time_joined " + timeJoinedOrderSymbol
-                        + " ? OR (time_joined = ? AND user_id <= ?)) ORDER BY time_joined " + timeJoinedOrder
+                        + " ? OR (time_joined = ? AND user_id <= ?)) AND app_id = ? AND tenant_id = ?"
+                        + " ORDER BY time_joined " + timeJoinedOrder
                         + ", user_id DESC LIMIT ?";
                 usersFromQuery = execute(start, QUERY, pst -> {
-                    pst.setLong(1, timeJoined);
-                    pst.setLong(2, timeJoined);
-                    pst.setString(3, userId);
-                    pst.setInt(4, limit);
+                    if (includeRecipeIds != null) {
+                        for (int i = 0; i < includeRecipeIds.length; i++) {
+                            // i+1 cause this starts with 1 and not 0
+                            pst.setString(i + 1, includeRecipeIds[i].toString());
+                        }
+                    }
+                    int baseIndex = includeRecipeIds == null ? 0 : includeRecipeIds.length;
+                    pst.setLong(baseIndex + 1, timeJoined);
+                    pst.setLong(baseIndex + 2, timeJoined);
+                    pst.setString(baseIndex + 3, userId);
+                    pst.setString(baseIndex + 4, tenantIdentifier.getAppId());
+                    pst.setString(baseIndex + 5, tenantIdentifier.getTenantId());
+                    pst.setInt(baseIndex + 6, limit);
                 }, result -> {
                     List<UserInfoPaginationResultHolder> temp = new ArrayList<>();
                     while (result.next()) {
@@ -750,12 +835,24 @@ public class GeneralQueries {
                 });
             } else {
                 String recipeIdCondition = RECIPE_ID_CONDITION.toString();
+                String QUERY = "SELECT user_id, recipe_id FROM " + getConfig(start).getUsersTable() + " WHERE ";
                 if (!recipeIdCondition.equals("")) {
-                    recipeIdCondition = " WHERE " + recipeIdCondition;
+                    QUERY += recipeIdCondition + " AND";
                 }
-                String QUERY = "SELECT user_id, recipe_id FROM " + getConfig(start).getUsersTable() + recipeIdCondition
-                        + " ORDER BY time_joined " + timeJoinedOrder + ", user_id DESC LIMIT ?";
-                usersFromQuery = execute(start, QUERY, pst -> pst.setInt(1, limit), result -> {
+                QUERY += " app_id = ? AND tenant_id = ? ORDER BY time_joined " + timeJoinedOrder
+                        + ", user_id DESC LIMIT ?";
+                usersFromQuery = execute(start, QUERY, pst -> {
+                    if (includeRecipeIds != null) {
+                        for (int i = 0; i < includeRecipeIds.length; i++) {
+                            // i+1 cause this starts with 1 and not 0
+                            pst.setString(i + 1, includeRecipeIds[i].toString());
+                        }
+                    }
+                    int baseIndex = includeRecipeIds == null ? 0 : includeRecipeIds.length;
+                    pst.setString(baseIndex + 1, tenantIdentifier.getAppId());
+                    pst.setString(baseIndex + 2, tenantIdentifier.getTenantId());
+                    pst.setInt(baseIndex + 3, limit);
+                }, result -> {
                     List<UserInfoPaginationResultHolder> temp = new ArrayList<>();
                     while (result.next()) {
                         temp.add(new UserInfoPaginationResultHolder(result.getString("user_id"),
