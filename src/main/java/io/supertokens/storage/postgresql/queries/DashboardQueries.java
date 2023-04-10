@@ -48,7 +48,11 @@ public class DashboardQueries {
                 + "CONSTRAINT " + Utils.getConstraintName(schema, dashboardUsersTable, "email", "key")
                 + " UNIQUE (app_id, email),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, dashboardUsersTable, null, "pkey")
-                + " PRIMARY KEY (app_id, user_id));";
+                + " PRIMARY KEY (app_id, user_id),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, dashboardUsersTable, "app_id", "fkey")
+                + " FOREIGN KEY(app_id)"
+                + " REFERENCES " + Config.getConfig(start).getAppsTable() +  " (app_id) ON DELETE CASCADE"
+                + ");";
         // @formatter:on
     }
 

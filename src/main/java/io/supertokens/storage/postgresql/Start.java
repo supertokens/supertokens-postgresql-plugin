@@ -2420,7 +2420,7 @@ public class Start
     @Override
     public void createNewDashboardUser(AppIdentifier appIdentifier, DashboardUser userInfo)
             throws StorageQueryException, io.supertokens.pluginInterface.dashboard.exceptions.DuplicateUserIdException,
-            io.supertokens.pluginInterface.dashboard.exceptions.DuplicateEmailException {
+            io.supertokens.pluginInterface.dashboard.exceptions.DuplicateEmailException, TenantOrAppNotFoundException {
         try {
             DashboardQueries.createDashboardUser(this, appIdentifier, userInfo.userId, userInfo.email,
                     userInfo.passwordHash,
@@ -2436,8 +2436,11 @@ public class Start
                 if (isUniqueConstraintError(serverErrorMessage, config.getDashboardUsersTable(),
                         "email")) {
                     throw new io.supertokens.pluginInterface.dashboard.exceptions.DuplicateEmailException();
-
                 }
+                if (isForeignKeyConstraintError(serverErrorMessage, config.getDashboardUsersTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
+
             }
             throw new StorageQueryException(e);
         }
