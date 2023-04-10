@@ -77,7 +77,7 @@ public class DashboardQueries {
 
     static String getQueryToCreateDashboardUserSessionsExpiryIndex(Start start) {
         return "CREATE INDEX dashboard_user_sessions_expiry_index ON "
-                + Config.getConfig(start).getDashboardSessionsTable() + "(app_id, expiry);";
+                + Config.getConfig(start).getDashboardSessionsTable() + "(expiry);";
     }
 
     public static void createDashboardUser(Start start, AppIdentifier appIdentifier, String userId, String email,
