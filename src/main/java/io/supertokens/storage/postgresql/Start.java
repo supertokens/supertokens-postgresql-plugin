@@ -2294,9 +2294,8 @@ public class Start
     @Override
     public boolean deleteDashboardUserWithUserId(AppIdentifier appIdentifier, String userId) throws
             StorageQueryException {
-        // TODO..
         try {
-            return DashboardQueries.deleteDashboardUserWithUserId(this, userId);
+            return DashboardQueries.deleteDashboardUserWithUserId(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -2306,9 +2305,8 @@ public class Start
     public void createNewDashboardUserSession(AppIdentifier appIdentifier, String userId, String sessionId,
                                               long timeCreated, long expiry)
             throws StorageQueryException, UserIdNotFoundException {
-        // TODO..
         try {
-            DashboardQueries.createDashboardSession(this, userId, sessionId, timeCreated,
+            DashboardQueries.createDashboardSession(this, appIdentifier, userId, sessionId, timeCreated,
                     expiry);
         } catch (SQLException e) {
             if (e instanceof PSQLException) {
@@ -2327,9 +2325,8 @@ public class Start
     @Override
     public DashboardSessionInfo[] getAllSessionsForUserId(AppIdentifier appIdentifier, String userId) throws
             StorageQueryException {
-        // TODO..
         try {
-            return DashboardQueries.getAllSessionsForUserId(this, userId);
+            return DashboardQueries.getAllSessionsForUserId(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -2338,9 +2335,8 @@ public class Start
     @Override
     public DashboardSessionInfo getSessionInfoWithSessionId(AppIdentifier appIdentifier, String sessionId) throws
             StorageQueryException {
-        // TODO..
         try {
-            return DashboardQueries.getSessionInfoWithSessionId(this, sessionId);
+            return DashboardQueries.getSessionInfoWithSessionId(this, appIdentifier, sessionId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -2349,9 +2345,8 @@ public class Start
     @Override
     public boolean revokeSessionWithSessionId(AppIdentifier appIdentifier, String sessionId) throws
             StorageQueryException {
-        // TODO..
         try {
-            return DashboardQueries.deleteDashboardUserSessionWithSessionId(this,
+            return DashboardQueries.deleteDashboardUserSessionWithSessionId(this, appIdentifier,
                     sessionId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -2365,11 +2360,10 @@ public class Start
                                                                 String newEmail) throws StorageQueryException,
             io.supertokens.pluginInterface.dashboard.exceptions.DuplicateEmailException,
             UserIdNotFoundException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             if (!DashboardQueries.updateDashboardUsersEmailWithUserId_Transaction(this,
-                    sqlCon, userId, newEmail)) {
+                    sqlCon, appIdentifier, userId, newEmail)) {
                 throw new UserIdNotFoundException();
             }
         } catch (SQLException e) {
@@ -2393,12 +2387,10 @@ public class Start
                                                                    TransactionConnection con, String userId,
                                                                    String newPassword)
             throws StorageQueryException, UserIdNotFoundException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
             if (!DashboardQueries.updateDashboardUsersPasswordWithUserId_Transaction(this,
-                    sqlCon, userId,
-                    newPassword)) {
+                    sqlCon, appIdentifier, userId, newPassword)) {
                 throw new UserIdNotFoundException();
             }
         } catch (SQLException e) {
@@ -2409,8 +2401,7 @@ public class Start
     @Override
     public DashboardUser[] getAllDashboardUsers(AppIdentifier appIdentifier) throws StorageQueryException {
         try {
-            // TODO..
-            return DashboardQueries.getAllDashBoardUsers(this);
+            return DashboardQueries.getAllDashBoardUsers(this, appIdentifier);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -2420,8 +2411,7 @@ public class Start
     public DashboardUser getDashboardUserByUserId(AppIdentifier appIdentifier, String userId)
             throws StorageQueryException {
         try {
-            // TODO..
-            return DashboardQueries.getDashboardUserByUserId(this, userId);
+            return DashboardQueries.getDashboardUserByUserId(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -2430,10 +2420,9 @@ public class Start
     @Override
     public void createNewDashboardUser(AppIdentifier appIdentifier, DashboardUser userInfo)
             throws StorageQueryException, io.supertokens.pluginInterface.dashboard.exceptions.DuplicateUserIdException,
-            io.supertokens.pluginInterface.dashboard.exceptions.DuplicateEmailException {
-        // TODO..
+            io.supertokens.pluginInterface.dashboard.exceptions.DuplicateEmailException, TenantOrAppNotFoundException {
         try {
-            DashboardQueries.createDashboardUser(this, userInfo.userId, userInfo.email,
+            DashboardQueries.createDashboardUser(this, appIdentifier, userInfo.userId, userInfo.email,
                     userInfo.passwordHash,
                     userInfo.timeJoined);
         } catch (SQLException e) {
@@ -2447,8 +2436,11 @@ public class Start
                 if (isUniqueConstraintError(serverErrorMessage, config.getDashboardUsersTable(),
                         "email")) {
                     throw new io.supertokens.pluginInterface.dashboard.exceptions.DuplicateEmailException();
-
                 }
+                if (isForeignKeyConstraintError(serverErrorMessage, config.getDashboardUsersTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
+
             }
             throw new StorageQueryException(e);
         }
@@ -2459,8 +2451,7 @@ public class Start
     public DashboardUser getDashboardUserByEmail(AppIdentifier appIdentifier, String email)
             throws StorageQueryException {
         try {
-            // TODO..
-            return DashboardQueries.getDashboardUserByEmail(this, email);
+            return DashboardQueries.getDashboardUserByEmail(this, appIdentifier, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
