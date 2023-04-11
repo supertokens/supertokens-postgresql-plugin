@@ -686,7 +686,7 @@ public class Start
             }
         } else if (className.equals(TOTPStorage.class.getName())) {
             try {
-                TOTPDevice[] devices = TOTPQueries.getDevices(this, userId);
+                TOTPDevice[] devices = TOTPQueries.getDevices(this, appIdentifier, userId);
                 return devices.length > 0;
             } catch (SQLException e) {
                 throw new StorageQueryException(e);
@@ -761,7 +761,7 @@ public class Start
         } else if (className.equals(TOTPStorage.class.getName())) {
             try {
                 TOTPDevice device = new TOTPDevice(userId, "testDevice", "secret", 0, 30, false);
-                TOTPQueries.createDevice(this, device);
+                TOTPQueries.createDevice(this, new AppIdentifier(null, null), device);
             } catch (StorageTransactionLogicException e) {
                 throw new StorageQueryException(e.actualException);
             }
@@ -2470,10 +2470,9 @@ public class Start
     // TOTP recipe:
     @Override
     public void createDevice(AppIdentifier appIdentifier, TOTPDevice device)
-            throws StorageQueryException, DeviceAlreadyExistsException {
+            throws StorageQueryException, DeviceAlreadyExistsException, TenantOrAppNotFoundException {
         try {
-            // TODO..
-            TOTPQueries.createDevice(this, device);
+            TOTPQueries.createDevice(this, appIdentifier, device);
         } catch (StorageTransactionLogicException e) {
             Exception actualException = e.actualException;
 
@@ -2482,7 +2481,10 @@ public class Start
 
                 if (isPrimaryKeyError(errMsg, Config.getConfig(this).getTotpUserDevicesTable())) {
                     throw new DeviceAlreadyExistsException();
+                } else if (isForeignKeyConstraintError(errMsg, Config.getConfig(this).getTotpUsersTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
                 }
+
             }
 
             throw new StorageQueryException(e.actualException);
@@ -2493,8 +2495,7 @@ public class Start
     public void markDeviceAsVerified(AppIdentifier appIdentifier, String userId, String deviceName)
             throws StorageQueryException, UnknownDeviceException {
         try {
-            // TODO..
-            int matchedCount = TOTPQueries.markDeviceAsVerified(this, userId, deviceName);
+            int matchedCount = TOTPQueries.markDeviceAsVerified(this, appIdentifier, userId, deviceName);
             if (matchedCount == 0) {
                 // Note matchedCount != updatedCount
                 throw new UnknownDeviceException();
@@ -2509,10 +2510,9 @@ public class Start
     public int deleteDevice_Transaction(TransactionConnection con, AppIdentifier appIdentifier, String userId,
                                         String deviceName)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return TOTPQueries.deleteDevice_Transaction(this, sqlCon, userId, deviceName);
+            return TOTPQueries.deleteDevice_Transaction(this, sqlCon, appIdentifier, userId, deviceName);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -2521,10 +2521,9 @@ public class Start
     @Override
     public void removeUser_Transaction(TransactionConnection con, AppIdentifier appIdentifier, String userId)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            TOTPQueries.removeUser_Transaction(this, sqlCon, userId);
+            TOTPQueries.removeUser_Transaction(this, sqlCon, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -2534,9 +2533,8 @@ public class Start
     public void updateDeviceName(AppIdentifier appIdentifier, String userId, String oldDeviceName, String newDeviceName)
             throws StorageQueryException, DeviceAlreadyExistsException,
             UnknownDeviceException {
-        // TODO..
         try {
-            int updatedCount = TOTPQueries.updateDeviceName(this, userId, oldDeviceName, newDeviceName);
+            int updatedCount = TOTPQueries.updateDeviceName(this, appIdentifier, userId, oldDeviceName, newDeviceName);
             if (updatedCount == 0) {
                 throw new UnknownDeviceException();
             }
@@ -2553,9 +2551,8 @@ public class Start
     @Override
     public TOTPDevice[] getDevices(AppIdentifier appIdentifier, String userId)
             throws StorageQueryException {
-        // TODO..
         try {
-            return TOTPQueries.getDevices(this, userId);
+            return TOTPQueries.getDevices(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -2564,10 +2561,9 @@ public class Start
     @Override
     public TOTPDevice[] getDevices_Transaction(TransactionConnection con, AppIdentifier appIdentifier, String userId)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return TOTPQueries.getDevices_Transaction(this, sqlCon, userId);
+            return TOTPQueries.getDevices_Transaction(this, sqlCon, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -2576,11 +2572,11 @@ public class Start
     @Override
     public void insertUsedCode_Transaction(TransactionConnection con, TenantIdentifier tenantIdentifier,
                                            TOTPUsedCode usedCodeObj)
-            throws StorageQueryException, TotpNotEnabledException, UsedCodeAlreadyExistsException {
-        // TODO..
+            throws StorageQueryException, TotpNotEnabledException, UsedCodeAlreadyExistsException,
+            TenantOrAppNotFoundException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            TOTPQueries.insertUsedCode_Transaction(this, sqlCon, usedCodeObj);
+            TOTPQueries.insertUsedCode_Transaction(this, sqlCon, tenantIdentifier, usedCodeObj);
         } catch (SQLException e) {
             ServerErrorMessage err = ((PSQLException) e).getServerErrorMessage();
 
@@ -2589,6 +2585,8 @@ public class Start
             } else if (isForeignKeyConstraintError(err, Config.getConfig(this).getTotpUsedCodesTable(),
                     "user_id")) {
                 throw new TotpNotEnabledException();
+            } else if (isForeignKeyConstraintError(err, Config.getConfig(this).getTotpUsedCodesTable(), "tenant_id")) {
+                throw new TenantOrAppNotFoundException(tenantIdentifier);
             }
 
             throw new StorageQueryException(e);
@@ -2599,10 +2597,9 @@ public class Start
     public TOTPUsedCode[] getAllUsedCodesDescOrder_Transaction(TransactionConnection con,
                                                                TenantIdentifier tenantIdentifier, String userId)
             throws StorageQueryException {
-        // TODO..
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            return TOTPQueries.getAllUsedCodesDescOrder_Transaction(this, sqlCon, userId);
+            return TOTPQueries.getAllUsedCodesDescOrder_Transaction(this, sqlCon, tenantIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -2611,9 +2608,8 @@ public class Start
     @Override
     public int removeExpiredCodes(TenantIdentifier tenantIdentifier, long expiredBefore)
             throws StorageQueryException {
-        // TODO..
         try {
-            return TOTPQueries.removeExpiredCodes(this, expiredBefore);
+            return TOTPQueries.removeExpiredCodes(this, tenantIdentifier, expiredBefore);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
