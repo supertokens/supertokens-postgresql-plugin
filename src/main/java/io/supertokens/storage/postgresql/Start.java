@@ -2481,7 +2481,7 @@ public class Start
 
                 if (isPrimaryKeyError(errMsg, Config.getConfig(this).getTotpUserDevicesTable())) {
                     throw new DeviceAlreadyExistsException();
-                } else if (isForeignKeyConstraintError(errMsg, Config.getConfig(this).getTotpUserDevicesTable(), "app_id")) {
+                } else if (isForeignKeyConstraintError(errMsg, Config.getConfig(this).getTotpUsersTable(), "app_id")) {
                     throw new TenantOrAppNotFoundException(appIdentifier);
                 }
 
