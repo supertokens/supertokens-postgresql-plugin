@@ -2470,7 +2470,7 @@ public class Start
     // TOTP recipe:
     @Override
     public void createDevice(AppIdentifier appIdentifier, TOTPDevice device)
-            throws StorageQueryException, DeviceAlreadyExistsException {
+            throws StorageQueryException, DeviceAlreadyExistsException, TenantOrAppNotFoundException {
         try {
             TOTPQueries.createDevice(this, appIdentifier, device);
         } catch (StorageTransactionLogicException e) {
@@ -2481,7 +2481,10 @@ public class Start
 
                 if (isPrimaryKeyError(errMsg, Config.getConfig(this).getTotpUserDevicesTable())) {
                     throw new DeviceAlreadyExistsException();
+                } else if (isForeignKeyConstraintError(errMsg, Config.getConfig(this).getTotpUserDevicesTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
                 }
+
             }
 
             throw new StorageQueryException(e.actualException);
@@ -2569,7 +2572,8 @@ public class Start
     @Override
     public void insertUsedCode_Transaction(TransactionConnection con, TenantIdentifier tenantIdentifier,
                                            TOTPUsedCode usedCodeObj)
-            throws StorageQueryException, TotpNotEnabledException, UsedCodeAlreadyExistsException {
+            throws StorageQueryException, TotpNotEnabledException, UsedCodeAlreadyExistsException,
+            TenantOrAppNotFoundException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             TOTPQueries.insertUsedCode_Transaction(this, sqlCon, tenantIdentifier, usedCodeObj);
@@ -2581,6 +2585,8 @@ public class Start
             } else if (isForeignKeyConstraintError(err, Config.getConfig(this).getTotpUsedCodesTable(),
                     "user_id")) {
                 throw new TotpNotEnabledException();
+            } else if (isForeignKeyConstraintError(err, Config.getConfig(this).getTotpUsedCodesTable(), "tenant_id")) {
+                throw new TenantOrAppNotFoundException(tenantIdentifier);
             }
 
             throw new StorageQueryException(e);

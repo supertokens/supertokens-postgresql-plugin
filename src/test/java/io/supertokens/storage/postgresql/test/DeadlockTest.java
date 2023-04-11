@@ -270,6 +270,8 @@ public class DeadlockTest {
             } catch (TotpNotEnabledException | UsedCodeAlreadyExistsException e) {
                 // This should not happen
                 throw new StorageTransactionLogicException(e);
+            } catch (TenantOrAppNotFoundException e) {
+                throw new IllegalStateException(e);
             }
             return null;
         });
@@ -430,6 +432,8 @@ public class DeadlockTest {
             } catch (TotpNotEnabledException | UsedCodeAlreadyExistsException e) {
                 // This should not happen
                 throw new StorageTransactionLogicException(e);
+            } catch (TenantOrAppNotFoundException e) {
+                throw new IllegalStateException(e);
             }
             return null;
         });
@@ -531,6 +535,8 @@ public class DeadlockTest {
                     } catch (TotpNotEnabledException | UsedCodeAlreadyExistsException e) {
                         // This should not happen
                         throw new StorageTransactionLogicException(e);
+                    } catch (TenantOrAppNotFoundException e) {
+                        throw new IllegalStateException(e);
                     }
                     sqlStorage.commitTransaction(con);
                     t2State.set("commit");
