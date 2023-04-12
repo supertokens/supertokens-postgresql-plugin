@@ -56,6 +56,7 @@ public class SessionQueries {
                 + "expires_at BIGINT NOT NULL,"
                 + "created_at_time BIGINT NOT NULL,"
                 + "jwt_user_payload TEXT,"
+                + "use_static_key BOOLEAN NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, sessionInfoTable, null, "pkey")
                 + " PRIMARY KEY(app_id, tenant_id, session_handle),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, sessionInfoTable, "tenant_id", "fkey")
@@ -83,12 +84,14 @@ public class SessionQueries {
         // @formatter:on
     }
 
-    public static void createNewSession(Start start, TenantIdentifier tenantIdentifier, String sessionHandle, String userId, String refreshTokenHash2,
-                                        JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT, long createdAtTime)
+    public static void createNewSession(Start start, TenantIdentifier tenantIdentifier, String sessionHandle,
+                                        String userId, String refreshTokenHash2,
+                                        JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT,
+                                        long createdAtTime, boolean useStaticKey)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getSessionInfoTable()
                 + "(app_id, tenant_id, session_handle, user_id, refresh_token_hash_2, session_data, expires_at,"
-                + " jwt_user_payload, created_at_time)" + " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                + " jwt_user_payload, created_at_time, use_static_key)" + " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         update(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
@@ -100,6 +103,7 @@ public class SessionQueries {
             pst.setLong(7, expiry);
             pst.setString(8, userDataInJWT.toString());
             pst.setLong(9, createdAtTime);
+            pst.setBoolean(10, useStaticKey);
         });
     }
 
@@ -107,7 +111,7 @@ public class SessionQueries {
                                                          String sessionHandle)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT session_handle, user_id, refresh_token_hash_2, session_data, expires_at, "
-                + "created_at_time, jwt_user_payload FROM " + getConfig(start).getSessionInfoTable()
+                + "created_at_time, jwt_user_payload, use_static_key FROM " + getConfig(start).getSessionInfoTable()
                 + " WHERE app_id = ? AND tenant_id = ? AND session_handle = ? FOR UPDATE";
         return execute(con, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
@@ -123,7 +127,8 @@ public class SessionQueries {
 
     public static void updateSessionInfo_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,
                                                      String sessionHandle,
-                                                     String refreshTokenHash2, long expiry) throws SQLException, StorageQueryException {
+                                                     String refreshTokenHash2, long expiry)
+            throws SQLException, StorageQueryException {
         String QUERY = "UPDATE " + getConfig(start).getSessionInfoTable()
                 + " SET refresh_token_hash_2 = ?, expires_at = ?"
                 + " WHERE app_id = ? AND tenant_id = ? AND session_handle = ?";
@@ -137,7 +142,8 @@ public class SessionQueries {
         });
     }
 
-    public static int getNumberOfSessions(Start start, TenantIdentifier tenantIdentifier) throws SQLException, StorageQueryException {
+    public static int getNumberOfSessions(Start start, TenantIdentifier tenantIdentifier)
+            throws SQLException, StorageQueryException {
         String QUERY = "SELECT count(*) as num FROM " + getConfig(start).getSessionInfoTable()
                 + " WHERE app_id = ? AND tenant_id = ?";
 
@@ -152,7 +158,8 @@ public class SessionQueries {
         });
     }
 
-    public static int deleteSession(Start start, TenantIdentifier tenantIdentifier, String[] sessionHandles) throws SQLException, StorageQueryException {
+    public static int deleteSession(Start start, TenantIdentifier tenantIdentifier, String[] sessionHandles)
+            throws SQLException, StorageQueryException {
         if (sessionHandles.length == 0) {
             return 0;
         }
@@ -176,7 +183,8 @@ public class SessionQueries {
         });
     }
 
-    public static void deleteSessionsOfUser(Start start, AppIdentifier appIdentifier, String userId) throws SQLException, StorageQueryException {
+    public static void deleteSessionsOfUser(Start start, AppIdentifier appIdentifier, String userId)
+            throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getSessionInfoTable()
                 + " WHERE app_id = ? AND user_id = ?";
 
@@ -186,7 +194,8 @@ public class SessionQueries {
         });
     }
 
-    public static String[] getAllNonExpiredSessionHandlesForUser(Start start, TenantIdentifier tenantIdentifier, String userId)
+    public static String[] getAllNonExpiredSessionHandlesForUser(Start start, TenantIdentifier tenantIdentifier,
+                                                                 String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT session_handle FROM " + getConfig(start).getSessionInfoTable()
                 + " WHERE app_id = ? AND tenant_id = ? AND user_id = ? AND expires_at >= ?";
@@ -209,7 +218,8 @@ public class SessionQueries {
         });
     }
 
-    public static String[] getAllNonExpiredSessionHandlesForUser(Start start, AppIdentifier appIdentifier, String userId)
+    public static String[] getAllNonExpiredSessionHandlesForUser(Start start, AppIdentifier appIdentifier,
+                                                                 String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT session_handle FROM " + getConfig(start).getSessionInfoTable()
                 + " WHERE app_id = ? AND user_id = ? AND expires_at >= ?";
@@ -237,7 +247,8 @@ public class SessionQueries {
         update(start, QUERY, pst -> pst.setLong(1, currentTimeMillis()));
     }
 
-    public static int updateSession(Start start, TenantIdentifier tenantIdentifier, String sessionHandle, @Nullable JsonObject sessionData,
+    public static int updateSession(Start start, TenantIdentifier tenantIdentifier, String sessionHandle,
+                                    @Nullable JsonObject sessionData,
                                     @Nullable JsonObject jwtPayload) throws SQLException, StorageQueryException {
 
         if (sessionData == null && jwtPayload == null) {
@@ -271,9 +282,10 @@ public class SessionQueries {
         });
     }
 
-    public static SessionInfo getSession(Start start, TenantIdentifier tenantIdentifier, String sessionHandle) throws SQLException, StorageQueryException {
+    public static SessionInfo getSession(Start start, TenantIdentifier tenantIdentifier, String sessionHandle)
+            throws SQLException, StorageQueryException {
         String QUERY = "SELECT session_handle, user_id, refresh_token_hash_2, session_data, expires_at, "
-                + "created_at_time, jwt_user_payload FROM " + getConfig(start).getSessionInfoTable()
+                + "created_at_time, jwt_user_payload, use_static_key FROM " + getConfig(start).getSessionInfoTable()
                 + " WHERE app_id = ? AND tenant_id = ? AND session_handle = ?";
         return execute(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
@@ -350,7 +362,7 @@ public class SessionQueries {
                     result.getString("refresh_token_hash_2"),
                     jp.parse(result.getString("session_data")).getAsJsonObject(), result.getLong("expires_at"),
                     jp.parse(result.getString("jwt_user_payload")).getAsJsonObject(),
-                    result.getLong("created_at_time"));
+                    result.getLong("created_at_time"), result.getBoolean("use_static_key"));
         }
     }
 
