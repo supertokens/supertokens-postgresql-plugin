@@ -456,11 +456,11 @@ public class Start
     public void createNewSession(TenantIdentifier tenantIdentifier, String sessionHandle, String userId,
                                  String refreshTokenHash2,
                                  JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT,
-                                 long createdAtTime)
+                                 long createdAtTime, boolean useStaticKey)
             throws StorageQueryException, TenantOrAppNotFoundException {
         try {
             SessionQueries.createNewSession(this, tenantIdentifier, sessionHandle, userId, refreshTokenHash2,
-                    userDataInDatabase, expiry, userDataInJWT, createdAtTime);
+                    userDataInDatabase, expiry, userDataInJWT, createdAtTime, useStaticKey);
         } catch (SQLException e) {
             if (e instanceof PSQLException) {
                 PostgreSQLConfig config = Config.getConfig(this);
@@ -706,7 +706,7 @@ public class Start
             try {
                 createNewSession(new TenantIdentifier(null, null, null), "sessionHandle", userId, "refreshTokenHash",
                         new JsonObject(),
-                        System.currentTimeMillis() + 1000000, new JsonObject(), System.currentTimeMillis());
+                        System.currentTimeMillis() + 1000000, new JsonObject(), System.currentTimeMillis(), false);
             } catch (Exception e) {
                 throw new StorageQueryException(e);
             }
