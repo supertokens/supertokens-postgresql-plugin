@@ -108,6 +108,11 @@ public class Start
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
         MultitenancyStorage, DashboardSQLStorage, TOTPSQLStorage, ActiveUsersStorage {
 
+    // these configs are protected from being modified / viewed by the dev using the SuperTokens
+    // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
+    private static String[] PROTECTED_DB_CONFIG = new String[]{"postgresql_connection_pool_size",
+            "postgresql_connection_uri", "postgresql_host", "postgresql_port", "postgresql_user", "postgresql_password",
+            "postgresql_database_name", "postgresql_table_schema"};
     private static final Object appenderLock = new Object();
     public static boolean silent = false;
     private ResourceDistributor resourceDistributor = new ResourceDistributor();
@@ -775,6 +780,11 @@ public class Start
     @Override
     public void modifyConfigToAddANewUserPoolForTesting(JsonObject config, int poolNumber) {
         config.add("postgresql_database_name", new JsonPrimitive("st" + poolNumber));
+    }
+
+    @Override
+    public String[] getProtectedConfigsFromSuperTokensSaaSUsers() {
+        return PROTECTED_DB_CONFIG;
     }
 
     @Override
