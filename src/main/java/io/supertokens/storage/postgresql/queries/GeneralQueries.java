@@ -574,7 +574,8 @@ public class GeneralQueries {
         });
     }
 
-    public static boolean doesUserIdExist(Start start, AppIdentifier appIdentifier, String userId) throws SQLException, StorageQueryException {
+    public static boolean doesUserIdExist(Start start, AppIdentifier appIdentifier, String userId)
+            throws SQLException, StorageQueryException {
 
         String QUERY = "SELECT 1 FROM " + getConfig(start).getUsersTable()
                 + " WHERE app_id = ? AND user_id = ?";
@@ -584,7 +585,8 @@ public class GeneralQueries {
         }, ResultSet::next);
     }
 
-    public static boolean doesUserIdExist(Start start, TenantIdentifier tenantIdentifier, String userId) throws SQLException, StorageQueryException {
+    public static boolean doesUserIdExist(Start start, TenantIdentifier tenantIdentifier, String userId)
+            throws SQLException, StorageQueryException {
 
         String QUERY = "SELECT 1 FROM " + getConfig(start).getUsersTable()
                 + " WHERE app_id = ? AND tenant_id = ? AND user_id = ?";
@@ -620,7 +622,8 @@ public class GeneralQueries {
                                 + "allAuthUsersTable.user_id = emailpasswordTable.user_id";
 
                         // attach email tags to queries
-                        QUERY = QUERY + " WHERE (emailpasswordTable.app_id = ? AND emailpasswordTable.tenant_id = ?) AND"
+                        QUERY = QUERY +
+                                " WHERE (emailpasswordTable.app_id = ? AND emailpasswordTable.tenant_id = ?) AND"
                                 + " (emailpasswordTable.email LIKE ? OR emailpasswordTable.email LIKE ?)";
                         queryList.add(tenantIdentifier.getAppId());
                         queryList.add(tenantIdentifier.getTenantId());
@@ -646,14 +649,18 @@ public class GeneralQueries {
                                 + " AS thirdPartyTable ON allAuthUsersTable.app_id = thirdPartyTable.app_id AND"
                                 + " allAuthUsersTable.user_id = thirdPartyTable.user_id"
                                 + " JOIN " + getConfig(start).getThirdPartyUserToTenantTable()
-                                + " AS thirdPartyToTenantTable ON thirdPartyTable.app_id = thirdPartyToTenantTable.app_id AND"
+                                +
+                                " AS thirdPartyToTenantTable ON thirdPartyTable.app_id = thirdPartyToTenantTable" +
+                                ".app_id AND"
                                 + " thirdPartyTable.user_id = thirdPartyToTenantTable.user_id";
 
                         // check if email tag is present
                         if (dashboardSearchTags.emails != null) {
 
-                            QUERY += " WHERE (thirdPartyToTenantTable.app_id = ? AND thirdPartyToTenantTable.tenant_id = ?)"
-                                    + " AND ( thirdPartyTable.email LIKE ? OR thirdPartyTable.email LIKE ?";
+                            QUERY +=
+                                    " WHERE (thirdPartyToTenantTable.app_id = ? AND thirdPartyToTenantTable.tenant_id" +
+                                            " = ?)"
+                                            + " AND ( thirdPartyTable.email LIKE ? OR thirdPartyTable.email LIKE ?";
                             queryList.add(tenantIdentifier.getAppId());
                             queryList.add(tenantIdentifier.getTenantId());
                             queryList.add(dashboardSearchTags.emails.get(0) + "%");
@@ -674,7 +681,8 @@ public class GeneralQueries {
                             if (dashboardSearchTags.emails != null) {
                                 QUERY += " AND ";
                             } else {
-                                QUERY += " WHERE (thirdPartyToTenantTable.app_id = ? AND thirdPartyToTenantTable.tenant_id = ?) AND ";
+                                QUERY += " WHERE (thirdPartyToTenantTable.app_id = ? AND thirdPartyToTenantTable" +
+                                        ".tenant_id = ?) AND ";
                                 queryList.add(tenantIdentifier.getAppId());
                                 queryList.add(tenantIdentifier.getTenantId());
                             }
@@ -735,7 +743,8 @@ public class GeneralQueries {
                             if (dashboardSearchTags.emails != null) {
                                 QUERY += " AND ";
                             } else {
-                                QUERY += " WHERE (passwordlessTable.app_id = ? AND passwordlessTable.tenant_id = ?) AND ";
+                                QUERY += " WHERE (passwordlessTable.app_id = ? AND passwordlessTable.tenant_id = ?) " +
+                                        "AND ";
                                 queryList.add(tenantIdentifier.getAppId());
                                 queryList.add(tenantIdentifier.getTenantId());
                             }

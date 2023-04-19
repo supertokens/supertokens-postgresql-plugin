@@ -108,6 +108,11 @@ public class Start
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
         MultitenancyStorage, DashboardSQLStorage, TOTPSQLStorage, ActiveUsersStorage {
 
+    // these configs are protected from being modified / viewed by the dev using the SuperTokens
+    // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
+    private static String[] PROTECTED_DB_CONFIG = new String[]{"postgresql_connection_pool_size",
+            "postgresql_connection_uri", "postgresql_host", "postgresql_port", "postgresql_user", "postgresql_password",
+            "postgresql_database_name", "postgresql_table_schema"};
     private static final Object appenderLock = new Object();
     public static boolean silent = false;
     private ResourceDistributor resourceDistributor = new ResourceDistributor();
@@ -456,11 +461,11 @@ public class Start
     public void createNewSession(TenantIdentifier tenantIdentifier, String sessionHandle, String userId,
                                  String refreshTokenHash2,
                                  JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT,
-                                 long createdAtTime)
+                                 long createdAtTime, boolean useStaticKey)
             throws StorageQueryException, TenantOrAppNotFoundException {
         try {
             SessionQueries.createNewSession(this, tenantIdentifier, sessionHandle, userId, refreshTokenHash2,
-                    userDataInDatabase, expiry, userDataInJWT, createdAtTime);
+                    userDataInDatabase, expiry, userDataInJWT, createdAtTime, useStaticKey);
         } catch (SQLException e) {
             if (e instanceof PSQLException) {
                 PostgreSQLConfig config = Config.getConfig(this);
@@ -706,7 +711,7 @@ public class Start
             try {
                 createNewSession(new TenantIdentifier(null, null, null), "sessionHandle", userId, "refreshTokenHash",
                         new JsonObject(),
-                        System.currentTimeMillis() + 1000000, new JsonObject(), System.currentTimeMillis());
+                        System.currentTimeMillis() + 1000000, new JsonObject(), System.currentTimeMillis(), false);
             } catch (Exception e) {
                 throw new StorageQueryException(e);
             }
@@ -775,6 +780,11 @@ public class Start
     @Override
     public void modifyConfigToAddANewUserPoolForTesting(JsonObject config, int poolNumber) {
         config.add("postgresql_database_name", new JsonPrimitive("st" + poolNumber));
+    }
+
+    @Override
+    public String[] getProtectedConfigsFromSuperTokensSaaSUsers() {
+        return PROTECTED_DB_CONFIG;
     }
 
     @Override
