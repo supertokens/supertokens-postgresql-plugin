@@ -926,6 +926,22 @@ public class GeneralQueries {
         }
     }
 
+    public static String getRecipeIdForUser_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT recipe_id FROM " + getConfig(start).getUsersTable()
+                + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
+
+        return execute(sqlCon, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, result -> {
+            if (result.next()) {
+                return result.getString("recipe_id");
+            }
+            return null;
+        });
+    }
+
     private static class UserInfoPaginationResultHolder {
         String userId;
         String recipeId;

@@ -16,6 +16,7 @@
 
 package io.supertokens.storage.postgresql.queries;
 
+import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.*;
@@ -32,6 +33,7 @@ import java.sql.SQLException;
 import java.util.HashMap;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class MultitenancyQueries {
@@ -262,5 +264,9 @@ public class MultitenancyQueries {
         } catch (SQLException throwables) {
             throw new StorageQueryException(throwables);
         }
+    }
+
+    public static boolean removeUserIdFromTenant(Start start, TenantIdentifier tenantIdentifier, String userId) {
+        return false;
     }
 }

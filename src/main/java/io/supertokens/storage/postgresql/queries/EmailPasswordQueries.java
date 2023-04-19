@@ -398,6 +398,41 @@ public class EmailPasswordQueries {
         });
     }
 
+    public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon,
+                                                        TenantIdentifier tenantIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+        UserInfo userInfo = EmailPasswordQueries.getUserInfoUsingId_Transaction(start, sqlCon,
+                tenantIdentifier.toAppIdentifier(), userId);
+
+        { // all_auth_recipe_users
+            String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
+                    + "(app_id, tenant_id, user_id, recipe_id, time_joined)"
+                    + " VALUES(?, ?, ?, ?, ?)" + " ON CONFLICT DO NOTHING";
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, userId);
+                pst.setString(4, EMAIL_PASSWORD.toString());
+                pst.setLong(5, userInfo.timeJoined);
+            });
+        }
+
+        { // emailpassword_user_to_tenant
+            String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUserToTenantTable()
+                    + "(app_id, tenant_id, user_id, email)"
+                    + " VALUES(?, ?, ?, ?) " + " ON CONFLICT DO NOTHING";
+
+            int numRows = update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, userId);
+                pst.setString(4, userInfo.email);
+            });
+
+            return numRows > 0;
+        }
+    }
+
     private static class PasswordResetRowMapper implements RowMapper<PasswordResetTokenInfo, ResultSet> {
         public static final PasswordResetRowMapper INSTANCE = new PasswordResetRowMapper();
 
