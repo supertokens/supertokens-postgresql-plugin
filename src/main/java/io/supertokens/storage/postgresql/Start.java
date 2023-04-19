@@ -2208,10 +2208,10 @@ public class Start
     }
 
     @Override
-    public void addTenantIdInUserPool(TenantIdentifier tenantIdentifier)
+    public void addTenantIdInTargetStorage(TenantIdentifier tenantIdentifier)
             throws DuplicateTenantException, StorageQueryException {
         try {
-            MultitenancyQueries.addTenantIdInUserPool(this, tenantIdentifier);
+            MultitenancyQueries.addTenantIdInTargetStorage(this, tenantIdentifier);
         } catch (StorageTransactionLogicException e) {
             if (e.actualException instanceof PSQLException) {
                 PostgreSQLConfig config = Config.getConfig(this);
@@ -2222,12 +2222,6 @@ public class Start
             }
             throw new StorageQueryException(e.actualException);
         }
-    }
-
-    @Override
-    public void deleteTenantIdInUserPool(TenantIdentifier tenantIdentifier) throws
-            TenantOrAppNotFoundException {
-        // TODO:
     }
 
     @Override
@@ -2256,21 +2250,22 @@ public class Start
     }
 
     @Override
-    public void deleteTenant(TenantIdentifier tenantIdentifier) throws
-            TenantOrAppNotFoundException {
-        // TODO:
+    public void deleteTenantIdInTargetStorage(TenantIdentifier tenantIdentifier) throws StorageQueryException {
+        MultitenancyQueries.deleteTenantIdInTargetStorage(this, tenantIdentifier);
     }
 
     @Override
-    public void deleteApp(TenantIdentifier tenantIdentifier) throws
-            TenantOrAppNotFoundException {
-        // TODO:
+    public void deleteTenantInfoInBaseStorage(TenantIdentifier tenantIdentifier) throws StorageQueryException {
+        MultitenancyQueries.deleteTenantConfig(this, tenantIdentifier);
     }
 
     @Override
-    public void deleteConnectionUriDomainMapping(TenantIdentifier tenantIdentifier) throws
-            TenantOrAppNotFoundException {
-        // TODO:
+    public void deleteAppInfoInBaseStorage(AppIdentifier appIdentifier) throws StorageQueryException {
+        deleteTenantInfoInBaseStorage(appIdentifier.getAsPublicTenantIdentifier());
+    }
+    @Override
+    public void deleteConnectionUriDomainInfoInBaseStorage(String connectionUriDomain) throws StorageQueryException {
+        deleteTenantInfoInBaseStorage(new TenantIdentifier(connectionUriDomain, null, null));
     }
 
     @Override
@@ -2294,17 +2289,6 @@ public class Start
     @Override
     public void addRoleToTenant(TenantIdentifier tenantIdentifier, String role)
             throws TenantOrAppNotFoundException, UnknownRoleException {
-        // TODO:
-    }
-
-    @Override
-    public void deleteAppId(String appId) throws TenantOrAppNotFoundException {
-        // TODO:
-    }
-
-    @Override
-    public void deleteConnectionUriDomain(String connectionUriDomain) throws
-            TenantOrAppNotFoundException {
         // TODO:
     }
 
