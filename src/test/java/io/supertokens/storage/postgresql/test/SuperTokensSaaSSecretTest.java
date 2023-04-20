@@ -87,11 +87,10 @@ public class SuperTokensSaaSSecretTest {
             try {
                 JsonObject j = new JsonObject();
                 j.addProperty(PROTECTED_DB_CONFIG[i], "");
-                Multitenancy.addNewOrUpdateAppOrTenant(process.main, new TenantIdentifier(null, null, null),
-                        new TenantConfig(new TenantIdentifier(null, null, "t1"), new EmailPasswordConfig(false),
-                                new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
-                                new PasswordlessConfig(false),
-                                j), true);
+                Multitenancy.validateTenantConfig(process.main, new TenantConfig(new TenantIdentifier(null, null, "t1"), new EmailPasswordConfig(false),
+                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new PasswordlessConfig(false),
+                        j), true);
                 fail();
             } catch (BadPermissionException e) {
                 assertEquals(e.getMessage(), "Not allowed to modify DB related configs.");
@@ -129,11 +128,11 @@ public class SuperTokensSaaSSecretTest {
             } else if (PROTECTED_DB_CONFIG_VALUES[i] instanceof Integer) {
                 j.addProperty(PROTECTED_DB_CONFIG[i], (Integer) PROTECTED_DB_CONFIG_VALUES[i]);
             }
-            Multitenancy.addNewOrUpdateAppOrTenant(process.main, new TenantIdentifier(null, null, null),
-                    new TenantConfig(new TenantIdentifier(null, null, "t1"), new EmailPasswordConfig(false),
-                            new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
-                            new PasswordlessConfig(false),
-                            j), false);
+            Multitenancy.validateTenantConfig(process.main, new TenantConfig(new TenantIdentifier(null, null, "t1"),
+                    new EmailPasswordConfig(false),
+                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                    new PasswordlessConfig(false),
+                    j), false);
         }
 
         // TODO: we should call the API to add a new tenant with api key, and check
