@@ -86,7 +86,7 @@ public class SuperTokensSaaSSecretTest {
             try {
                 JsonObject j = new JsonObject();
                 j.addProperty(PROTECTED_DB_CONFIG[i], "");
-                Multitenancy.validateTenantConfig(process.main, new TenantConfig(new TenantIdentifier(null, null, "t1"), new EmailPasswordConfig(false),
+                Multitenancy.addNewOrUpdateAppOrTenant(process.main, new TenantConfig(new TenantIdentifier(null, null, "t1"), new EmailPasswordConfig(false),
                         new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
                         j), true);
@@ -127,7 +127,7 @@ public class SuperTokensSaaSSecretTest {
             } else if (PROTECTED_DB_CONFIG_VALUES[i] instanceof Integer) {
                 j.addProperty(PROTECTED_DB_CONFIG[i], (Integer) PROTECTED_DB_CONFIG_VALUES[i]);
             }
-            Multitenancy.validateTenantConfig(process.main, new TenantConfig(new TenantIdentifier(null, null, "t1"),
+            Multitenancy.addNewOrUpdateAppOrTenant(process.main, new TenantConfig(new TenantIdentifier(null, null, "t1"),
                     new EmailPasswordConfig(false),
                     new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
                     new PasswordlessConfig(false),
