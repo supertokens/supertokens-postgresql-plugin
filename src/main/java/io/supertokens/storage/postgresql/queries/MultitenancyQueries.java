@@ -139,16 +139,18 @@ public class MultitenancyQueries {
         });
     }
 
-    public static void deleteTenantConfig(Start start, TenantIdentifier tenantIdentifier) throws StorageQueryException {
+    public static boolean deleteTenantConfig(Start start, TenantIdentifier tenantIdentifier) throws StorageQueryException {
         try {
             String QUERY = "DELETE FROM " + getConfig(start).getTenantConfigsTable()
                     + " WHERE connection_uri_domain = ? AND app_id = ? AND tenant_id = ?";
 
-            update(start, QUERY, pst -> {
+            int numRows = update(start, QUERY, pst -> {
                 pst.setString(1, tenantIdentifier.getConnectionUriDomain());
                 pst.setString(2, tenantIdentifier.getAppId());
                 pst.setString(3, tenantIdentifier.getTenantId());
             });
+
+            return numRows > 0;
 
         } catch (SQLException throwables) {
             throw new StorageQueryException(throwables);

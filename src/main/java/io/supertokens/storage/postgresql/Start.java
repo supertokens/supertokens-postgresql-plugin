@@ -2257,17 +2257,17 @@ public class Start
     }
 
     @Override
-    public void deleteTenantInfoInBaseStorage(TenantIdentifier tenantIdentifier) throws StorageQueryException {
-        MultitenancyQueries.deleteTenantConfig(this, tenantIdentifier);
+    public boolean deleteTenantInfoInBaseStorage(TenantIdentifier tenantIdentifier) throws StorageQueryException {
+        return MultitenancyQueries.deleteTenantConfig(this, tenantIdentifier);
     }
 
     @Override
-    public void deleteAppInfoInBaseStorage(AppIdentifier appIdentifier) throws StorageQueryException {
-        deleteTenantInfoInBaseStorage(appIdentifier.getAsPublicTenantIdentifier());
+    public boolean deleteAppInfoInBaseStorage(AppIdentifier appIdentifier) throws StorageQueryException {
+        return deleteTenantInfoInBaseStorage(appIdentifier.getAsPublicTenantIdentifier());
     }
     @Override
-    public void deleteConnectionUriDomainInfoInBaseStorage(String connectionUriDomain) throws StorageQueryException {
-        deleteTenantInfoInBaseStorage(new TenantIdentifier(connectionUriDomain, null, null));
+    public boolean deleteConnectionUriDomainInfoInBaseStorage(String connectionUriDomain) throws StorageQueryException {
+        return deleteTenantInfoInBaseStorage(new TenantIdentifier(connectionUriDomain, null, null));
     }
 
     @Override
