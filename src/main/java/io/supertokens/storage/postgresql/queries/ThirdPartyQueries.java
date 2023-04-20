@@ -370,26 +370,17 @@ public class ThirdPartyQueries {
         { // all_auth_recipe_users
             String QUERY = "DELETE FROM " + getConfig(start).getUsersTable()
                     + " WHERE app_id = ? AND tenant_id = ? and user_id = ? and recipe_id = ?";
-            update(sqlCon, QUERY, pst -> {
+            int numRows = update(sqlCon, QUERY, pst -> {
                 pst.setString(1, tenantIdentifier.getAppId());
                 pst.setString(2, tenantIdentifier.getTenantId());
                 pst.setString(3, userId);
                 pst.setString(4, THIRD_PARTY.toString());
             });
-        }
-
-        { // thirdparty_user_to_tenant
-            String QUERY = "DELETE FROM " + getConfig(start).getThirdPartyUserToTenantTable()
-                    + " WHERE app_id = ? AND tenant_id = ? AND user_id = ?";
-
-            int numRows = update(sqlCon, QUERY, pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, tenantIdentifier.getTenantId());
-                pst.setString(3, userId);
-            });
 
             return numRows > 0;
         }
+
+        // automatically deleted from thirdparty_user_to_tenant because of foreign key constraint
     }
 
     private static class UserInfoRowMapper implements RowMapper<UserInfo, ResultSet> {

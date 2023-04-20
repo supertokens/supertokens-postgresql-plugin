@@ -578,7 +578,7 @@ public class GeneralQueries {
     public static boolean doesUserIdExist(Start start, AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
 
-        String QUERY = "SELECT 1 FROM " + getConfig(start).getUsersTable()
+        String QUERY = "SELECT 1 FROM " + getConfig(start).getAppIdToUserIdTable()
                 + " WHERE app_id = ? AND user_id = ?";
         return execute(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
