@@ -286,13 +286,13 @@ public class ThirdPartyQueries {
         });
     }
 
-    public static UserInfo getUserInfoUsingUserId_Transaction(Start start, Connection con,
-                                                          AppIdentifier appIdentifier, String userId)
+    public static UserInfo getUserInfoUsingUserId(Start start, Connection con,
+                                                  AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
 
         String QUERY = "SELECT user_id, third_party_id, third_party_user_id, email, time_joined FROM "
                 + getConfig(start).getThirdPartyUsersTable()
-                + " WHERE app_id = ?  AND user_id = ? FOR UPDATE";
+                + " WHERE app_id = ?  AND user_id = ?";
         return execute(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, userId);
@@ -332,7 +332,7 @@ public class ThirdPartyQueries {
 
     public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId)
             throws SQLException, StorageQueryException {
-        UserInfo userInfo = ThirdPartyQueries.getUserInfoUsingUserId_Transaction(start, sqlCon,
+        UserInfo userInfo = ThirdPartyQueries.getUserInfoUsingUserId(start, sqlCon,
                 tenantIdentifier.toAppIdentifier(), userId);
 
         { // all_auth_recipe_users

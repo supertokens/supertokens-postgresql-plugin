@@ -705,10 +705,10 @@ public class PasswordlessQueries {
         });
     }
 
-    public static UserInfo getUserById_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier, String userId) throws StorageQueryException, SQLException {
+    public static UserInfo getUserById(Start start, Connection sqlCon, AppIdentifier appIdentifier, String userId) throws StorageQueryException, SQLException {
         String QUERY = "SELECT user_id, email, phone_number, time_joined FROM "
                 + getConfig(start).getPasswordlessUsersTable()
-                + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
+                + " WHERE app_id = ? AND user_id = ?";
 
         return execute(sqlCon, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
@@ -765,7 +765,7 @@ public class PasswordlessQueries {
 
     public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId)
             throws StorageQueryException, SQLException {
-        UserInfo userInfo = PasswordlessQueries.getUserById_Transaction(start, sqlCon,
+        UserInfo userInfo = PasswordlessQueries.getUserById(start, sqlCon,
                 tenantIdentifier.toAppIdentifier(), userId);
 
         { // all_auth_recipe_users

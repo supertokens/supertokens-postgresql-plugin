@@ -345,6 +345,21 @@ public class EmailPasswordQueries {
         });
     }
 
+    public static UserInfo getUserInfoUsingId(Start start, Connection sqlCon, AppIdentifier appIdentifier, String id) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT user_id, email, password_hash, time_joined FROM "
+                + getConfig(start).getEmailPasswordUsersTable() + " WHERE app_id = ? AND user_id = ?";
+
+        return execute(sqlCon, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, id);
+        }, result -> {
+            if (result.next()) {
+                return UserInfoRowMapper.getInstance().mapOrThrow(result);
+            }
+            return null;
+        });
+    }
+
     public static List<UserInfo> getUsersInfoUsingIdList(Start start, List<String> ids)
             throws SQLException, StorageQueryException {
         if (ids.size() > 0) {
@@ -401,7 +416,7 @@ public class EmailPasswordQueries {
     public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon,
                                                         TenantIdentifier tenantIdentifier, String userId)
             throws SQLException, StorageQueryException {
-        UserInfo userInfo = EmailPasswordQueries.getUserInfoUsingId_Transaction(start, sqlCon,
+        UserInfo userInfo = EmailPasswordQueries.getUserInfoUsingId(start, sqlCon,
                 tenantIdentifier.toAppIdentifier(), userId);
 
         { // all_auth_recipe_users
