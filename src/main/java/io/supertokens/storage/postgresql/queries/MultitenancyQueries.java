@@ -265,8 +265,4 @@ public class MultitenancyQueries {
             throw new StorageQueryException(throwables);
         }
     }
-
-    public static boolean removeUserIdFromTenant(Start start, TenantIdentifier tenantIdentifier, String userId) {
-        return false;
-    }
 }

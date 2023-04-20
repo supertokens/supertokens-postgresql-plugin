@@ -369,10 +369,11 @@ public class PasswordlessQueries {
             try {
                 { // app_id_to_user_id
                     String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                            + "(app_id, user_id)" + " VALUES(?, ?)";
+                            + "(app_id, user_id, recipe_id)" + " VALUES(?, ?, ?)";
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
                         pst.setString(2, user.id);
+                        pst.setString(3, PASSWORDLESS.toString());
                     });
                 }
 
@@ -792,6 +793,33 @@ public class PasswordlessQueries {
                 pst.setString(3, userInfo.id);
                 pst.setString(4, userInfo.email);
                 pst.setString(5, userInfo.phoneNumber);
+            });
+
+            return numRows > 0;
+        }
+    }
+
+    public static boolean removeUserIdFromTenant_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+        { // all_auth_recipe_users
+            String QUERY = "DELETE FROM " + getConfig(start).getUsersTable()
+                    + " WHERE app_id = ? AND tenant_id = ? and user_id = ? and recipe_id = ?";
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, userId);
+                pst.setString(4, PASSWORDLESS.toString());
+            });
+        }
+
+        { // passwordless_user_to_tenant
+            String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessUserToTenantTable()
+                    + " WHERE app_id = ? AND tenant_id = ? AND user_id = ?";
+
+            int numRows = update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, userId);
             });
 
             return numRows > 0;

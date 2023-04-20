@@ -104,7 +104,6 @@ import java.util.List;
 import java.util.Set;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
-import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
@@ -2342,14 +2341,49 @@ public class Start
     }
 
     @Override
-    public boolean removeUserIdFromTenant(TenantIdentifier tenantIdentifier, String userId) {
-        return MultitenancyQueries.removeUserIdFromTenant(this, tenantIdentifier, userId);
-    }
+    public boolean removeUserIdFromTenant(TenantIdentifier tenantIdentifier, String userId)
+            throws StorageQueryException, UnknownUserIdException {
+        try {
+            return this.startTransaction(con -> {
+                Connection sqlCon = (Connection) con.getConnection();
+                try {
+                    String recipeId = GeneralQueries.getRecipeIdForUser_Transaction(this, sqlCon, tenantIdentifier,
+                            userId);
 
-    @Override
-    public void addRoleToTenant(TenantIdentifier tenantIdentifier, String role)
-            throws TenantOrAppNotFoundException, UnknownRoleException {
-        // TODO:
+                    if (recipeId == null) {
+                        throw new StorageTransactionLogicException(new UnknownUserIdException());
+                    }
+
+                    boolean removed;
+                    if (recipeId.equals("emailpassword")) {
+                        removed = EmailPasswordQueries.removeUserIdFromTenant_Transaction(this, sqlCon, tenantIdentifier, userId);
+                    } else if (recipeId.equals("thirdparty")) {
+                        removed = ThirdPartyQueries.removeUserIdFromTenant_Transaction(this, sqlCon, tenantIdentifier, userId);
+                    } else if (recipeId.equals("passwordless")) {
+                        removed = PasswordlessQueries.removeUserIdFromTenant_Transaction(this, sqlCon, tenantIdentifier, userId);
+                    } else {
+                        throw new IllegalStateException("Should never come here!");
+                    }
+
+                    sqlCon.commit();
+                    return removed;
+                } catch (SQLException throwables) {
+                    throw new StorageTransactionLogicException(throwables);
+                }
+            });
+        } catch (StorageTransactionLogicException e) {
+            if (e.actualException instanceof SQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverErrorMessage = ((PSQLException) e.actualException).getServerErrorMessage();
+
+                throw new StorageQueryException(e.actualException);
+            } else if (e.actualException instanceof UnknownUserIdException) {
+                throw (UnknownUserIdException) e.actualException;
+            } else if (e.actualException instanceof StorageQueryException) {
+                throw (StorageQueryException) e.actualException;
+            }
+            throw new StorageQueryException(e.actualException);
+        }    
     }
 
     @Override
