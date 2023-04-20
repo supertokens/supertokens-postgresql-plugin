@@ -30,7 +30,6 @@ import io.supertokens.multitenancy.Multitenancy;
 import io.supertokens.multitenancy.MultitenancyHelper;
 import io.supertokens.multitenancy.exception.BadPermissionException;
 import io.supertokens.multitenancy.exception.CannotModifyBaseConfigException;
-import io.supertokens.multitenancy.exception.DeletionInProgressException;
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.exceptions.DbInitException;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
@@ -724,7 +723,7 @@ public class StorageLayerTest {
     public void testCantCreateTenantWithUnknownDb()
             throws InterruptedException, IOException, InvalidConfigException, TenantOrAppNotFoundException,
             BadPermissionException, InvalidProviderConfigException,
-            DeletionInProgressException, FeatureNotEnabledException,
+            FeatureNotEnabledException,
             CannotModifyBaseConfigException {
         String[] args = {"../"};
 
