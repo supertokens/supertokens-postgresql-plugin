@@ -84,6 +84,11 @@ public class SessionQueries {
         // @formatter:on
     }
 
+    static String getQueryToCreateSessionExpiryIndex(Start start) {
+        return "CREATE INDEX session_expiry_index ON "
+                + Config.getConfig(start).getSessionInfoTable() + "(expires_at);";
+    }
+
     public static void createNewSession(Start start, TenantIdentifier tenantIdentifier, String sessionHandle,
                                         String userId, String refreshTokenHash2,
                                         JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT,

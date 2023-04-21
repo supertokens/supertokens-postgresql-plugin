@@ -51,8 +51,7 @@ import static io.supertokens.storage.postgresql.queries.EmailPasswordQueries.get
 import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.*;
 import static io.supertokens.storage.postgresql.queries.JWTSigningQueries.getQueryToCreateJWTSigningTable;
 import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.*;
-import static io.supertokens.storage.postgresql.queries.SessionQueries.getQueryToCreateAccessTokenSigningKeysTable;
-import static io.supertokens.storage.postgresql.queries.SessionQueries.getQueryToCreateSessionInfoTable;
+import static io.supertokens.storage.postgresql.queries.SessionQueries.*;
 import static io.supertokens.storage.postgresql.queries.UserMetadataQueries.getQueryToCreateUserMetadataTable;
 
 public class GeneralQueries {
@@ -207,6 +206,9 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getSessionInfoTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateSessionInfoTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, getQueryToCreateSessionExpiryIndex(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getTenantConfigsTable())) {
