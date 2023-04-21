@@ -291,6 +291,7 @@ public class ThirdPartyQueries {
                                                   AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
 
+        // we don't need a FOR UPDATE here because this is already part of a transaction, and locked on app_id_to_user_id table
         String QUERY = "SELECT user_id, third_party_id, third_party_user_id, email, time_joined FROM "
                 + getConfig(start).getThirdPartyUsersTable()
                 + " WHERE app_id = ?  AND user_id = ?";

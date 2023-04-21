@@ -347,6 +347,7 @@ public class EmailPasswordQueries {
     }
 
     public static UserInfo getUserInfoUsingId(Start start, Connection sqlCon, AppIdentifier appIdentifier, String id) throws SQLException, StorageQueryException {
+        // we don't need a FOR UPDATE here because this is already part of a transaction, and locked on app_id_to_user_id table
         String QUERY = "SELECT user_id, email, password_hash, time_joined FROM "
                 + getConfig(start).getEmailPasswordUsersTable() + " WHERE app_id = ? AND user_id = ?";
 

@@ -707,6 +707,7 @@ public class PasswordlessQueries {
     }
 
     public static UserInfo getUserById(Start start, Connection sqlCon, AppIdentifier appIdentifier, String userId) throws StorageQueryException, SQLException {
+        // we don't need a FOR UPDATE here because this is already part of a transaction, and locked on app_id_to_user_id table
         String QUERY = "SELECT user_id, email, phone_number, time_joined FROM "
                 + getConfig(start).getPasswordlessUsersTable()
                 + " WHERE app_id = ? AND user_id = ?";
