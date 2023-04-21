@@ -255,10 +255,11 @@ public class EmailPasswordQueries {
             try {
                 { // app_id_to_user_id
                     String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                            + "(app_id, user_id)" + " VALUES(?, ?)";
+                            + "(app_id, user_id, recipe_id)" + " VALUES(?, ?, ?)";
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
                         pst.setString(2, userId);
+                        pst.setString(3, EMAIL_PASSWORD.toString());
                     });
                 }
 
@@ -345,6 +346,22 @@ public class EmailPasswordQueries {
         });
     }
 
+    public static UserInfo getUserInfoUsingId(Start start, Connection sqlCon, AppIdentifier appIdentifier, String id) throws SQLException, StorageQueryException {
+        // we don't need a FOR UPDATE here because this is already part of a transaction, and locked on app_id_to_user_id table
+        String QUERY = "SELECT user_id, email, password_hash, time_joined FROM "
+                + getConfig(start).getEmailPasswordUsersTable() + " WHERE app_id = ? AND user_id = ?";
+
+        return execute(sqlCon, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, id);
+        }, result -> {
+            if (result.next()) {
+                return UserInfoRowMapper.getInstance().mapOrThrow(result);
+            }
+            return null;
+        });
+    }
+
     public static List<UserInfo> getUsersInfoUsingIdList(Start start, List<String> ids)
             throws SQLException, StorageQueryException {
         if (ids.size() > 0) {
@@ -396,6 +413,57 @@ public class EmailPasswordQueries {
             }
             return null;
         });
+    }
+
+    public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon,
+                                                        TenantIdentifier tenantIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+        UserInfo userInfo = EmailPasswordQueries.getUserInfoUsingId(start, sqlCon,
+                tenantIdentifier.toAppIdentifier(), userId);
+
+        { // all_auth_recipe_users
+            String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
+                    + "(app_id, tenant_id, user_id, recipe_id, time_joined)"
+                    + " VALUES(?, ?, ?, ?, ?)" + " ON CONFLICT DO NOTHING";
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, userId);
+                pst.setString(4, EMAIL_PASSWORD.toString());
+                pst.setLong(5, userInfo.timeJoined);
+            });
+        }
+
+        { // emailpassword_user_to_tenant
+            String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUserToTenantTable()
+                    + "(app_id, tenant_id, user_id, email)"
+                    + " VALUES(?, ?, ?, ?) " + " ON CONFLICT DO NOTHING";
+
+            int numRows = update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, userId);
+                pst.setString(4, userInfo.email);
+            });
+
+            return numRows > 0;
+        }
+    }
+
+    public static boolean removeUserIdFromTenant_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+        { // all_auth_recipe_users
+            String QUERY = "DELETE FROM " + getConfig(start).getUsersTable()
+                    + " WHERE app_id = ? AND tenant_id = ? and user_id = ? and recipe_id = ?";
+            int numRows = update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, userId);
+                pst.setString(4, EMAIL_PASSWORD.toString());
+            });
+            return numRows > 0;
+        }
+        // automatically deleted from emailpassword_user_to_tenant because of foreign key constraint
     }
 
     private static class PasswordResetRowMapper implements RowMapper<PasswordResetTokenInfo, ResultSet> {

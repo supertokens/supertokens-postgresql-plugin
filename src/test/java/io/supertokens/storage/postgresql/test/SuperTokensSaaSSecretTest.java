@@ -24,7 +24,6 @@ import io.supertokens.featureflag.exceptions.FeatureNotEnabledException;
 import io.supertokens.multitenancy.Multitenancy;
 import io.supertokens.multitenancy.exception.BadPermissionException;
 import io.supertokens.multitenancy.exception.CannotModifyBaseConfigException;
-import io.supertokens.multitenancy.exception.DeletionInProgressException;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.*;
@@ -69,7 +68,7 @@ public class SuperTokensSaaSSecretTest {
     @Test
     public void testThatTenantCannotSetDatabaseRelatedConfigIfSuperTokensSaaSSecretIsSet()
             throws InterruptedException, IOException, InvalidConfigException, TenantOrAppNotFoundException,
-            InvalidProviderConfigException, DeletionInProgressException, StorageQueryException,
+            InvalidProviderConfigException, StorageQueryException,
             FeatureNotEnabledException, CannotModifyBaseConfigException {
         String[] args = {"../"};
 
@@ -87,11 +86,10 @@ public class SuperTokensSaaSSecretTest {
             try {
                 JsonObject j = new JsonObject();
                 j.addProperty(PROTECTED_DB_CONFIG[i], "");
-                Multitenancy.addNewOrUpdateAppOrTenant(process.main, new TenantIdentifier(null, null, null),
-                        new TenantConfig(new TenantIdentifier(null, null, "t1"), new EmailPasswordConfig(false),
-                                new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
-                                new PasswordlessConfig(false),
-                                j), true);
+                Multitenancy.addNewOrUpdateAppOrTenant(process.main, new TenantConfig(new TenantIdentifier(null, null, "t1"), new EmailPasswordConfig(false),
+                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new PasswordlessConfig(false),
+                        j), true);
                 fail();
             } catch (BadPermissionException e) {
                 assertEquals(e.getMessage(), "Not allowed to modify DB related configs.");
@@ -110,7 +108,7 @@ public class SuperTokensSaaSSecretTest {
     @Test
     public void testThatTenantCanSetDatabaseRelatedConfigIfSuperTokensSaaSSecretIsNotSet()
             throws InterruptedException, IOException, InvalidConfigException, TenantOrAppNotFoundException,
-            InvalidProviderConfigException, DeletionInProgressException, StorageQueryException,
+            InvalidProviderConfigException, StorageQueryException,
             FeatureNotEnabledException, CannotModifyBaseConfigException, BadPermissionException {
         String[] args = {"../"};
 
@@ -129,11 +127,11 @@ public class SuperTokensSaaSSecretTest {
             } else if (PROTECTED_DB_CONFIG_VALUES[i] instanceof Integer) {
                 j.addProperty(PROTECTED_DB_CONFIG[i], (Integer) PROTECTED_DB_CONFIG_VALUES[i]);
             }
-            Multitenancy.addNewOrUpdateAppOrTenant(process.main, new TenantIdentifier(null, null, null),
-                    new TenantConfig(new TenantIdentifier(null, null, "t1"), new EmailPasswordConfig(false),
-                            new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
-                            new PasswordlessConfig(false),
-                            j), false);
+            Multitenancy.addNewOrUpdateAppOrTenant(process.main, new TenantConfig(new TenantIdentifier(null, null, "t1"),
+                    new EmailPasswordConfig(false),
+                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                    new PasswordlessConfig(false),
+                    j), false);
         }
 
         // TODO: we should call the API to add a new tenant with api key, and check
@@ -146,7 +144,7 @@ public class SuperTokensSaaSSecretTest {
     @Test
     public void testThatTenantCannotGetDatabaseRelatedConfigIfSuperTokensSaaSSecretIsSet()
             throws InterruptedException, IOException, InvalidConfigException, TenantOrAppNotFoundException,
-            InvalidProviderConfigException, DeletionInProgressException, StorageQueryException,
+            InvalidProviderConfigException, StorageQueryException,
             FeatureNotEnabledException, CannotModifyBaseConfigException, BadPermissionException {
         String[] args = {"../"};
 

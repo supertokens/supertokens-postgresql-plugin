@@ -150,6 +150,7 @@ public class GeneralQueries {
         return "CREATE TABLE IF NOT EXISTS " + appToUserTable + " ("
                 + "app_id VARCHAR(64) NOT NULL DEFAULT 'public',"
                 + "user_id CHAR(36) NOT NULL,"
+                + "recipe_id VARCHAR(128) NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, null, "pkey")
                 + " PRIMARY KEY (app_id, user_id), "
                 + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, "app_id", "fkey")
@@ -577,7 +578,7 @@ public class GeneralQueries {
     public static boolean doesUserIdExist(Start start, AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
 
-        String QUERY = "SELECT 1 FROM " + getConfig(start).getUsersTable()
+        String QUERY = "SELECT 1 FROM " + getConfig(start).getAppIdToUserIdTable()
                 + " WHERE app_id = ? AND user_id = ?";
         return execute(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
@@ -924,6 +925,22 @@ public class GeneralQueries {
         } else {
             throw new IllegalArgumentException("No implementation of get users for recipe: " + recipeId.toString());
         }
+    }
+
+    public static String getRecipeIdForUser_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT recipe_id FROM " + getConfig(start).getAppIdToUserIdTable()
+                + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
+
+        return execute(sqlCon, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, result -> {
+            if (result.next()) {
+                return result.getString("recipe_id");
+            }
+            return null;
+        });
     }
 
     private static class UserInfoPaginationResultHolder {
