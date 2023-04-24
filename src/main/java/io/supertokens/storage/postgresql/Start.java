@@ -103,8 +103,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
-
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
@@ -674,7 +672,6 @@ public class Start
     @Override
     public boolean isUserIdBeingUsedInNonAuthRecipe(AppIdentifier appIdentifier, String className, String userId)
             throws StorageQueryException {
-        // TODO..
         // check if the input userId is being used in nonAuthRecipes.
         if (className.equals(SessionStorage.class.getName())) {
             String[] sessionHandlesForUser = getAllNonExpiredSessionHandlesForUser(appIdentifier, userId);
@@ -1273,19 +1270,10 @@ public class Start
         }
     }
 
-    public void updateLastActive(String userId) throws StorageQueryException {
-        try {
-            ActiveUsersQueries.updateUserLastActive(this, userId);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
     @Override
     public void updateLastActive(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
         try {
-            // TODO..
-            ActiveUsersQueries.updateUserLastActive(this, userId);
+            ActiveUsersQueries.updateUserLastActive(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1294,8 +1282,7 @@ public class Start
     @Override
     public int countUsersActiveSince(AppIdentifier appIdentifier, long time) throws StorageQueryException {
         try {
-            // TODO...
-            return ActiveUsersQueries.countUsersActiveSince(this, time);
+            return ActiveUsersQueries.countUsersActiveSince(this, appIdentifier, time);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1304,8 +1291,7 @@ public class Start
     @Override
     public int countUsersEnabledTotp(AppIdentifier appIdentifier) throws StorageQueryException {
         try {
-            // TODO...
-            return ActiveUsersQueries.countUsersEnabledTotp(this);
+            return ActiveUsersQueries.countUsersEnabledTotp(this, appIdentifier);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1315,8 +1301,7 @@ public class Start
     public int countUsersEnabledTotpAndActiveSince(AppIdentifier appIdentifier, long time)
             throws StorageQueryException {
         try {
-            // TODO...
-            return ActiveUsersQueries.countUsersEnabledTotpAndActiveSince(this, time);
+            return ActiveUsersQueries.countUsersEnabledTotpAndActiveSince(this, appIdentifier, time);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -2075,7 +2060,6 @@ public class Start
             externalUserId,
                                     @Nullable String externalUserIdInfo)
             throws StorageQueryException, UnknownSuperTokensUserIdException, UserIdMappingAlreadyExistsException {
-        // TODO..
         try {
             UserIdMappingQueries.createUserIdMapping(this, appIdentifier, superTokensUserId, externalUserId,
                     externalUserIdInfo);
@@ -2111,7 +2095,6 @@ public class Start
     public boolean deleteUserIdMapping(AppIdentifier appIdentifier, String userId,
                                        boolean isSuperTokensUserId)
             throws StorageQueryException {
-        // TODO..
         try {
             if (isSuperTokensUserId) {
                 return UserIdMappingQueries.deleteUserIdMappingWithSuperTokensUserId(this, appIdentifier,
@@ -2128,7 +2111,6 @@ public class Start
     public UserIdMapping getUserIdMapping(AppIdentifier appIdentifier, String userId,
                                           boolean isSuperTokensUserId)
             throws StorageQueryException {
-        // TODO..
         try {
             if (isSuperTokensUserId) {
                 return UserIdMappingQueries.getuseraIdMappingWithSuperTokensUserId(this, appIdentifier,
@@ -2144,7 +2126,6 @@ public class Start
     @Override
     public UserIdMapping[] getUserIdMapping(AppIdentifier appIdentifier, String userId)
             throws StorageQueryException {
-        // TODO..
         try {
             return UserIdMappingQueries.getUserIdMappingWithEitherSuperTokensUserIdOrExternalUserId(this,
                     appIdentifier,
@@ -2159,7 +2140,6 @@ public class Start
                                                     boolean isSuperTokensUserId,
                                                     @Nullable String externalUserIdInfo) throws StorageQueryException {
 
-        // TODO..
         try {
             if (isSuperTokensUserId) {
                 return UserIdMappingQueries.updateOrDeleteExternalUserIdInfoWithSuperTokensUserId(this,
