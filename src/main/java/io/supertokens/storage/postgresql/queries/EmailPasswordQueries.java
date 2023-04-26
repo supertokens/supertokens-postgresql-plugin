@@ -30,9 +30,7 @@ import io.supertokens.storage.postgresql.utils.Utils;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 import static io.supertokens.pluginInterface.RECIPE_ID.EMAIL_PASSWORD;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
@@ -335,7 +333,7 @@ public class EmailPasswordQueries {
         String QUERY = "SELECT user_id, email, password_hash, time_joined FROM "
                 + getConfig(start).getEmailPasswordUsersTable() + " WHERE app_id = ? AND user_id = ?";
 
-        return execute(start, QUERY.toString(), pst -> {
+        UserInfo userInfo = execute(start, QUERY.toString(), pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, id);
         }, result -> {
@@ -344,6 +342,7 @@ public class EmailPasswordQueries {
             }
             return null;
         });
+        return userInfoWithTenantIds(start, userInfo);
     }
 
     public static UserInfo getUserInfoUsingId(Start start, Connection sqlCon, AppIdentifier appIdentifier, String id) throws SQLException, StorageQueryException {
@@ -379,7 +378,7 @@ public class EmailPasswordQueries {
             }
             QUERY.append(")");
 
-            return execute(start, QUERY.toString(), pst -> {
+            List<UserInfo> userInfos = execute(start, QUERY.toString(), pst -> {
                 for (int i = 0; i < ids.size(); i++) {
                     // i+1 cause this starts with 1 and not 0
                     pst.setString(i + 1, ids.get(i));
@@ -391,6 +390,7 @@ public class EmailPasswordQueries {
                 }
                 return finalResult;
             });
+            return userInfoWithTenantIds(start, userInfos);
         }
         return Collections.emptyList();
     }
@@ -403,7 +403,7 @@ public class EmailPasswordQueries {
                 + "ON ep_users.app_id = ep_users_to_tenant.app_id AND ep_users.user_id = ep_users_to_tenant.user_id "
                 + "WHERE ep_users_to_tenant.app_id = ? AND ep_users_to_tenant.tenant_id = ? AND ep_users_to_tenant.email = ?";
 
-        return execute(start, QUERY, pst -> {
+        UserInfo userInfo = execute(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, email);
@@ -413,6 +413,7 @@ public class EmailPasswordQueries {
             }
             return null;
         });
+        return userInfoWithTenantIds(start, userInfo);
     }
 
     public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon,
@@ -464,6 +465,26 @@ public class EmailPasswordQueries {
             return numRows > 0;
         }
         // automatically deleted from emailpassword_user_to_tenant because of foreign key constraint
+    }
+
+    private static UserInfo userInfoWithTenantIds(Start start, UserInfo userInfo)
+            throws SQLException, StorageQueryException {
+        return userInfoWithTenantIds(start, Arrays.asList(userInfo)).get(0);
+    }
+
+    private static List<UserInfo> userInfoWithTenantIds(Start start, List<UserInfo> userInfos)
+            throws SQLException, StorageQueryException {
+        String[] userIds = new String[userInfos.size()];
+        for (int i = 0; i < userInfos.size(); i++) {
+            userIds[i] = userInfos.get(i).id;
+        }
+
+        Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds(start, userIds);
+        for (UserInfo userInfo : userInfos) {
+            userInfo.setTenantIds(tenantIdsForUserIds.get(userInfo.id).toArray(new String[0]));
+        }
+
+        return userInfos;
     }
 
     private static class PasswordResetRowMapper implements RowMapper<PasswordResetTokenInfo, ResultSet> {
