@@ -28,6 +28,7 @@ import io.supertokens.pluginInterface.dashboard.DashboardSessionInfo;
 import io.supertokens.pluginInterface.dashboard.DashboardUser;
 import io.supertokens.pluginInterface.dashboard.exceptions.UserIdNotFoundException;
 import io.supertokens.pluginInterface.dashboard.sqlStorage.DashboardSQLStorage;
+import io.supertokens.pluginInterface.emailpassword.CreateUserInfo;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
 import io.supertokens.pluginInterface.emailpassword.UserInfo;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
@@ -787,7 +788,7 @@ public class Start
     }
 
     @Override
-    public void signUp(TenantIdentifier tenantIdentifier, UserInfo userInfo)
+    public void signUp(TenantIdentifier tenantIdentifier, CreateUserInfo userInfo)
             throws StorageQueryException, DuplicateUserIdException, DuplicateEmailException,
             TenantOrAppNotFoundException {
         try {
@@ -1146,7 +1147,7 @@ public class Start
     }
 
     @Override
-    public void signUp(TenantIdentifier tenantIdentifier, io.supertokens.pluginInterface.thirdparty.UserInfo
+    public void signUp(TenantIdentifier tenantIdentifier, io.supertokens.pluginInterface.thirdparty.CreateUserInfo
             userInfo)
             throws StorageQueryException, io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException,
             DuplicateThirdPartyUserException, TenantOrAppNotFoundException {
@@ -1620,7 +1621,7 @@ public class Start
 
     @Override
     public void createUser(TenantIdentifier
-                                   tenantIdentifier, io.supertokens.pluginInterface.passwordless.UserInfo user)
+                                   tenantIdentifier, io.supertokens.pluginInterface.passwordless.CreateUserInfo user)
             throws StorageQueryException,
             DuplicateEmailException, DuplicatePhoneNumberException, DuplicateUserIdException,
             TenantOrAppNotFoundException {

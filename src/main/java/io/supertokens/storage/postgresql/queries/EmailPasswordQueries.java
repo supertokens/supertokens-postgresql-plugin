@@ -207,7 +207,7 @@ public class EmailPasswordQueries {
         String QUERY = "SELECT user_id, email, password_hash, time_joined FROM "
                 + getConfig(start).getEmailPasswordUsersTable()
                 + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
-        return execute(con, QUERY, pst -> {
+        EmailPasswordUserInfo userInfo = execute(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, id);
         }, result -> {
@@ -216,6 +216,7 @@ public class EmailPasswordQueries {
             }
             return null;
         });
+        return userInfoWithTenantIds(start, userInfo);
     }
 
     public static PasswordResetTokenInfo getPasswordResetTokenInfo(Start start, AppIdentifier appIdentifier, String token)
@@ -333,7 +334,7 @@ public class EmailPasswordQueries {
         String QUERY = "SELECT user_id, email, password_hash, time_joined FROM "
                 + getConfig(start).getEmailPasswordUsersTable() + " WHERE app_id = ? AND user_id = ?";
 
-        UserInfo userInfo = execute(start, QUERY.toString(), pst -> {
+        EmailPasswordUserInfo userInfo = execute(start, QUERY.toString(), pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, id);
         }, result -> {
@@ -345,7 +346,7 @@ public class EmailPasswordQueries {
         return userInfoWithTenantIds(start, userInfo);
     }
 
-    public static UserInfo getUserInfoUsingId(Start start, Connection sqlCon, AppIdentifier appIdentifier, String id) throws SQLException, StorageQueryException {
+    public static EmailPasswordUserInfo getUserInfoUsingId(Start start, Connection sqlCon, AppIdentifier appIdentifier, String id) throws SQLException, StorageQueryException {
         // we don't need a FOR UPDATE here because this is already part of a transaction, and locked on app_id_to_user_id table
         String QUERY = "SELECT user_id, email, password_hash, time_joined FROM "
                 + getConfig(start).getEmailPasswordUsersTable() + " WHERE app_id = ? AND user_id = ?";
@@ -378,13 +379,13 @@ public class EmailPasswordQueries {
             }
             QUERY.append(")");
 
-            List<UserInfo> userInfos = execute(start, QUERY.toString(), pst -> {
+            List<EmailPasswordUserInfo> userInfos = execute(start, QUERY.toString(), pst -> {
                 for (int i = 0; i < ids.size(); i++) {
                     // i+1 cause this starts with 1 and not 0
                     pst.setString(i + 1, ids.get(i));
                 }
             }, result -> {
-                List<UserInfo> finalResult = new ArrayList<>();
+                List<EmailPasswordUserInfo> finalResult = new ArrayList<>();
                 while (result.next()) {
                     finalResult.add(UserInfoRowMapper.getInstance().mapOrThrow(result));
                 }
@@ -403,7 +404,7 @@ public class EmailPasswordQueries {
                 + "ON ep_users.app_id = ep_users_to_tenant.app_id AND ep_users.user_id = ep_users_to_tenant.user_id "
                 + "WHERE ep_users_to_tenant.app_id = ? AND ep_users_to_tenant.tenant_id = ? AND ep_users_to_tenant.email = ?";
 
-        UserInfo userInfo = execute(start, QUERY, pst -> {
+        EmailPasswordUserInfo userInfo = execute(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, email);
@@ -419,7 +420,7 @@ public class EmailPasswordQueries {
     public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon,
                                                         TenantIdentifier tenantIdentifier, String userId)
             throws SQLException, StorageQueryException {
-        UserInfo userInfo = EmailPasswordQueries.getUserInfoUsingId(start, sqlCon,
+        EmailPasswordUserInfo userInfo = EmailPasswordQueries.getUserInfoUsingId(start, sqlCon,
                 tenantIdentifier.toAppIdentifier(), userId);
 
         { // all_auth_recipe_users
@@ -467,12 +468,12 @@ public class EmailPasswordQueries {
         // automatically deleted from emailpassword_user_to_tenant because of foreign key constraint
     }
 
-    private static UserInfo userInfoWithTenantIds(Start start, UserInfo userInfo)
+    private static UserInfo userInfoWithTenantIds(Start start, EmailPasswordUserInfo userInfo)
             throws SQLException, StorageQueryException {
         return userInfoWithTenantIds(start, Arrays.asList(userInfo)).get(0);
     }
 
-    private static List<UserInfo> userInfoWithTenantIds(Start start, List<UserInfo> userInfos)
+    private static List<UserInfo> userInfoWithTenantIds(Start start, List<EmailPasswordUserInfo> userInfos)
             throws SQLException, StorageQueryException {
         String[] userIds = new String[userInfos.size()];
         for (int i = 0; i < userInfos.size(); i++) {
@@ -480,11 +481,27 @@ public class EmailPasswordQueries {
         }
 
         Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds(start, userIds);
-        for (UserInfo userInfo : userInfos) {
-            userInfo.setTenantIds(tenantIdsForUserIds.get(userInfo.id).toArray(new String[0]));
+        List<UserInfo> result = new ArrayList<>();
+        for (EmailPasswordUserInfo userInfo : userInfos) {
+            result.add(new UserInfo(userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined,
+                    tenantIdsForUserIds.get(userInfo.id).toArray(new String[0])));
         }
 
-        return userInfos;
+        return result;
+    }
+
+    private static class EmailPasswordUserInfo {
+        public final String id;
+        public final long timeJoined;
+        public final String email;
+        public final String passwordHash;
+
+        public EmailPasswordUserInfo(String id, String email, String passwordHash, long timeJoined) {
+            this.id = id;
+            this.timeJoined = timeJoined;
+            this.email = email;
+            this.passwordHash = passwordHash;
+        }
     }
 
     private static class PasswordResetRowMapper implements RowMapper<PasswordResetTokenInfo, ResultSet> {
@@ -508,7 +525,7 @@ public class EmailPasswordQueries {
         }
     }
 
-    private static class UserInfoRowMapper implements RowMapper<UserInfo, ResultSet> {
+    private static class UserInfoRowMapper implements RowMapper<EmailPasswordUserInfo, ResultSet> {
         static final UserInfoRowMapper INSTANCE = new UserInfoRowMapper();
 
         private UserInfoRowMapper() {
@@ -519,8 +536,8 @@ public class EmailPasswordQueries {
         }
 
         @Override
-        public UserInfo map(ResultSet result) throws Exception {
-            return new UserInfo(result.getString("user_id"), result.getString("email"),
+        public EmailPasswordUserInfo map(ResultSet result) throws Exception {
+            return new EmailPasswordUserInfo(result.getString("user_id"), result.getString("email"),
                     result.getString("password_hash"), result.getLong("time_joined"));
         }
     }

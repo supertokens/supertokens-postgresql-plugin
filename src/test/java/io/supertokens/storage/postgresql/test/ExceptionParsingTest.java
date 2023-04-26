@@ -19,8 +19,8 @@ package io.supertokens.storage.postgresql.test;
 
 import io.supertokens.ProcessState;
 import io.supertokens.pluginInterface.RECIPE_ID;
+import io.supertokens.pluginInterface.emailpassword.CreateUserInfo;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
-import io.supertokens.pluginInterface.emailpassword.UserInfo;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicatePasswordResetTokenException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateUserIdException;
@@ -89,7 +89,7 @@ public class ExceptionParsingTest {
             String userEmail = "useremail@asdf.fdas";
 
             var tp = new io.supertokens.pluginInterface.thirdparty.UserInfo.ThirdParty(tpId, thirdPartyUserId);
-            var info = new io.supertokens.pluginInterface.thirdparty.UserInfo(userId, userEmail, tp,
+            var info = new io.supertokens.pluginInterface.thirdparty.CreateUserInfo(userId, userEmail, tp,
                     System.currentTimeMillis());
             storage.signUp(new TenantIdentifier(null, null, null), info);
             try {
@@ -98,7 +98,7 @@ public class ExceptionParsingTest {
             } catch (io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException ex) {
                 // expected
             }
-            var info2 = new io.supertokens.pluginInterface.thirdparty.UserInfo(userId2, userEmail, tp,
+            var info2 = new io.supertokens.pluginInterface.thirdparty.CreateUserInfo(userId2, userEmail, tp,
                     System.currentTimeMillis());
 
             try {
@@ -130,7 +130,7 @@ public class ExceptionParsingTest {
             String pwHash = "fakehash";
             String userEmail = "useremail@asdf.fdas";
 
-            var info = new UserInfo(userId, userEmail, pwHash, System.currentTimeMillis());
+            var info = new CreateUserInfo(userId, userEmail, pwHash, System.currentTimeMillis());
             storage.signUp(new TenantIdentifier(null, null, null), info);
             try {
                 storage.signUp(new TenantIdentifier(null, null, null), info);
@@ -138,7 +138,7 @@ public class ExceptionParsingTest {
             } catch (DuplicateUserIdException ex) {
                 // expected
             }
-            var info2 = new UserInfo(userId2, userEmail, pwHash, System.currentTimeMillis());
+            var info2 = new CreateUserInfo(userId2, userEmail, pwHash, System.currentTimeMillis());
 
             try {
                 storage.signUp(new TenantIdentifier(null, null, null), info2);
@@ -176,8 +176,8 @@ public class ExceptionParsingTest {
             String userEmail2 = "useremail2@asdf.fdas";
             String userEmail3 = "useremail3@asdf.fdas";
 
-            var info = new UserInfo(userId, userEmail, pwHash, System.currentTimeMillis());
-            var info2 = new UserInfo(userId2, userEmail2, pwHash, System.currentTimeMillis());
+            var info = new CreateUserInfo(userId, userEmail, pwHash, System.currentTimeMillis());
+            var info2 = new CreateUserInfo(userId2, userEmail2, pwHash, System.currentTimeMillis());
             storage.signUp(new TenantIdentifier(null, null, null), info);
             storage.signUp(new TenantIdentifier(null, null, null), info2);
             storage.startTransaction(conn -> {
@@ -287,7 +287,7 @@ public class ExceptionParsingTest {
             String pwHash = "fakehash";
             String userEmail = "useremail@asdf.fdas";
 
-            var userInfo = new UserInfo(userId, userEmail, pwHash, System.currentTimeMillis());
+            var userInfo = new CreateUserInfo(userId, userEmail, pwHash, System.currentTimeMillis());
             var info = new PasswordResetTokenInfo(userId, tokenHash, System.currentTimeMillis() + 10000);
             try {
                 storage.addPasswordResetToken(new AppIdentifier(null, null), info);
@@ -348,7 +348,7 @@ public class ExceptionParsingTest {
             String pwHash = "fakehash";
             String userEmail = "useremail@asdf.fdas";
 
-            var info = new UserInfo(userId, userEmail, pwHash, System.currentTimeMillis());
+            var info = new CreateUserInfo(userId, userEmail, pwHash, System.currentTimeMillis());
             storage.signUp(new TenantIdentifier(null, null, null), info);
             try {
                 storage.signUp(new TenantIdentifier(null, null, null), info);
@@ -356,7 +356,7 @@ public class ExceptionParsingTest {
             } catch (DuplicateUserIdException ex) {
                 // expected
             }
-            var info2 = new UserInfo(userId2, userEmail, pwHash, System.currentTimeMillis());
+            var info2 = new CreateUserInfo(userId2, userEmail, pwHash, System.currentTimeMillis());
 
             try {
                 storage.signUp(new TenantIdentifier(null, null, null), info2);
