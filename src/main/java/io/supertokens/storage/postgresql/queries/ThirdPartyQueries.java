@@ -145,7 +145,7 @@ public class ThirdPartyQueries {
                     });
                 }
 
-                UserInfo userInfo = userInfoWithTenantIds_transaction(start, sqlCon, new ThirdPartyUserInfo(id, email, thirdParty, timeJoined));
+                UserInfo userInfo = userInfoWithTenantIds_transaction(start, sqlCon, new UserInfoPartial(id, email, thirdParty, timeJoined));
                 sqlCon.commit();
                 return userInfo;
 
@@ -183,7 +183,7 @@ public class ThirdPartyQueries {
         String QUERY = "SELECT user_id, third_party_id, third_party_user_id, email, time_joined FROM "
                 + getConfig(start).getThirdPartyUsersTable() + " WHERE app_id = ? AND user_id = ?";
 
-        ThirdPartyUserInfo userInfo = execute(start, QUERY.toString(), pst -> {
+        UserInfoPartial userInfo = execute(start, QUERY.toString(), pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, userId);
         }, result -> {
@@ -213,13 +213,13 @@ public class ThirdPartyQueries {
             }
             QUERY.append(")");
 
-            List<ThirdPartyUserInfo> userInfos = execute(start, QUERY.toString(), pst -> {
+            List<UserInfoPartial> userInfos = execute(start, QUERY.toString(), pst -> {
                 for (int i = 0; i < ids.size(); i++) {
                     // i+1 cause this starts with 1 and not 0
                     pst.setString(i + 1, ids.get(i));
                 }
             }, result -> {
-                List<ThirdPartyUserInfo> finalResult = new ArrayList<>();
+                List<UserInfoPartial> finalResult = new ArrayList<>();
                 while (result.next()) {
                     finalResult.add(UserInfoRowMapper.getInstance().mapOrThrow(result));
                 }
@@ -243,7 +243,7 @@ public class ThirdPartyQueries {
                 + "WHERE tp_users_to_tenant.app_id = ? AND tp_users_to_tenant.tenant_id = ? "
                 + "AND tp_users_to_tenant.third_party_id = ? AND tp_users_to_tenant.third_party_user_id = ?";
 
-        ThirdPartyUserInfo userInfo = execute(start, QUERY, pst -> {
+        UserInfoPartial userInfo = execute(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, thirdPartyId);
@@ -279,7 +279,7 @@ public class ThirdPartyQueries {
         String QUERY = "SELECT user_id, third_party_id, third_party_user_id, email, time_joined FROM "
                 + getConfig(start).getThirdPartyUsersTable()
                 + " WHERE app_id = ?  AND third_party_id = ? AND third_party_user_id = ? FOR UPDATE";
-        ThirdPartyUserInfo userInfo = execute(con, QUERY, pst -> {
+        UserInfoPartial userInfo = execute(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, thirdPartyId);
             pst.setString(3, thirdPartyUserId);
@@ -292,8 +292,8 @@ public class ThirdPartyQueries {
         return userInfoWithTenantIds_transaction(start, con, userInfo);
     }
 
-    private static ThirdPartyUserInfo getUserInfoUsingUserId(Start start, Connection con,
-                                                  AppIdentifier appIdentifier, String userId)
+    private static UserInfoPartial getUserInfoUsingUserId(Start start, Connection con,
+                                                          AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
 
         // we don't need a FOR UPDATE here because this is already part of a transaction, and locked on app_id_to_user_id table
@@ -324,12 +324,12 @@ public class ThirdPartyQueries {
                 + "WHERE tp_users_to_tenant.app_id = ? AND tp_users_to_tenant.tenant_id = ? AND tp_users.email = ? "
                 + "ORDER BY time_joined";
 
-        List<ThirdPartyUserInfo> userInfos = execute(start, QUERY.toString(), pst -> {
+        List<UserInfoPartial> userInfos = execute(start, QUERY.toString(), pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, email);
         }, result -> {
-            List<ThirdPartyUserInfo> finalResult = new ArrayList<>();
+            List<UserInfoPartial> finalResult = new ArrayList<>();
             while (result.next()) {
                 finalResult.add(UserInfoRowMapper.getInstance().mapOrThrow(result));
             }
@@ -340,7 +340,7 @@ public class ThirdPartyQueries {
 
     public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId)
             throws SQLException, StorageQueryException {
-        ThirdPartyUserInfo userInfo = ThirdPartyQueries.getUserInfoUsingUserId(start, sqlCon,
+        UserInfoPartial userInfo = ThirdPartyQueries.getUserInfoUsingUserId(start, sqlCon,
                 tenantIdentifier.toAppIdentifier(), userId);
 
         { // all_auth_recipe_users
@@ -390,24 +390,24 @@ public class ThirdPartyQueries {
         // automatically deleted from thirdparty_user_to_tenant because of foreign key constraint
     }
 
-    private static UserInfo userInfoWithTenantIds(Start start, ThirdPartyUserInfo userInfo)
+    private static UserInfo userInfoWithTenantIds(Start start, UserInfoPartial userInfo)
             throws SQLException, StorageQueryException {
         if (userInfo == null) return null;
         return userInfoWithTenantIds_transaction(start, ConnectionPool.getConnection(start), Arrays.asList(userInfo)).get(0);
     }
 
-    private static List<UserInfo> userInfoWithTenantIds(Start start, List<ThirdPartyUserInfo> userInfos)
+    private static List<UserInfo> userInfoWithTenantIds(Start start, List<UserInfoPartial> userInfos)
             throws SQLException, StorageQueryException {
         return userInfoWithTenantIds_transaction(start, ConnectionPool.getConnection(start), userInfos);
     }
 
-    private static UserInfo userInfoWithTenantIds_transaction(Start start, Connection sqlCon, ThirdPartyUserInfo userInfo)
+    private static UserInfo userInfoWithTenantIds_transaction(Start start, Connection sqlCon, UserInfoPartial userInfo)
             throws SQLException, StorageQueryException {
         if (userInfo == null) return null;
         return userInfoWithTenantIds_transaction(start, sqlCon, Arrays.asList(userInfo)).get(0);
     }
 
-    private static List<UserInfo> userInfoWithTenantIds_transaction(Start start, Connection sqlCon, List<ThirdPartyUserInfo> userInfos)
+    private static List<UserInfo> userInfoWithTenantIds_transaction(Start start, Connection sqlCon, List<UserInfoPartial> userInfos)
             throws SQLException, StorageQueryException {
         String[] userIds = new String[userInfos.size()];
         for (int i = 0; i < userInfos.size(); i++) {
@@ -416,7 +416,7 @@ public class ThirdPartyQueries {
 
         Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds_transaction(start, sqlCon, userIds);
         List<UserInfo> result = new ArrayList<>();
-        for (ThirdPartyUserInfo userInfo : userInfos) {
+        for (UserInfoPartial userInfo : userInfos) {
             result.add(new UserInfo(userInfo.id, userInfo.email, userInfo.thirdParty, userInfo.timeJoined,
                     tenantIdsForUserIds.get(userInfo.id).toArray(new String[0])));
         }
@@ -424,13 +424,13 @@ public class ThirdPartyQueries {
         return result;
     }
 
-    private static class ThirdPartyUserInfo {
+    private static class UserInfoPartial {
         public final String id;
         public final String email;
         public final UserInfo.ThirdParty thirdParty;
         public final long timeJoined;
 
-        public ThirdPartyUserInfo(String id, String email, UserInfo.ThirdParty thirdParty, long timeJoined) {
+        public UserInfoPartial(String id, String email, UserInfo.ThirdParty thirdParty, long timeJoined) {
             this.id = id;
             this.email = email;
             this.thirdParty = thirdParty;
@@ -438,7 +438,7 @@ public class ThirdPartyQueries {
         }
     }
 
-    private static class UserInfoRowMapper implements RowMapper<ThirdPartyUserInfo, ResultSet> {
+    private static class UserInfoRowMapper implements RowMapper<UserInfoPartial, ResultSet> {
         private static final UserInfoRowMapper INSTANCE = new UserInfoRowMapper();
 
         private UserInfoRowMapper() {
@@ -449,8 +449,8 @@ public class ThirdPartyQueries {
         }
 
         @Override
-        public ThirdPartyUserInfo map(ResultSet result) throws Exception {
-            return new ThirdPartyUserInfo(result.getString("user_id"), result.getString("email"),
+        public UserInfoPartial map(ResultSet result) throws Exception {
+            return new UserInfoPartial(result.getString("user_id"), result.getString("email"),
                     new UserInfo.ThirdParty(result.getString("third_party_id"),
                             result.getString("third_party_user_id")),
                     result.getLong("time_joined"));

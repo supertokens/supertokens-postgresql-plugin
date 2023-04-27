@@ -412,7 +412,7 @@ public class PasswordlessQueries {
                         pst.setString(5, phoneNumber);
                     });
                 }
-                UserInfo userInfo = userInfoWithTenantIds_transaction(start, sqlCon, new PasswordlessUserInfo(id, email, phoneNumber, timeJoined));
+                UserInfo userInfo = userInfoWithTenantIds_transaction(start, sqlCon, new UserInfoPartial(id, email, phoneNumber, timeJoined));
                 sqlCon.commit();
                 return userInfo;
             } catch (SQLException throwables) {
@@ -675,13 +675,13 @@ public class PasswordlessQueries {
             }
             QUERY.append(")");
 
-            List<PasswordlessUserInfo> userInfos = execute(start, QUERY.toString(), pst -> {
+            List<UserInfoPartial> userInfos = execute(start, QUERY.toString(), pst -> {
                 for (int i = 0; i < ids.size(); i++) {
                     // i+1 cause this starts with 1 and not 0
                     pst.setString(i + 1, ids.get(i));
                 }
             }, result -> {
-                List<PasswordlessUserInfo> finalResult = new ArrayList<>();
+                List<UserInfoPartial> finalResult = new ArrayList<>();
                 while (result.next()) {
                     finalResult.add(UserInfoRowMapper.getInstance().mapOrThrow(result));
                 }
@@ -696,7 +696,7 @@ public class PasswordlessQueries {
         String QUERY = "SELECT user_id, email, phone_number, time_joined FROM "
                 + getConfig(start).getPasswordlessUsersTable() + " WHERE app_id = ? AND user_id = ?";
 
-        PasswordlessUserInfo userInfo = execute(start, QUERY, pst -> {
+        UserInfoPartial userInfo = execute(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, userId);
         }, result -> {
@@ -708,7 +708,7 @@ public class PasswordlessQueries {
         return userInfoWithTenantIds(start, userInfo);
     }
 
-    public static PasswordlessUserInfo getUserById(Start start, Connection sqlCon, AppIdentifier appIdentifier, String userId) throws StorageQueryException, SQLException {
+    public static UserInfoPartial getUserById(Start start, Connection sqlCon, AppIdentifier appIdentifier, String userId) throws StorageQueryException, SQLException {
         // we don't need a FOR UPDATE here because this is already part of a transaction, and locked on app_id_to_user_id table
         String QUERY = "SELECT user_id, email, phone_number, time_joined FROM "
                 + getConfig(start).getPasswordlessUsersTable()
@@ -734,7 +734,7 @@ public class PasswordlessQueries {
                 + "ON pl_users.app_id = pl_users_to_tenant.app_id AND pl_users.user_id = pl_users_to_tenant.user_id "
                 + "WHERE pl_users_to_tenant.app_id = ? AND pl_users_to_tenant.tenant_id = ? AND pl_users_to_tenant.email = ? ";
 
-        PasswordlessUserInfo userInfo = execute(start, QUERY, pst -> {
+        UserInfoPartial userInfo = execute(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, email);
@@ -756,7 +756,7 @@ public class PasswordlessQueries {
                 + "ON pl_users.app_id = pl_users_to_tenant.app_id AND pl_users.user_id = pl_users_to_tenant.user_id "
                 + "WHERE pl_users_to_tenant.app_id = ? AND pl_users_to_tenant.tenant_id = ? AND pl_users_to_tenant.phone_number = ? ";
 
-        PasswordlessUserInfo userInfo = execute(start, QUERY, pst -> {
+        UserInfoPartial userInfo = execute(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, phoneNumber);
@@ -771,7 +771,7 @@ public class PasswordlessQueries {
 
     public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId)
             throws StorageQueryException, SQLException {
-        PasswordlessUserInfo userInfo = PasswordlessQueries.getUserById(start, sqlCon,
+        UserInfoPartial userInfo = PasswordlessQueries.getUserById(start, sqlCon,
                 tenantIdentifier.toAppIdentifier(), userId);
 
         { // all_auth_recipe_users
@@ -822,24 +822,24 @@ public class PasswordlessQueries {
         // automatically deleted from passwordless_user_to_tenant because of foreign key constraint
     }
 
-    private static UserInfo userInfoWithTenantIds(Start start, PasswordlessUserInfo userInfo)
+    private static UserInfo userInfoWithTenantIds(Start start, UserInfoPartial userInfo)
             throws SQLException, StorageQueryException {
         if (userInfo == null) return null;
         return userInfoWithTenantIds_transaction(start, ConnectionPool.getConnection(start), Arrays.asList(userInfo)).get(0);
     }
 
-    private static List<UserInfo> userInfoWithTenantIds(Start start, List<PasswordlessUserInfo> userInfos)
+    private static List<UserInfo> userInfoWithTenantIds(Start start, List<UserInfoPartial> userInfos)
             throws SQLException, StorageQueryException {
         return userInfoWithTenantIds_transaction(start, ConnectionPool.getConnection(start), userInfos);
     }
 
-    private static UserInfo userInfoWithTenantIds_transaction(Start start, Connection sqlCon, PasswordlessUserInfo userInfo)
+    private static UserInfo userInfoWithTenantIds_transaction(Start start, Connection sqlCon, UserInfoPartial userInfo)
             throws SQLException, StorageQueryException {
         if (userInfo == null) return null;
         return userInfoWithTenantIds_transaction(start, sqlCon, Arrays.asList(userInfo)).get(0);
     }
 
-    private static List<UserInfo> userInfoWithTenantIds_transaction(Start start, Connection sqlCon, List<PasswordlessUserInfo> userInfos)
+    private static List<UserInfo> userInfoWithTenantIds_transaction(Start start, Connection sqlCon, List<UserInfoPartial> userInfos)
             throws SQLException, StorageQueryException {
         String[] userIds = new String[userInfos.size()];
         for (int i = 0; i < userInfos.size(); i++) {
@@ -848,7 +848,7 @@ public class PasswordlessQueries {
 
         Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds_transaction(start, sqlCon, userIds);
         List<UserInfo> result = new ArrayList<>();
-        for (PasswordlessUserInfo userInfo : userInfos) {
+        for (UserInfoPartial userInfo : userInfos) {
             result.add(new UserInfo(userInfo.id, userInfo.email, userInfo.phoneNumber, userInfo.timeJoined,
                     tenantIdsForUserIds.get(userInfo.id).toArray(new String[0])));
         }
@@ -891,13 +891,13 @@ public class PasswordlessQueries {
         }
     }
 
-    private static class PasswordlessUserInfo {
+    private static class UserInfoPartial {
         public final String id;
         public final long timeJoined;
         public final String email;
         public final String phoneNumber;
 
-        PasswordlessUserInfo(String id, @Nullable String email, @Nullable String phoneNumber, long timeJoined) {
+        UserInfoPartial(String id, @Nullable String email, @Nullable String phoneNumber, long timeJoined) {
             this.id = id;
             this.timeJoined = timeJoined;
 
@@ -910,7 +910,7 @@ public class PasswordlessQueries {
         }
     }
 
-    private static class UserInfoRowMapper implements RowMapper<PasswordlessUserInfo, ResultSet> {
+    private static class UserInfoRowMapper implements RowMapper<UserInfoPartial, ResultSet> {
         private static final UserInfoRowMapper INSTANCE = new UserInfoRowMapper();
 
         private UserInfoRowMapper() {
@@ -921,8 +921,8 @@ public class PasswordlessQueries {
         }
 
         @Override
-        public PasswordlessUserInfo map(ResultSet result) throws Exception {
-            return new PasswordlessUserInfo(result.getString("user_id"), result.getString("email"),
+        public UserInfoPartial map(ResultSet result) throws Exception {
+            return new UserInfoPartial(result.getString("user_id"), result.getString("email"),
                     result.getString("phone_number"), result.getLong("time_joined"));
         }
     }
