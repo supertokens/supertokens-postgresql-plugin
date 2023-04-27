@@ -824,6 +824,7 @@ public class PasswordlessQueries {
 
     private static UserInfo userInfoWithTenantIds(Start start, PasswordlessUserInfo userInfo)
             throws SQLException, StorageQueryException {
+        if (userInfo == null) return null;
         return userInfoWithTenantIds(start, Arrays.asList(userInfo)).get(0);
     }
 

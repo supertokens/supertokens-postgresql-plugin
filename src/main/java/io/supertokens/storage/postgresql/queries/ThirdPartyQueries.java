@@ -390,6 +390,7 @@ public class ThirdPartyQueries {
 
     private static UserInfo userInfoWithTenantIds(Start start, ThirdPartyUserInfo userInfo)
             throws SQLException, StorageQueryException {
+        if (userInfo == null) return null;
         return userInfoWithTenantIds(start, Arrays.asList(userInfo)).get(0);
     }
 
@@ -412,6 +413,7 @@ public class ThirdPartyQueries {
 
     private static UserInfo userInfoWithTenantIds(Start start, Connection sqlCon, ThirdPartyUserInfo userInfo)
             throws SQLException, StorageQueryException {
+        if (userInfo == null) return null;
         return userInfoWithTenantIds(start, sqlCon, Arrays.asList(userInfo)).get(0);
     }
 

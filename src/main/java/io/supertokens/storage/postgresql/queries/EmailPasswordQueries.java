@@ -470,6 +470,7 @@ public class EmailPasswordQueries {
 
     private static UserInfo userInfoWithTenantIds(Start start, EmailPasswordUserInfo userInfo)
             throws SQLException, StorageQueryException {
+        if (userInfo == null) return null;
         return userInfoWithTenantIds(start, Arrays.asList(userInfo)).get(0);
     }
 
