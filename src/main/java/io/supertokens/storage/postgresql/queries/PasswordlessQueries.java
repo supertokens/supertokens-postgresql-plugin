@@ -825,12 +825,16 @@ public class PasswordlessQueries {
     private static UserInfo userInfoWithTenantIds(Start start, UserInfoPartial userInfo)
             throws SQLException, StorageQueryException {
         if (userInfo == null) return null;
-        return userInfoWithTenantIds_transaction(start, ConnectionPool.getConnection(start), Arrays.asList(userInfo)).get(0);
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            return userInfoWithTenantIds_transaction(start, con, Arrays.asList(userInfo)).get(0);
+        }
     }
 
     private static List<UserInfo> userInfoWithTenantIds(Start start, List<UserInfoPartial> userInfos)
             throws SQLException, StorageQueryException {
-        return userInfoWithTenantIds_transaction(start, ConnectionPool.getConnection(start), userInfos);
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            return userInfoWithTenantIds_transaction(start, con, userInfos);
+        }
     }
 
     private static UserInfo userInfoWithTenantIds_transaction(Start start, Connection sqlCon, UserInfoPartial userInfo)
