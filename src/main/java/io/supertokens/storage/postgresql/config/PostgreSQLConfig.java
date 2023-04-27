@@ -388,6 +388,10 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("totp_used_codes");
     }
 
+    public String getMfaUserFactorsTable() {
+        return addSchemaAndPrefixToTableName("mfa_user_factors");
+    }
+
     private String addSchemaAndPrefixToTableName(String tableName) {
         String name = tableName;
         if (!getTablePrefix().equals("")) {

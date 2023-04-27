@@ -365,6 +365,11 @@ public class GeneralQueries {
                     update(start, TOTPQueries.getQueryToCreateUsedCodesExpiryTimeIndex(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getMfaUserFactorsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, MfaQueries.getQueryToCreateUserFactorsTable(start), NO_OP_SETTER);
+                }
+
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
@@ -431,7 +436,7 @@ public class GeneralQueries {
                     + getConfig(start).getDashboardUsersTable() + ","
                     + getConfig(start).getDashboardSessionsTable() + ","
                     + getConfig(start).getTotpUsedCodesTable() + "," + getConfig(start).getTotpUserDevicesTable() + ","
-                    + getConfig(start).getTotpUsersTable();
+                    + getConfig(start).getTotpUsersTable() + "," + getConfig(start).getMfaUserFactorsTable();
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
     }

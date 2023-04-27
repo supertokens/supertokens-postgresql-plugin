@@ -47,6 +47,7 @@ import io.supertokens.pluginInterface.jwt.JWTRecipeStorage;
 import io.supertokens.pluginInterface.jwt.JWTSigningKeyInfo;
 import io.supertokens.pluginInterface.jwt.exceptions.DuplicateKeyIdException;
 import io.supertokens.pluginInterface.jwt.sqlstorage.JWTRecipeSQLStorage;
+import io.supertokens.pluginInterface.mfa.MfaStorage;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.MultitenancyStorage;
 import io.supertokens.pluginInterface.multitenancy.TenantConfig;
@@ -106,7 +107,7 @@ import java.util.Set;
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
-        MultitenancyStorage, DashboardSQLStorage, TOTPSQLStorage, ActiveUsersStorage {
+        MultitenancyStorage, DashboardSQLStorage, TOTPSQLStorage, ActiveUsersStorage, MfaStorage {
 
     private static final Object appenderLock = new Object();
     public static boolean silent = false;
@@ -2614,4 +2615,44 @@ public class Start
             throw new StorageQueryException(e);
         }
     }
+
+    // MFA recipe:
+    @Override
+    public boolean enableFactor(TenantIdentifier tenantIdentifier, String userId, String factor)
+            throws StorageQueryException {
+        try {
+            int insertedCount = MfaQueries.enableFactor(this, tenantIdentifier, userId, factor);
+            if (insertedCount == 0) {
+                return false;
+            }
+            return true;
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public String[] listFactors(TenantIdentifier tenantIdentifier, String userId)
+            throws StorageQueryException {
+        try {
+            return MfaQueries.listFactors(this, tenantIdentifier, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean disableFactor(TenantIdentifier tenantIdentifier, String userId, String factor)
+            throws StorageQueryException {
+        try {
+            int deletedCount = MfaQueries.disableFactor(this, tenantIdentifier, userId, factor);
+            if (deletedCount == 0) {
+                return false;
+            }
+            return true;
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
 }
