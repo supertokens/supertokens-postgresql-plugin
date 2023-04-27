@@ -21,7 +21,6 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
-import io.supertokens.pluginInterface.thirdparty.CreateUserInfo;
 import io.supertokens.pluginInterface.thirdparty.UserInfo;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -91,9 +90,9 @@ public class ThirdPartyQueries {
         // @formatter:on
     }
 
-    public static void signUp(Start start, TenantIdentifier tenantIdentifier, CreateUserInfo userInfo)
+    public static UserInfo signUp(Start start, TenantIdentifier tenantIdentifier, String id, String email, UserInfo.ThirdParty thirdParty, long timeJoined)
             throws StorageQueryException, StorageTransactionLogicException {
-        start.startTransaction(con -> {
+        return start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try {
                 { // app_id_to_user_id
@@ -101,7 +100,7 @@ public class ThirdPartyQueries {
                             + "(app_id, user_id, recipe_id)" + " VALUES(?, ?, ?)";
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, userInfo.id);
+                        pst.setString(2, id);
                         pst.setString(3, THIRD_PARTY.toString());
                     });
                 }
@@ -112,9 +111,9 @@ public class ThirdPartyQueries {
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
                         pst.setString(2, tenantIdentifier.getTenantId());
-                        pst.setString(3, userInfo.id);
+                        pst.setString(3, id);
                         pst.setString(4, THIRD_PARTY.toString());
-                        pst.setLong(5, userInfo.timeJoined);
+                        pst.setLong(5, timeJoined);
                     });
                 }
 
@@ -124,11 +123,11 @@ public class ThirdPartyQueries {
                             + " VALUES(?, ?, ?, ?, ?, ?)";
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, userInfo.thirdParty.id);
-                        pst.setString(3, userInfo.thirdParty.userId);
-                        pst.setString(4, userInfo.id);
-                        pst.setString(5, userInfo.email);
-                        pst.setLong(6, userInfo.timeJoined);
+                        pst.setString(2, thirdParty.id);
+                        pst.setString(3, thirdParty.userId);
+                        pst.setString(4, id);
+                        pst.setString(5, email);
+                        pst.setLong(6, timeJoined);
                     });
                 }
 
@@ -139,17 +138,19 @@ public class ThirdPartyQueries {
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
                         pst.setString(2, tenantIdentifier.getTenantId());
-                        pst.setString(3, userInfo.id);
-                        pst.setString(4, userInfo.thirdParty.id);
-                        pst.setString(5, userInfo.thirdParty.userId);
+                        pst.setString(3, id);
+                        pst.setString(4, thirdParty.id);
+                        pst.setString(5, thirdParty.userId);
                     });
                 }
 
+                UserInfo userInfo = userInfoWithTenantIds(start, sqlCon, new ThirdPartyUserInfo(id, email, thirdParty, timeJoined));
                 sqlCon.commit();
+                return userInfo;
+
             } catch (SQLException throwables) {
                 throw new StorageTransactionLogicException(throwables);
             }
-            return null;
         });
     }
 

@@ -247,9 +247,9 @@ public class EmailPasswordQueries {
         });
     }
 
-    public static void signUp(Start start, TenantIdentifier tenantIdentifier, String userId, String email, String passwordHash, long timeJoined)
+    public static UserInfo signUp(Start start, TenantIdentifier tenantIdentifier, String userId, String email, String passwordHash, long timeJoined)
             throws StorageQueryException, StorageTransactionLogicException {
-        start.startTransaction(con -> {
+        return start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try {
                 { // app_id_to_user_id
@@ -299,11 +299,13 @@ public class EmailPasswordQueries {
                     });
                 }
 
+                UserInfo userInfo = userInfoWithTenantIds(start, sqlCon, new EmailPasswordUserInfo(userId, email, passwordHash, timeJoined));
+
                 sqlCon.commit();
+                return userInfo;
             } catch (SQLException throwables) {
                 throw new StorageTransactionLogicException(throwables);
             }
-            return null;
         });
     }
 
