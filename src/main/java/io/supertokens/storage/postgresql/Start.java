@@ -787,12 +787,11 @@ public class Start
     }
 
     @Override
-    public void signUp(TenantIdentifier tenantIdentifier, UserInfo userInfo)
+    public UserInfo signUp(TenantIdentifier tenantIdentifier, String id, String email, String passwordHash, long timeJoined)
             throws StorageQueryException, DuplicateUserIdException, DuplicateEmailException,
             TenantOrAppNotFoundException {
         try {
-            EmailPasswordQueries.signUp(this, tenantIdentifier, userInfo.id, userInfo.email, userInfo.passwordHash,
-                    userInfo.timeJoined);
+            return EmailPasswordQueries.signUp(this, tenantIdentifier, id, email, passwordHash, timeJoined);
         } catch (StorageTransactionLogicException eTemp) {
             Exception e = eTemp.actualException;
             if (e instanceof PSQLException) {
@@ -1146,12 +1145,13 @@ public class Start
     }
 
     @Override
-    public void signUp(TenantIdentifier tenantIdentifier, io.supertokens.pluginInterface.thirdparty.UserInfo
-            userInfo)
+    public io.supertokens.pluginInterface.thirdparty.UserInfo signUp(
+            TenantIdentifier tenantIdentifier, String id, String email,
+            io.supertokens.pluginInterface.thirdparty.UserInfo.ThirdParty thirdParty, long timeJoined)
             throws StorageQueryException, io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException,
             DuplicateThirdPartyUserException, TenantOrAppNotFoundException {
         try {
-            ThirdPartyQueries.signUp(this, tenantIdentifier, userInfo);
+            return ThirdPartyQueries.signUp(this, tenantIdentifier, id, email, thirdParty, timeJoined);
         } catch (StorageTransactionLogicException eTemp) {
             Exception e = eTemp.actualException;
             if (e instanceof PSQLException) {
@@ -1619,13 +1619,18 @@ public class Start
     }
 
     @Override
-    public void createUser(TenantIdentifier
-                                   tenantIdentifier, io.supertokens.pluginInterface.passwordless.UserInfo user)
+    public io.supertokens.pluginInterface.passwordless.UserInfo createUser(TenantIdentifier tenantIdentifier,
+                                                                           String id, @javax.annotation.Nullable String email,
+                                                                           @javax.annotation.Nullable String phoneNumber, long timeJoined)
             throws StorageQueryException,
             DuplicateEmailException, DuplicatePhoneNumberException, DuplicateUserIdException,
             TenantOrAppNotFoundException {
+        if (email == null && phoneNumber == null) {
+            throw new IllegalArgumentException("Both email and phoneNumber cannot be null");
+        }
+
         try {
-            PasswordlessQueries.createUser(this, tenantIdentifier, user);
+            return PasswordlessQueries.createUser(this, tenantIdentifier, id, email, phoneNumber, timeJoined);
         } catch (StorageTransactionLogicException e) {
 
             Exception actualException = e.actualException;

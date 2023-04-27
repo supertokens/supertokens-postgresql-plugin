@@ -35,10 +35,7 @@ import org.jetbrains.annotations.TestOnly;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
 import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.CREATING_NEW_TABLE;
@@ -943,6 +940,45 @@ public class GeneralQueries {
             }
             return null;
         });
+    }
+
+    public static Map<String, List<String>> getTenantIdsForUserIds_transaction(Start start, Connection sqlCon, String[] userIds)
+            throws SQLException, StorageQueryException {
+        if (userIds != null && userIds.length > 0) {
+            StringBuilder QUERY = new StringBuilder("SELECT user_id, tenant_id "
+                    + "FROM " + getConfig(start).getUsersTable());
+            QUERY.append(" WHERE user_id IN (");
+            for (int i = 0; i < userIds.length; i++) {
+
+                QUERY.append("?");
+                if (i != userIds.length - 1) {
+                    // not the last element
+                    QUERY.append(",");
+                }
+            }
+            QUERY.append(")");
+
+            return execute(sqlCon, QUERY.toString(), pst -> {
+                for (int i = 0; i < userIds.length; i++) {
+                    // i+1 cause this starts with 1 and not 0
+                    pst.setString(i + 1, userIds[i]);
+                }
+            }, result -> {
+                Map<String, List<String>> finalResult = new HashMap<>();
+                while (result.next()) {
+                    String userId = result.getString("user_id");
+                    String tenantId = result.getString("tenant_id");
+
+                    if (!finalResult.containsKey(userId)) {
+                        finalResult.put(userId, new ArrayList<>());
+                    }
+                    finalResult.get(userId).add(tenantId);
+                }
+                return finalResult;
+            });
+        }
+
+        return new HashMap<>();
     }
 
     private static class UserInfoPaginationResultHolder {
