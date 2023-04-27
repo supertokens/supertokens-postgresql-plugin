@@ -216,7 +216,7 @@ public class EmailPasswordQueries {
             }
             return null;
         });
-        return userInfoWithTenantIds(start, userInfo);
+        return userInfoWithTenantIds(start, con, userInfo);
     }
 
     public static PasswordResetTokenInfo getPasswordResetTokenInfo(Start start, AppIdentifier appIdentifier, String token)
@@ -482,6 +482,29 @@ public class EmailPasswordQueries {
         }
 
         Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds(start, userIds);
+        List<UserInfo> result = new ArrayList<>();
+        for (EmailPasswordUserInfo userInfo : userInfos) {
+            result.add(new UserInfo(userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined,
+                    tenantIdsForUserIds.get(userInfo.id).toArray(new String[0])));
+        }
+
+        return result;
+    }
+
+    private static UserInfo userInfoWithTenantIds(Start start, Connection sqlCon, EmailPasswordUserInfo userInfo)
+            throws SQLException, StorageQueryException {
+        if (userInfo == null) return null;
+        return userInfoWithTenantIds(start, sqlCon, Arrays.asList(userInfo)).get(0);
+    }
+
+    private static List<UserInfo> userInfoWithTenantIds(Start start, Connection sqlCon, List<EmailPasswordUserInfo> userInfos)
+            throws SQLException, StorageQueryException {
+        String[] userIds = new String[userInfos.size()];
+        for (int i = 0; i < userInfos.size(); i++) {
+            userIds[i] = userInfos.get(i).id;
+        }
+
+        Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds(start, sqlCon, userIds);
         List<UserInfo> result = new ArrayList<>();
         for (EmailPasswordUserInfo userInfo : userInfos) {
             result.add(new UserInfo(userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined,
