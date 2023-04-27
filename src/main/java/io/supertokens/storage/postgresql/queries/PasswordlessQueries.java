@@ -21,7 +21,6 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
-import io.supertokens.pluginInterface.passwordless.CreateUserInfo;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.UserInfo;
@@ -362,9 +361,9 @@ public class PasswordlessQueries {
         });
     }
 
-    public static void createUser(Start start, TenantIdentifier tenantIdentifier, CreateUserInfo user)
+    public static UserInfo createUser(Start start, TenantIdentifier tenantIdentifier, String id, @Nullable String email, @Nullable String phoneNumber, long timeJoined)
             throws StorageTransactionLogicException, StorageQueryException {
-        start.startTransaction(con -> {
+        return start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try {
                 { // app_id_to_user_id
@@ -372,7 +371,7 @@ public class PasswordlessQueries {
                             + "(app_id, user_id, recipe_id)" + " VALUES(?, ?, ?)";
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, user.id);
+                        pst.setString(2, id);
                         pst.setString(3, PASSWORDLESS.toString());
                     });
                 }
@@ -383,9 +382,9 @@ public class PasswordlessQueries {
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
                         pst.setString(2, tenantIdentifier.getTenantId());
-                        pst.setString(3, user.id);
+                        pst.setString(3, id);
                         pst.setString(4, PASSWORDLESS.toString());
-                        pst.setLong(5, user.timeJoined);
+                        pst.setLong(5, timeJoined);
                     });
                 }
 
@@ -394,10 +393,10 @@ public class PasswordlessQueries {
                             + "(app_id, user_id, email, phone_number, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, user.id);
-                        pst.setString(3, user.email);
-                        pst.setString(4, user.phoneNumber);
-                        pst.setLong(5, user.timeJoined);
+                        pst.setString(2, id);
+                        pst.setString(3, email);
+                        pst.setString(4, phoneNumber);
+                        pst.setLong(5, timeJoined);
                     });
                 }
 
@@ -408,16 +407,17 @@ public class PasswordlessQueries {
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
                         pst.setString(2, tenantIdentifier.getTenantId());
-                        pst.setString(3, user.id);
-                        pst.setString(4, user.email);
-                        pst.setString(5, user.phoneNumber);
+                        pst.setString(3, id);
+                        pst.setString(4, email);
+                        pst.setString(5, phoneNumber);
                     });
                 }
+                UserInfo userInfo = userInfoWithTenantIds_transaction(start, sqlCon, new PasswordlessUserInfo(id, email, phoneNumber, timeJoined));
                 sqlCon.commit();
+                return userInfo;
             } catch (SQLException throwables) {
                 throw new StorageTransactionLogicException(throwables);
             }
-            return null;
         });
     }
 
@@ -825,17 +825,28 @@ public class PasswordlessQueries {
     private static UserInfo userInfoWithTenantIds(Start start, PasswordlessUserInfo userInfo)
             throws SQLException, StorageQueryException {
         if (userInfo == null) return null;
-        return userInfoWithTenantIds(start, Arrays.asList(userInfo)).get(0);
+        return userInfoWithTenantIds_transaction(start, ConnectionPool.getConnection(start), Arrays.asList(userInfo)).get(0);
     }
 
     private static List<UserInfo> userInfoWithTenantIds(Start start, List<PasswordlessUserInfo> userInfos)
+            throws SQLException, StorageQueryException {
+        return userInfoWithTenantIds_transaction(start, ConnectionPool.getConnection(start), userInfos);
+    }
+
+    private static UserInfo userInfoWithTenantIds_transaction(Start start, Connection sqlCon, PasswordlessUserInfo userInfo)
+            throws SQLException, StorageQueryException {
+        if (userInfo == null) return null;
+        return userInfoWithTenantIds_transaction(start, sqlCon, Arrays.asList(userInfo)).get(0);
+    }
+
+    private static List<UserInfo> userInfoWithTenantIds_transaction(Start start, Connection sqlCon, List<PasswordlessUserInfo> userInfos)
             throws SQLException, StorageQueryException {
         String[] userIds = new String[userInfos.size()];
         for (int i = 0; i < userInfos.size(); i++) {
             userIds[i] = userInfos.get(i).id;
         }
 
-        Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds(start, userIds);
+        Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds_transaction(start, sqlCon, userIds);
         List<UserInfo> result = new ArrayList<>();
         for (PasswordlessUserInfo userInfo : userInfos) {
             result.add(new UserInfo(userInfo.id, userInfo.email, userInfo.phoneNumber, userInfo.timeJoined,

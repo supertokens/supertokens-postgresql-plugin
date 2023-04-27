@@ -942,46 +942,7 @@ public class GeneralQueries {
         });
     }
 
-    public static Map<String, List<String>> getTenantIdsForUserIds(Start start, String[] userIds)
-            throws SQLException, StorageQueryException {
-        if (userIds != null && userIds.length > 0) {
-            StringBuilder QUERY = new StringBuilder("SELECT user_id, tenant_id "
-                    + "FROM " + getConfig(start).getUsersTable());
-            QUERY.append(" WHERE user_id IN (");
-            for (int i = 0; i < userIds.length; i++) {
-
-                QUERY.append("?");
-                if (i != userIds.length - 1) {
-                    // not the last element
-                    QUERY.append(",");
-                }
-            }
-            QUERY.append(")");
-
-            return execute(start, QUERY.toString(), pst -> {
-                for (int i = 0; i < userIds.length; i++) {
-                    // i+1 cause this starts with 1 and not 0
-                    pst.setString(i + 1, userIds[i]);
-                }
-            }, result -> {
-                Map<String, List<String>> finalResult = new HashMap<>();
-                while (result.next()) {
-                    String userId = result.getString("user_id");
-                    String tenantId = result.getString("tenant_id");
-
-                    if (!finalResult.containsKey(userId)) {
-                        finalResult.put(userId, new ArrayList<>());
-                    }
-                    finalResult.get(userId).add(tenantId);
-                }
-                return finalResult;
-            });
-        }
-
-        return new HashMap<>();
-    }
-
-    public static Map<String, List<String>> getTenantIdsForUserIds(Start start, Connection sqlCon, String[] userIds)
+    public static Map<String, List<String>> getTenantIdsForUserIds_transaction(Start start, Connection sqlCon, String[] userIds)
             throws SQLException, StorageQueryException {
         if (userIds != null && userIds.length > 0) {
             StringBuilder QUERY = new StringBuilder("SELECT user_id, tenant_id "

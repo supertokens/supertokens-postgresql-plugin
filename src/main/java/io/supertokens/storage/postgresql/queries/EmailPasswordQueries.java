@@ -23,6 +23,7 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -216,7 +217,7 @@ public class EmailPasswordQueries {
             }
             return null;
         });
-        return userInfoWithTenantIds(start, con, userInfo);
+        return userInfoWithTenantIds_transaction(start, con, userInfo);
     }
 
     public static PasswordResetTokenInfo getPasswordResetTokenInfo(Start start, AppIdentifier appIdentifier, String token)
@@ -299,7 +300,7 @@ public class EmailPasswordQueries {
                     });
                 }
 
-                UserInfo userInfo = userInfoWithTenantIds(start, sqlCon, new EmailPasswordUserInfo(userId, email, passwordHash, timeJoined));
+                UserInfo userInfo = userInfoWithTenantIds_transaction(start, sqlCon, new EmailPasswordUserInfo(userId, email, passwordHash, timeJoined));
 
                 sqlCon.commit();
                 return userInfo;
@@ -473,40 +474,28 @@ public class EmailPasswordQueries {
     private static UserInfo userInfoWithTenantIds(Start start, EmailPasswordUserInfo userInfo)
             throws SQLException, StorageQueryException {
         if (userInfo == null) return null;
-        return userInfoWithTenantIds(start, Arrays.asList(userInfo)).get(0);
+        return userInfoWithTenantIds_transaction(start, ConnectionPool.getConnection(start), Arrays.asList(userInfo)).get(0);
     }
 
     private static List<UserInfo> userInfoWithTenantIds(Start start, List<EmailPasswordUserInfo> userInfos)
             throws SQLException, StorageQueryException {
-        String[] userIds = new String[userInfos.size()];
-        for (int i = 0; i < userInfos.size(); i++) {
-            userIds[i] = userInfos.get(i).id;
-        }
-
-        Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds(start, userIds);
-        List<UserInfo> result = new ArrayList<>();
-        for (EmailPasswordUserInfo userInfo : userInfos) {
-            result.add(new UserInfo(userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined,
-                    tenantIdsForUserIds.get(userInfo.id).toArray(new String[0])));
-        }
-
-        return result;
+        return userInfoWithTenantIds_transaction(start, ConnectionPool.getConnection(start), userInfos);
     }
 
-    private static UserInfo userInfoWithTenantIds(Start start, Connection sqlCon, EmailPasswordUserInfo userInfo)
+    private static UserInfo userInfoWithTenantIds_transaction(Start start, Connection sqlCon, EmailPasswordUserInfo userInfo)
             throws SQLException, StorageQueryException {
         if (userInfo == null) return null;
-        return userInfoWithTenantIds(start, sqlCon, Arrays.asList(userInfo)).get(0);
+        return userInfoWithTenantIds_transaction(start, sqlCon, Arrays.asList(userInfo)).get(0);
     }
 
-    private static List<UserInfo> userInfoWithTenantIds(Start start, Connection sqlCon, List<EmailPasswordUserInfo> userInfos)
+    private static List<UserInfo> userInfoWithTenantIds_transaction(Start start, Connection sqlCon, List<EmailPasswordUserInfo> userInfos)
             throws SQLException, StorageQueryException {
         String[] userIds = new String[userInfos.size()];
         for (int i = 0; i < userInfos.size(); i++) {
             userIds[i] = userInfos.get(i).id;
         }
 
-        Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds(start, sqlCon, userIds);
+        Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds_transaction(start, sqlCon, userIds);
         List<UserInfo> result = new ArrayList<>();
         for (EmailPasswordUserInfo userInfo : userInfos) {
             result.add(new UserInfo(userInfo.id, userInfo.email, userInfo.passwordHash, userInfo.timeJoined,

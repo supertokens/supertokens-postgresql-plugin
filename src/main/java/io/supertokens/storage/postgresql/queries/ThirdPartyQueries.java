@@ -22,6 +22,7 @@ import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicExceptio
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.thirdparty.UserInfo;
+import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -144,7 +145,7 @@ public class ThirdPartyQueries {
                     });
                 }
 
-                UserInfo userInfo = userInfoWithTenantIds(start, sqlCon, new ThirdPartyUserInfo(id, email, thirdParty, timeJoined));
+                UserInfo userInfo = userInfoWithTenantIds_transaction(start, sqlCon, new ThirdPartyUserInfo(id, email, thirdParty, timeJoined));
                 sqlCon.commit();
                 return userInfo;
 
@@ -288,7 +289,7 @@ public class ThirdPartyQueries {
             }
             return null;
         });
-        return userInfoWithTenantIds(start, con, userInfo);
+        return userInfoWithTenantIds_transaction(start, con, userInfo);
     }
 
     private static ThirdPartyUserInfo getUserInfoUsingUserId(Start start, Connection con,
@@ -392,40 +393,28 @@ public class ThirdPartyQueries {
     private static UserInfo userInfoWithTenantIds(Start start, ThirdPartyUserInfo userInfo)
             throws SQLException, StorageQueryException {
         if (userInfo == null) return null;
-        return userInfoWithTenantIds(start, Arrays.asList(userInfo)).get(0);
+        return userInfoWithTenantIds_transaction(start, ConnectionPool.getConnection(start), Arrays.asList(userInfo)).get(0);
     }
 
     private static List<UserInfo> userInfoWithTenantIds(Start start, List<ThirdPartyUserInfo> userInfos)
             throws SQLException, StorageQueryException {
-        String[] userIds = new String[userInfos.size()];
-        for (int i = 0; i < userInfos.size(); i++) {
-            userIds[i] = userInfos.get(i).id;
-        }
-
-        Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds(start, userIds);
-        List<UserInfo> result = new ArrayList<>();
-        for (ThirdPartyUserInfo userInfo : userInfos) {
-            result.add(new UserInfo(userInfo.id, userInfo.email, userInfo.thirdParty, userInfo.timeJoined,
-                    tenantIdsForUserIds.get(userInfo.id).toArray(new String[0])));
-        }
-
-        return result;
+        return userInfoWithTenantIds_transaction(start, ConnectionPool.getConnection(start), userInfos);
     }
 
-    private static UserInfo userInfoWithTenantIds(Start start, Connection sqlCon, ThirdPartyUserInfo userInfo)
+    private static UserInfo userInfoWithTenantIds_transaction(Start start, Connection sqlCon, ThirdPartyUserInfo userInfo)
             throws SQLException, StorageQueryException {
         if (userInfo == null) return null;
-        return userInfoWithTenantIds(start, sqlCon, Arrays.asList(userInfo)).get(0);
+        return userInfoWithTenantIds_transaction(start, sqlCon, Arrays.asList(userInfo)).get(0);
     }
 
-    private static List<UserInfo> userInfoWithTenantIds(Start start, Connection sqlCon, List<ThirdPartyUserInfo> userInfos)
+    private static List<UserInfo> userInfoWithTenantIds_transaction(Start start, Connection sqlCon, List<ThirdPartyUserInfo> userInfos)
             throws SQLException, StorageQueryException {
         String[] userIds = new String[userInfos.size()];
         for (int i = 0; i < userInfos.size(); i++) {
             userIds[i] = userInfos.get(i).id;
         }
 
-        Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds(start, sqlCon, userIds);
+        Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds_transaction(start, sqlCon, userIds);
         List<UserInfo> result = new ArrayList<>();
         for (ThirdPartyUserInfo userInfo : userInfos) {
             result.add(new UserInfo(userInfo.id, userInfo.email, userInfo.thirdParty, userInfo.timeJoined,
