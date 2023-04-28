@@ -146,8 +146,8 @@ public class Start
     }
 
     @Override
-    public void loadConfig(JsonObject configJson, Set<LOG_LEVEL> logLevels) throws InvalidConfigException {
-        Config.loadConfig(this, configJson, logLevels);
+    public void loadConfig(JsonObject configJson, Set<LOG_LEVEL> logLevels, TenantIdentifier tenantIdentifier) throws InvalidConfigException {
+        Config.loadConfig(this, configJson, logLevels, tenantIdentifier);
     }
 
     @Override
