@@ -902,7 +902,7 @@ public class PasswordlessQueries {
         public final String phoneNumber;
 
         UserInfoPartial(String id, @Nullable String email, @Nullable String phoneNumber, long timeJoined) {
-            this.id = id;
+            this.id = id.trim();
             this.timeJoined = timeJoined;
 
             if (email == null && phoneNumber == null) {

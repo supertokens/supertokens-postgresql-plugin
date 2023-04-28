@@ -435,7 +435,7 @@ public class ThirdPartyQueries {
         public final long timeJoined;
 
         public UserInfoPartial(String id, String email, UserInfo.ThirdParty thirdParty, long timeJoined) {
-            this.id = id;
+            this.id = id.trim();
             this.email = email;
             this.thirdParty = thirdParty;
             this.timeJoined = timeJoined;

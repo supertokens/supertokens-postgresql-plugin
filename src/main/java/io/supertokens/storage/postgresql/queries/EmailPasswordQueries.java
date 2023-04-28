@@ -516,7 +516,7 @@ public class EmailPasswordQueries {
         public final String passwordHash;
 
         public UserInfoPartial(String id, String email, String passwordHash, long timeJoined) {
-            this.id = id;
+            this.id = id.trim();
             this.timeJoined = timeJoined;
             this.email = email;
             this.passwordHash = passwordHash;
