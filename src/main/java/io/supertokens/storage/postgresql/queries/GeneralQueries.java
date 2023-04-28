@@ -966,7 +966,7 @@ public class GeneralQueries {
             }, result -> {
                 Map<String, List<String>> finalResult = new HashMap<>();
                 while (result.next()) {
-                    String userId = result.getString("user_id");
+                    String userId = result.getString("user_id").trim();
                     String tenantId = result.getString("tenant_id");
 
                     if (!finalResult.containsKey(userId)) {
