@@ -57,7 +57,7 @@ public class Config extends ResourceDistributor.SingletonResource {
             return;
         }
         start.getResourceDistributor().setResource(RESOURCE_KEY, new Config(start, configJson, logLevels));
-        Logging.info(start, "Loading PostgreSQL config.", true);
+        Logging.info(start, "Loading PostgreSQL config.", false);
     }
 
     public static String getUserPoolId(Start start) {
