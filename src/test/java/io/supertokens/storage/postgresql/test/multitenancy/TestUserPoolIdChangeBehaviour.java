@@ -113,4 +113,52 @@ public class TestUserPoolIdChangeBehaviour {
         assertEquals(userInfo, user2);
 
     }
+
+    @Test
+    public void testUsersWorkAfterUserPoolIdChangesAndServerRestart() throws Exception {
+        JsonObject coreConfig = new JsonObject();
+        StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess())
+                .modifyConfigToAddANewUserPoolForTesting(coreConfig, 1);
+
+        TenantIdentifier tenantIdentifier = new TenantIdentifier(null, "a1", null);
+        Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
+                tenantIdentifier,
+                new EmailPasswordConfig(true),
+                new ThirdPartyConfig(true, null),
+                new PasswordlessConfig(true),
+                coreConfig
+        ), false);
+
+        TenantIdentifierWithStorage tenantIdentifierWithStorage = tenantIdentifier.withStorage(
+                StorageLayer.getStorage(tenantIdentifier, process.getProcess()));
+
+        String userPoolId = tenantIdentifierWithStorage.getStorage().getUserPoolId();
+
+        UserInfo userInfo = EmailPassword.signUp(
+                tenantIdentifierWithStorage, process.getProcess(), "user@example.com", "password");
+
+        coreConfig.addProperty("postgresql_host", "127.0.0.1");
+        Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
+                tenantIdentifier,
+                new EmailPasswordConfig(true),
+                new ThirdPartyConfig(true, null),
+                new PasswordlessConfig(true),
+                coreConfig
+        ), false);
+
+        // Restart the process
+        process.kill(false);
+        String[] args = {"../"};
+        this.process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        tenantIdentifierWithStorage = tenantIdentifier.withStorage(
+                StorageLayer.getStorage(tenantIdentifier, process.getProcess()));
+        String userPoolId2 = tenantIdentifierWithStorage.getStorage().getUserPoolId();
+        assertNotEquals(userPoolId, userPoolId2);
+
+        UserInfo user2 = EmailPassword.signIn(tenantIdentifierWithStorage, process.getProcess(), "user@example.com", "password");
+
+        assertEquals(userInfo, user2);
+    }
 }
