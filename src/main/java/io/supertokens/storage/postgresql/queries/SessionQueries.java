@@ -199,6 +199,19 @@ public class SessionQueries {
         });
     }
 
+    public static boolean deleteSessionsOfUser(Start start, TenantIdentifier tenantIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + getConfig(start).getSessionInfoTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND user_id = ?";
+
+        int numRows = update(start, QUERY.toString(), pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, userId);
+        });
+        return numRows > 0;
+    }
+
     public static String[] getAllNonExpiredSessionHandlesForUser(Start start, TenantIdentifier tenantIdentifier,
                                                                  String userId)
             throws SQLException, StorageQueryException {

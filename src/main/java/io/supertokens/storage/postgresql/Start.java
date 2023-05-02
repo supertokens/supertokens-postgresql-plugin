@@ -490,6 +490,16 @@ public class Start
     }
 
     @Override
+    public boolean deleteSessionsOfUser(TenantIdentifier tenantIdentifier, String userId)
+            throws StorageQueryException {
+        try {
+            return SessionQueries.deleteSessionsOfUser(this, tenantIdentifier, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public int getNumberOfSessions(TenantIdentifier tenantIdentifier) throws StorageQueryException {
         try {
             return SessionQueries.getNumberOfSessions(this, tenantIdentifier);
@@ -1028,6 +1038,16 @@ public class Start
             EmailVerificationQueries.deleteUserInfo(this, appIdentifier, userId);
         } catch (StorageTransactionLogicException e) {
             throw new StorageQueryException(e.actualException);
+        }
+    }
+
+    @Override
+    public boolean deleteEmailVerificationUserInfo(TenantIdentifier tenantIdentifier, String userId)
+            throws StorageQueryException {
+        try {
+            return EmailVerificationQueries.deleteUserInfo(this, tenantIdentifier, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
         }
     }
 
@@ -2604,6 +2624,16 @@ public class Start
         Connection sqlCon = (Connection) con.getConnection();
         try {
             TOTPQueries.removeUser_Transaction(this, sqlCon, appIdentifier, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean removeUser(TenantIdentifier tenantIdentifier, String userId)
+            throws StorageQueryException {
+        try {
+            return TOTPQueries.removeUser(this, tenantIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
