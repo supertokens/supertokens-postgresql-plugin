@@ -16,6 +16,7 @@
 
 package io.supertokens.storage.postgresql.queries;
 
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -80,6 +81,17 @@ public class MfaQueries {
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, userId);
             pst.setString(4, factorId);
+        });
+    }
+
+
+    public static int deleteUser(Start start, AppIdentifier appIdentifier, String userId)
+            throws StorageQueryException, SQLException {
+        String QUERY = "DELETE FROM " + Config.getConfig(start).getMfaUserFactorsTable() + " WHERE app_id = ? AND user_id = ?";
+
+        return update(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
         });
     }
 
