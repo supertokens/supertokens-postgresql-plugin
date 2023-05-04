@@ -714,11 +714,11 @@ public class Start
 
     @TestOnly
     @Override
-    public void addInfoToNonAuthRecipesBasedOnUserId(String className, String userId) throws StorageQueryException {
+    public void addInfoToNonAuthRecipesBasedOnUserId(TenantIdentifier tenantIdentifier, String className, String userId) throws StorageQueryException {
         // add entries to nonAuthRecipe tables with input userId
         if (className.equals(SessionStorage.class.getName())) {
             try {
-                createNewSession(new TenantIdentifier(null, null, null), "sessionHandle", userId, "refreshTokenHash",
+                createNewSession(tenantIdentifier, "sessionHandle", userId, "refreshTokenHash",
                         new JsonObject(),
                         System.currentTimeMillis() + 1000000, new JsonObject(), System.currentTimeMillis(), false);
             } catch (Exception e) {
@@ -729,14 +729,14 @@ public class Start
                 String role = "testRole";
                 this.startTransaction(con -> {
                     try {
-                        createNewRoleOrDoNothingIfExists_Transaction(new AppIdentifier(null, null), con, role);
+                        createNewRoleOrDoNothingIfExists_Transaction(tenantIdentifier.toAppIdentifier(), con, role);
                     } catch (TenantOrAppNotFoundException e) {
                         throw new IllegalStateException(e);
                     }
                     return null;
                 });
                 try {
-                    addRoleToUser(new TenantIdentifier(null, null, null), userId, role);
+                    addRoleToUser(tenantIdentifier, userId, role);
                 } catch (Exception e) {
                     throw new StorageTransactionLogicException(e);
                 }
@@ -747,7 +747,7 @@ public class Start
             try {
                 EmailVerificationTokenInfo info = new EmailVerificationTokenInfo(userId, "someToken", 10000,
                         "test123@example.com");
-                addEmailVerificationToken(new TenantIdentifier(null, null, null), info);
+                addEmailVerificationToken(tenantIdentifier, info);
 
             } catch (DuplicateEmailVerificationTokenException e) {
                 throw new StorageQueryException(e);
@@ -760,7 +760,7 @@ public class Start
             try {
                 this.startTransaction(con -> {
                     try {
-                        setUserMetadata_Transaction(new AppIdentifier(null, null), con, userId, data);
+                        setUserMetadata_Transaction(tenantIdentifier.toAppIdentifier(), con, userId, data);
                     } catch (TenantOrAppNotFoundException e) {
                         throw new StorageTransactionLogicException(e);
                     }
@@ -775,7 +775,18 @@ public class Start
         } else if (className.equals(TOTPStorage.class.getName())) {
             try {
                 TOTPDevice device = new TOTPDevice(userId, "testDevice", "secret", 0, 30, false);
-                TOTPQueries.createDevice(this, new AppIdentifier(null, null), device);
+                TOTPQueries.createDevice(this, tenantIdentifier.toAppIdentifier(), device);
+                this.startTransaction(con -> {
+                    try {
+                        long now = System.currentTimeMillis();
+                        TOTPQueries.insertUsedCode_Transaction(this,
+                                (Connection) con.getConnection(), tenantIdentifier, new TOTPUsedCode(userId, "123456", true, 1000+now, now));
+                    } catch (SQLException e) {
+                        throw new StorageTransactionLogicException(e);
+                    }
+                    return null;
+                });
+
             } catch (StorageTransactionLogicException e) {
                 throw new StorageQueryException(e.actualException);
             }
@@ -2356,7 +2367,8 @@ public class Start
                             userId);
 
                     if (recipeId == null) {
-                        throw new StorageTransactionLogicException(new UnknownUserIdException());
+                        sqlCon.commit();
+                        return false; // No auth user to remove
                     }
 
                     boolean removed;
@@ -2382,8 +2394,6 @@ public class Start
                 ServerErrorMessage serverErrorMessage = ((PSQLException) e.actualException).getServerErrorMessage();
 
                 throw new StorageQueryException(e.actualException);
-            } else if (e.actualException instanceof UnknownUserIdException) {
-                throw (UnknownUserIdException) e.actualException;
             } else if (e.actualException instanceof StorageQueryException) {
                 throw (StorageQueryException) e.actualException;
             }
