@@ -2358,7 +2358,7 @@ public class Start
 
     @Override
     public boolean removeUserIdFromTenant(TenantIdentifier tenantIdentifier, String userId)
-            throws StorageQueryException, UnknownUserIdException {
+            throws StorageQueryException {
         try {
             return this.startTransaction(con -> {
                 Connection sqlCon = (Connection) con.getConnection();
