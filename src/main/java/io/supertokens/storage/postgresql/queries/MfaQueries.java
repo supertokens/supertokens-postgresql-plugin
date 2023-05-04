@@ -34,7 +34,7 @@ public class MfaQueries {
         return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getMfaUserFactorsTable() + " ("
                 + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "tenant_id VARCHAR(64) DEFAULT 'public',"
-                + "user_id VARCHAR(255) NOT NULL,"
+                + "user_id VARCHAR(128) NOT NULL,"
                 + "factor_id VARCHAR(255) NOT NULL,"
                 + "PRIMARY KEY (app_id, tenant_id, user_id, factor_id),"
                 + "FOREIGN KEY (app_id, tenant_id)"
