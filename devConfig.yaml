@@ -1,66 +1,71 @@
 postgresql_config_version: 0
 
-# (OPTIONAL | Default: 10) integer value. Defines the connection pool size to PostgreSQL.
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: 10) integer value. Defines the connection pool size to PostgreSQL.
 # Please see https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing
 # postgresql_connection_pool_size:
 
-# (OPTIONAL | Default: null) string value. Specify the PostgreSQL connection URI in the following
-# format: postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2...
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: null) string value. Specify the PostgreSQL connection URI in the
+# following format: postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2...
 # Values provided via other configs will override values provided by this config.
 # postgresql_connection_uri:
 
-# (OPTIONAL | Default: "localhost") string value. Specify the postgresql host url here. For example:
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: "localhost") string value. Specify the postgresql host url here.
+# For example:
 # - "localhost"
 # - "192.168.0.1"
 # - "<IP to cloud instance>"
 # - "example.com"
 # postgresql_host:
 
-# (OPTIONAL | Default: 5432) integer value. Specify the port to use when connecting to PostgreSQL instance.
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: 5432) integer value. Specify the port to use when connecting to
+# PostgreSQL instance.
 # postgresql_port:
 
-# (COMPULSORY) string value. The PostgreSQL user to use to query the database.
+# (DIFFERENT_ACROSS_TENANTS | COMPULSORY) string value. The PostgreSQL user to use to query the database.
 # If the relevant tables are not already created by you, this user should have the
 # ability to create new tables. To see the tables needed, visit: TODO
 postgresql_user: "root"
 
-# (COMPULSORY) string value. Password for the PostgreSQL instance. If you do not have a password
+# (DIFFERENT_ACROSS_TENANTS | COMPULSORY) string value. Password for the PostgreSQL instance. If you do not have a
+# password
 # make this an empty string.
 postgresql_password: "root"
-# (OPTIONAL | Default: "supertokens") string value. The database name to store SuperTokens related data.
+
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: "supertokens") string value. The database name to store SuperTokens
+# related data.
 # postgresql_database_name:
 
-# (OPTIONAL | Default: "public") string value. The schema for tables.
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: "public") string value. The schema for tables.
 # postgresql_table_schema:
 
-# (OPTIONAL | Default: "") string value. A prefix to add to all table names managed by SuperTokens. An "_" will be
-# added between this prefix and the actual table name if the prefix is defined
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: "") string value. A prefix to add to all table names managed by
+# SuperTokens. An "_" will be added between this prefix and the actual table name if the prefix is defined
 # postgresql_table_names_prefix:
 
-# (OPTIONAL | Default: "key_value") string value. Specify the name of the table that will store secret keys
-# and app info necessary for the functioning sessions.
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: "key_value") string value. Specify the name of the table that will
+# store secret keys and app info necessary for the functioning sessions.
 # postgresql_key_value_table_name:
 
-# (OPTIONAL | Default: "session_info") string value. Specify the name of the table that will store the
-# session info for users.
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: "session_info") string value. Specify the name of the table that
+# will store the session info for users.
 # postgresql_session_info_table_name:
 
-# (OPTIONAL | Default: "emailpassword_users") string value. Specify the name of the table that will store the
-# user information, along with their email and hashed password.
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: "emailpassword_users") string value. Specify the name of the table
+# that will store the user information, along with their email and hashed password.
 # postgresql_emailpassword_users_table_name:
 
-# (OPTIONAL | Default: "emailpassword_pswd_reset_tokens") string value. Specify the name of the table that will
-# store the password reset tokens for users.
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: "emailpassword_pswd_reset_tokens") string value. Specify the name
+# of the table that will store the password reset tokens for users.
 # postgresql_emailpassword_pswd_reset_tokens_table_name:
 
-# (OPTIONAL | Default: "emailverification_tokens") string value. Specify the name of the table that will
-# store the email verification tokens for users.
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: "emailverification_tokens") string value. Specify the name of the
+# table that will store the email verification tokens for users.
 # postgresql_emailverification_tokens_table_name:
 
-# (OPTIONAL | Default: "emailverification_verified_emails") string value. Specify the name of the table that will
-# store the verified email addresses.
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: "emailverification_verified_emails") string value. Specify the name
+# of the table that will store the verified email addresses.
 # postgresql_emailverification_verified_emails_table_name:
 
-# (OPTIONAL | Default: "thirdparty_users") string value. Specify the name of the table that will
-# store the thirdparty recipe users.
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: "thirdparty_users") string value. Specify the name of the table
+# that will store the thirdparty recipe users.
 # postgresql_thirdparty_users_table_name
