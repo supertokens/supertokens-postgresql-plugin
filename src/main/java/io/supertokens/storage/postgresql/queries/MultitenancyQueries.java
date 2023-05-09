@@ -16,6 +16,7 @@
 
 package io.supertokens.storage.postgresql.queries;
 
+import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.*;
@@ -32,6 +33,7 @@ import java.sql.SQLException;
 import java.util.HashMap;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class MultitenancyQueries {
@@ -137,6 +139,24 @@ public class MultitenancyQueries {
         });
     }
 
+    public static boolean deleteTenantConfig(Start start, TenantIdentifier tenantIdentifier) throws StorageQueryException {
+        try {
+            String QUERY = "DELETE FROM " + getConfig(start).getTenantConfigsTable()
+                    + " WHERE connection_uri_domain = ? AND app_id = ? AND tenant_id = ?";
+
+            int numRows = update(start, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getConnectionUriDomain());
+                pst.setString(2, tenantIdentifier.getAppId());
+                pst.setString(3, tenantIdentifier.getTenantId());
+            });
+
+            return numRows > 0;
+
+        } catch (SQLException throwables) {
+            throw new StorageQueryException(throwables);
+        }
+    }
+
     public static void overwriteTenantConfig(Start start, TenantConfig tenantConfig) throws StorageQueryException, StorageTransactionLogicException {
         start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
@@ -185,7 +205,7 @@ public class MultitenancyQueries {
         }
     }
 
-    public static void addTenantIdInUserPool(Start start, TenantIdentifier tenantIdentifier) throws
+    public static void addTenantIdInTargetStorage(Start start, TenantIdentifier tenantIdentifier) throws
             StorageTransactionLogicException, StorageQueryException {
         {
             start.startTransaction(con -> {
@@ -218,6 +238,33 @@ public class MultitenancyQueries {
                 }
                 return null;
             });
+        }
+    }
+
+    public static void deleteTenantIdInTargetStorage(Start start, TenantIdentifier tenantIdentifier)
+        throws StorageQueryException {
+        try {
+            if (tenantIdentifier.getTenantId().equals(TenantIdentifier.DEFAULT_TENANT_ID)) {
+                // Delete the app
+                String QUERY = "DELETE FROM " + getConfig(start).getAppsTable()
+                        + " WHERE app_id = ?";
+
+                update(start, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                });
+            } else {
+                // Delete the tenant
+                String QUERY = "DELETE FROM " + getConfig(start).getTenantsTable()
+                        + " WHERE app_id = ? AND tenant_id = ?";
+
+                update(start, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, tenantIdentifier.getTenantId());
+                });
+            }
+
+        } catch (SQLException throwables) {
+            throw new StorageQueryException(throwables);
         }
     }
 }

@@ -30,7 +30,6 @@ import io.supertokens.multitenancy.Multitenancy;
 import io.supertokens.multitenancy.MultitenancyHelper;
 import io.supertokens.multitenancy.exception.BadPermissionException;
 import io.supertokens.multitenancy.exception.CannotModifyBaseConfigException;
-import io.supertokens.multitenancy.exception.DeletionInProgressException;
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.exceptions.DbInitException;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
@@ -724,7 +723,7 @@ public class StorageLayerTest {
     public void testCantCreateTenantWithUnknownDb()
             throws InterruptedException, IOException, InvalidConfigException, TenantOrAppNotFoundException,
             BadPermissionException, InvalidProviderConfigException,
-            DeletionInProgressException, FeatureNotEnabledException,
+            FeatureNotEnabledException,
             CannotModifyBaseConfigException {
         String[] args = {"../"};
 
@@ -812,9 +811,7 @@ public class StorageLayerTest {
                         "does not exist");
             }
 
-            assertEquals(2,
-                    Multitenancy.getAllTenants(new TenantIdentifier(null, null, null), process.getProcess()).length);
-
+            assertEquals(2, Multitenancy.getAllTenants(process.getProcess()).length);
 
             process.kill(false);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -829,8 +826,7 @@ public class StorageLayerTest {
             process.startProcess();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-            assertEquals(2,
-                    Multitenancy.getAllTenants(new TenantIdentifier(null, null, null), process.getProcess()).length);
+            assertEquals(2, Multitenancy.getAllTenants(process.getProcess()).length);
 
             TenantIdentifier tid = new TenantIdentifier("abc", null, null);
             try {

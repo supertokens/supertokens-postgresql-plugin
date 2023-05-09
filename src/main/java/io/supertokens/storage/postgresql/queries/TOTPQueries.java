@@ -167,6 +167,19 @@ public class TOTPQueries {
         return removedUsersCount;
     }
 
+    public static boolean removeUser(Start start, TenantIdentifier tenantIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + Config.getConfig(start).getTotpUsedCodesTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND user_id = ?;";
+        int removedUsersCount = update(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, userId);
+        });
+
+        return removedUsersCount > 0;
+    }
+
     public static int updateDeviceName(Start start, AppIdentifier appIdentifier, String userId, String oldDeviceName, String newDeviceName)
             throws StorageQueryException, SQLException {
         String QUERY = "UPDATE " + Config.getConfig(start).getTotpUserDevicesTable()

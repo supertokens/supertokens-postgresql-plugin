@@ -19,9 +19,15 @@ package io.supertokens.storage.postgresql.config;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 
 import java.net.URI;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class PostgreSQLConfig {
@@ -76,6 +82,17 @@ public class PostgreSQLConfig {
 
     @JsonProperty
     private String postgresql_connection_uri = null;
+
+    public static Set<String> getValidFields() {
+        PostgreSQLConfig config = new PostgreSQLConfig();
+        JsonObject configObj = new GsonBuilder().serializeNulls().create().toJsonTree(config).getAsJsonObject();
+
+        Set<String> validFields = new HashSet<>();
+        for (Map.Entry<String, JsonElement> entry : configObj.entrySet()) {
+            validFields.add(entry.getKey());
+        }
+        return validFields;
+    }
 
     public String getTableSchema() {
         if (postgresql_connection_uri != null) {

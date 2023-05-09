@@ -22,6 +22,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.gson.JsonObject;
 import io.supertokens.pluginInterface.LOG_LEVEL;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ResourceDistributor;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.output.Logging;
@@ -51,13 +52,13 @@ public class Config extends ResourceDistributor.SingletonResource {
         return (Config) start.getResourceDistributor().getResource(RESOURCE_KEY);
     }
 
-    public static void loadConfig(Start start, JsonObject configJson, Set<LOG_LEVEL> logLevels)
+    public static void loadConfig(Start start, JsonObject configJson, Set<LOG_LEVEL> logLevels, TenantIdentifier tenantIdentifier)
             throws InvalidConfigException {
         if (getInstance(start) != null) {
             return;
         }
         start.getResourceDistributor().setResource(RESOURCE_KEY, new Config(start, configJson, logLevels));
-        Logging.info(start, "Loading PostgreSQL config.", true);
+        Logging.info(start, "Loading PostgreSQL config.", tenantIdentifier.equals(TenantIdentifier.BASE_TENANT));
     }
 
     public static String getUserPoolId(Start start) {

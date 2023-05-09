@@ -99,16 +99,18 @@ import javax.annotation.Nonnull;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
         MultitenancyStorage, DashboardSQLStorage, TOTPSQLStorage, ActiveUsersStorage, MfaStorage {
 
+    // these configs are protected from being modified / viewed by the dev using the SuperTokens
+    // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
+    private static String[] PROTECTED_DB_CONFIG = new String[]{"postgresql_connection_pool_size",
+            "postgresql_connection_uri", "postgresql_host", "postgresql_port", "postgresql_user", "postgresql_password",
+            "postgresql_database_name", "postgresql_table_schema"};
     private static final Object appenderLock = new Object();
     public static boolean silent = false;
     private ResourceDistributor resourceDistributor = new ResourceDistributor();
@@ -142,8 +144,8 @@ public class Start
     }
 
     @Override
-    public void loadConfig(JsonObject configJson, Set<LOG_LEVEL> logLevels) throws InvalidConfigException {
-        Config.loadConfig(this, configJson, logLevels);
+    public void loadConfig(JsonObject configJson, Set<LOG_LEVEL> logLevels, TenantIdentifier tenantIdentifier) throws InvalidConfigException {
+        Config.loadConfig(this, configJson, logLevels, tenantIdentifier);
     }
 
     @Override
@@ -486,6 +488,16 @@ public class Start
     }
 
     @Override
+    public boolean deleteSessionsOfUser(TenantIdentifier tenantIdentifier, String userId)
+            throws StorageQueryException {
+        try {
+            return SessionQueries.deleteSessionsOfUser(this, tenantIdentifier, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public int getNumberOfSessions(TenantIdentifier tenantIdentifier) throws StorageQueryException {
         try {
             return SessionQueries.getNumberOfSessions(this, tenantIdentifier);
@@ -668,7 +680,6 @@ public class Start
     @Override
     public boolean isUserIdBeingUsedInNonAuthRecipe(AppIdentifier appIdentifier, String className, String userId)
             throws StorageQueryException {
-        // TODO..
         // check if the input userId is being used in nonAuthRecipes.
         if (className.equals(SessionStorage.class.getName())) {
             String[] sessionHandlesForUser = getAllNonExpiredSessionHandlesForUser(appIdentifier, userId);
@@ -701,11 +712,11 @@ public class Start
 
     @TestOnly
     @Override
-    public void addInfoToNonAuthRecipesBasedOnUserId(String className, String userId) throws StorageQueryException {
+    public void addInfoToNonAuthRecipesBasedOnUserId(TenantIdentifier tenantIdentifier, String className, String userId) throws StorageQueryException {
         // add entries to nonAuthRecipe tables with input userId
         if (className.equals(SessionStorage.class.getName())) {
             try {
-                createNewSession(new TenantIdentifier(null, null, null), "sessionHandle", userId, "refreshTokenHash",
+                createNewSession(tenantIdentifier, "sessionHandle", userId, "refreshTokenHash",
                         new JsonObject(),
                         System.currentTimeMillis() + 1000000, new JsonObject(), System.currentTimeMillis(), false);
             } catch (Exception e) {
@@ -716,14 +727,14 @@ public class Start
                 String role = "testRole";
                 this.startTransaction(con -> {
                     try {
-                        createNewRoleOrDoNothingIfExists_Transaction(new AppIdentifier(null, null), con, role);
+                        createNewRoleOrDoNothingIfExists_Transaction(tenantIdentifier.toAppIdentifier(), con, role);
                     } catch (TenantOrAppNotFoundException e) {
                         throw new IllegalStateException(e);
                     }
                     return null;
                 });
                 try {
-                    addRoleToUser(new TenantIdentifier(null, null, null), userId, role);
+                    addRoleToUser(tenantIdentifier, userId, role);
                 } catch (Exception e) {
                     throw new StorageTransactionLogicException(e);
                 }
@@ -734,7 +745,7 @@ public class Start
             try {
                 EmailVerificationTokenInfo info = new EmailVerificationTokenInfo(userId, "someToken", 10000,
                         "test123@example.com");
-                addEmailVerificationToken(new TenantIdentifier(null, null, null), info);
+                addEmailVerificationToken(tenantIdentifier, info);
 
             } catch (DuplicateEmailVerificationTokenException e) {
                 throw new StorageQueryException(e);
@@ -747,7 +758,7 @@ public class Start
             try {
                 this.startTransaction(con -> {
                     try {
-                        setUserMetadata_Transaction(new AppIdentifier(null, null), con, userId, data);
+                        setUserMetadata_Transaction(tenantIdentifier.toAppIdentifier(), con, userId, data);
                     } catch (TenantOrAppNotFoundException e) {
                         throw new StorageTransactionLogicException(e);
                     }
@@ -762,7 +773,18 @@ public class Start
         } else if (className.equals(TOTPStorage.class.getName())) {
             try {
                 TOTPDevice device = new TOTPDevice(userId, "testDevice", "secret", 0, 30, false);
-                TOTPQueries.createDevice(this, new AppIdentifier(null, null), device);
+                TOTPQueries.createDevice(this, tenantIdentifier.toAppIdentifier(), device);
+                this.startTransaction(con -> {
+                    try {
+                        long now = System.currentTimeMillis();
+                        TOTPQueries.insertUsedCode_Transaction(this,
+                                (Connection) con.getConnection(), tenantIdentifier, new TOTPUsedCode(userId, "123456", true, 1000+now, now));
+                    } catch (SQLException e) {
+                        throw new StorageTransactionLogicException(e);
+                    }
+                    return null;
+                });
+
             } catch (StorageTransactionLogicException e) {
                 throw new StorageQueryException(e.actualException);
             }
@@ -779,12 +801,16 @@ public class Start
     }
 
     @Override
-    public void signUp(TenantIdentifier tenantIdentifier, UserInfo userInfo)
+    public String[] getProtectedConfigsFromSuperTokensSaaSUsers() {
+        return PROTECTED_DB_CONFIG;
+    }
+
+    @Override
+    public UserInfo signUp(TenantIdentifier tenantIdentifier, String id, String email, String passwordHash, long timeJoined)
             throws StorageQueryException, DuplicateUserIdException, DuplicateEmailException,
             TenantOrAppNotFoundException {
         try {
-            EmailPasswordQueries.signUp(this, tenantIdentifier, userInfo.id, userInfo.email, userInfo.passwordHash,
-                    userInfo.timeJoined);
+            return EmailPasswordQueries.signUp(this, tenantIdentifier, id, email, passwordHash, timeJoined);
         } catch (StorageTransactionLogicException eTemp) {
             Exception e = eTemp.actualException;
             if (e instanceof PSQLException) {
@@ -1025,6 +1051,16 @@ public class Start
     }
 
     @Override
+    public boolean deleteEmailVerificationUserInfo(TenantIdentifier tenantIdentifier, String userId)
+            throws StorageQueryException {
+        try {
+            return EmailVerificationQueries.deleteUserInfo(this, tenantIdentifier, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public void addEmailVerificationToken(TenantIdentifier tenantIdentifier,
                                           EmailVerificationTokenInfo emailVerificationInfo)
             throws StorageQueryException, DuplicateEmailVerificationTokenException, TenantOrAppNotFoundException {
@@ -1138,12 +1174,13 @@ public class Start
     }
 
     @Override
-    public void signUp(TenantIdentifier tenantIdentifier, io.supertokens.pluginInterface.thirdparty.UserInfo
-            userInfo)
+    public io.supertokens.pluginInterface.thirdparty.UserInfo signUp(
+            TenantIdentifier tenantIdentifier, String id, String email,
+            io.supertokens.pluginInterface.thirdparty.UserInfo.ThirdParty thirdParty, long timeJoined)
             throws StorageQueryException, io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException,
             DuplicateThirdPartyUserException, TenantOrAppNotFoundException {
         try {
-            ThirdPartyQueries.signUp(this, tenantIdentifier, userInfo);
+            return ThirdPartyQueries.signUp(this, tenantIdentifier, id, email, thirdParty, timeJoined);
         } catch (StorageTransactionLogicException eTemp) {
             Exception e = eTemp.actualException;
             if (e instanceof PSQLException) {
@@ -1262,19 +1299,10 @@ public class Start
         }
     }
 
-    public void updateLastActive(String userId) throws StorageQueryException {
-        try {
-            ActiveUsersQueries.updateUserLastActive(this, userId);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
     @Override
     public void updateLastActive(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
         try {
-            // TODO..
-            ActiveUsersQueries.updateUserLastActive(this, userId);
+            ActiveUsersQueries.updateUserLastActive(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1283,8 +1311,7 @@ public class Start
     @Override
     public int countUsersActiveSince(AppIdentifier appIdentifier, long time) throws StorageQueryException {
         try {
-            // TODO...
-            return ActiveUsersQueries.countUsersActiveSince(this, time);
+            return ActiveUsersQueries.countUsersActiveSince(this, appIdentifier, time);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1293,8 +1320,7 @@ public class Start
     @Override
     public int countUsersEnabledTotp(AppIdentifier appIdentifier) throws StorageQueryException {
         try {
-            // TODO...
-            return ActiveUsersQueries.countUsersEnabledTotp(this);
+            return ActiveUsersQueries.countUsersEnabledTotp(this, appIdentifier);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1304,8 +1330,7 @@ public class Start
     public int countUsersEnabledTotpAndActiveSince(AppIdentifier appIdentifier, long time)
             throws StorageQueryException {
         try {
-            // TODO...
-            return ActiveUsersQueries.countUsersEnabledTotpAndActiveSince(this, time);
+            return ActiveUsersQueries.countUsersEnabledTotpAndActiveSince(this, appIdentifier, time);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1644,13 +1669,18 @@ public class Start
     }
 
     @Override
-    public void createUser(TenantIdentifier
-                                   tenantIdentifier, io.supertokens.pluginInterface.passwordless.UserInfo user)
+    public io.supertokens.pluginInterface.passwordless.UserInfo createUser(TenantIdentifier tenantIdentifier,
+                                                                           String id, @javax.annotation.Nullable String email,
+                                                                           @javax.annotation.Nullable String phoneNumber, long timeJoined)
             throws StorageQueryException,
             DuplicateEmailException, DuplicatePhoneNumberException, DuplicateUserIdException,
             TenantOrAppNotFoundException {
+        if (email == null && phoneNumber == null) {
+            throw new IllegalArgumentException("Both email and phoneNumber cannot be null");
+        }
+
         try {
-            PasswordlessQueries.createUser(this, tenantIdentifier, user);
+            return PasswordlessQueries.createUser(this, tenantIdentifier, id, email, phoneNumber, timeJoined);
         } catch (StorageTransactionLogicException e) {
 
             Exception actualException = e.actualException;
@@ -2085,7 +2115,6 @@ public class Start
             externalUserId,
                                     @Nullable String externalUserIdInfo)
             throws StorageQueryException, UnknownSuperTokensUserIdException, UserIdMappingAlreadyExistsException {
-        // TODO..
         try {
             UserIdMappingQueries.createUserIdMapping(this, appIdentifier, superTokensUserId, externalUserId,
                     externalUserIdInfo);
@@ -2121,7 +2150,6 @@ public class Start
     public boolean deleteUserIdMapping(AppIdentifier appIdentifier, String userId,
                                        boolean isSuperTokensUserId)
             throws StorageQueryException {
-        // TODO..
         try {
             if (isSuperTokensUserId) {
                 return UserIdMappingQueries.deleteUserIdMappingWithSuperTokensUserId(this, appIdentifier,
@@ -2138,7 +2166,6 @@ public class Start
     public UserIdMapping getUserIdMapping(AppIdentifier appIdentifier, String userId,
                                           boolean isSuperTokensUserId)
             throws StorageQueryException {
-        // TODO..
         try {
             if (isSuperTokensUserId) {
                 return UserIdMappingQueries.getuseraIdMappingWithSuperTokensUserId(this, appIdentifier,
@@ -2154,7 +2181,6 @@ public class Start
     @Override
     public UserIdMapping[] getUserIdMapping(AppIdentifier appIdentifier, String userId)
             throws StorageQueryException {
-        // TODO..
         try {
             return UserIdMappingQueries.getUserIdMappingWithEitherSuperTokensUserIdOrExternalUserId(this,
                     appIdentifier,
@@ -2169,7 +2195,6 @@ public class Start
                                                     boolean isSuperTokensUserId,
                                                     @Nullable String externalUserIdInfo) throws StorageQueryException {
 
-        // TODO..
         try {
             if (isSuperTokensUserId) {
                 return UserIdMappingQueries.updateOrDeleteExternalUserIdInfoWithSuperTokensUserId(this,
@@ -2220,10 +2245,10 @@ public class Start
     }
 
     @Override
-    public void addTenantIdInUserPool(TenantIdentifier tenantIdentifier)
+    public void addTenantIdInTargetStorage(TenantIdentifier tenantIdentifier)
             throws DuplicateTenantException, StorageQueryException {
         try {
-            MultitenancyQueries.addTenantIdInUserPool(this, tenantIdentifier);
+            MultitenancyQueries.addTenantIdInTargetStorage(this, tenantIdentifier);
         } catch (StorageTransactionLogicException e) {
             if (e.actualException instanceof PSQLException) {
                 PostgreSQLConfig config = Config.getConfig(this);
@@ -2234,12 +2259,6 @@ public class Start
             }
             throw new StorageQueryException(e.actualException);
         }
-    }
-
-    @Override
-    public void deleteTenantIdInUserPool(TenantIdentifier tenantIdentifier) throws
-            TenantOrAppNotFoundException {
-        // TODO:
     }
 
     @Override
@@ -2268,21 +2287,22 @@ public class Start
     }
 
     @Override
-    public void deleteTenant(TenantIdentifier tenantIdentifier) throws
-            TenantOrAppNotFoundException {
-        // TODO:
+    public void deleteTenantIdInTargetStorage(TenantIdentifier tenantIdentifier) throws StorageQueryException {
+        MultitenancyQueries.deleteTenantIdInTargetStorage(this, tenantIdentifier);
     }
 
     @Override
-    public void deleteApp(TenantIdentifier tenantIdentifier) throws
-            TenantOrAppNotFoundException {
-        // TODO:
+    public boolean deleteTenantInfoInBaseStorage(TenantIdentifier tenantIdentifier) throws StorageQueryException {
+        return MultitenancyQueries.deleteTenantConfig(this, tenantIdentifier);
     }
 
     @Override
-    public void deleteConnectionUriDomainMapping(TenantIdentifier tenantIdentifier) throws
-            TenantOrAppNotFoundException {
-        // TODO:
+    public boolean deleteAppInfoInBaseStorage(AppIdentifier appIdentifier) throws StorageQueryException {
+        return deleteTenantInfoInBaseStorage(appIdentifier.getAsPublicTenantIdentifier());
+    }
+    @Override
+    public boolean deleteConnectionUriDomainInfoInBaseStorage(String connectionUriDomain) throws StorageQueryException {
+        return deleteTenantInfoInBaseStorage(new TenantIdentifier(connectionUriDomain, null, null));
     }
 
     @Override
@@ -2291,26 +2311,113 @@ public class Start
     }
 
     @Override
-    public void addUserIdToTenant(TenantIdentifier tenantIdentifier, String userId)
-            throws TenantOrAppNotFoundException, UnknownUserIdException {
-        // TODO:
+    public boolean addUserIdToTenant(TenantIdentifier tenantIdentifier, String userId)
+            throws TenantOrAppNotFoundException, UnknownUserIdException, StorageQueryException,
+            DuplicateEmailException, DuplicateThirdPartyUserException, DuplicatePhoneNumberException {
+        try {
+            return this.startTransaction(con -> {
+                Connection sqlCon = (Connection) con.getConnection();
+                try {
+                    String recipeId = GeneralQueries.getRecipeIdForUser_Transaction(this, sqlCon, tenantIdentifier,
+                            userId);
+
+                    if (recipeId == null) {
+                        throw new StorageTransactionLogicException(new UnknownUserIdException());
+                    }
+
+                    boolean added;
+                    if (recipeId.equals("emailpassword")) {
+                        added = EmailPasswordQueries.addUserIdToTenant_Transaction(this, sqlCon, tenantIdentifier, userId);
+                    } else if (recipeId.equals("thirdparty")) {
+                        added = ThirdPartyQueries.addUserIdToTenant_Transaction(this, sqlCon, tenantIdentifier, userId);
+                    } else if (recipeId.equals("passwordless")) {
+                        added = PasswordlessQueries.addUserIdToTenant_Transaction(this, sqlCon, tenantIdentifier, userId);
+                    } else {
+                        throw new IllegalStateException("Should never come here!");
+                    }
+
+                    sqlCon.commit();
+                    return added;
+                } catch (SQLException throwables) {
+                    throw new StorageTransactionLogicException(throwables);
+                }
+            });
+        } catch (StorageTransactionLogicException e) {
+            if (e.actualException instanceof SQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverErrorMessage = ((PSQLException) e.actualException).getServerErrorMessage();
+
+                if (isForeignKeyConstraintError(serverErrorMessage, config.getUsersTable(), "tenant_id")) {
+                    throw new TenantOrAppNotFoundException(tenantIdentifier);
+                }
+                if (isUniqueConstraintError(serverErrorMessage, config.getEmailPasswordUserToTenantTable(), "email")) {
+                    throw new DuplicateEmailException();
+                }
+                if (isUniqueConstraintError(serverErrorMessage, config.getThirdPartyUserToTenantTable(), "third_party_user_id")) {
+                    throw new DuplicateThirdPartyUserException();
+                }
+                if (isUniqueConstraintError(serverErrorMessage,
+                        Config.getConfig(this).getPasswordlessUserToTenantTable(), "phone_number")) {
+                    throw new DuplicatePhoneNumberException();
+                }
+                if (isUniqueConstraintError(serverErrorMessage,
+                        Config.getConfig(this).getPasswordlessUserToTenantTable(), "email")) {
+                    throw new DuplicateEmailException();
+                }
+
+                throw new StorageQueryException(e.actualException);
+            } else if (e.actualException instanceof UnknownUserIdException) {
+                throw (UnknownUserIdException) e.actualException;
+            } else if (e.actualException instanceof StorageQueryException) {
+                throw (StorageQueryException) e.actualException;
+            }
+            throw new StorageQueryException(e.actualException);
+        }
     }
 
     @Override
-    public void addRoleToTenant(TenantIdentifier tenantIdentifier, String role)
-            throws TenantOrAppNotFoundException, UnknownRoleException {
-        // TODO:
-    }
+    public boolean removeUserIdFromTenant(TenantIdentifier tenantIdentifier, String userId)
+            throws StorageQueryException {
+        try {
+            return this.startTransaction(con -> {
+                Connection sqlCon = (Connection) con.getConnection();
+                try {
+                    String recipeId = GeneralQueries.getRecipeIdForUser_Transaction(this, sqlCon, tenantIdentifier,
+                            userId);
 
-    @Override
-    public void deleteAppId(String appId) throws TenantOrAppNotFoundException {
-        // TODO:
-    }
+                    if (recipeId == null) {
+                        sqlCon.commit();
+                        return false; // No auth user to remove
+                    }
 
-    @Override
-    public void deleteConnectionUriDomain(String connectionUriDomain) throws
-            TenantOrAppNotFoundException {
-        // TODO:
+                    boolean removed;
+                    if (recipeId.equals("emailpassword")) {
+                        removed = EmailPasswordQueries.removeUserIdFromTenant_Transaction(this, sqlCon, tenantIdentifier, userId);
+                    } else if (recipeId.equals("thirdparty")) {
+                        removed = ThirdPartyQueries.removeUserIdFromTenant_Transaction(this, sqlCon, tenantIdentifier, userId);
+                    } else if (recipeId.equals("passwordless")) {
+                        removed = PasswordlessQueries.removeUserIdFromTenant_Transaction(this, sqlCon, tenantIdentifier, userId);
+                    } else {
+                        throw new IllegalStateException("Should never come here!");
+                    }
+
+                    sqlCon.commit();
+                    return removed;
+                } catch (SQLException throwables) {
+                    throw new StorageTransactionLogicException(throwables);
+                }
+            });
+        } catch (StorageTransactionLogicException e) {
+            if (e.actualException instanceof SQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverErrorMessage = ((PSQLException) e.actualException).getServerErrorMessage();
+
+                throw new StorageQueryException(e.actualException);
+            } else if (e.actualException instanceof StorageQueryException) {
+                throw (StorageQueryException) e.actualException;
+            }
+            throw new StorageQueryException(e.actualException);
+        }    
     }
 
     @Override
@@ -2552,6 +2659,16 @@ public class Start
     }
 
     @Override
+    public boolean removeUser(TenantIdentifier tenantIdentifier, String userId)
+            throws StorageQueryException {
+        try {
+            return TOTPQueries.removeUser(this, tenantIdentifier, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public void updateDeviceName(AppIdentifier appIdentifier, String userId, String oldDeviceName, String newDeviceName)
             throws StorageQueryException, DeviceAlreadyExistsException,
             UnknownDeviceException {
@@ -2689,4 +2806,9 @@ public class Start
         }
     }
 
+
+    @Override
+    public Set<String> getValidFieldsInConfig() {
+        return PostgreSQLConfig.getValidFields();
+    }
 }
