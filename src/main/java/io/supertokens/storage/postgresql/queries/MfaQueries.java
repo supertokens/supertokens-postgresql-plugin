@@ -38,7 +38,7 @@ public class MfaQueries {
                 + "factor_id VARCHAR(16) NOT NULL,"
                 + "PRIMARY KEY (app_id, tenant_id, user_id, factor_id),"
                 + "FOREIGN KEY (app_id, tenant_id)"
-                + "REFERENCES " + Config.getConfig(start).getTenantsTable() + " (app_id, tenant_id) ON DELETE CASCADE";
+                + "REFERENCES " + Config.getConfig(start).getTenantsTable() + " (app_id, tenant_id) ON DELETE CASCADE);";
     }
 
     public static int enableFactor(Start start, TenantIdentifier tenantIdentifier, String userId, String factorId)
