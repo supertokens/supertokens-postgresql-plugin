@@ -95,4 +95,15 @@ public class MfaQueries {
         });
     }
 
+    public static int deleteUserFromTenant(Start start, TenantIdentifier tenantIdentifier, String userId)
+            throws StorageQueryException, SQLException {
+        String QUERY = "DELETE FROM " + Config.getConfig(start).getMfaUserFactorsTable() + " WHERE app_id = ? AND tenant_id = ? AND user_id = ?";
+
+        return update(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, userId);
+        });
+    }
+
 }

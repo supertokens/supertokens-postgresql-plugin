@@ -2804,6 +2804,19 @@ public class Start
         }
     }
 
+    @Override
+    public boolean deleteUserFromTenant(TenantIdentifier tenantIdentifier, String userId) throws StorageQueryException {
+        try {
+            int deletedCount = MfaQueries.deleteUserFromTenant(this, tenantIdentifier, userId);
+            if (deletedCount == 0) {
+                return false;
+            }
+            return true;
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
 
     @Override
     public Set<String> getValidFieldsInConfig() {
