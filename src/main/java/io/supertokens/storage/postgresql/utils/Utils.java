@@ -19,6 +19,9 @@ package io.supertokens.storage.postgresql.utils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 public class Utils {
     public static String exceptionStacktraceToString(Exception e) {
@@ -41,5 +44,23 @@ public class Utils {
         }
         constraintName.append('_').append(typeSuffix);
         return constraintName.toString();
+    }
+
+    public static String bytesToString(byte[] bArr) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bArr) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
+    }
+
+    private static byte[] stringToBytes(String str) {
+        return str.getBytes(StandardCharsets.UTF_8);
+    }
+
+    public static String hashSHA256(String base) throws NoSuchAlgorithmException {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte[] hash = digest.digest(stringToBytes(base));
+        return bytesToString(hash);
     }
 }

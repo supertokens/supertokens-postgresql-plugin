@@ -158,6 +158,9 @@ public class Start
     }
 
     @Override
+    public String getConfigHash() { return Config.getConfigHash(this); }
+
+    @Override
     public void assertThatConfigFromSameUserPoolIsNotConflicting(JsonObject otherConfig) throws InvalidConfigException {
         Config.assertThatConfigFromSameUserPoolIsNotConflicting(this, otherConfig);
     }

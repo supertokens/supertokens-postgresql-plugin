@@ -19,6 +19,7 @@ package io.supertokens.storage.postgresql.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import io.supertokens.pluginInterface.LOG_LEVEL;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
@@ -26,8 +27,10 @@ import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ResourceDistributor;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.output.Logging;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.io.IOException;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -75,6 +78,16 @@ public class Config extends ResourceDistributor.SingletonResource {
         return config.getConnectionScheme() + "|" + config.getConnectionAttributes() + "|" + config.getUser() + "|" +
                 config.getPassword() + "|" + config.getConnectionPoolSize();
 
+    }
+
+    public static String getConfigHash(Start start) {
+        PostgreSQLConfig config = getConfig(start);
+        Gson gson = new Gson();
+        try {
+            return Utils.hashSHA256(gson.toJsonTree(config).toString());
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static void assertThatConfigFromSameUserPoolIsNotConflicting(Start start, JsonObject otherConfigJson)
