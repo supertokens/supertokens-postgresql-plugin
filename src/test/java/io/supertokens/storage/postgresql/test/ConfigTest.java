@@ -27,6 +27,10 @@ import io.supertokens.session.Session;
 import io.supertokens.session.info.SessionInformationHolder;
 import io.supertokens.storage.postgresql.ConnectionPoolTestContent;
 import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.annotations.ConnectionPoolProperty;
+import io.supertokens.storage.postgresql.annotations.IgnoreForAnnotationCheck;
+import io.supertokens.storage.postgresql.annotations.NotConflictingWithinUserPool;
+import io.supertokens.storage.postgresql.annotations.UserPoolProperty;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storageLayer.StorageLayer;
@@ -39,9 +43,9 @@ import org.junit.rules.TestRule;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.*;
 
 public class ConfigTest {
 
@@ -642,6 +646,20 @@ public class ConfigTest {
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
+    @Test
+    public void testAllConfigsHaveAnAnnotation() throws Exception {
+        for (Field field : PostgreSQLConfig.class.getDeclaredFields()) {
+            if (field.isAnnotationPresent(IgnoreForAnnotationCheck.class)) {
+                continue;
+            }
+
+            if (!(field.isAnnotationPresent(UserPoolProperty.class) || field.isAnnotationPresent(ConnectionPoolProperty.class) || field.isAnnotationPresent(
+                    NotConflictingWithinUserPool.class))) {
+                fail(field.getName() + " does not have UserPoolProperty, ConnectionPoolProperty or NotConflictingWithinUserPool annotation");
+            }
         }
     }
 
