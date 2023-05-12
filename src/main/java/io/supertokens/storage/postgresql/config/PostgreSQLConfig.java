@@ -109,7 +109,6 @@ public class PostgreSQLConfig {
     @ConnectionPoolProperty
     private String postgresql_connection_attributes = "allowPublicKeyRetrieval=true";
 
-    @JsonProperty
     @ConnectionPoolProperty
     private String postgresql_connection_scheme = "postgresql";
 
