@@ -106,7 +106,6 @@ public class PostgreSQLConfig {
     @IgnoreForAnnotationCheck
     private String postgresql_connection_uri = null;
 
-    @JsonProperty
     @ConnectionPoolProperty
     private String postgresql_connection_attributes = "allowPublicKeyRetrieval=true";
 
