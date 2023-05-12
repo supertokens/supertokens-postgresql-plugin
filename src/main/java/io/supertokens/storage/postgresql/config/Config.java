@@ -66,15 +66,10 @@ public class Config extends ResourceDistributor.SingletonResource {
         //  same database, but with a different host (cause the db is reachable via two hosts as an example),
         //  then it will return two different user pool IDs - which is technically the wrong thing to do.
         return getConfig(start).getUserPoolId();
-//        return config.getDatabaseName() + "|" + config.getHostName() + "|" + config.getTableSchema() + "|" +
-//                config.getPort();
     }
 
     public static String getConnectionPoolId(Start start) {
         return getConfig(start).getConnectionPoolId();
-//        return config.getConnectionScheme() + "|" + config.getConnectionAttributes() + "|" + config.getUser() + "|" +
-//                config.getPassword() + "|" + config.getConnectionPoolSize();
-
     }
 
     public static void assertThatConfigFromSameUserPoolIsNotConflicting(Start start, JsonObject otherConfigJson)

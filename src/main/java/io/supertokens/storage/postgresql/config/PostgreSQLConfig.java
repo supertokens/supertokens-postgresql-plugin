@@ -498,55 +498,6 @@ public class PostgreSQLConfig {
                 }
             }
         }
-//        if (!otherConfig.getTablePrefix().equals(getTablePrefix())) {
-//            throw new InvalidConfigException(
-//                    "You cannot set different name for table prefix for the same user pool");
-//        }
-//
-//        if (!otherConfig.getKeyValueTable().equals(getKeyValueTable())) {
-//            throw new InvalidConfigException(
-//                    "You cannot set different name for table " + getKeyValueTable() +
-//                            " for the same user pool");
-//        }
-//        if (!otherConfig.getSessionInfoTable().equals(getSessionInfoTable())) {
-//            throw new InvalidConfigException(
-//                    "You cannot set different name for table " + getSessionInfoTable() +
-//                            " for the same user pool");
-//        }
-//
-//        if (!otherConfig.getEmailPasswordUsersTable().equals(getEmailPasswordUsersTable())) {
-//            throw new InvalidConfigException(
-//                    "You cannot set different name for table " + getEmailPasswordUsersTable() +
-//                            " for the same user pool");
-//        }
-//
-//        if (!otherConfig.getPasswordResetTokensTable().equals(
-//                getPasswordResetTokensTable())) {
-//            throw new InvalidConfigException(
-//                    "You cannot set different name for table " + getPasswordResetTokensTable() +
-//                            " for the same user pool");
-//        }
-//
-//        if (!otherConfig.getEmailVerificationTokensTable().equals(
-//                getEmailVerificationTokensTable())) {
-//            throw new InvalidConfigException(
-//                    "You cannot set different name for table " + getEmailVerificationTokensTable() +
-//                            " for the same user pool");
-//        }
-//
-//        if (!otherConfig.getEmailVerificationTable().equals(
-//                getEmailVerificationTable())) {
-//            throw new InvalidConfigException(
-//                    "You cannot set different name for table " +
-//                            getEmailVerificationTable() +
-//                            " for the same user pool");
-//        }
-//
-//        if (!otherConfig.getThirdPartyUsersTable().equals(getThirdPartyUsersTable())) {
-//            throw new InvalidConfigException(
-//                    "You cannot set different name for table " + getThirdPartyUsersTable() +
-//                            " for the same user pool");
-//        }
     }
 
     public String getUserPoolId() {
