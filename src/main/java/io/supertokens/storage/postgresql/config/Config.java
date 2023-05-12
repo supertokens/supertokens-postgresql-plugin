@@ -65,16 +65,11 @@ public class Config extends ResourceDistributor.SingletonResource {
         // TODO: The way things are implemented right now, this function has the issue that if the user points to the
         //  same database, but with a different host (cause the db is reachable via two hosts as an example),
         //  then it will return two different user pool IDs - which is technically the wrong thing to do.
-        PostgreSQLConfig config = getConfig(start);
-        return config.getDatabaseName() + "|" + config.getHostName() + "|" + config.getTableSchema() + "|" +
-                config.getPort();
+        return getConfig(start).getUserPoolId();
     }
 
     public static String getConnectionPoolId(Start start) {
-        PostgreSQLConfig config = getConfig(start);
-        return config.getConnectionScheme() + "|" + config.getConnectionAttributes() + "|" + config.getUser() + "|" +
-                config.getPassword() + "|" + config.getConnectionPoolSize();
-
+        return getConfig(start).getConnectionPoolId();
     }
 
     public static void assertThatConfigFromSameUserPoolIsNotConflicting(Start start, JsonObject otherConfigJson)
@@ -100,7 +95,7 @@ public class Config extends ResourceDistributor.SingletonResource {
     private PostgreSQLConfig loadPostgreSQLConfig(JsonObject configJson) throws IOException, InvalidConfigException {
         final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         PostgreSQLConfig config = mapper.readValue(configJson.toString(), PostgreSQLConfig.class);
-        config.validate();
+        config.validateAndNormalise();
         return config;
     }
 

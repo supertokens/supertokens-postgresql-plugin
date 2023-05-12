@@ -321,7 +321,7 @@ public class StorageLayerTest {
             fail();
         } catch (InvalidConfigException e) {
             assertEquals(e.getMessage(),
-                    "You cannot set different name for table random for the same user pool");
+                    "You cannot set different values for postgresql_thirdparty_users_table_name for the same user pool");
         }
 
         process.kill();
@@ -355,7 +355,7 @@ public class StorageLayerTest {
             fail();
         } catch (InvalidConfigException e) {
             assertEquals(e.getMessage(),
-                    "You cannot set different name for table prefix for the same user pool");
+                    "You cannot set different values for postgresql_table_names_prefix for the same user pool");
         }
 
         process.kill();
@@ -785,7 +785,7 @@ public class StorageLayerTest {
                     tenantConfigJson);
 
             StorageLayer.getMultitenancyStorage(process.getProcess()).createTenant(tenantConfig);
-            MultitenancyHelper.getInstance(process.getProcess()).refreshTenantsInCoreIfRequired(true);
+            MultitenancyHelper.getInstance(process.getProcess()).refreshTenantsInCoreBasedOnChangesInCoreConfigOrIfTenantListChanged(true);
 
             try {
                 EmailPassword.signIn(tid.withStorage(StorageLayer.getStorage(tid, process.getProcess())),

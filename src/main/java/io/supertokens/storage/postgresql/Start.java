@@ -1385,17 +1385,24 @@ public class Start
 
     private boolean isUniqueConstraintError(ServerErrorMessage serverMessage, String tableName, String
             columnName) {
+        String[] tableNameParts = tableName.split("\\.");
+        tableName = tableNameParts[tableNameParts.length - 1];
+
         return serverMessage.getSQLState().equals("23505") && serverMessage.getConstraint() != null
                 && serverMessage.getConstraint().equals(tableName + "_" + columnName + "_key");
     }
 
     private boolean isForeignKeyConstraintError(ServerErrorMessage serverMessage, String tableName, String
             columnName) {
+        String[] tableNameParts = tableName.split("\\.");
+        tableName = tableNameParts[tableNameParts.length - 1];
         return serverMessage.getSQLState().equals("23503") && serverMessage.getConstraint() != null
                 && serverMessage.getConstraint().equals(tableName + "_" + columnName + "_fkey");
     }
 
     private boolean isPrimaryKeyError(ServerErrorMessage serverMessage, String tableName) {
+        String[] tableNameParts = tableName.split("\\.");
+        tableName = tableNameParts[tableNameParts.length - 1];
         return serverMessage.getSQLState().equals("23505") && serverMessage.getConstraint() != null
                 && serverMessage.getConstraint().equals(tableName + "_pkey");
     }

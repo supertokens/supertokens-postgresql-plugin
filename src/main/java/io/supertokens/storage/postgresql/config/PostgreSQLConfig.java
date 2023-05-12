@@ -23,65 +23,94 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
+import io.supertokens.storage.postgresql.annotations.ConnectionPoolProperty;
+import io.supertokens.storage.postgresql.annotations.IgnoreForAnnotationCheck;
+import io.supertokens.storage.postgresql.annotations.NotConflictingWithinUserPool;
+import io.supertokens.storage.postgresql.annotations.UserPoolProperty;
 
+import java.lang.reflect.Field;
 import java.net.URI;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class PostgreSQLConfig {
 
     @JsonProperty
+    @IgnoreForAnnotationCheck
     private int postgresql_config_version = -1;
 
     @JsonProperty
+    @ConnectionPoolProperty
     private int postgresql_connection_pool_size = 10;
 
     @JsonProperty
+    @UserPoolProperty
     private String postgresql_host = null;
 
     @JsonProperty
+    @UserPoolProperty
     private int postgresql_port = -1;
 
     @JsonProperty
+    @ConnectionPoolProperty
     private String postgresql_user = null;
 
     @JsonProperty
+    @ConnectionPoolProperty
     private String postgresql_password = null;
 
     @JsonProperty
+    @UserPoolProperty
     private String postgresql_database_name = null;
 
     @JsonProperty
+    @NotConflictingWithinUserPool
     private String postgresql_key_value_table_name = null;
 
     @JsonProperty
+    @NotConflictingWithinUserPool
     private String postgresql_session_info_table_name = null;
 
     @JsonProperty
+    @NotConflictingWithinUserPool
     private String postgresql_emailpassword_users_table_name = null;
 
     @JsonProperty
+    @NotConflictingWithinUserPool
     private String postgresql_emailpassword_pswd_reset_tokens_table_name = null;
 
     @JsonProperty
+    @NotConflictingWithinUserPool
     private String postgresql_emailverification_tokens_table_name = null;
 
     @JsonProperty
+    @NotConflictingWithinUserPool
     private String postgresql_emailverification_verified_emails_table_name = null;
 
     @JsonProperty
+    @NotConflictingWithinUserPool
     private String postgresql_thirdparty_users_table_name = null;
 
     @JsonProperty
+    @NotConflictingWithinUserPool
     private String postgresql_table_names_prefix = "";
 
     @JsonProperty
+    @UserPoolProperty
     private String postgresql_table_schema = "public";
 
     @JsonProperty
+    @IgnoreForAnnotationCheck
     private String postgresql_connection_uri = null;
+
+    @ConnectionPoolProperty
+    private String postgresql_connection_attributes = "allowPublicKeyRetrieval=true";
+
+    @ConnectionPoolProperty
+    private String postgresql_connection_scheme = "postgresql";
 
     public static Set<String> getValidFields() {
         PostgreSQLConfig config = new PostgreSQLConfig();
@@ -95,17 +124,6 @@ public class PostgreSQLConfig {
     }
 
     public String getTableSchema() {
-        if (postgresql_connection_uri != null) {
-            String connectionAttributes = getConnectionAttributes();
-            if (connectionAttributes.contains("currentSchema=")) {
-                String[] splitted = connectionAttributes.split("currentSchema=");
-                String valueStr = splitted[1];
-                if (valueStr.contains("&")) {
-                    return valueStr.split("&")[0];
-                }
-                return valueStr.trim();
-            }
-        }
         return postgresql_table_schema.trim();
     }
 
@@ -114,43 +132,14 @@ public class PostgreSQLConfig {
     }
 
     public String getConnectionScheme() {
-        if (postgresql_connection_uri != null) {
-            URI uri = URI.create(postgresql_connection_uri);
-
-            // sometimes if the scheme is missing, the host is returned as the scheme. To
-            // prevent that,
-            // we have a check
-            String host = this.getHostName();
-            if (uri.getScheme() != null && !uri.getScheme().equals(host)) {
-                return uri.getScheme();
-            }
-        }
-        return "postgresql";
+        return postgresql_connection_scheme;
     }
 
     public String getConnectionAttributes() {
-        if (postgresql_connection_uri != null) {
-            URI uri = URI.create(postgresql_connection_uri);
-            String query = uri.getQuery();
-            if (query != null) {
-                if (query.contains("allowPublicKeyRetrieval=")) {
-                    return query;
-                } else {
-                    return query + "&allowPublicKeyRetrieval=true";
-                }
-            }
-        }
-        return "allowPublicKeyRetrieval=true";
+        return postgresql_connection_attributes;
     }
 
     public String getHostName() {
-        if (postgresql_connection_uri != null) {
-            URI uri = URI.create(postgresql_connection_uri);
-            if (uri.getHost() != null) {
-                return uri.getHost();
-            }
-        }
-
         if (postgresql_host != null) {
             return postgresql_host;
         }
@@ -158,13 +147,6 @@ public class PostgreSQLConfig {
     }
 
     public int getPort() {
-        if (postgresql_connection_uri != null) {
-            URI uri = URI.create(postgresql_connection_uri);
-            if (uri.getPort() > 0) {
-                return uri.getPort();
-            }
-        }
-
         if (postgresql_port != -1) {
             return postgresql_port;
         }
@@ -172,17 +154,6 @@ public class PostgreSQLConfig {
     }
 
     public String getUser() {
-        if (postgresql_connection_uri != null) {
-            URI uri = URI.create(postgresql_connection_uri);
-            String userInfo = uri.getUserInfo();
-            if (userInfo != null) {
-                String[] userInfoArray = userInfo.split(":");
-                if (userInfoArray.length > 0 && !userInfoArray[0].equals("")) {
-                    return userInfoArray[0];
-                }
-            }
-        }
-
         if (postgresql_user != null) {
             return postgresql_user;
         }
@@ -190,17 +161,6 @@ public class PostgreSQLConfig {
     }
 
     public String getPassword() {
-        if (postgresql_connection_uri != null) {
-            URI uri = URI.create(postgresql_connection_uri);
-            String userInfo = uri.getUserInfo();
-            if (userInfo != null) {
-                String[] userInfoArray = userInfo.split(":");
-                if (userInfoArray.length > 1 && !userInfoArray[1].equals("")) {
-                    return userInfoArray[1];
-                }
-            }
-        }
-
         if (postgresql_password != null) {
             return postgresql_password;
         }
@@ -208,17 +168,6 @@ public class PostgreSQLConfig {
     }
 
     public String getDatabaseName() {
-        if (postgresql_connection_uri != null) {
-            URI uri = URI.create(postgresql_connection_uri);
-            String path = uri.getPath();
-            if (path != null && !path.equals("") && !path.equals("/")) {
-                if (path.startsWith("/")) {
-                    return path.substring(1);
-                }
-                return path;
-            }
-        }
-
         if (postgresql_database_name != null) {
             return postgresql_database_name;
         }
@@ -421,7 +370,7 @@ public class PostgreSQLConfig {
         return name;
     }
 
-    void validate() throws InvalidConfigException {
+    void validateAndNormalise() throws InvalidConfigException {
         if (postgresql_connection_uri != null) {
             try {
                 URI ignored = URI.create(postgresql_connection_uri);
@@ -442,57 +391,144 @@ public class PostgreSQLConfig {
             throw new InvalidConfigException(
                     "'postgresql_connection_pool_size' in the config.yaml file must be > 0");
         }
+
+        // Normalisation
+        if (postgresql_connection_uri != null) {
+            {
+                URI uri = URI.create(postgresql_connection_uri);
+                String query = uri.getQuery();
+                if (query != null) {
+                    if (query.contains("allowPublicKeyRetrieval=")) {
+                        postgresql_connection_attributes = query;
+                    } else {
+                        postgresql_connection_attributes = query + "&allowPublicKeyRetrieval=true";
+                    }
+                }
+            }
+
+            {
+                String connectionAttributes = postgresql_connection_attributes;
+                if (connectionAttributes.contains("currentSchema=")) {
+                    String[] splitted = connectionAttributes.split("currentSchema=");
+                    String valueStr = splitted[1];
+                    if (valueStr.contains("&")) {
+                        postgresql_table_schema = valueStr.split("&")[0];
+                    } else {
+                        postgresql_table_schema = valueStr;
+                    }
+                    postgresql_table_schema = postgresql_table_schema.trim();
+                }
+            }
+
+            {
+                URI uri = URI.create(postgresql_connection_uri);
+
+                // sometimes if the scheme is missing, the host is returned as the scheme. To
+                // prevent that,
+                // we have a check
+                String host = this.getHostName();
+                if (uri.getScheme() != null && !uri.getScheme().equals(host)) {
+                    postgresql_connection_scheme = uri.getScheme();
+                }
+            }
+
+            {
+                URI uri = URI.create(postgresql_connection_uri);
+                if (uri.getHost() != null) {
+                    postgresql_host = uri.getHost();
+                }
+            }
+
+            {
+                URI uri = URI.create(postgresql_connection_uri);
+                if (uri.getPort() > 0) {
+                    postgresql_port = uri.getPort();
+                }
+            }
+
+            {
+                URI uri = URI.create(postgresql_connection_uri);
+                String userInfo = uri.getUserInfo();
+                if (userInfo != null) {
+                    String[] userInfoArray = userInfo.split(":");
+                    if (userInfoArray.length > 0 && !userInfoArray[0].equals("")) {
+                        postgresql_user = userInfoArray[0];
+                    }
+                }
+            }
+
+            {
+                URI uri = URI.create(postgresql_connection_uri);
+                String userInfo = uri.getUserInfo();
+                if (userInfo != null) {
+                    String[] userInfoArray = userInfo.split(":");
+                    if (userInfoArray.length > 1 && !userInfoArray[1].equals("")) {
+                        postgresql_password = userInfoArray[1];
+                    }
+                }
+            }
+
+            {
+                URI uri = URI.create(postgresql_connection_uri);
+                String path = uri.getPath();
+                if (path != null && !path.equals("") && !path.equals("/")) {
+                    if (path.startsWith("/")) {
+                        postgresql_database_name = path.substring(1);
+                    } else {
+                        postgresql_database_name = path;
+                    }
+                }
+            }
+        }
     }
 
     void assertThatConfigFromSameUserPoolIsNotConflicting(PostgreSQLConfig otherConfig) throws InvalidConfigException {
-        if (!otherConfig.getTablePrefix().equals(getTablePrefix())) {
-            throw new InvalidConfigException(
-                    "You cannot set different name for table prefix for the same user pool");
+        for (Field field : PostgreSQLConfig.class.getDeclaredFields()) {
+            if (field.isAnnotationPresent(NotConflictingWithinUserPool.class)) {
+                try {
+                    if (!Objects.equals(field.get(this), field.get(otherConfig))) {
+                        throw new InvalidConfigException(
+                                "You cannot set different values for " + field.getName() +
+                                        " for the same user pool");
+                    }
+                } catch (IllegalAccessException e) {
+                    throw new RuntimeException(e);
+                }
+            }
         }
+    }
 
-        if (!otherConfig.getKeyValueTable().equals(getKeyValueTable())) {
-            throw new InvalidConfigException(
-                    "You cannot set different name for table " + getKeyValueTable() +
-                            " for the same user pool");
+    public String getUserPoolId() {
+        StringBuilder userPoolId = new StringBuilder();
+        for (Field field : PostgreSQLConfig.class.getDeclaredFields()) {
+            if (field.isAnnotationPresent(UserPoolProperty.class)) {
+                userPoolId.append("|");
+                try {
+                    if (field.get(this) != null) {
+                        userPoolId.append(field.get(this).toString());
+                    }
+                } catch (IllegalAccessException e) {
+                    throw new RuntimeException(e);
+                }
+            }
         }
-        if (!otherConfig.getSessionInfoTable().equals(getSessionInfoTable())) {
-            throw new InvalidConfigException(
-                    "You cannot set different name for table " + getSessionInfoTable() +
-                            " for the same user pool");
-        }
+        return userPoolId.toString();
+    }
 
-        if (!otherConfig.getEmailPasswordUsersTable().equals(getEmailPasswordUsersTable())) {
-            throw new InvalidConfigException(
-                    "You cannot set different name for table " + getEmailPasswordUsersTable() +
-                            " for the same user pool");
+    public String getConnectionPoolId() {
+        StringBuilder connectionPoolId = new StringBuilder();
+        for (Field field : PostgreSQLConfig.class.getDeclaredFields()) {
+            if (field.isAnnotationPresent(ConnectionPoolProperty.class)) {
+                connectionPoolId.append("|");
+                try {
+                    if (field.get(this) != null) {
+                        connectionPoolId.append(field.get(this).toString());
+                    }
+                } catch (IllegalAccessException e) {
+                    throw new RuntimeException(e);
+                }
+            }
         }
-
-        if (!otherConfig.getPasswordResetTokensTable().equals(
-                getPasswordResetTokensTable())) {
-            throw new InvalidConfigException(
-                    "You cannot set different name for table " + getPasswordResetTokensTable() +
-                            " for the same user pool");
-        }
-
-        if (!otherConfig.getEmailVerificationTokensTable().equals(
-                getEmailVerificationTokensTable())) {
-            throw new InvalidConfigException(
-                    "You cannot set different name for table " + getEmailVerificationTokensTable() +
-                            " for the same user pool");
-        }
-
-        if (!otherConfig.getEmailVerificationTable().equals(
-                getEmailVerificationTable())) {
-            throw new InvalidConfigException(
-                    "You cannot set different name for table " +
-                            getEmailVerificationTable() +
-                            " for the same user pool");
-        }
-
-        if (!otherConfig.getThirdPartyUsersTable().equals(getThirdPartyUsersTable())) {
-            throw new InvalidConfigException(
-                    "You cannot set different name for table " + getThirdPartyUsersTable() +
-                            " for the same user pool");
-        }
+        return connectionPoolId.toString();
     }
 }
