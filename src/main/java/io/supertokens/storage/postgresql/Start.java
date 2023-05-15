@@ -2792,7 +2792,7 @@ public class Start
     }
 
     @Override
-    public boolean deleteUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
+    public boolean deleteMfaInfoForUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
         try {
             int deletedCount = MfaQueries.deleteUser(this, appIdentifier, userId);
             if (deletedCount == 0) {
@@ -2805,9 +2805,9 @@ public class Start
     }
 
     @Override
-    public boolean deleteUserFromTenant(TenantIdentifier tenantIdentifier, String userId) throws StorageQueryException {
+    public boolean deleteMfaInfoForUser(TenantIdentifier tenantIdentifier, String userId) throws StorageQueryException {
         try {
-            int deletedCount = MfaQueries.deleteUserFromTenant(this, tenantIdentifier, userId);
+            int deletedCount = MfaQueries.deleteUser(this, tenantIdentifier, userId);
             if (deletedCount == 0) {
                 return false;
             }
