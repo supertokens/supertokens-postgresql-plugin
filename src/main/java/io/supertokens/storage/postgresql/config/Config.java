@@ -36,7 +36,7 @@ public class Config extends ResourceDistributor.SingletonResource {
     private static final String RESOURCE_KEY = "io.supertokens.storage.postgresql.config.Config";
     private final PostgreSQLConfig config;
     private final Start start;
-    private final Set<LOG_LEVEL> logLevels;
+    private Set<LOG_LEVEL> logLevels;
 
     private Config(Start start, JsonObject configJson, Set<LOG_LEVEL> logLevels) throws InvalidConfigException {
         this.start = start;
@@ -90,6 +90,10 @@ public class Config extends ResourceDistributor.SingletonResource {
 
     public static Set<LOG_LEVEL> getLogLevels(Start start) {
         return getInstance(start).logLevels;
+    }
+
+    public static void setLogLevels(Start start, Set<LOG_LEVEL> logLevels) {
+        getInstance(start).logLevels = logLevels;
     }
 
     private PostgreSQLConfig loadPostgreSQLConfig(JsonObject configJson) throws IOException, InvalidConfigException {

@@ -2743,4 +2743,9 @@ public class Start
     public Set<String> getValidFieldsInConfig() {
         return PostgreSQLConfig.getValidFields();
     }
+
+    @Override
+    public void setLogLevels(Set<LOG_LEVEL> logLevels) {
+        Config.setLogLevels(this, logLevels);
+    }
 }
