@@ -832,6 +832,7 @@ public class Start
                         || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
                     throw new DuplicateUserIdException();
                 } else if (isForeignKeyConstraintError(serverMessage, config.getEmailPasswordUsersTable(), "user_id")) {
+                    // This should never happen because we add the user to app_id_to_user_id table first
                     throw new IllegalStateException("should never come here");
                 } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
                     throw new TenantOrAppNotFoundException(tenantIdentifier.toAppIdentifier());
@@ -1207,6 +1208,7 @@ public class Start
                     throw new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException();
 
                 } else if (isForeignKeyConstraintError(serverMessage, config.getThirdPartyUsersTable(), "user_id")) {
+                    // This should never happen because we add the user to app_id_to_user_id table first
                     throw new IllegalStateException("should never come here");
 
                 } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
@@ -1705,6 +1707,7 @@ public class Start
                 }
 
                 if (isForeignKeyConstraintError(serverMessage, config.getPasswordlessUsersTable(), "user_id")) {
+                    // This should never happen because we add the user to app_id_to_user_id table first
                     throw new IllegalStateException("should never come here");
                 }
 
