@@ -53,7 +53,7 @@ public class PasswordlessQueries {
                 + "email VARCHAR(256),"
                 + "phone_number VARCHAR(256),"
                 + "time_joined BIGINT NOT NULL, "
-                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "app_id", "fkey")
+                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "user_id", "fkey")
                 + " FOREIGN KEY(app_id, user_id)"
                 + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +  " (app_id, user_id) ON DELETE CASCADE,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, null, "pkey")
