@@ -831,6 +831,8 @@ public class Start
                         || isPrimaryKeyError(serverMessage, config.getEmailPasswordUserToTenantTable())
                         || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
                     throw new DuplicateUserIdException();
+                } else if (isForeignKeyConstraintError(serverMessage, config.getEmailPasswordUsersTable(), "user_id")) {
+                    throw new IllegalStateException("should never come here");
                 } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
                     throw new TenantOrAppNotFoundException(tenantIdentifier.toAppIdentifier());
                 } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
@@ -1203,6 +1205,9 @@ public class Start
                         || isPrimaryKeyError(serverMessage, config.getThirdPartyUserToTenantTable())
                         || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
                     throw new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException();
+
+                } else if (isForeignKeyConstraintError(serverMessage, config.getThirdPartyUsersTable(), "user_id")) {
+                    throw new IllegalStateException("should never come here");
 
                 } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
                     throw new TenantOrAppNotFoundException(tenantIdentifier.toAppIdentifier());
@@ -1697,6 +1702,10 @@ public class Start
                 if (isUniqueConstraintError(((PSQLException) actualException).getServerErrorMessage(),
                         Config.getConfig(this).getPasswordlessUserToTenantTable(), "phone_number")) {
                     throw new DuplicatePhoneNumberException();
+                }
+
+                if (isForeignKeyConstraintError(serverMessage, config.getPasswordlessUsersTable(), "user_id")) {
+                    throw new IllegalStateException("should never come here");
                 }
 
                 if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
