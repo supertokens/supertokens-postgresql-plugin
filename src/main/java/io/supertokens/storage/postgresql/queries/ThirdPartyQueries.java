@@ -51,7 +51,7 @@ public class ThirdPartyQueries {
                 + "user_id CHAR(36) NOT NULL,"
                 + "email VARCHAR(256) NOT NULL,"
                 + "time_joined BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, thirdPartyUsersTable, "app_id", "fkey")
+                + "CONSTRAINT " + Utils.getConstraintName(schema, thirdPartyUsersTable, "user_id", "fkey")
                 + " FOREIGN KEY(app_id, user_id)"
                 + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +  " (app_id, user_id) ON DELETE CASCADE,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, thirdPartyUsersTable, null, "pkey")
