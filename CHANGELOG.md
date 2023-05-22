@@ -7,10 +7,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added
+### Changes
 
 - Support for multitenancy
-  - `app_id` and `tenant_id` columns added in tables and constraints & indexes have been modified to include this columns.
+  - New tables `apps` and `tenants` have been added.
+  - Schema of tables have been changed, adding `app_id` and `tenant_id` columns in tables and constraints & indexes have been modified to include this columns.
+  - New user tables have been added to map users to apps and tenants.
+  - New tables for multitenancy have been added.
 
 ### Migration
 
