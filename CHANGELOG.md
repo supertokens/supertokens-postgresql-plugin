@@ -17,7 +17,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Migration
 
-Ensure the plugin is already migrated to version 3.0.0 and then,
+Ensure the core is already migrated to version 2.21 and then,
 Run the following:
 
 ```sql
