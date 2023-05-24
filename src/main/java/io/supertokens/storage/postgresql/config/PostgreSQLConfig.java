@@ -354,15 +354,25 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("totp_used_codes");
     }
 
-    public String getOAuth2ClientTable(){ return addSchemaAndPrefixToTableName("oauth2_client"); }
+    public String getOAuth2ClientTable() {
+        return addSchemaAndPrefixToTableName("oauth2_client");
+    }
 
-    public String getOAuth2ScopesTable(){ return addSchemaAndPrefixToTableName("oauth2_scopes"); }
+    public String getOAuth2ScopesTable() {
+        return addSchemaAndPrefixToTableName("oauth2_scopes");
+    }
 
-    public String getOAuth2ClientAllowedScopesTable(){ return addSchemaAndPrefixToTableName("oauth2_client_allowed_scopes"); }
+    public String getOAuth2ClientAllowedScopesTable() {
+        return addSchemaAndPrefixToTableName("oauth2_client_allowed_scopes");
+    }
 
-    public String getOAuth2AuthcodeTable(){ return addSchemaAndPrefixToTableName("oauth2_authcode"); }
+    public String getOAuth2AuthcodeTable() {
+        return addSchemaAndPrefixToTableName("oauth2_authcode");
+    }
 
-    public String getOAuth2TokenTable(){ return addSchemaAndPrefixToTableName("oauth2_token"); }
+    public String getOAuth2TokenTable() {
+        return addSchemaAndPrefixToTableName("oauth2_token");
+    }
 
 
     private String addSchemaAndPrefixToTableName(String tableName) {
