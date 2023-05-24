@@ -374,7 +374,6 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("oauth2_token");
     }
 
-
     private String addSchemaAndPrefixToTableName(String tableName) {
         String name = tableName;
         if (!getTablePrefix().equals("")) {
