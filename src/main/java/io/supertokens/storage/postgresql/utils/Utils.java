@@ -42,18 +42,5 @@ public class Utils {
         constraintName.append('_').append(typeSuffix);
         return constraintName.toString();
     }
-    public static String appendQuotes(String input) {
-        return "'" + input + "'";
-    }
-
-    public static String getIndexName(String prefixedTableName, String column) {
-        StringBuilder indexName = new StringBuilder(prefixedTableName);
-
-        if (column != null) {
-            indexName.append('_').append(column);
-        }
-        indexName.append('_').append("index");
-        return indexName.toString();
-    }
 
 }

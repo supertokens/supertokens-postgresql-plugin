@@ -429,6 +429,22 @@ public class GeneralQueries {
             String DROP_QUERY = "DROP INDEX IF EXISTS all_auth_recipe_users_pagination_index";
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
+        {
+            String DROP_QUERY = "DROP INDEX IF EXISTS oauth2_client_allowed_scopes_client_id_index";
+            update(start, DROP_QUERY, NO_OP_SETTER);
+        }
+        {
+            String DROP_QUERY = "DROP INDEX IF EXISTS oauth2_authcode_expires_at_ms_index";
+            update(start, DROP_QUERY, NO_OP_SETTER);
+        }
+        {
+            String DROP_QUERY = "DROP INDEX IF EXISTS oauth2_token_access_token_expires_at_ms_index";
+            update(start, DROP_QUERY, NO_OP_SETTER);
+        }
+        {
+            String DROP_QUERY = "DROP INDEX IF EXISTS oauth2_token_refresh_token_expires_at_ms_index";
+            update(start, DROP_QUERY, NO_OP_SETTER);
+        }
 
         {
             String DROP_QUERY = "DROP TABLE IF EXISTS "
@@ -463,7 +479,12 @@ public class GeneralQueries {
                     + getConfig(start).getDashboardUsersTable() + ","
                     + getConfig(start).getDashboardSessionsTable() + ","
                     + getConfig(start).getTotpUsedCodesTable() + "," + getConfig(start).getTotpUserDevicesTable() + ","
-                    + getConfig(start).getTotpUsersTable();
+                    + getConfig(start).getTotpUsersTable() + ","
+                    + getConfig(start).getOAuth2ClientTable() + ","
+                    + getConfig(start).getOAuth2ScopesTable() + ","
+                    + getConfig(start).getOAuth2ClientAllowedScopesTable() + ","
+                    + getConfig(start).getOAuth2AuthcodeTable() + ","
+                    + getConfig(start).getOAuth2TokenTable();
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
     }
