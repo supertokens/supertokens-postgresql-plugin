@@ -42,5 +42,4 @@ public class Utils {
         constraintName.append('_').append(typeSuffix);
         return constraintName.toString();
     }
-
 }
