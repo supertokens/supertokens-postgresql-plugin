@@ -365,6 +365,38 @@ public class GeneralQueries {
                     update(start, TOTPQueries.getQueryToCreateUsedCodesExpiryTimeIndex(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getOAuth2ClientTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, OAuth2Queries.getQueryToCreateOAuth2ClientTable(start), NO_OP_SETTER);
+
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getOAuth2ScopesTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, OAuth2Queries.getQueryToCreateOAuth2ScopesTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getOAuth2ClientAllowedScopesTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, OAuth2Queries.getQueryToCreateOAuth2ClientAllowedScopesTable(start), NO_OP_SETTER);
+                    // index:
+                    update(start, OAuth2Queries.getQueryToCreateOAuth2ClientAllowedScopesTableIndex(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getOAuth2AuthcodeTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, OAuth2Queries.getQueryToCreateOAuth2AuthcodeTable(start), NO_OP_SETTER);
+                    // index:
+                    update(start, OAuth2Queries.getQueryToCreateOAuth2AuthcodeTableIndex(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getOAuth2TokenTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, OAuth2Queries.getQueryToCreateOAuth2TokenTable(start), NO_OP_SETTER);
+                    // index:
+                    update(start, OAuth2Queries.getQueryToCreateOAuth2TokenTableIndex(start), NO_OP_SETTER);
+                }
+
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
