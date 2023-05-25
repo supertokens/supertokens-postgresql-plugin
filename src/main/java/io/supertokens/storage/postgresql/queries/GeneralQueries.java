@@ -368,12 +368,15 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getOAuth2ClientTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, OAuth2Queries.getQueryToCreateOAuth2ClientTable(start), NO_OP_SETTER);
-
+                    // index:
+                    update(start, OAuth2Queries.getQueryToCreateOAuth2ClientTableIndex(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getOAuth2ScopesTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, OAuth2Queries.getQueryToCreateOAuth2ScopesTable(start), NO_OP_SETTER);
+                    // index:
+                    update(start, OAuth2Queries.getQueryToCreateOAuth2ScopesTableIndex(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getOAuth2ClientAllowedScopesTable())) {
@@ -430,6 +433,14 @@ public class GeneralQueries {
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
         {
+            String DROP_QUERY = "DROP INDEX IF EXISTS oauth2_client_app_id_index";
+            update(start, DROP_QUERY, NO_OP_SETTER);
+        }
+        {
+            String DROP_QUERY = "DROP INDEX IF EXISTS oauth2_scopes_app_id_index";
+            update(start, DROP_QUERY, NO_OP_SETTER);
+        }
+        {
             String DROP_QUERY = "DROP INDEX IF EXISTS oauth2_client_allowed_scopes_client_id_index";
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
@@ -438,19 +449,11 @@ public class GeneralQueries {
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
         {
-            String DROP_QUERY = "DROP INDEX IF EXISTS oauth2_client_allowed_scopes_app_id_index";
-            update(start, DROP_QUERY, NO_OP_SETTER);
-        }
-        {
             String DROP_QUERY = "DROP INDEX IF EXISTS oauth2_authcode_client_id_index";
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
         {
             String DROP_QUERY = "DROP INDEX IF EXISTS oauth2_authcode_session_handle_index";
-            update(start, DROP_QUERY, NO_OP_SETTER);
-        }
-        {
-            String DROP_QUERY = "DROP INDEX IF EXISTS oauth2_authcode_tenant_id_index";
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
         {
@@ -463,10 +466,6 @@ public class GeneralQueries {
         }
         {
             String DROP_QUERY = "DROP INDEX IF EXISTS oauth2_token_session_handle_index";
-            update(start, DROP_QUERY, NO_OP_SETTER);
-        }
-        {
-            String DROP_QUERY = "DROP INDEX IF EXISTS oauth2_token_tenant_id_index";
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
         {

@@ -41,6 +41,13 @@ public class OAuth2Queries {
         // @formatter:on
     }
 
+    static String getQueryToCreateOAuth2ClientTableIndex(Start start) {
+        String oAuth2ClientTable = Config.getConfig(start).getOAuth2ClientTable();
+        // psql does not automatically add index on foreign keys
+        // hence adding index on foreign keys to support faster JOINS and DELETE ON CASCADE queries
+        return "CREATE INDEX oauth2_client_app_id_index ON " + oAuth2ClientTable + "(app_id);";
+    }
+
     static String getQueryToCreateOAuth2ScopesTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String oAuth2ScopesTable = Config.getConfig(start).getOAuth2ScopesTable();
@@ -54,6 +61,13 @@ public class OAuth2Queries {
                 + " FOREIGN KEY(app_id) REFERENCES " + Config.getConfig(start).getAppsTable() +
                 " (app_id) ON DELETE CASCADE);";
         // @formatter:on
+    }
+
+    static String getQueryToCreateOAuth2ScopesTableIndex(Start start) {
+        String oAuth2ScopesTable = Config.getConfig(start).getOAuth2ScopesTable();
+        // psql does not automatically add index on foreign keys
+        // hence adding index on foreign keys to support faster JOINS and DELETE ON CASCADE queries
+        return "CREATE INDEX oauth2_scopes_app_id_index ON " + oAuth2ScopesTable + "(app_id);";
     }
 
     static String getQueryToCreateOAuth2ClientAllowedScopesTable(Start start) {
@@ -72,9 +86,7 @@ public class OAuth2Queries {
                 + "(app_id, client_id) ON DELETE CASCADE,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientAllowedScopesTable, "scope", "fkey")
                 + " FOREIGN KEY(app_id, scope) REFERENCES " + Config.getConfig(start).getOAuth2ScopesTable()
-                + "(app_id, scope) ON DELETE CASCADE,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientAllowedScopesTable, "app_id", "fkey")
-                + " FOREIGN KEY(app_id) REFERENCES " + Config.getConfig(start).getAppsTable() + "(app_id) ON DELETE CASCADE);";
+                + "(app_id, scope) ON DELETE CASCADE);";
         // @formatter:on
     }
 
@@ -83,8 +95,7 @@ public class OAuth2Queries {
         // psql does not automatically add index on foreign keys
         // hence adding index on foreign keys to support faster JOINS and DELETE ON CASCADE queries
         return "CREATE INDEX oauth2_client_allowed_scopes_client_id_index ON " + oAuth2ClientAllowedScopesTable + "(app_id, client_id);"
-                + "CREATE INDEX oauth2_client_allowed_scopes_scope_index ON " + oAuth2ClientAllowedScopesTable + "(app_id, scope);"
-                + "CREATE INDEX oauth2_client_allowed_scopes_app_id_index ON " + oAuth2ClientAllowedScopesTable + "(app_id);";
+                + "CREATE INDEX oauth2_client_allowed_scopes_scope_index ON " + oAuth2ClientAllowedScopesTable + "(app_id, scope);";
     }
 
 
@@ -121,10 +132,7 @@ public class OAuth2Queries {
                 + "(app_id, client_id) ON DELETE CASCADE,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2AuthcodeTable, "session_handle", "fkey")
                 + " FOREIGN KEY(app_id, tenant_id, session_handle) REFERENCES "
-                + Config.getConfig(start).getSessionInfoTable() + "(app_id, tenant_id, session_handle) ON DELETE CASCADE,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2AuthcodeTable, "tenant_id", "fkey")
-                + " FOREIGN KEY(app_id, tenant_id) REFERENCES " + Config.getConfig(start).getTenantsTable()
-                + "(app_id, tenant_id) ON DELETE CASCADE);";
+                + Config.getConfig(start).getSessionInfoTable() + "(app_id, tenant_id, session_handle) ON DELETE CASCADE );";
         // @formatter:on
     }
 
@@ -132,7 +140,6 @@ public class OAuth2Queries {
         String oAuth2AuthcodeTable = Config.getConfig(start).getOAuth2AuthcodeTable();
         return "CREATE INDEX oauth2_authcode_client_id_index ON " + oAuth2AuthcodeTable + "(app_id, client_id);"
                 + "CREATE INDEX oauth2_authcode_session_handle_index ON " + oAuth2AuthcodeTable + "(app_id, tenant_id, session_handle);"
-                + "CREATE INDEX oauth2_authcode_tenant_id_index ON " + oAuth2AuthcodeTable + "(app_id, tenant_id);"
                 + "CREATE INDEX oauth2_authcode_expires_at_ms_index ON " + oAuth2AuthcodeTable + "(expires_at_ms);";
     }
 
@@ -164,11 +171,7 @@ public class OAuth2Queries {
                 + "(app_id, client_id) ON DELETE CASCADE,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2TokenTable, "session_handle", "fkey")
                 + " FOREIGN KEY(app_id, tenant_id, session_handle) REFERENCES " + Config.getConfig(start).getSessionInfoTable()
-                + "(app_id, tenant_id, session_handle) ON DELETE CASCADE,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2TokenTable, "tenant_id", "fkey")
-                + " FOREIGN KEY(app_id, tenant_id) REFERENCES " + Config.getConfig(start).getTenantsTable()
-                + "(app_id, tenant_id) ON DELETE CASCADE);";
-
+                + "(app_id, tenant_id, session_handle) ON DELETE CASCADE);";
         // @formatter:on
     }
 
@@ -176,7 +179,6 @@ public class OAuth2Queries {
         String oAuth2TokenTable = Config.getConfig(start).getOAuth2TokenTable();
         return "CREATE INDEX oauth2_access_token_client_id_index ON " + oAuth2TokenTable + "(app_id, client_id);"
                 + "CREATE INDEX oauth2_access_token_session_handle_index ON " + oAuth2TokenTable + "(app_id,tenant_id,session_handle);"
-                + "CREATE INDEX oauth2_access_token_tenant_id_index ON " + oAuth2TokenTable + "(app_id, tenant_id);"
                 + "CREATE INDEX oauth2_token_access_token_expires_at_ms_index ON " + oAuth2TokenTable + "(access_token_expires_at_ms);"
                 + "CREATE INDEX oauth2_token_refresh_token_expires_at_ms_index ON " + oAuth2TokenTable + "(refresh_token_expires_at_ms);";
     }
