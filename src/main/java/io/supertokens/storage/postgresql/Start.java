@@ -1361,6 +1361,15 @@ public class Start
     }
 
     @Override
+    public void deleteUserActive(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
+        try {
+            ActiveUsersQueries.deleteUserActive(this, appIdentifier, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public boolean doesUserIdExist(TenantIdentifier tenantIdentifier, String userId)
             throws StorageQueryException {
         try {

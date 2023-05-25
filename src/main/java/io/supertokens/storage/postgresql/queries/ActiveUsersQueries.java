@@ -110,4 +110,15 @@ public class ActiveUsersQueries {
             throw new StorageQueryException(e);
         }
     }
+
+    public static void deleteUserActive(Start start, AppIdentifier appIdentifier, String userId)
+            throws StorageQueryException, SQLException {
+        String QUERY = "DELETE FROM " + Config.getConfig(start).getUserLastActiveTable()
+                + " WHERE app_id = ? AND user_id = ?";
+
+        update(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        });
+    }
 }
