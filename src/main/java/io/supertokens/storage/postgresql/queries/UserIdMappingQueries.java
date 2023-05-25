@@ -32,6 +32,7 @@ import java.util.HashMap;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class UserIdMappingQueries {
 
@@ -55,6 +56,11 @@ public class UserIdMappingQueries {
                 + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() + "(app_id, user_id)" + " ON DELETE CASCADE"
                 + ");";
         // @formatter:on
+    }
+
+    public static String getQueryToCreateSupertokensUserIdIndexForUserIdMappingTable(Start start) {
+        return "CREATE INDEX userid_mapping_supertokens_user_id_index ON "
+                + getConfig(start).getUserIdMappingTable() + "(app_id, supertokens_user_id);";
     }
 
     public static void createUserIdMapping(Start start, AppIdentifier appIdentifier, String superTokensUserId, String externalUserId,

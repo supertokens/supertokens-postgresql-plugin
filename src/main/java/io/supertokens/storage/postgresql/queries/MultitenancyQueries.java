@@ -88,6 +88,11 @@ public class MultitenancyQueries {
         // @formatter:on
     }
 
+    public static String getQueryToCreateTenantIdIndexForTenantThirdPartyProvidersTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS tenant_thirdparty_providers_tenant_id_index ON "
+                + getConfig(start).getTenantThirdPartyProvidersTable() + " (connection_uri_domain, app_id, tenant_id);";
+    }
+
     static String getQueryToCreateTenantThirdPartyProviderClientsTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String tenantThirdPartyProvidersTable = Config.getConfig(start).getTenantThirdPartyProviderClientsTable();
@@ -107,6 +112,11 @@ public class MultitenancyQueries {
                 + " FOREIGN KEY(connection_uri_domain, app_id, tenant_id, third_party_id)"
                 + " REFERENCES " + Config.getConfig(start).getTenantThirdPartyProvidersTable() +  " (connection_uri_domain, app_id, tenant_id, third_party_id) ON DELETE CASCADE"
                 + ");";
+    }
+
+    public static String getQueryToCreateThirdPartyIdIndexForTenantThirdPartyProviderClientsTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS tenant_thirdparty_provider_clients_third_party_id_index ON "
+                + getConfig(start).getTenantThirdPartyProviderClientsTable() + " (connection_uri_domain, app_id, tenant_id, third_party_id);";
     }
 
     private static void executeCreateTenantQueries(Start start, Connection sqlCon, TenantConfig tenantConfig)

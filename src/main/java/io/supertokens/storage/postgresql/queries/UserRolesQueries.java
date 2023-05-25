@@ -47,8 +47,11 @@ public class UserRolesQueries {
                 + " FOREIGN KEY(app_id)"
                 + " REFERENCES " + Config.getConfig(start).getAppsTable() +  " (app_id) ON DELETE CASCADE"
                 + ");";
-
         // @formatter:on
+    }
+
+    public static String getQueryToCreateAppIdIndexForRolesTable(Start start) {
+        return "CREATE INDEX roles_app_id_index ON " + getConfig(start).getRolesTable() + "(app_id);";
     }
 
     public static String getQueryToCreateRolePermissionsTable(Start start) {
@@ -66,6 +69,11 @@ public class UserRolesQueries {
                 + " REFERENCES " + getConfig(start).getRolesTable() + "(app_id, role) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
+    }
+
+    public static String getQueryToCreateRoleIndexForRolePermissionsTable(Start start) {
+        return "CREATE INDEX role_permissions_role_index ON " + getConfig(start).getUserRolesPermissionsTable()
+                + "(app_id, role);";
     }
 
     static String getQueryToCreateRolePermissionsPermissionIndex(Start start) {
@@ -92,6 +100,14 @@ public class UserRolesQueries {
                 + " REFERENCES " + Config.getConfig(start).getTenantsTable() + "(app_id, tenant_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
+    }
+
+    public static String getQueryToCreateTenantIdIndexForUserRolesTable(Start start) {
+        return "CREATE INDEX user_roles_tenant_id_index ON " + getConfig(start).getUserRolesTable() + "(app_id, tenant_id);";
+    }
+
+    public static String getQueryToCreateRoleIndexForUserRolesTable(Start start) {
+        return "CREATE INDEX user_roles_role_index ON " + getConfig(start).getUserRolesTable() + "(app_id, role);";
     }
 
     public static String getQueryToCreateUserRolesRoleIndex(Start start) {

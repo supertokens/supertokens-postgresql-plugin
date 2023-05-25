@@ -15,7 +15,14 @@ public class ActiveUsersQueries {
         return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getUserLastActiveTable() + " ("
                 + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "user_id VARCHAR(128),"
-                + "last_active_time BIGINT," + "PRIMARY KEY(app_id, user_id)" + " );";
+                + "last_active_time BIGINT,"
+                + "PRIMARY KEY(app_id, user_id)"
+                + " );";
+    }
+
+    static String getQueryToCreateAppIdIndexForUserLastActiveTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS user_last_active_app_id_index ON "
+                + Config.getConfig(start).getUserLastActiveTable() + "(app_id);";
     }
 
     public static int countUsersActiveSince(Start start, AppIdentifier appIdentifier, long sinceTime) throws SQLException, StorageQueryException {
@@ -32,7 +39,6 @@ public class ActiveUsersQueries {
             return 0;
         });
     }
-
 
     public static int countUsersEnabledTotp(Start start, AppIdentifier appIdentifier) throws SQLException, StorageQueryException {
         String QUERY = "SELECT COUNT(*) as total FROM " + Config.getConfig(start).getTotpUsersTable()
