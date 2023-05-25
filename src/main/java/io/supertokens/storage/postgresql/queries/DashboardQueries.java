@@ -56,6 +56,11 @@ public class DashboardQueries {
         // @formatter:on
     }
 
+    public static String getQueryToCreateAppIdIndexForDashboardUsersTable(Start start) {
+        return "CREATE INDEX dashboard_users_app_id_index ON "
+                + Config.getConfig(start).getDashboardUsersTable() + "(app_id);";
+    }
+
     public static String getQueryToCreateDashboardUserSessionsTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String tableName = Config.getConfig(start).getDashboardSessionsTable();
@@ -78,6 +83,11 @@ public class DashboardQueries {
     static String getQueryToCreateDashboardUserSessionsExpiryIndex(Start start) {
         return "CREATE INDEX dashboard_user_sessions_expiry_index ON "
                 + Config.getConfig(start).getDashboardSessionsTable() + "(expiry);";
+    }
+
+    public static String getQueryToCreateUserIdIndexForDashboardUserSessionsTable(Start start) {
+        return "CREATE INDEX dashboard_user_sessions_user_id_index ON "
+                + Config.getConfig(start).getDashboardSessionsTable() + "(app_id, user_id);";
     }
 
     public static void createDashboardUser(Start start, AppIdentifier appIdentifier, String userId, String email,
@@ -107,7 +117,7 @@ public class DashboardQueries {
 
         return rowUpdatedCount > 0;
 
-    };
+    }
 
     public static DashboardUser[] getAllDashBoardUsers(Start start, AppIdentifier appIdentifier) throws SQLException, StorageQueryException {
         String QUERY = "SELECT * FROM "

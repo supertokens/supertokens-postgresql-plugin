@@ -37,6 +37,11 @@ public class TOTPQueries {
         // @formatter:on
     }
 
+    public static String getQueryToCreateAppIdIndexForUsersTable(Start start) {
+        return "CREATE INDEX totp_users_app_id_index ON "
+                + Config.getConfig(start).getTotpUsersTable() + "(app_id);";
+    }
+
     public static String getQueryToCreateUserDevicesTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String tableName = Config.getConfig(start).getTotpUserDevicesTable();
@@ -56,6 +61,11 @@ public class TOTPQueries {
                 + " REFERENCES " + Config.getConfig(start).getTotpUsersTable() + "(app_id, user_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
+    }
+
+    public static String getQueryToCreateUserIdIndexForUserDevicesTable(Start start) {
+        return "CREATE INDEX totp_user_devices_user_id_index ON "
+                + Config.getConfig(start).getTotpUserDevicesTable() + "(app_id, user_id);";
     }
 
     public static String getQueryToCreateUsedCodesTable(Start start) {
@@ -79,6 +89,16 @@ public class TOTPQueries {
                 + " REFERENCES " + Config.getConfig(start).getTenantsTable() + " (app_id, tenant_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
+    }
+
+    public static String getQueryToCreateUserIdIndexForUsedCodesTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS totp_used_codes_user_id_index ON "
+                + Config.getConfig(start).getTotpUsedCodesTable() + " (app_id, user_id)";
+    }
+
+    public static String getQueryToCreateTenantIdIndexForUsedCodesTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS totp_used_codes_tenant_id_index ON "
+                + Config.getConfig(start).getTotpUsedCodesTable() + " (app_id, tenant_id)";
     }
 
     public static String getQueryToCreateUsedCodesExpiryTimeIndex(Start start) {

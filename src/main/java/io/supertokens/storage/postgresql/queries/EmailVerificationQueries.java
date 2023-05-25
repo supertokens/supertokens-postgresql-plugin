@@ -57,6 +57,11 @@ public class EmailVerificationQueries {
         // @formatter:on
     }
 
+    public static String getQueryToCreateAppIdIndexForEmailVerificationTable(Start start) {
+        return "CREATE INDEX emailverification_verified_emails_app_id_index ON "
+                + Config.getConfig(start).getEmailVerificationTable() + "(app_id);";
+    }
+
     static String getQueryToCreateEmailVerificationTokensTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String emailVerificationTokensTable = Config.getConfig(start).getEmailVerificationTokensTable();
@@ -75,6 +80,11 @@ public class EmailVerificationQueries {
                 + " REFERENCES " + Config.getConfig(start).getTenantsTable() +  " (app_id, tenant_id) ON DELETE CASCADE"
                 + ")";
         // @formatter:on
+    }
+
+    public static String getQueryToCreateTenantIdIndexForEmailVerificationTokensTable(Start start) {
+        return "CREATE INDEX emailverification_tokens_tenant_id_index ON "
+                + Config.getConfig(start).getEmailVerificationTokensTable() + "(app_id, tenant_id);";
     }
 
     static String getQueryToCreateEmailVerificationTokenExpiryIndex(Start start) {
