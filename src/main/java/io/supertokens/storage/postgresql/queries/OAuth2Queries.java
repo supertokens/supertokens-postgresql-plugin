@@ -61,7 +61,7 @@ public class OAuth2Queries {
         String oAuth2ClientAllowedScopesTable = Config.getConfig(start).getOAuth2ClientAllowedScopesTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + oAuth2ClientAllowedScopesTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'pubic',"
+                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "client_id VARCHAR(128) NOT NULL,"
                 + "scope TEXT NOT NULL,"
                 + "requires_consent BOOLEAN NOT NULL,"
@@ -80,8 +80,11 @@ public class OAuth2Queries {
 
     static String getQueryToCreateOAuth2ClientAllowedScopesTableIndex(Start start) {
         String oAuth2ClientAllowedScopesTable = Config.getConfig(start).getOAuth2ClientAllowedScopesTable();
-        return "CREATE INDEX oauth2_client_allowed_scopes_client_id_index ON "
-                + oAuth2ClientAllowedScopesTable + "(app_id, client_id);";
+        // psql does not automatically add index on foreign keys
+        // hence adding index on foreign keys to support faster JOINS and DELETE ON CASCADE queries
+        return "CREATE INDEX oauth2_client_allowed_scopes_client_id_index ON " + oAuth2ClientAllowedScopesTable + "(app_id, client_id);"
+                + "CREATE INDEX oauth2_client_allowed_scopes_scope_index ON " + oAuth2ClientAllowedScopesTable + "(app_id, scope);"
+                + "CREATE INDEX oauth2_client_allowed_scopes_app_id_index ON " + oAuth2ClientAllowedScopesTable + "(app_id);";
     }
 
 
@@ -101,9 +104,12 @@ public class OAuth2Queries {
                 + "created_at_ms BIGINT NOT NULL,"
                 + "expires_at_ms BIGINT NOT NULL,"
                 + "scopes TEXT NOT NULL,"
-                // scopes are not referred to oauth2_scope table -> scope field as deleting or modifying scope in the
-                // original oauth2_scopes table should not affect the existing OAuth2 codes
-                // and users continue their session without being abruptly logged out due to scope changes
+                // In an ideal scenario, the 'scopes' field should be a foreign key referencing the 'scope' field in
+                // the 'oauth2_scope' table,
+                // containing an array of scopes. However, in this case, the scopes are not directly linked
+                // to the 'oauth2_scope' table's 'scope' field.
+                // This deliberate design choice ensures that any changes or deletions made to scopes in the 'oauth2_scope' table
+                // do not affect existing OAuth2 codes or cause unexpected disruptions in users' sessions.
                 + "redirect_uri TEXT NOT NULL,"
                 + "access_type VARCHAR(10) NOT NULL,"
                 + "code_challenge VARCHAR(128),"
@@ -124,7 +130,10 @@ public class OAuth2Queries {
 
     static String getQueryToCreateOAuth2AuthcodeTableIndex(Start start) {
         String oAuth2AuthcodeTable = Config.getConfig(start).getOAuth2AuthcodeTable();
-        return "CREATE INDEX oauth2_authcode_expires_at_ms_index ON " + oAuth2AuthcodeTable + "(expires_at_ms);";
+        return "CREATE INDEX oauth2_authcode_client_id_index ON " + oAuth2AuthcodeTable + "(app_id, client_id);"
+                + "CREATE INDEX oauth2_authcode_session_handle_index ON " + oAuth2AuthcodeTable + "(app_id, tenant_id, session_handle);"
+                + "CREATE INDEX oauth2_authcode_tenant_id_index ON " + oAuth2AuthcodeTable + "(app_id, tenant_id);"
+                + "CREATE INDEX oauth2_authcode_expires_at_ms_index ON " + oAuth2AuthcodeTable + "(expires_at_ms);";
     }
 
     static String getQueryToCreateOAuth2TokenTable(Start start) {
@@ -132,7 +141,7 @@ public class OAuth2Queries {
         String oAuth2TokenTable = Config.getConfig(start).getOAuth2TokenTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + oAuth2TokenTable + " ("
-                + "id VARCHAR(36) NOT NULL,"
+                + "id CHAR(36) NOT NULL,"
                 + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "tenant_id VARCHAR(64) DEFAULT 'public',"
                 + "client_id VARCHAR(128) NOT NULL,"
@@ -149,7 +158,7 @@ public class OAuth2Queries {
                 + "access_token_expires_at_ms BIGINT NOT NULL,"
                 + "refresh_token_expires_at_ms BIGINT,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2TokenTable, null, "pkey")
-                + " PRIMARY KEY (id),"
+                + " PRIMARY KEY (app_id, tenant_id, id),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2TokenTable, "client_id", "fkey")
                 + " FOREIGN KEY(app_id, client_id) REFERENCES " + Config.getConfig(start).getOAuth2ClientTable()
                 + "(app_id, client_id) ON DELETE CASCADE,"
@@ -159,12 +168,16 @@ public class OAuth2Queries {
                 + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2TokenTable, "tenant_id", "fkey")
                 + " FOREIGN KEY(app_id, tenant_id) REFERENCES " + Config.getConfig(start).getTenantsTable()
                 + "(app_id, tenant_id) ON DELETE CASCADE);";
+
         // @formatter:on
     }
 
     static String getQueryToCreateOAuth2TokenTableIndex(Start start) {
         String oAuth2TokenTable = Config.getConfig(start).getOAuth2TokenTable();
-        return "CREATE INDEX oauth2_token_access_token_expires_at_ms_index ON " + oAuth2TokenTable + "(access_token_expires_at_ms);"
+        return "CREATE INDEX oauth2_access_token_client_id_index ON " + oAuth2TokenTable + "(app_id, client_id);"
+                + "CREATE INDEX oauth2_access_token_session_handle_index ON " + oAuth2TokenTable + "(app_id,tenant_id,session_handle);"
+                + "CREATE INDEX oauth2_access_token_tenant_id_index ON " + oAuth2TokenTable + "(app_id, tenant_id);"
+                + "CREATE INDEX oauth2_token_access_token_expires_at_ms_index ON " + oAuth2TokenTable + "(access_token_expires_at_ms);"
                 + "CREATE INDEX oauth2_token_refresh_token_expires_at_ms_index ON " + oAuth2TokenTable + "(refresh_token_expires_at_ms);";
     }
 }
