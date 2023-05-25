@@ -107,7 +107,7 @@ public class UserRolesQueries {
     }
 
     public static String getQueryToCreateRoleIndexForUserRolesTable(Start start) {
-        return "CREATE INDEX IF NOT EXISTS user_roles_role_index ON " + getConfig(start).getUserRolesTable() + "(app_id, role);";
+        return "CREATE INDEX IF NOT EXISTS user_roles_app_id_role_index ON " + getConfig(start).getUserRolesTable() + "(app_id, role);";
     }
 
     public static String getQueryToCreateUserRolesRoleIndex(Start start) {
