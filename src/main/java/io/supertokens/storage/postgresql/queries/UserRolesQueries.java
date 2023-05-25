@@ -103,15 +103,15 @@ public class UserRolesQueries {
     }
 
     public static String getQueryToCreateTenantIdIndexForUserRolesTable(Start start) {
-        return "CREATE INDEX user_roles_tenant_id_index ON " + getConfig(start).getUserRolesTable() + "(app_id, tenant_id);";
+        return "CREATE INDEX IF NOT EXISTS user_roles_tenant_id_index ON " + getConfig(start).getUserRolesTable() + "(app_id, tenant_id);";
     }
 
     public static String getQueryToCreateRoleIndexForUserRolesTable(Start start) {
-        return "CREATE INDEX user_roles_role_index ON " + getConfig(start).getUserRolesTable() + "(app_id, role);";
+        return "CREATE INDEX IF NOT EXISTS user_roles_role_index ON " + getConfig(start).getUserRolesTable() + "(app_id, role);";
     }
 
     public static String getQueryToCreateUserRolesRoleIndex(Start start) {
-        return "CREATE INDEX user_roles_role_index ON " + getConfig(start).getUserRolesTable()
+        return "CREATE INDEX IF NOT EXISTS user_roles_role_index ON " + getConfig(start).getUserRolesTable()
                 + "(app_id, tenant_id, role);";
     }
 

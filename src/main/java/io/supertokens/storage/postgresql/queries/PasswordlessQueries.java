@@ -106,7 +106,7 @@ public class PasswordlessQueries {
 
     public static String getQueryToCreateTenantIdIndexForDevicesTable(Start start) {
         return "CREATE INDEX passwordless_devices_tenant_id_index ON "
-                + Config.getConfig(start).getAccessTokenSigningKeysTable() + "(app_id, tenant_id);";
+                + Config.getConfig(start).getPasswordlessDevicesTable() + "(app_id, tenant_id);";
     }
 
     public static String getQueryToCreateCodesTable(Start start) {
