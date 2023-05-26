@@ -236,7 +236,8 @@ public class OAuth2Queries {
                                                      String codeChallenge, String codeChallengeMethod)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getOAuth2AuthcodeTable()
-                + "(app_id, tenant_id, authorization_code_hash, session_handle, client_id, created_at_ms, expires_at_ms, " + "scopes,access_type, code_challenge, code_challenge_method)" +
+                + "(app_id, tenant_id, authorization_code_hash, session_handle, client_id, created_at_ms, expires_at_ms, "
+                + "scopes,access_type, code_challenge, code_challenge_method)" +
                 " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         update(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
