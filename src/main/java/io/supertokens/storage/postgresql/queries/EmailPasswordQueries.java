@@ -48,8 +48,9 @@ public class EmailPasswordQueries {
                 + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "user_id CHAR(36) NOT NULL,"
                 + "email VARCHAR(256) NOT NULL,"
-                + "password_hash VARCHAR(256) NOT NULL," + "time_joined BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUsersTable, "app_id", "fkey")
+                + "password_hash VARCHAR(256) NOT NULL,"
+                + "time_joined BIGINT NOT NULL,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUsersTable, "user_id", "fkey")
                 + " FOREIGN KEY(app_id, user_id)"
                 + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +  " (app_id, user_id) ON DELETE CASCADE,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUsersTable, null, "pkey")
@@ -96,6 +97,11 @@ public class EmailPasswordQueries {
                 + " ON DELETE CASCADE ON UPDATE CASCADE"
                 + ");";
         // @formatter:on
+    }
+
+    public static String getQueryToCreateUserIdIndexForPasswordResetTokensTable(Start start) {
+        return "CREATE INDEX emailpassword_pswd_reset_tokens_user_id_index ON "
+                + Config.getConfig(start).getPasswordResetTokensTable() + "(app_id, user_id);";
     }
 
     static String getQueryToCreatePasswordResetTokenExpiryIndex(Start start) {

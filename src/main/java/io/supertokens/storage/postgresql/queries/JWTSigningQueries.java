@@ -64,6 +64,11 @@ public class JWTSigningQueries {
         // @formatter:on
     }
 
+    public static String getQueryToCreateAppIdIndexForJWTSigningTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS jwt_signing_keys_app_id_index ON "
+                + getConfig(start).getJWTSigningKeysTable() + " (app_id);";
+    }
+
     public static List<JWTSigningKeyInfo> getJWTSigningKeys_Transaction(Start start, Connection con,
                                                                         AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {

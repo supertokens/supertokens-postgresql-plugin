@@ -43,12 +43,13 @@ import static io.supertokens.storage.postgresql.ProcessState.getInstance;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
-import static io.supertokens.storage.postgresql.queries.EmailPasswordQueries.getQueryToCreatePasswordResetTokenExpiryIndex;
-import static io.supertokens.storage.postgresql.queries.EmailPasswordQueries.getQueryToCreatePasswordResetTokensTable;
+import static io.supertokens.storage.postgresql.queries.EmailPasswordQueries.*;
 import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.*;
+import static io.supertokens.storage.postgresql.queries.JWTSigningQueries.getQueryToCreateAppIdIndexForJWTSigningTable;
 import static io.supertokens.storage.postgresql.queries.JWTSigningQueries.getQueryToCreateJWTSigningTable;
 import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.*;
 import static io.supertokens.storage.postgresql.queries.SessionQueries.*;
+import static io.supertokens.storage.postgresql.queries.UserMetadataQueries.getQueryToCreateAppIdIndexForUserMetadataTable;
 import static io.supertokens.storage.postgresql.queries.UserMetadataQueries.getQueryToCreateUserMetadataTable;
 
 public class GeneralQueries {
@@ -86,6 +87,16 @@ public class GeneralQueries {
         // @formatter:on
     }
 
+    public static String getQueryToCreateUserIdIndexForUsersTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS all_auth_recipe_user_id_index ON "
+                + Config.getConfig(start).getUsersTable() + "(app_id, user_id);";
+    }
+
+    public static String getQueryToCreateTenantIdIndexForUsersTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS all_auth_recipe_tenant_id_index ON "
+                + Config.getConfig(start).getUsersTable() + "(app_id, tenant_id);";
+    }
+
     static String getQueryToCreateUserPaginationIndex(Start start) {
         return "CREATE INDEX all_auth_recipe_users_pagination_index ON " + Config.getConfig(start).getUsersTable()
                 + "(time_joined DESC, user_id DESC, tenant_id DESC, app_id DESC);";
@@ -98,7 +109,8 @@ public class GeneralQueries {
         return "CREATE TABLE IF NOT EXISTS " + appsTable + " ("
                 + "app_id VARCHAR(64) NOT NULL DEFAULT 'public',"
                 + "created_at_time BIGINT ,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, appsTable, null, "pkey") + " PRIMARY KEY(app_id)" +
+                + "CONSTRAINT " + Utils.getConstraintName(schema, appsTable, null, "pkey") 
+				+ " PRIMARY KEY(app_id)" +
                 " );";
         // @formatter:on
     }
@@ -120,6 +132,11 @@ public class GeneralQueries {
         // @formatter:on
     }
 
+    static String getQueryToCreateAppIdIndexForTenantsTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS tenants_app_id_index ON "
+                + Config.getConfig(start).getTenantsTable() + "(app_id);";
+    }
+
     private static String getQueryToCreateKeyValueTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String keyValueTable = Config.getConfig(start).getKeyValueTable();
@@ -139,6 +156,11 @@ public class GeneralQueries {
         // @formatter:on
     }
 
+    static String getQueryToCreateTenantIdIndexForKeyValueTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS key_value_tenant_id_index ON "
+                + Config.getConfig(start).getKeyValueTable() + "(app_id, tenant_id);";
+    }
+
     private static String getQueryToCreateAppIdToUserIdTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String appToUserTable = Config.getConfig(start).getAppIdToUserIdTable();
@@ -156,6 +178,11 @@ public class GeneralQueries {
         // @formatter:on
     }
 
+    static String getQueryToCreateAppIdIndexForAppIdToUserIdTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS app_id_to_user_id_app_id_index ON "
+                + Config.getConfig(start).getAppIdToUserIdTable() + "(app_id);";
+    }
+
     public static void createTablesIfNotExists(Start start) throws SQLException, StorageQueryException {
         int numberOfRetries = 0;
         boolean retry = true;
@@ -170,16 +197,25 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getTenantsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateTenantsTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, getQueryToCreateAppIdIndexForTenantsTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getKeyValueTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateKeyValueTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, getQueryToCreateTenantIdIndexForKeyValueTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getAppIdToUserIdTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateAppIdToUserIdTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, getQueryToCreateAppIdIndexForAppIdToUserIdTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getUsersTable())) {
@@ -193,11 +229,17 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getUserLastActiveTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, ActiveUsersQueries.getQueryToCreateUserLastActiveTable(start), NO_OP_SETTER);
+
+                    // Index
+                    update(start, ActiveUsersQueries.getQueryToCreateAppIdIndexForUserLastActiveTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateAccessTokenSigningKeysTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, getQueryToCreateAppIdIndexForAccessTokenSigningKeysTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getSessionInfoTable())) {
@@ -206,6 +248,7 @@ public class GeneralQueries {
 
                     // index
                     update(start, getQueryToCreateSessionExpiryIndex(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateTenantIdIndexForSessionInfoTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getTenantConfigsTable())) {
@@ -217,11 +260,19 @@ public class GeneralQueries {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, MultitenancyQueries.getQueryToCreateTenantThirdPartyProvidersTable(start),
                             NO_OP_SETTER);
+
+                    // index
+                    update(start, MultitenancyQueries.getQueryToCreateTenantIdIndexForTenantThirdPartyProvidersTable(start),
+                            NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getTenantThirdPartyProviderClientsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, MultitenancyQueries.getQueryToCreateTenantThirdPartyProviderClientsTable(start),
+                            NO_OP_SETTER);
+
+                    // index
+                    update(start, MultitenancyQueries.getQueryToCreateThirdPartyIdIndexForTenantThirdPartyProviderClientsTable(start),
                             NO_OP_SETTER);
                 }
 
@@ -241,11 +292,15 @@ public class GeneralQueries {
                     update(start, getQueryToCreatePasswordResetTokensTable(start), NO_OP_SETTER);
                     // index
                     update(start, getQueryToCreatePasswordResetTokenExpiryIndex(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateUserIdIndexForPasswordResetTokensTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getEmailVerificationTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateEmailVerificationTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, getQueryToCreateAppIdIndexForEmailVerificationTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getEmailVerificationTokensTable())) {
@@ -253,6 +308,7 @@ public class GeneralQueries {
                     update(start, getQueryToCreateEmailVerificationTokensTable(start), NO_OP_SETTER);
                     // index
                     update(start, getQueryToCreateEmailVerificationTokenExpiryIndex(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateTenantIdIndexForEmailVerificationTokensTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getThirdPartyUsersTable())) {
@@ -271,11 +327,18 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getJWTSigningKeysTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateJWTSigningTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, getQueryToCreateAppIdIndexForJWTSigningTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, PasswordlessQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, getQueryToCreateUserIdIndexForUsersTable(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateTenantIdIndexForUsersTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessUserToTenantTable())) {
@@ -290,6 +353,7 @@ public class GeneralQueries {
                     // index
                     update(start, getQueryToCreateDeviceEmailIndex(start), NO_OP_SETTER);
                     update(start, getQueryToCreateDevicePhoneNumberIndex(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateTenantIdIndexForDevicesTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessCodesTable())) {
@@ -297,8 +361,8 @@ public class GeneralQueries {
                     update(start, getQueryToCreateCodesTable(start), NO_OP_SETTER);
                     // index
                     update(start, getQueryToCreateCodeCreatedAtIndex(start), NO_OP_SETTER);
-                }
 
+                }
                 // This PostgreSQL specific, because it's created automatically in MySQL and it
                 // doesn't support "create
                 // index if not exists"
@@ -309,11 +373,17 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getUserMetadataTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateUserMetadataTable(start), NO_OP_SETTER);
+
+                    // Index
+                    update(start, getQueryToCreateAppIdIndexForUserMetadataTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getRolesTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, UserRolesQueries.getQueryToCreateRolesTable(start), NO_OP_SETTER);
+
+                    // Index
+                    update(start, UserRolesQueries.getQueryToCreateAppIdIndexForRolesTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getUserRolesPermissionsTable())) {
@@ -321,23 +391,33 @@ public class GeneralQueries {
                     update(start, UserRolesQueries.getQueryToCreateRolePermissionsTable(start), NO_OP_SETTER);
                     // index
                     update(start, UserRolesQueries.getQueryToCreateRolePermissionsPermissionIndex(start), NO_OP_SETTER);
+                    update(start, UserRolesQueries.getQueryToCreateRoleIndexForRolePermissionsTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getUserRolesTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, UserRolesQueries.getQueryToCreateUserRolesTable(start), NO_OP_SETTER);
+
                     // index
                     update(start, UserRolesQueries.getQueryToCreateUserRolesRoleIndex(start), NO_OP_SETTER);
+                    update(start, UserRolesQueries.getQueryToCreateTenantIdIndexForUserRolesTable(start), NO_OP_SETTER);
+                    update(start, UserRolesQueries.getQueryToCreateRoleIndexForUserRolesTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getUserIdMappingTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, UserIdMappingQueries.getQueryToCreateUserIdMappingTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, UserIdMappingQueries.getQueryToCreateSupertokensUserIdIndexForUserIdMappingTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getDashboardUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, DashboardQueries.getQueryToCreateDashboardUsersTable(start), NO_OP_SETTER);
+
+                    // Index
+                    update(start, DashboardQueries.getQueryToCreateAppIdIndexForDashboardUsersTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getDashboardSessionsTable())) {
@@ -346,16 +426,24 @@ public class GeneralQueries {
                     // index
                     update(start, DashboardQueries.getQueryToCreateDashboardUserSessionsExpiryIndex(start),
                             NO_OP_SETTER);
+                    update(start, DashboardQueries.getQueryToCreateUserIdIndexForDashboardUserSessionsTable(start),
+                            NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getTotpUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, TOTPQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, TOTPQueries.getQueryToCreateAppIdIndexForUsersTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getTotpUserDevicesTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, TOTPQueries.getQueryToCreateUserDevicesTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, TOTPQueries.getQueryToCreateUserIdIndexForUserDevicesTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getTotpUsedCodesTable())) {
@@ -363,6 +451,8 @@ public class GeneralQueries {
                     update(start, TOTPQueries.getQueryToCreateUsedCodesTable(start), NO_OP_SETTER);
                     // index:
                     update(start, TOTPQueries.getQueryToCreateUsedCodesExpiryTimeIndex(start), NO_OP_SETTER);
+                    update(start, TOTPQueries.getQueryToCreateUserIdIndexForUsedCodesTable(start), NO_OP_SETTER);
+                    update(start, TOTPQueries.getQueryToCreateTenantIdIndexForUsedCodesTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getMfaUserFactorsTable())) {
