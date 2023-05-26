@@ -16,17 +16,23 @@
 
 package io.supertokens.storage.postgresql.queries;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.reflect.TypeToken;
+import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
-import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
-import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.oauth2.OAuth2Client;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.utils.Utils;
 
+import java.lang.reflect.Type;
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
@@ -40,9 +46,12 @@ public class OAuth2Queries {
                 + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "client_id VARCHAR(128) NOT NULL,"
                 + "name TEXT NOT NULL,"
-                + "client_secret_hash  VARCHAR(128) NOT NULL,"
-                + "redirect_uris  TEXT NOT NULL,"
-                + "created_at_ms  BIGINT NOT NULL,"
+                + "client_secret_hash VARCHAR(128) NOT NULL "
+                + "CONSTRAINT "
+                + Utils.getConstraintName(schema, oAuth2ClientTable, "client_secret_hash", "key")
+                + " UNIQUE,"
+                + "redirect_uris TEXT NOT NULL,"
+                + "created_at_ms BIGINT NOT NULL,"
                 + "updated_at_ms BIGINT NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientTable, null, "pkey")
                 + " PRIMARY KEY (app_id, client_id),"
@@ -193,64 +202,62 @@ public class OAuth2Queries {
                 + "CREATE INDEX oauth2_token_refresh_token_expires_at_ms_index ON " + oAuth2TokenTable + "(refresh_token_expires_at_ms);";
     }
 
-    public static void insertOAuth2Client_Transaction(Start start, Connection con,
-                                                      AppIdentifier appIdentifier, String client_id,
-                                                      String name, String clientSecretHash, List<String> redirectUris,
-                                                      long createdAt)
-            throws StorageQueryException, StorageTransactionLogicException
-    {
+    public static void createOAuth2Client_Transaction(Start start, Connection con,
+                                                      AppIdentifier appIdentifier, OAuth2Client oAuth2Client) throws StorageQueryException, SQLException{
+        JsonArray jsonArray = new Gson().toJsonTree(oAuth2Client.redirectUris).getAsJsonArray();
 
-        try {
-                String QUERY = "INSERT INTO " + getConfig(start).getOAuth2ClientTable()
-                        + "(app_id , client_id, name, client_secret_hash, redirect_uris, created_at, updated_at)" +
-                        " VALUES(?, ?, ?, ?, ?, ?, ?)";
-                update(con, QUERY, pst -> {
-                    pst.setString(1, appIdentifier.getAppId());
-                    pst.setString(2, client_id);
-                    pst.setString(3, name);
-                    pst.setString(4, clientSecretHash);
-                    pst.setString(5, String.join(",", redirectUris));
-                    pst.setLong(6, createdAt);
-                    pst.setLong(7, createdAt);
-                });
+        String QUERY = "INSERT INTO " + getConfig(start).getOAuth2ClientTable()
+                + "(app_id , client_id, name, client_secret_hash, redirect_uris, created_at_ms, updated_at_ms)" +
+                " VALUES(?, ?, ?, ?, ?, ?, ?)";
 
-            } catch (SQLException throwables) {
-                throw new StorageTransactionLogicException(throwables);
-            }
-    }
-
-    public static void insertOAuth2Scope( Start start, AppIdentifier appIdentifier, String scope)
-            throws SQLException, StorageQueryException {
-        String QUERY = "INSERT INTO " + getConfig(start).getOAuth2ScopesTable()
-                + "(app_id, scope)" + " VALUES(?, ?)";
-
-        update(start, QUERY, pst -> {
+        update(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2,scope);
+            pst.setString(2, oAuth2Client.clientId);
+            pst.setString(3, oAuth2Client.name);
+            pst.setString(4, oAuth2Client.clientSecretHash);
+            pst.setString(5, jsonArray.toString());
+            pst.setLong(6, oAuth2Client.createdAtMs);
+            pst.setLong(7, oAuth2Client.updatedAtMs);
         });
     }
 
-    public static void createOAuth2AuthorizationCode(Start start, TenantIdentifier tenantIdentifier, String codeHash, String sessionHandle, String clientId, long createdAtMs,
-                                                     long expiresAtMs, List<String> scope, String redirectUri, String accessType,
-                                                     String codeChallenge, String codeChallengeMethod)
-            throws SQLException, StorageQueryException {
-        String QUERY = "INSERT INTO " + getConfig(start).getOAuth2AuthcodeTable()
-                + "(app_id, tenant_id, authorization_code_hash, session_handle, client_id, created_at_ms, expires_at_ms, "
-                + "scopes,access_type, code_challenge, code_challenge_method)" +
-                " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        update(start, QUERY, pst -> {
-            pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, tenantIdentifier.getTenantId());
-            pst.setString(3, codeHash);
-            pst.setString(4, sessionHandle);
-            pst.setString(5, clientId);
-            pst.setLong(6, createdAtMs);
-            pst.setLong(7, expiresAtMs);
-            pst.setString(8, String.join(",", scope));
-            pst.setString(9, accessType);
-            pst.setString(10,codeChallenge );
-            pst.setString(10,codeChallengeMethod );
+    public static OAuth2Client getOAuth2ClientById(Start start, AppIdentifier appIdentifier, String clientId) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT * from " + getConfig(start).getOAuth2ClientTable()
+                + " WHERE app_id = ? AND client_id = ?";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, clientId);
+        }, result -> {
+            if (result.next()) {
+                return OAuth2Queries.OAuth2ClientRowMapper.getInstance().mapOrThrow(result);
+            }
+            return null;
         });
+    }
 
+    private static class OAuth2ClientRowMapper implements RowMapper<OAuth2Client, ResultSet> {
+        private static final OAuth2Queries.OAuth2ClientRowMapper INSTANCE = new OAuth2Queries.OAuth2ClientRowMapper();
+
+        private OAuth2ClientRowMapper() {
+        }
+
+        private static  OAuth2Queries.OAuth2ClientRowMapper getInstance() {
+            return INSTANCE;
+        }
+
+        @Override
+        public OAuth2Client map(ResultSet result) throws Exception {
+
+            // TODO: Make this conversion part of utility code
+            // Define the type of the target list
+            Type listType = new TypeToken<List<String>>() {}.getType();
+
+            // Convert JSON array to a List of Strings using Gson
+            List<String> redirectUris = new Gson().fromJson(result.getString("redirect_uris"), listType);
+
+            return new OAuth2Client(result.getString("client_id"), result.getString("name"),
+                    result.getString("client_secret_hash"),redirectUris,
+                    result.getLong("created_at_ms"), result.getLong("updated_at_ms"));
+        }
     }
 }

@@ -55,6 +55,12 @@ import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateClientTyp
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateTenantException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateThirdPartyIdException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
+import io.supertokens.pluginInterface.oauth2.OAuth2AuthorizationCode;
+import io.supertokens.pluginInterface.oauth2.OAuth2Client;
+import io.supertokens.pluginInterface.oauth2.OAuth2ClientScope;
+import io.supertokens.pluginInterface.oauth2.OAuth2TokenInfo;
+import io.supertokens.pluginInterface.oauth2.exception.*;
+import io.supertokens.pluginInterface.oauth2.sqlStorage.OAuth2SQLStorage;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.exception.*;
@@ -103,7 +109,7 @@ import java.util.*;
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
-        MultitenancyStorage, DashboardSQLStorage, TOTPSQLStorage, ActiveUsersStorage {
+        MultitenancyStorage, DashboardSQLStorage, TOTPSQLStorage, ActiveUsersStorage, OAuth2SQLStorage {
 
     // these configs are protected from being modified / viewed by the dev using the SuperTokens
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
@@ -2756,5 +2762,201 @@ public class Start
     @Override
     public void setLogLevels(Set<LOG_LEVEL> logLevels) {
         Config.setLogLevels(this, logLevels);
+    }
+
+    @Override
+    public OAuth2Client getOAuth2ClientById(AppIdentifier appIdentifier, String clientId)
+            throws StorageQueryException, UnknownOAuth2ClientIdException {
+        try {
+            OAuth2Client oAuth2Client = OAuth2Queries.getOAuth2ClientById(this, appIdentifier, clientId);
+
+            if ( oAuth2Client == null){
+                throw new UnknownOAuth2ClientIdException();
+            }
+            return oAuth2Client;
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void removeOAuth2Client(AppIdentifier appIdentifier, String clientId)
+            throws StorageQueryException, UnknownOAuth2ClientIdException {
+        //TODO:
+    }
+
+    @Override
+    public List<OAuth2ClientScope> getOAuth2ClientScopes(AppIdentifier appIdentifier, String clientId)
+            throws StorageQueryException, UnknownOAuth2ClientIdException, UnknownOAuth2ScopeException {
+        //TODO:
+        return null;
+    }
+
+    @Override
+    public void removeOAuth2ClientScope(AppIdentifier appIdentifier, String clientId, String scope)
+            throws StorageQueryException, UnknownOAuth2ClientIdException, UnknownOAuth2ScopeException {
+        //TODO:
+    }
+
+    @Override
+    public void createOAuth2Scope(AppIdentifier appIdentifier, String scope)
+            throws StorageQueryException, DuplicateOAuth2ScopeException {
+       //TODO:
+    }
+
+    @Override
+    public void updateOAuth2Scope(AppIdentifier appIdentifier, String scope, String newName)
+            throws StorageQueryException, DuplicateOAuth2ScopeException {
+        //TODO:
+    }
+
+    @Override
+    public void removeOAuth2Scope(AppIdentifier appIdentifier, String scope)
+            throws StorageQueryException, DuplicateOAuth2ScopeException {
+        //TODO:
+    }
+
+    @Override
+    public List<String> getOAuth2Scopes(AppIdentifier appIdentifier) throws StorageQueryException {
+        return null;
+        //TODO:
+    }
+
+    @Override
+    public void createOAuth2AuthorizationCode(TenantIdentifier tenantIdentifier, String codeHash, String sessionHandle,
+                                              String clientId, long createdAtMs, long expiresAtMs, List<String> scope,
+                                              String redirectUri, String accessType, String codeChallenge,
+                                              String codeChallengeMethod)
+            throws StorageQueryException, DuplicateOAuth2AuthorizationCodeHash {
+        //TODO:
+    }
+
+    @Override
+    public OAuth2TokenInfo getOAuth2TokenInfoByAccessTokenHash(TenantIdentifier tenantIdentifier,
+                                                               String accessTokenHash)
+            throws StorageQueryException, UnknownOAuth2AccessTokenHashHashException {
+        //TODO:
+        return null;
+    }
+
+    @Override
+    public void updateOAuth2TokenInfoByRefreshTokenHash(TenantIdentifier tenantIdentifier, String refreshTokenHash,
+                                                        String newAccessTokenHash, String newRefreshTokenHash,
+                                                        long accessTokenExpiresAtMs, Long refreshTokenHashExpiresAtMs,
+                                                        long updatedAtMs)
+            throws StorageQueryException, UnknownOAuth2RefreshTokenHashHashException, DuplicateOAuth2RefreshTokenHash,
+            DuplicateOAuth2AccessTokenHash {
+        //TODO:
+    }
+
+    @Override
+    public void removeOAuth2TokensExpiredBefore(long now) throws StorageQueryException {
+        //TODO:
+    }
+
+    @Override
+    public void removeOAuth2TokensBySessionHandle(TenantIdentifier tenantIdentifier, String sessionHandle)
+            throws StorageQueryException {
+        //TODO:
+    }
+
+    @Override
+    public void removeOAuth2TokenByAccessTokenHash(TenantIdentifier tenantIdentifier, String accessTokenHash)
+            throws StorageQueryException {
+        //TODO:
+    }
+
+    @Override
+    public void removeOAuth2TokensByClientId(TenantIdentifier tenantIdentifier, String accessTokenHash)
+            throws StorageQueryException {
+        //TODO:
+    }
+
+    @Override
+    public void removeOAuth2AuthorizationCodesExpiredBefore(long now) throws StorageQueryException {
+        //TODO:
+    }
+
+    @Override
+    public void removeOAuth2AuthorizationCodesByClientId(long now) throws StorageQueryException {
+        //TODO:
+    }
+
+    @Override
+    public void removeOAuth2AuthorizationCodesBySessionHandle(long now) throws StorageQueryException {
+        //TODO:
+    }
+
+    @Override
+    public void createOAuth2Client_Transaction(AppIdentifier appIdentifier, TransactionConnection con, OAuth2Client oAuth2Client)
+            throws StorageQueryException, DuplicateOAuth2ClientSecretHash, DuplicateOAuth2ClientIdException, TenantOrAppNotFoundException {
+
+        Connection sqlCon = (Connection) con.getConnection();
+
+        try {
+            OAuth2Queries.createOAuth2Client_Transaction(this, sqlCon, appIdentifier,oAuth2Client);
+        } catch ( SQLException e) {
+            if (e instanceof PSQLException) {
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+                if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getOAuth2ScopesTable())) {
+                    throw new DuplicateOAuth2ClientIdException();
+                } else if(isUniqueConstraintError(serverMessage, Config.getConfig(this).getOAuth2ClientTable(), "client_secret_hash") ){
+                    throw new DuplicateOAuth2ClientSecretHash();
+                } else if(isForeignKeyConstraintError(serverMessage, Config.getConfig(this).getOAuth2ClientTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
+            }
+            throw new StorageQueryException(e);
+        }
+
+    }
+
+    @Override
+    public void updateOAuth2Client_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String clientId,
+                                               String name, String clientSecretHash, List<String> redirectUris,
+                                               long updatedAtMs)
+            throws StorageQueryException, UnknownOAuth2ClientIdException, DuplicateOAuth2ClientSecretHash {
+            //TODO:
+    }
+
+    @Override
+    public OAuth2Client getOAuth2ClientByIdAndClientSecretHash_Transaction(AppIdentifier appIdentifier,
+                                                                           TransactionConnection con, String clientId,
+                                                                           String clientSecretHash)
+            throws StorageQueryException, UnknownOAuth2ClientIdOrSecretException {
+        //TODO:
+        return null;
+    }
+
+    @Override
+    public void upsertOAuth2ClientScope_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                    String clientId, String scope, boolean requiresConsent)
+            throws StorageQueryException, UnknownOAuth2ClientIdException, UnknownOAuth2ScopeException {
+        //TODO:
+    }
+
+    @Override
+    public OAuth2AuthorizationCode getOAuth2AuthorizationCodeByCodeHash_Transaction(TenantIdentifier tenantIdentifier,
+                                                                                    TransactionConnection con,
+                                                                                    String codeHash)
+            throws StorageQueryException, UnknownOAuth2AuthorizationCodeHashException {
+        //TODO:
+        return null;
+    }
+
+    @Override
+    public void removeOAuth2AuthorizationCodeByCodeHash_Transaction(TenantIdentifier tenantIdentifier,
+                                                                    TransactionConnection con, String codeHash)
+            throws StorageQueryException, UnknownOAuth2AuthorizationCodeHashException {
+        //TODO:
+    }
+
+    @Override
+    public void createOAuth2Token_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
+                                              String clientId, String sessionHandle, List<String> scope,
+                                              String accessTokenHash, String refreshTokenHash, long createdAtMs,
+                                              long accessTokenExpiresAtMs, Long refreshTokenHashExpiresAtMs)
+            throws StorageQueryException, UnknownOAuth2ClientIdException {
+        //TODO:
     }
 }
