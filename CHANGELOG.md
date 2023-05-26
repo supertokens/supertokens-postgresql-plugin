@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS tenants (
 INSERT INTO tenants (app_id, tenant_id, created_at_time) 
   VALUES ('public', 'public', 0);
 
+CREATE INDEX tenants_app_id_index ON tenants (app_id);
+
 ------------------------------------------------------------
 
 ALTER TABLE key_value
@@ -65,6 +67,8 @@ ALTER TABLE key_value
     FOREIGN KEY (app_id, tenant_id)
     REFERENCES tenants (app_id, tenant_id) ON DELETE CASCADE;
 
+CREATE INDEX key_value_tenant_id_index ON key_value (app_id, tenant_id);
+
 ------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS app_id_to_user_id (
@@ -80,6 +84,8 @@ CREATE TABLE IF NOT EXISTS app_id_to_user_id (
 INSERT INTO app_id_to_user_id (user_id, recipe_id) 
   SELECT user_id, recipe_id
   FROM all_auth_recipe_users;
+
+CREATE INDEX app_id_to_user_id_app_id_index ON app_id_to_user_id (app_id);
 
 ------------------------------------------------------------
 
@@ -107,6 +113,10 @@ ALTER TABLE all_auth_recipe_users
 DROP INDEX all_auth_recipe_users_pagination_index;
 
 CREATE INDEX all_auth_recipe_users_pagination_index ON all_auth_recipe_users (time_joined DESC, user_id DESC, tenant_id DESC, app_id DESC);
+
+CREATE INDEX all_auth_recipe_user_id_index ON all_auth_recipe_users (app_id, user_id);
+
+CREATE INDEX all_auth_recipe_tenant_id_index ON all_auth_recipe_users (app_id, tenant_id);
 
 -- Multitenancy
 
@@ -153,6 +163,8 @@ CREATE TABLE IF NOT EXISTS tenant_thirdparty_providers (
     REFERENCES tenant_configs (connection_uri_domain, app_id, tenant_id) ON DELETE CASCADE
 );
 
+CREATE INDEX tenant_thirdparty_providers_tenant_id_index ON tenant_thirdparty_providers (connection_uri_domain, app_id, tenant_id);
+
 ------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS tenant_thirdparty_provider_clients (
@@ -172,6 +184,8 @@ CREATE TABLE IF NOT EXISTS tenant_thirdparty_provider_clients (
     FOREIGN KEY (connection_uri_domain, app_id, tenant_id, third_party_id)
     REFERENCES tenant_thirdparty_providers (connection_uri_domain, app_id, tenant_id, third_party_id) ON DELETE CASCADE
 );
+
+CREATE INDEX tenant_thirdparty_provider_clients_third_party_id_index ON tenant_thirdparty_provider_clients (connection_uri_domain, app_id, tenant_id, third_party_id);
 
 -- Session
 
@@ -193,6 +207,8 @@ ALTER TABLE session_info
 
 CREATE INDEX session_expiry_index ON session_info (expires_at);
 
+CREATE INDEX session_info_tenant_id_index ON session_info (app_id, tenant_id);
+
 ------------------------------------------------------------
 
 ALTER TABLE session_access_token_signing_keys
@@ -209,6 +225,8 @@ ALTER TABLE session_access_token_signing_keys
   ADD CONSTRAINT session_access_token_signing_keys_app_id_fkey 
     FOREIGN KEY (app_id)
     REFERENCES apps (app_id) ON DELETE CASCADE;
+
+CREATE INDEX access_token_signing_keys_app_id_index ON session_access_token_signing_keys (app_id);
 
 -- JWT
 
@@ -227,6 +245,8 @@ ALTER TABLE jwt_signing_keys
     FOREIGN KEY (app_id)
     REFERENCES apps (app_id) ON DELETE CASCADE;
 
+CREATE INDEX jwt_signing_keys_app_id_index ON jwt_signing_keys (app_id);
+
 -- EmailVerification
 
 ALTER TABLE emailverification_verified_emails
@@ -243,6 +263,8 @@ ALTER TABLE emailverification_verified_emails
   ADD CONSTRAINT emailverification_verified_emails_app_id_fkey 
     FOREIGN KEY (app_id)
     REFERENCES apps (app_id) ON DELETE CASCADE;
+
+CREATE INDEX emailverification_verified_emails_app_id_index ON emailverification_verified_emails (app_id);
 
 ------------------------------------------------------------
 
@@ -262,6 +284,7 @@ ALTER TABLE emailverification_tokens
     FOREIGN KEY (app_id, tenant_id)
     REFERENCES tenants (app_id, tenant_id) ON DELETE CASCADE;
 
+CREATE INDEX emailverification_tokens_tenant_id_index ON emailverification_tokens (app_id, tenant_id);
 
 -- EmailPassword
 
@@ -321,6 +344,8 @@ ALTER TABLE emailpassword_pswd_reset_tokens
   ADD CONSTRAINT emailpassword_pswd_reset_tokens_user_id_fkey 
     FOREIGN KEY (app_id, user_id)
     REFERENCES emailpassword_users (app_id, user_id) ON DELETE CASCADE;
+
+CREATE INDEX emailpassword_pswd_reset_tokens_user_id_index ON emailpassword_pswd_reset_tokens (app_id, user_id);
 
 -- Passwordless
 
@@ -392,6 +417,8 @@ CREATE INDEX passwordless_devices_email_index ON passwordless_devices (app_id, t
 DROP INDEX passwordless_devices_phone_number_index;
 
 CREATE INDEX passwordless_devices_phone_number_index ON passwordless_devices (app_id, tenant_id, phone_number);
+
+CREATE INDEX passwordless_devices_tenant_id_index ON passwordless_devices (app_id, tenant_id);
 
 ------------------------------------------------------------
 
@@ -510,6 +537,8 @@ ALTER TABLE userid_mapping
     FOREIGN KEY (app_id, supertokens_user_id)
     REFERENCES app_id_to_user_id (app_id, user_id) ON DELETE CASCADE;
 
+CREATE INDEX userid_mapping_supertokens_user_id_index ON userid_mapping (app_id, supertokens_user_id);
+
 -- UserRoles
 
 ALTER TABLE roles
@@ -526,6 +555,8 @@ ALTER TABLE roles
   ADD CONSTRAINT roles_app_id_fkey 
     FOREIGN KEY (app_id)
     REFERENCES apps (app_id) ON DELETE CASCADE;
+
+CREATE INDEX roles_app_id_index ON roles (app_id);
 
 ------------------------------------------------------------
 
@@ -550,6 +581,8 @@ ALTER TABLE role_permissions
 DROP INDEX role_permissions_permission_index;
 
 CREATE INDEX role_permissions_permission_index ON role_permissions (app_id, permission);
+
+CREATE INDEX role_permissions_role_index ON role_permissions (app_id, role);
 
 ------------------------------------------------------------
 
@@ -581,6 +614,10 @@ DROP INDEX user_roles_role_index;
 
 CREATE INDEX user_roles_role_index ON user_roles (app_id, tenant_id, role);
 
+CREATE INDEX user_roles_tenant_id_index ON user_roles (app_id, tenant_id);
+
+CREATE INDEX user_roles_app_id_role_index ON user_roles (app_id, role);
+
 -- UserMetadata
 
 ALTER TABLE user_metadata
@@ -597,6 +634,8 @@ ALTER TABLE user_metadata
   ADD CONSTRAINT user_metadata_app_id_fkey 
     FOREIGN KEY (app_id)
     REFERENCES apps (app_id) ON DELETE CASCADE;
+
+CREATE INDEX user_metadata_app_id_index ON user_metadata (app_id);
 
 -- Dashboard
 
@@ -622,6 +661,8 @@ ALTER TABLE dashboard_users
     FOREIGN KEY (app_id)
     REFERENCES apps (app_id) ON DELETE CASCADE;
 
+CREATE INDEX dashboard_users_app_id_index ON dashboard_users (app_id);
+
 ------------------------------------------------------------
 
 ALTER TABLE dashboard_user_sessions
@@ -642,6 +683,8 @@ ALTER TABLE dashboard_user_sessions
     FOREIGN KEY (app_id, user_id)
     REFERENCES dashboard_users (app_id, user_id) ON DELETE CASCADE;
 
+CREATE INDEX dashboard_user_sessions_user_id_index ON dashboard_user_sessions (app_id, user_id);
+
 -- TOTP
 
 ALTER TABLE totp_users
@@ -658,6 +701,8 @@ ALTER TABLE totp_users
   ADD CONSTRAINT totp_users_app_id_fkey 
     FOREIGN KEY (app_id)
     REFERENCES apps (app_id) ON DELETE CASCADE;
+
+CREATE INDEX totp_users_app_id_index ON totp_users (app_id);
 
 ------------------------------------------------------------
 
@@ -678,6 +723,8 @@ ALTER TABLE totp_user_devices
   ADD CONSTRAINT totp_user_devices_user_id_fkey 
     FOREIGN KEY (app_id, user_id)
     REFERENCES totp_users (app_id, user_id) ON DELETE CASCADE;
+
+CREATE INDEX totp_user_devices_user_id_index ON totp_user_devices (app_id, user_id);
 
 ------------------------------------------------------------
 
@@ -709,6 +756,10 @@ DROP INDEX totp_used_codes_expiry_time_ms_index;
 
 CREATE INDEX totp_used_codes_expiry_time_ms_index ON totp_used_codes (app_id, tenant_id, expiry_time_ms);
 
+CREATE INDEX totp_used_codes_user_id_index ON totp_used_codes (app_id, user_id);
+
+CREATE INDEX totp_used_codes_tenant_id_index ON totp_used_codes (app_id, tenant_id);
+
 -- ActiveUsers
 
 ALTER TABLE user_last_active
@@ -720,6 +771,13 @@ ALTER TABLE user_last_active
 ALTER TABLE user_last_active
   ADD CONSTRAINT user_last_active_pkey 
     PRIMARY KEY (app_id, user_id);
+
+ALTER TABLE user_last_active
+  ADD CONSTRAINT user_last_active_app_id_fkey 
+    FOREIGN KEY (app_id)
+    REFERENCES apps (app_id) ON DELETE CASCADE;
+
+CREATE INDEX user_last_active_app_id_index ON user_last_active (app_id);
 ```
 
 ## [3.0.0] - 2023-04-05

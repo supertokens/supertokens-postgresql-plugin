@@ -64,7 +64,11 @@ public class SessionQueries {
                 + " REFERENCES " + Config.getConfig(start).getTenantsTable() + "(app_id, tenant_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
+    }
 
+    public static String getQueryToCreateTenantIdIndexForSessionInfoTable(Start start) {
+        return "CREATE INDEX session_info_tenant_id_index ON "
+                + Config.getConfig(start).getSessionInfoTable() + "(app_id, tenant_id);";
     }
 
     static String getQueryToCreateAccessTokenSigningKeysTable(Start start) {
@@ -82,6 +86,11 @@ public class SessionQueries {
                 + " REFERENCES " + Config.getConfig(start).getAppsTable() + "(app_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
+    }
+
+    public static String getQueryToCreateAppIdIndexForAccessTokenSigningKeysTable(Start start) {
+        return "CREATE INDEX access_token_signing_keys_app_id_index ON "
+                + Config.getConfig(start).getAccessTokenSigningKeysTable() + "(app_id);";
     }
 
     static String getQueryToCreateSessionExpiryIndex(Start start) {

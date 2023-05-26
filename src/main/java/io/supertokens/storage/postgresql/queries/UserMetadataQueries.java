@@ -49,7 +49,11 @@ public class UserMetadataQueries {
                 + " REFERENCES " + Config.getConfig(start).getAppsTable() +  " (app_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
+    }
 
+    public static String getQueryToCreateAppIdIndexForUserMetadataTable(Start start) {
+        return "CREATE INDEX user_metadata_app_id_index ON "
+                + Config.getConfig(start).getUserMetadataTable() + "(app_id);";
     }
 
     public static int deleteUserMetadata(Start start, AppIdentifier appIdentifier, String userId) throws SQLException, StorageQueryException {
