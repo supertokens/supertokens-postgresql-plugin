@@ -2898,7 +2898,7 @@ public class Start
         } catch ( SQLException e) {
             if (e instanceof PSQLException) {
                 ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
-                if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getOAuth2ScopesTable())) {
+                if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getOAuth2ClientTable())) {
                     throw new DuplicateOAuth2ClientIdException();
                 } else if(isUniqueConstraintError(serverMessage, Config.getConfig(this).getOAuth2ClientTable(), "client_secret_hash") ){
                     throw new DuplicateOAuth2ClientSecretHash();
