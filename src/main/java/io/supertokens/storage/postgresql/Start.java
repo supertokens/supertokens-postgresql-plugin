@@ -2800,8 +2800,21 @@ public class Start
 
     @Override
     public void createOAuth2Scope(AppIdentifier appIdentifier, String scope)
-            throws StorageQueryException, DuplicateOAuth2ScopeException {
-       //TODO:
+            throws StorageQueryException, DuplicateOAuth2ScopeException, TenantOrAppNotFoundException {
+        try {
+            OAuth2Queries.createScope(this, appIdentifier, scope);
+        } catch (SQLException e){
+            if (e instanceof PSQLException) {
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+                if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getOAuth2ScopesTable())) {
+                    throw new DuplicateOAuth2ScopeException();
+                } else if (isForeignKeyConstraintError(serverMessage, Config.getConfig(this).getOAuth2ScopesTable(),
+                        "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
+            }
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
@@ -2818,8 +2831,11 @@ public class Start
 
     @Override
     public List<String> getOAuth2Scopes(AppIdentifier appIdentifier) throws StorageQueryException {
-        return null;
-        //TODO:
+        try {
+            return OAuth2Queries.getOAuth2Scopes(this, appIdentifier);
+        }catch (SQLException e){
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override

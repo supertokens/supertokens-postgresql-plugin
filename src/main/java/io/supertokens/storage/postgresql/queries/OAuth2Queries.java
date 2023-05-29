@@ -30,6 +30,7 @@ import java.lang.reflect.Type;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
@@ -230,6 +231,31 @@ public class OAuth2Queries {
                 return OAuth2Queries.OAuth2ClientRowMapper.getInstance().mapOrThrow(result);
             }
             return null;
+        });
+    }
+
+    public static void createScope(Start start, AppIdentifier appIdentifier, String scope) throws StorageQueryException, SQLException {
+        String QUERY = "INSERT INTO " + getConfig(start).getOAuth2ScopesTable()
+                + "(app_id, scope)" +
+                " VALUES(?, ?)";
+
+        update(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, scope);
+        });
+    }
+
+    public static List<String> getOAuth2Scopes(Start start, AppIdentifier appIdentifier) throws SQLException, StorageQueryException{
+        String QUERY = "SELECT * from " + getConfig(start).getOAuth2ScopesTable()
+                + " WHERE app_id = ?";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+        }, result -> {
+            List<String> scopes = new ArrayList<>();
+            while (result.next()) {
+                scopes.add(result.getString("scope"));
+            }
+            return scopes;
         });
     }
 
