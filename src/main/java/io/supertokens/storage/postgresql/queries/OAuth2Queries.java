@@ -204,8 +204,6 @@ public class OAuth2Queries {
 
     public static void createOAuth2Client_Transaction(Start start, Connection con,
                                                       AppIdentifier appIdentifier, OAuth2Client oAuth2Client) throws StorageQueryException, SQLException{
-        JsonArray jsonArray = new Gson().toJsonTree(oAuth2Client.redirectUris).getAsJsonArray();
-
         String QUERY = "INSERT INTO " + getConfig(start).getOAuth2ClientTable()
                 + "(app_id , client_id, name, client_secret_hash, redirect_uris, created_at_ms, updated_at_ms)" +
                 " VALUES(?, ?, ?, ?, ?, ?, ?)";
@@ -215,7 +213,7 @@ public class OAuth2Queries {
             pst.setString(2, oAuth2Client.clientId);
             pst.setString(3, oAuth2Client.name);
             pst.setString(4, oAuth2Client.clientSecretHash);
-            pst.setString(5, jsonArray.toString());
+            pst.setString(5, convertListToJsonArrayString(oAuth2Client.redirectUris));
             pst.setLong(6, oAuth2Client.createdAtMs);
             pst.setLong(7, oAuth2Client.updatedAtMs);
         });
@@ -247,17 +245,22 @@ public class OAuth2Queries {
 
         @Override
         public OAuth2Client map(ResultSet result) throws Exception {
-
-            // TODO: Make this conversion part of utility code
-            // Define the type of the target list
-            Type listType = new TypeToken<List<String>>() {}.getType();
-
-            // Convert JSON array to a List of Strings using Gson
-            List<String> redirectUris = new Gson().fromJson(result.getString("redirect_uris"), listType);
-
             return new OAuth2Client(result.getString("client_id"), result.getString("name"),
-                    result.getString("client_secret_hash"),redirectUris,
+                    result.getString("client_secret_hash"),convertJSONArrayStringToList(result.getString("redirect_uris")),
                     result.getLong("created_at_ms"), result.getLong("updated_at_ms"));
         }
     }
+
+    private  static String convertListToJsonArrayString(List<String> list) {
+        // Convert List of Strings to a JSON array using Gson
+        JsonArray jsonArray = new Gson().toJsonTree(list).getAsJsonArray();
+        return jsonArray.toString();
+    }
+
+    private  static List<String> convertJSONArrayStringToList(String jsonArrayString) {
+        Type listType = new TypeToken<List<String>>() {}.getType();
+        // Convert JSON array to a List of Strings using Gson
+        return new Gson().fromJson(jsonArrayString, listType);
+    }
+
 }
