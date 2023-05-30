@@ -2905,7 +2905,7 @@ public class Start
 
     @Override
     public void createOAuth2Client_Transaction(AppIdentifier appIdentifier, TransactionConnection con, OAuth2Client oAuth2Client)
-            throws StorageQueryException, DuplicateOAuth2ClientSecretHash, DuplicateOAuth2ClientIdException, TenantOrAppNotFoundException {
+            throws StorageQueryException, DuplicateOAuth2ClientSecretHash, DuplicateOAuth2ClientIdException, DuplicateOAuth2ClientNameException, TenantOrAppNotFoundException {
 
         Connection sqlCon = (Connection) con.getConnection();
 
@@ -2916,9 +2916,14 @@ public class Start
                 ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
                 if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getOAuth2ClientTable())) {
                     throw new DuplicateOAuth2ClientIdException();
-                } else if(isUniqueConstraintError(serverMessage, Config.getConfig(this).getOAuth2ClientTable(), "client_secret_hash") ){
+                }
+                if (isUniqueConstraintError(serverMessage, Config.getConfig(this).getOAuth2ClientTable(), "name")) {
+                    throw new DuplicateOAuth2ClientNameException();
+                }
+                if (isUniqueConstraintError(serverMessage, Config.getConfig(this).getOAuth2ClientTable(), "client_secret_hash")){
                     throw new DuplicateOAuth2ClientSecretHash();
-                } else if(isForeignKeyConstraintError(serverMessage, Config.getConfig(this).getOAuth2ClientTable(), "app_id")) {
+                }
+                if (isForeignKeyConstraintError(serverMessage, Config.getConfig(this).getOAuth2ClientTable(), "app_id")) {
                     throw new TenantOrAppNotFoundException(appIdentifier);
                 }
             }
