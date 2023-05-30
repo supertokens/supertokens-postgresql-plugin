@@ -56,6 +56,8 @@ public class OAuth2Queries {
                 + "updated_at_ms BIGINT NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientTable, null, "pkey")
                 + " PRIMARY KEY (app_id, client_id),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientTable, "name", "key")
+                + " UNIQUE (app_id, name),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientTable, "app_id", "fkey")
                 + " FOREIGN KEY(app_id) REFERENCES " + getConfig(start).getAppsTable() + "(app_id) ON DELETE CASCADE);";
         // @formatter:on
