@@ -17,7 +17,9 @@
 package io.supertokens.storage.postgresql.queries;
 
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
-import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -37,10 +39,19 @@ public class UserRolesQueries {
         String tableName = getConfig(start).getRolesTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "role VARCHAR(255) NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey") + " PRIMARY KEY(role)" + " );";
-
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
+                + " PRIMARY KEY(app_id, role),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "app_id", "fkey")
+                + " FOREIGN KEY(app_id)"
+                + " REFERENCES " + Config.getConfig(start).getAppsTable() +  " (app_id) ON DELETE CASCADE"
+                + ");";
         // @formatter:on
+    }
+
+    public static String getQueryToCreateAppIdIndexForRolesTable(Start start) {
+        return "CREATE INDEX roles_app_id_index ON " + getConfig(start).getRolesTable() + "(app_id);";
     }
 
     public static String getQueryToCreateRolePermissionsTable(Start start) {
@@ -48,19 +59,26 @@ public class UserRolesQueries {
         String schema = Config.getConfig(start).getTableSchema();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "role VARCHAR(255) NOT NULL,"
                 + "permission VARCHAR(255) NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey") + " PRIMARY KEY(role, permission),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "role", "fkey") + " FOREIGN KEY(role)"
-                + " REFERENCES " + getConfig(start).getRolesTable()
-                +"(role) ON DELETE CASCADE );";
-
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
+                + " PRIMARY KEY(app_id, role, permission),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "role", "fkey")
+                + " FOREIGN KEY(app_id, role)"
+                + " REFERENCES " + getConfig(start).getRolesTable() + "(app_id, role) ON DELETE CASCADE"
+                + ");";
         // @formatter:on
+    }
+
+    public static String getQueryToCreateRoleIndexForRolePermissionsTable(Start start) {
+        return "CREATE INDEX role_permissions_role_index ON " + getConfig(start).getUserRolesPermissionsTable()
+                + "(app_id, role);";
     }
 
     static String getQueryToCreateRolePermissionsPermissionIndex(Start start) {
         return "CREATE INDEX role_permissions_permission_index ON " + getConfig(start).getUserRolesPermissionsTable()
-                + "(permission);";
+                + "(app_id, permission);";
     }
 
     public static String getQueryToCreateUserRolesTable(Start start) {
@@ -68,54 +86,85 @@ public class UserRolesQueries {
         String tableName = getConfig(start).getUserRolesTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "tenant_id VARCHAR(64) DEFAULT 'public',"
                 + "user_id VARCHAR(128) NOT NULL,"
                 + "role VARCHAR(255) NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey") + " PRIMARY KEY(user_id, role),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "role", "fkey") + " FOREIGN KEY(role)"
-                + " REFERENCES " + getConfig(start).getRolesTable()
-                +"(role) ON DELETE CASCADE );";
-
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
+                + " PRIMARY KEY(app_id, tenant_id, user_id, role),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "role", "fkey")
+                + " FOREIGN KEY(app_id, role)"
+                + " REFERENCES " + getConfig(start).getRolesTable() + "(app_id, role) ON DELETE CASCADE,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "tenant_id", "fkey")
+                + " FOREIGN KEY (app_id, tenant_id)"
+                + " REFERENCES " + Config.getConfig(start).getTenantsTable() + "(app_id, tenant_id) ON DELETE CASCADE"
+                + ");";
         // @formatter:on
     }
 
-    public static String getQueryToCreateUserRolesRoleIndex(Start start) {
-        return "CREATE INDEX user_roles_role_index ON " + getConfig(start).getUserRolesTable() + "(role);";
+    public static String getQueryToCreateTenantIdIndexForUserRolesTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS user_roles_tenant_id_index ON " + getConfig(start).getUserRolesTable() + "(app_id, tenant_id);";
     }
 
-    public static boolean createNewRoleOrDoNothingIfExists_Transaction(Start start, Connection con, String role)
+    public static String getQueryToCreateRoleIndexForUserRolesTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS user_roles_app_id_role_index ON " + getConfig(start).getUserRolesTable() + "(app_id, role);";
+    }
+
+    public static String getQueryToCreateUserRolesRoleIndex(Start start) {
+        return "CREATE INDEX IF NOT EXISTS user_roles_role_index ON " + getConfig(start).getUserRolesTable()
+                + "(app_id, tenant_id, role);";
+    }
+
+    public static boolean createNewRoleOrDoNothingIfExists_Transaction(Start start, Connection con,
+                                                    AppIdentifier appIdentifier, String role)
             throws SQLException, StorageQueryException {
-        String QUERY = "INSERT INTO " + getConfig(start).getRolesTable() + " VALUES(?) ON CONFLICT DO NOTHING;";
-        int rowsUpdated = update(con, QUERY, pst -> pst.setString(1, role));
+        String QUERY = "INSERT INTO " + getConfig(start).getRolesTable()
+                + "(app_id, role) VALUES (?, ?) ON CONFLICT DO NOTHING;";
+        int rowsUpdated = update(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, role);
+        });
         return rowsUpdated > 0;
     }
 
-    public static void addPermissionToRoleOrDoNothingIfExists_Transaction(Start start, Connection con, String role,
-            String permission) throws SQLException, StorageQueryException {
+    public static void addPermissionToRoleOrDoNothingIfExists_Transaction(Start start, Connection con,
+                                                                          AppIdentifier appIdentifier, String role,
+                                                                          String permission) throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getUserRolesPermissionsTable()
-                + " (role, permission) VALUES(?, ?) ON CONFLICT DO NOTHING";
+                + " (app_id, role, permission) VALUES(?, ?, ?) ON CONFLICT DO NOTHING";
 
         update(con, QUERY, pst -> {
-            pst.setString(1, role);
-            pst.setString(2, permission);
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, role);
+            pst.setString(3, permission);
         });
     }
 
-    public static boolean deleteRole(Start start, String role) throws SQLException, StorageQueryException {
-        String QUERY = "DELETE FROM " + getConfig(start).getRolesTable() + " WHERE role = ? ;";
+    public static boolean deleteRole(Start start, AppIdentifier appIdentifier, String role) throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + getConfig(start).getRolesTable()
+                + " WHERE app_id = ? AND role = ? ;";
         return update(start, QUERY, pst -> {
-            pst.setString(1, role);
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, role);
         }) == 1;
     }
 
-    public static boolean doesRoleExist(Start start, String role) throws SQLException, StorageQueryException {
-        String QUERY = "SELECT 1 FROM " + getConfig(start).getRolesTable() + " WHERE role = ?";
-        return execute(start, QUERY, pst -> pst.setString(1, role), ResultSet::next);
+    public static boolean doesRoleExist(Start start, AppIdentifier appIdentifier, String role) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT 1 FROM " + getConfig(start).getRolesTable()
+                + " WHERE app_id = ? AND role = ?";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, role);
+        }, ResultSet::next);
     }
 
-    public static String[] getPermissionsForRole(Start start, String role) throws SQLException, StorageQueryException {
+    public static String[] getPermissionsForRole(Start start, AppIdentifier appIdentifier, String role) throws SQLException, StorageQueryException {
         String QUERY = "SELECT permission FROM " + Config.getConfig(start).getUserRolesPermissionsTable()
-                + " WHERE role = ?;";
-        return execute(start, QUERY, pst -> pst.setString(1, role), result -> {
+                + " WHERE app_id = ? AND role = ?;";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, role);
+        }, result -> {
             ArrayList<String> permissions = new ArrayList<>();
             while (result.next()) {
                 permissions.add(result.getString("permission"));
@@ -124,9 +173,9 @@ public class UserRolesQueries {
         });
     }
 
-    public static String[] getRoles(Start start) throws SQLException, StorageQueryException {
-        String QUERY = "SELECT role FROM " + getConfig(start).getRolesTable();
-        return execute(start, QUERY, PreparedStatementValueSetter.NO_OP_SETTER, result -> {
+    public static String[] getRoles(Start start, AppIdentifier appIdentifier) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT role FROM " + getConfig(start).getRolesTable() + " WHERE app_id = ?";
+        return execute(start, QUERY, pst -> pst.setString(1, appIdentifier.getAppId()), result -> {
             ArrayList<String> roles = new ArrayList<>();
             while (result.next()) {
                 roles.add(result.getString("role"));
@@ -135,19 +184,28 @@ public class UserRolesQueries {
         });
     }
 
-    public static int addRoleToUser(Start start, String userId, String role)
+    public static int addRoleToUser(Start start, TenantIdentifier tenantIdentifier, String userId, String role)
             throws SQLException, StorageQueryException {
-        String QUERY = "INSERT INTO " + getConfig(start).getUserRolesTable() + "(user_id, role) VALUES(?, ?);";
+        String QUERY = "INSERT INTO " + getConfig(start).getUserRolesTable()
+                + "(app_id, tenant_id, user_id, role) VALUES(?, ?, ?, ?);";
         return update(start, QUERY, pst -> {
-            pst.setString(1, userId);
-            pst.setString(2, role);
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, userId);
+            pst.setString(4, role);
         });
     }
 
-    public static String[] getRolesForUser(Start start, String userId) throws SQLException, StorageQueryException {
-        String QUERY = "SELECT role FROM " + getConfig(start).getUserRolesTable() + " WHERE user_id = ? ;";
+    public static String[] getRolesForUser(Start start, TenantIdentifier tenantIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT role FROM " + getConfig(start).getUserRolesTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND user_id = ? ;";
 
-        return execute(start, QUERY, pst -> pst.setString(1, userId), result -> {
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, userId);
+        }, result -> {
             ArrayList<String> roles = new ArrayList<>();
             while (result.next()) {
                 roles.add(result.getString("role"));
@@ -156,27 +214,57 @@ public class UserRolesQueries {
         });
     }
 
-    public static boolean deleteRoleForUser_Transaction(Start start, Connection con, String userId, String role)
+    public static String[] getRolesForUser(Start start, AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
-        String QUERY = "DELETE FROM " + getConfig(start).getUserRolesTable() + " WHERE user_id = ? AND role = ? ;";
+        String QUERY = "SELECT role FROM " + getConfig(start).getUserRolesTable()
+                + " WHERE app_id = ? AND user_id = ? ;";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, result -> {
+            ArrayList<String> roles = new ArrayList<>();
+            while (result.next()) {
+                roles.add(result.getString("role"));
+            }
+            return roles.toArray(String[]::new);
+        });
+    }
+
+    public static boolean deleteRoleForUser_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,
+                                                        String userId, String role)
+            throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + getConfig(start).getUserRolesTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND user_id = ? AND role = ? ;";
 
         // store the number of rows updated
         int rowUpdatedCount = update(con, QUERY, pst -> {
-            pst.setString(1, userId);
-            pst.setString(2, role);
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, userId);
+            pst.setString(4, role);
         });
         return rowUpdatedCount > 0;
     }
 
-    public static boolean doesRoleExist_transaction(Start start, Connection con, String role)
+    public static boolean doesRoleExist_transaction(Start start, Connection con, AppIdentifier appIdentifier, String role)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT 1 FROM " + getConfig(start).getRolesTable() + " WHERE role = ? FOR UPDATE";
-        return execute(con, QUERY, pst -> pst.setString(1, role), ResultSet::next);
+        String QUERY = "SELECT 1 FROM " + getConfig(start).getRolesTable()
+                + " WHERE app_id = ? AND role = ? FOR UPDATE";
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, role);
+        }, ResultSet::next);
     }
 
-    public static String[] getUsersForRole(Start start, String role) throws SQLException, StorageQueryException {
-        String QUERY = "SELECT user_id FROM " + getConfig(start).getUserRolesTable() + " WHERE role = ? ";
-        return execute(start, QUERY, pst -> pst.setString(1, role), result -> {
+    public static String[] getUsersForRole(Start start, TenantIdentifier tenantIdentifier, String role) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT user_id FROM " + getConfig(start).getUserRolesTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND role = ? ";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, role);
+        }, result -> {
             ArrayList<String> userIds = new ArrayList<>();
             while (result.next()) {
                 userIds.add(result.getString("user_id"));
@@ -185,37 +273,46 @@ public class UserRolesQueries {
         });
     }
 
-    public static boolean deletePermissionForRole_Transaction(Start start, Connection con, String role,
-            String permission) throws SQLException, StorageQueryException {
+    public static boolean deletePermissionForRole_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
+                                                              String role,
+                                                              String permission) throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getUserRolesPermissionsTable()
-                + " WHERE role = ? AND permission = ? ";
+                + " WHERE app_id = ? AND role = ? AND permission = ? ";
 
         // store the number of rows updated
         int rowUpdatedCount = update(con, QUERY, pst -> {
-            pst.setString(1, role);
-            pst.setString(2, permission);
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, role);
+            pst.setString(3, permission);
         });
 
         return rowUpdatedCount > 0;
     }
 
-    public static int deleteAllPermissionsForRole_Transaction(Start start, Connection con, String role)
+    public static int deleteAllPermissionsForRole_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
+                                                              String role)
             throws SQLException, StorageQueryException {
 
-        String QUERY = "DELETE FROM " + getConfig(start).getUserRolesPermissionsTable() + " WHERE role = ? ";
+        String QUERY = "DELETE FROM " + getConfig(start).getUserRolesPermissionsTable()
+                + " WHERE app_id = ? AND role = ? ";
         // return the number of rows updated
         return update(con, QUERY, pst -> {
-            pst.setString(1, role);
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, role);
         });
 
     }
 
-    public static String[] getRolesThatHavePermission(Start start, String permission)
+    public static String[] getRolesThatHavePermission(Start start, AppIdentifier appIdentifier, String permission)
             throws SQLException, StorageQueryException {
 
-        String QUERY = "SELECT role FROM " + getConfig(start).getUserRolesPermissionsTable() + " WHERE permission = ? ";
+        String QUERY = "SELECT role FROM " + getConfig(start).getUserRolesPermissionsTable()
+                + " WHERE app_id = ? AND permission = ? ";
 
-        return execute(start, QUERY, pst -> pst.setString(1, permission), result -> {
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, permission);
+        }, result -> {
             ArrayList<String> roles = new ArrayList<>();
 
             while (result.next()) {
@@ -226,9 +323,22 @@ public class UserRolesQueries {
         });
     }
 
-    public static int deleteAllRolesForUser(Start start, String userId) throws SQLException, StorageQueryException {
-        String QUERY = "DELETE FROM " + getConfig(start).getUserRolesTable() + " WHERE user_id = ?";
-        return update(start, QUERY, pst -> pst.setString(1, userId));
+    public static int deleteAllRolesForUser(Start start, TenantIdentifier tenantIdentifier, String userId) throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + getConfig(start).getUserRolesTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND user_id = ?";
+        return update(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, userId);
+        });
     }
 
+    public static int deleteAllRolesForUser(Start start, AppIdentifier appIdentifier, String userId) throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + getConfig(start).getUserRolesTable()
+                + " WHERE app_id = ? AND user_id = ?";
+        return update(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        });
+    }
 }

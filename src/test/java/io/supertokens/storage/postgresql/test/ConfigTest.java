@@ -21,10 +21,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.gson.JsonObject;
 import io.supertokens.ProcessState;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.session.SessionStorage;
 import io.supertokens.session.Session;
 import io.supertokens.session.info.SessionInformationHolder;
 import io.supertokens.storage.postgresql.ConnectionPoolTestContent;
 import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.annotations.ConnectionPoolProperty;
+import io.supertokens.storage.postgresql.annotations.IgnoreForAnnotationCheck;
+import io.supertokens.storage.postgresql.annotations.NotConflictingWithinUserPool;
+import io.supertokens.storage.postgresql.annotations.UserPoolProperty;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storageLayer.StorageLayer;
@@ -37,9 +43,9 @@ import org.junit.rules.TestRule;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.*;
 
 public class ConfigTest {
 
@@ -58,7 +64,7 @@ public class ConfigTest {
 
     @Test
     public void testThatDefaultConfigLoadsCorrectly() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -74,7 +80,7 @@ public class ConfigTest {
 
     @Test
     public void testThatCustomConfigLoadsCorrectly() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_connection_pool_size", "5");
         Utils.setValueInConfig("postgresql_key_value_table_name", "\"temp_name\"");
@@ -86,20 +92,22 @@ public class ConfigTest {
         assertEquals(config.getConnectionPoolSize(), 5);
         assertEquals(config.getKeyValueTable(), "temp_name");
 
+        process.getProcess().deleteAllInformationForTesting();
+
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
 
     @Test
     public void testThatInvalidConfigThrowsRightError() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_connection_pool_size", "-1");
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
 
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
         assertNotNull(e);
-        TestCase.assertEquals(e.exception.getMessage(),
+        TestCase.assertEquals(e.exception.getCause().getMessage(),
                 "'postgresql_connection_pool_size' in the config.yaml file must be > 0");
 
         process.kill();
@@ -109,7 +117,7 @@ public class ConfigTest {
 
     @Test
     public void testThatMissingConfigFileThrowsError() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         ProcessBuilder pb = new ProcessBuilder("rm", "-r", "config.yaml");
         pb.directory(new File(args[0]));
@@ -121,7 +129,7 @@ public class ConfigTest {
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
         assertNotNull(e);
         TestCase.assertEquals(e.exception.getMessage(),
-                "java.io.FileNotFoundException: ../config.yaml (No such file or directory)");
+                "../config.yaml (No such file or directory)");
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -130,7 +138,7 @@ public class ConfigTest {
 
     @Test
     public void testCustomLocationForConfigLoadsCorrectly() throws Exception {
-        String[] args = { "../", "configFile=../temp/config.yaml" };
+        String[] args = {"../", "configFile=../temp/config.yaml"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
@@ -142,7 +150,7 @@ public class ConfigTest {
 
         // absolute path
         File f = new File("../temp/config.yaml");
-        args = new String[] { "../", "configFile=" + f.getAbsolutePath() };
+        args = new String[]{"../", "configFile=" + f.getAbsolutePath()};
 
         process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -156,7 +164,7 @@ public class ConfigTest {
 
     @Test
     public void testBadPortInput() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_port", "8989");
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -172,7 +180,7 @@ public class ConfigTest {
 
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE, 7000);
         assertNotNull(e);
-        assertEquals(e.exception.getMessage(),
+        assertEquals(e.exception.getCause().getCause().getMessage(),
                 "Error connecting to PostgreSQL instance. Please make sure that PostgreSQL is running and that you "
                         + "have specified the correct values for ('postgresql_host' and 'postgresql_port') or for "
                         + "'postgresql_connection_uri'");
@@ -183,7 +191,7 @@ public class ConfigTest {
 
     @Test
     public void storageDisabledAndThenEnabled() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
         process.getProcess().waitToInitStorageModule();
@@ -208,7 +216,7 @@ public class ConfigTest {
 
     @Test
     public void testBadHostInput() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_host", "random");
 
@@ -216,7 +224,10 @@ public class ConfigTest {
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
         assertNotNull(e);
 
-        assertEquals("Failed to initialize pool: The connection attempt failed.", e.exception.getMessage());
+        assertEquals(
+                "java.sql.SQLException: com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to " +
+                        "initialize pool: The connection attempt failed.",
+                e.exception.getCause().getCause().getMessage());
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -225,7 +236,7 @@ public class ConfigTest {
 
     @Test
     public void testThatChangeInTableNameIsCorrect() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_key_value_table_name", "key_value_table");
         Utils.setValueInConfig("postgresql_session_info_table_name", "session_info_table");
@@ -252,7 +263,7 @@ public class ConfigTest {
 
     @Test
     public void testAddingTableNamePrefixWorks() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_key_value_table_name", "key_value_table");
         Utils.setValueInConfig("postgresql_table_names_prefix", "some_prefix");
@@ -279,7 +290,7 @@ public class ConfigTest {
 
     @Test
     public void testAddingSchemaWorks() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_table_schema", "myschema");
         Utils.setValueInConfig("postgresql_table_names_prefix", "some_prefix");
@@ -308,8 +319,142 @@ public class ConfigTest {
 
         assert sessionInfo.accessToken != null;
         assert sessionInfo.refreshToken != null;
+        try {
+            TestCase.assertEquals(((SessionStorage) StorageLayer.getStorage(process.getProcess()))
+                    .getNumberOfSessions(new TenantIdentifier(null, null, null)), 1);
 
-        TestCase.assertEquals(StorageLayer.getSessionStorage(process.getProcess()).getNumberOfSessions(), 1);
+            // we call this here so that the database is cleared with the modified table names
+            // since in postgres, we delete all dbs one by one
+        } finally {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+            TestingProcessManager.deleteAllInformation();
+        }
+    }
+
+    @Test
+    public void testAddingSchemaViaConnectionUriWorks() throws Exception {
+        String[] args = {"../"};
+
+        Utils.setValueInConfig("postgresql_connection_uri",
+                "postgresql://root:root@localhost:5432/supertokens?currentSchema=myschema");
+        Utils.setValueInConfig("postgresql_table_names_prefix", "some_prefix");
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+        PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
+
+        assertEquals("change in KeyValueTable name not reflected", config.getKeyValueTable(),
+                "myschema.some_prefix_key_value");
+        assertEquals("change in SessionInfoTable name not reflected", config.getSessionInfoTable(),
+                "myschema.some_prefix_session_info");
+        assertEquals("change in table name not reflected", config.getEmailPasswordUsersTable(),
+                "myschema.some_prefix_emailpassword_users");
+        assertEquals("change in table name not reflected", config.getPasswordResetTokensTable(),
+                "myschema.some_prefix_emailpassword_pswd_reset_tokens");
+
+        String userId = "userId";
+        JsonObject userDataInJWT = new JsonObject();
+        userDataInJWT.addProperty("key", "value");
+        JsonObject userDataInDatabase = new JsonObject();
+        userDataInDatabase.addProperty("key", "value");
+
+        SessionInformationHolder sessionInfo = Session.createNewSession(process.getProcess(), userId, userDataInJWT,
+                userDataInDatabase);
+
+        assert sessionInfo.accessToken != null;
+        assert sessionInfo.refreshToken != null;
+
+        TestCase.assertEquals(((SessionStorage) StorageLayer.getStorage(process.getProcess()))
+                .getNumberOfSessions(new TenantIdentifier(null, null, null)), 1);
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+        // we call this here so that the database is cleared with the modified table names
+        // since in postgres, we delete all dbs one by one
+        TestingProcessManager.deleteAllInformation();
+    }
+
+    @Test
+    public void testAddingSchemaViaConnectionUriWorks2() throws Exception {
+        String[] args = {"../"};
+
+        Utils.setValueInConfig("postgresql_connection_uri",
+                "postgresql://root:root@localhost:5432/supertokens?a=b&currentSchema=myschema");
+        Utils.setValueInConfig("postgresql_table_names_prefix", "some_prefix");
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+        PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
+
+        assertEquals("change in KeyValueTable name not reflected", config.getKeyValueTable(),
+                "myschema.some_prefix_key_value");
+        assertEquals("change in SessionInfoTable name not reflected", config.getSessionInfoTable(),
+                "myschema.some_prefix_session_info");
+        assertEquals("change in table name not reflected", config.getEmailPasswordUsersTable(),
+                "myschema.some_prefix_emailpassword_users");
+        assertEquals("change in table name not reflected", config.getPasswordResetTokensTable(),
+                "myschema.some_prefix_emailpassword_pswd_reset_tokens");
+
+        String userId = "userId";
+        JsonObject userDataInJWT = new JsonObject();
+        userDataInJWT.addProperty("key", "value");
+        JsonObject userDataInDatabase = new JsonObject();
+        userDataInDatabase.addProperty("key", "value");
+
+        SessionInformationHolder sessionInfo = Session.createNewSession(process.getProcess(), userId, userDataInJWT,
+                userDataInDatabase);
+
+        assert sessionInfo.accessToken != null;
+        assert sessionInfo.refreshToken != null;
+
+        TestCase.assertEquals(((SessionStorage) StorageLayer.getStorage(process.getProcess()))
+                .getNumberOfSessions(new TenantIdentifier(null, null, null)), 1);
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+        // we call this here so that the database is cleared with the modified table names
+        // since in postgres, we delete all dbs one by one
+        TestingProcessManager.deleteAllInformation();
+    }
+
+    @Test
+    public void testAddingSchemaViaConnectionUriWorks3() throws Exception {
+        String[] args = {"../"};
+
+        Utils.setValueInConfig("postgresql_connection_uri",
+                "postgresql://root:root@localhost:5432/supertokens?e=f&currentSchema=myschema&a=b&c=d");
+        Utils.setValueInConfig("postgresql_table_names_prefix", "some_prefix");
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+        PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
+
+        assertEquals("change in KeyValueTable name not reflected", config.getKeyValueTable(),
+                "myschema.some_prefix_key_value");
+        assertEquals("change in SessionInfoTable name not reflected", config.getSessionInfoTable(),
+                "myschema.some_prefix_session_info");
+        assertEquals("change in table name not reflected", config.getEmailPasswordUsersTable(),
+                "myschema.some_prefix_emailpassword_users");
+        assertEquals("change in table name not reflected", config.getPasswordResetTokensTable(),
+                "myschema.some_prefix_emailpassword_pswd_reset_tokens");
+
+        String userId = "userId";
+        JsonObject userDataInJWT = new JsonObject();
+        userDataInJWT.addProperty("key", "value");
+        JsonObject userDataInDatabase = new JsonObject();
+        userDataInDatabase.addProperty("key", "value");
+
+        SessionInformationHolder sessionInfo = Session.createNewSession(process.getProcess(), userId, userDataInJWT,
+                userDataInDatabase);
+
+        assert sessionInfo.accessToken != null;
+        assert sessionInfo.refreshToken != null;
+
+        TestCase.assertEquals(((SessionStorage) StorageLayer.getStorage(process.getProcess()))
+                .getNumberOfSessions(new TenantIdentifier(null, null, null)), 1);
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -325,7 +470,7 @@ public class ConfigTest {
         PostgreSQLConfig userConfig = mapper.readValue(new File("../config.yaml"), PostgreSQLConfig.class);
         String hostname = userConfig.getHostName();
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri",
                     "postgresql://root:root@" + hostname + ":5432/supertokens");
@@ -346,7 +491,7 @@ public class ConfigTest {
 
         {
             Utils.reset();
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@" + hostname + "/supertokens");
             Utils.commentConfigValue("postgresql_password");
@@ -358,7 +503,7 @@ public class ConfigTest {
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
             PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
-            assertEquals(config.getPort(), -1);
+            assertEquals(config.getPort(), 5432);
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -366,7 +511,7 @@ public class ConfigTest {
 
         {
             Utils.reset();
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri", "postgresql://" + hostname + ":5432/supertokens");
             Utils.commentConfigValue("postgresql_port");
@@ -384,7 +529,7 @@ public class ConfigTest {
 
         {
             Utils.reset();
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root@" + hostname + ":5432/supertokens");
             Utils.commentConfigValue("postgresql_user");
@@ -403,7 +548,7 @@ public class ConfigTest {
 
         {
             Utils.reset();
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@" + hostname + ":5432");
             Utils.commentConfigValue("postgresql_password");
@@ -428,7 +573,7 @@ public class ConfigTest {
         PostgreSQLConfig userConfig = mapper.readValue(new File("../config.yaml"), PostgreSQLConfig.class);
         String hostname = userConfig.getHostName();
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri", ":/localhost:5432/supertokens");
 
@@ -438,7 +583,7 @@ public class ConfigTest {
             assertEquals(
                     "The provided postgresql connection URI has an incorrect format. Please use a format like "
                             + "postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2...",
-                    e.exception.getMessage());
+                    e.exception.getCause().getMessage());
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -446,7 +591,7 @@ public class ConfigTest {
 
         {
             Utils.reset();
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri",
                     "postgresql://root:wrongPassword@" + hostname + ":5432/supertokens");
@@ -460,7 +605,7 @@ public class ConfigTest {
             ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
             assertNotNull(e);
 
-            TestCase.assertTrue(e.exception.getMessage().contains("password authentication failed"));
+            TestCase.assertTrue(e.exception.getCause().getMessage().contains("password authentication failed"));
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -473,7 +618,7 @@ public class ConfigTest {
         PostgreSQLConfig userConfig = mapper.readValue(new File("../config.yaml"), PostgreSQLConfig.class);
         String hostname = userConfig.getHostName();
         {
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri",
                     "postgresql://root:root@" + hostname + ":5432/supertokens?key1=value1");
@@ -489,7 +634,7 @@ public class ConfigTest {
 
         {
             Utils.reset();
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@" + hostname
                     + ":5432/supertokens?key1=value1&allowPublicKeyRetrieval=false&key2" + "=value2");
@@ -501,6 +646,20 @@ public class ConfigTest {
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
+    @Test
+    public void testAllConfigsHaveAnAnnotation() throws Exception {
+        for (Field field : PostgreSQLConfig.class.getDeclaredFields()) {
+            if (field.isAnnotationPresent(IgnoreForAnnotationCheck.class)) {
+                continue;
+            }
+
+            if (!(field.isAnnotationPresent(UserPoolProperty.class) || field.isAnnotationPresent(ConnectionPoolProperty.class) || field.isAnnotationPresent(
+                    NotConflictingWithinUserPool.class))) {
+                fail(field.getName() + " does not have UserPoolProperty, ConnectionPoolProperty or NotConflictingWithinUserPool annotation");
+            }
         }
     }
 

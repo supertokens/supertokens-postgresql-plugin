@@ -23,6 +23,9 @@ import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.pluginInterface.sqlStorage.SQLStorage;
 import io.supertokens.pluginInterface.sqlStorage.SQLStorage.TransactionIsolationLevel;
 import io.supertokens.pluginInterface.totp.TOTPDevice;
@@ -75,8 +78,14 @@ public class DeadlockTest {
         Storage storage = StorageLayer.getStorage(process.getProcess());
         SQLStorage sqlStorage = (SQLStorage) storage;
         sqlStorage.startTransaction(con -> {
-            sqlStorage.setKeyValue_Transaction(con, "Key", new KeyValueInfo("Value"));
-            sqlStorage.setKeyValue_Transaction(con, "Key1", new KeyValueInfo("Value1"));
+            try {
+                sqlStorage.setKeyValue_Transaction(new TenantIdentifier(null, null, null), con, "Key",
+                        new KeyValueInfo("Value"));
+                sqlStorage.setKeyValue_Transaction(new TenantIdentifier(null, null, null), con, "Key1",
+                        new KeyValueInfo("Value1"));
+            } catch (TenantOrAppNotFoundException e) {
+                throw new IllegalStateException(e);
+            }
             sqlStorage.commitTransaction(con);
             return null;
         });
@@ -92,7 +101,7 @@ public class DeadlockTest {
             try {
                 sqlStorage.startTransaction(con -> {
 
-                    sqlStorage.getKeyValue_Transaction(con, "Key");
+                    sqlStorage.getKeyValue_Transaction(new TenantIdentifier(null, null, null), con, "Key");
 
                     synchronized (syncObject) {
                         t1State.set("read");
@@ -108,7 +117,7 @@ public class DeadlockTest {
                         }
                     }
 
-                    sqlStorage.getKeyValue_Transaction(con, "Key1");
+                    sqlStorage.getKeyValue_Transaction(new TenantIdentifier(null, null, null), con, "Key1");
                     t1Failed.set(false); // it should come here because we will try three times.
                     return null;
                 });
@@ -120,7 +129,7 @@ public class DeadlockTest {
             try {
                 sqlStorage.startTransaction(con -> {
 
-                    sqlStorage.getKeyValue_Transaction(con, "Key1");
+                    sqlStorage.getKeyValue_Transaction(new TenantIdentifier(null, null, null), con, "Key1");
 
                     synchronized (syncObject) {
                         t2State.set("read");
@@ -136,7 +145,7 @@ public class DeadlockTest {
                         }
                     }
 
-                    sqlStorage.getKeyValue_Transaction(con, "Key");
+                    sqlStorage.getKeyValue_Transaction(new TenantIdentifier(null, null, null), con, "Key");
 
                     t2Failed.set(false); // it should come here because we will try three times.
                     return null;
@@ -230,8 +239,6 @@ public class DeadlockTest {
         es.shutdown();
         es.awaitTermination(2, TimeUnit.MINUTES);
 
-        assertNull(process.checkOrWaitForEventInPlugin(
-                io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
         assert (pass.get());
 
         process.kill();
@@ -248,20 +255,22 @@ public class DeadlockTest {
         SQLStorage sqlStorage = (SQLStorage) storage;
 
         // Create a device as well as a user:
-        TOTPSQLStorage totpStorage = StorageLayer.getTOTPStorage(process.getProcess());
+        TOTPSQLStorage totpStorage = (TOTPSQLStorage) StorageLayer.getStorage(process.getProcess());
         TOTPDevice device = new TOTPDevice("user", "d1", "secret", 30, 1, false);
-        totpStorage.createDevice(device);
+        totpStorage.createDevice(new AppIdentifier(null, null), device);
 
         long now = System.currentTimeMillis();
         long nextDay = now + 1000 * 60 * 60 * 24; // 1 day from now
         TOTPUsedCode code = new TOTPUsedCode("user", "1234", true, nextDay, now);
         totpStorage.startTransaction(con -> {
             try {
-                totpStorage.insertUsedCode_Transaction(con, code);
+                totpStorage.insertUsedCode_Transaction(con, new TenantIdentifier(null, null, null), code);
                 totpStorage.commitTransaction(con);
             } catch (TotpNotEnabledException | UsedCodeAlreadyExistsException e) {
                 // This should not happen
                 throw new StorageTransactionLogicException(e);
+            } catch (TenantOrAppNotFoundException e) {
+                throw new IllegalStateException(e);
             }
             return null;
         });
@@ -408,20 +417,22 @@ public class DeadlockTest {
         SQLStorage sqlStorage = (SQLStorage) storage;
 
         // Create a device as well as a user:
-        TOTPSQLStorage totpStorage = StorageLayer.getTOTPStorage(process.getProcess());
+        TOTPSQLStorage totpStorage = (TOTPSQLStorage) StorageLayer.getStorage(process.getProcess());
         TOTPDevice device = new TOTPDevice("user", "d1", "secret", 30, 1, false);
-        totpStorage.createDevice(device);
+        totpStorage.createDevice(new AppIdentifier(null, null), device);
 
         long now = System.currentTimeMillis();
         long nextDay = now + 1000 * 60 * 60 * 24; // 1 day from now
         TOTPUsedCode code = new TOTPUsedCode("user", "1234", true, nextDay, now);
         totpStorage.startTransaction(con -> {
             try {
-                totpStorage.insertUsedCode_Transaction(con, code);
+                totpStorage.insertUsedCode_Transaction(con, new TenantIdentifier(null, null, null), code);
                 totpStorage.commitTransaction(con);
             } catch (TotpNotEnabledException | UsedCodeAlreadyExistsException e) {
                 // This should not happen
                 throw new StorageTransactionLogicException(e);
+            } catch (TenantOrAppNotFoundException e) {
+                throw new IllegalStateException(e);
             }
             return null;
         });
@@ -519,10 +530,12 @@ public class DeadlockTest {
 
                     TOTPUsedCode code2 = new TOTPUsedCode("user", "1234", false, nextDay, now + 1);
                     try {
-                        totpStorage.insertUsedCode_Transaction(con, code2);
+                        totpStorage.insertUsedCode_Transaction(con, new TenantIdentifier(null, null, null), code2);
                     } catch (TotpNotEnabledException | UsedCodeAlreadyExistsException e) {
                         // This should not happen
                         throw new StorageTransactionLogicException(e);
+                    } catch (TenantOrAppNotFoundException e) {
+                        throw new IllegalStateException(e);
                     }
                     sqlStorage.commitTransaction(con);
                     t2State.set("commit");

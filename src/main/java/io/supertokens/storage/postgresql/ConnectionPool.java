@@ -19,7 +19,7 @@ package io.supertokens.storage.postgresql;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import io.supertokens.pluginInterface.exceptions.QuitProgramFromPluginException;
+import io.supertokens.pluginInterface.exceptions.DbInitException;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storage.postgresql.output.Logging;
@@ -33,22 +33,19 @@ import java.util.Objects;
 public class ConnectionPool extends ResourceDistributor.SingletonResource {
 
     private static final String RESOURCE_KEY = "io.supertokens.storage.postgresql.ConnectionPool";
-    private static HikariDataSource hikariDataSource = null;
+    private HikariDataSource hikariDataSource;
+    private final Start start;
 
     private ConnectionPool(Start start) {
+        this.start = start;
+    }
+
+    private synchronized void initialiseHikariDataSource() throws SQLException {
+        if (this.hikariDataSource != null) {
+            return;
+        }
         if (!start.enabled) {
             throw new RuntimeException("Connection to refused"); // emulates exception thrown by Hikari
-        }
-
-        if (ConnectionPool.hikariDataSource != null) {
-            // This implies that it was already created before and that
-            // there is no need to create Hikari again.
-
-            // If ConnectionPool.hikariDataSource == null, it implies that
-            // either the config file had changed somehow (which means the plugin JAR was reloaded, resulting in static
-            // variables to be set to null), or it means that this is the first time we are trying to connect to a db
-            // (applicable only for testing).
-            return;
         }
 
         HikariConfig config = new HikariConfig();
@@ -92,8 +89,12 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         // SuperTokens
         // - Failed to validate connection org.mariadb.jdbc.MariaDbConnection@79af83ae (Connection.setNetworkTimeout
         // cannot be called on a closed connection). Possibly consider using a shorter maxLifetime value.
-        config.setPoolName("SuperTokens");
-        hikariDataSource = new HikariDataSource(config);
+        config.setPoolName(start.getUserPoolId() + "~" + start.getConnectionPoolId());
+        try {
+            hikariDataSource = new HikariDataSource(config);
+        } catch (Exception e) {
+            throw new SQLException(e);
+        }
     }
 
     private static int getTimeToWaitToInit(Start start) {
@@ -120,30 +121,41 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         return (ConnectionPool) start.getResourceDistributor().getResource(RESOURCE_KEY);
     }
 
-    static void initPool(Start start) {
-        if (getInstance(start) != null) {
+    static boolean isAlreadyInitialised(Start start) {
+        return getInstance(start) != null && getInstance(start).hikariDataSource != null;
+    }
+
+    static void initPool(Start start, boolean shouldWait) throws DbInitException {
+        if (isAlreadyInitialised(start)) {
             return;
         }
         if (Thread.currentThread() != start.mainThread) {
-            throw new QuitProgramFromPluginException("Should not come here");
+            throw new DbInitException("Should not come here");
         }
         Logging.info(start, "Setting up PostgreSQL connection pool.", true);
         boolean longMessagePrinted = false;
         long maxTryTime = System.currentTimeMillis() + getTimeToWaitToInit(start);
-        String errorMessage = "Error connecting to PostgreSQL instance. Please make sure that PostgreSQL is running and that "
-                + "you have" + " specified the correct values for ('postgresql_host' and 'postgresql_port') or for "
-                + "'postgresql_connection_uri'";
+        String errorMessage =
+                "Error connecting to PostgreSQL instance. Please make sure that PostgreSQL is running and that "
+                        + "you have" +
+                        " specified the correct values for ('postgresql_host' and 'postgresql_port') or for "
+                        + "'postgresql_connection_uri'";
         try {
+            ConnectionPool con = new ConnectionPool(start);
+            start.getResourceDistributor().setResource(RESOURCE_KEY, con);
             while (true) {
                 try {
-                    start.getResourceDistributor().setResource(RESOURCE_KEY, new ConnectionPool(start));
+                    con.initialiseHikariDataSource();
                     break;
                 } catch (Exception e) {
+                    if (!shouldWait) {
+                        throw new DbInitException(e);
+                    }
                     if (e.getMessage().contains("Connection to") && e.getMessage().contains("refused")
                             || e.getMessage().contains("the database system is starting up")) {
                         start.handleKillSignalForWhenItHappens();
                         if (System.currentTimeMillis() > maxTryTime) {
-                            throw new QuitProgramFromPluginException(errorMessage);
+                            throw new DbInitException(errorMessage);
                         }
                         if (!longMessagePrinted) {
                             longMessagePrinted = true;
@@ -160,10 +172,10 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
                             }
                             Thread.sleep(getRetryIntervalIfInitFails(start));
                         } catch (InterruptedException ex) {
-                            throw new QuitProgramFromPluginException(errorMessage);
+                            throw new DbInitException(errorMessage);
                         }
                     } else {
-                        throw e;
+                        throw new DbInitException(e);
                     }
                 }
             }
@@ -174,19 +186,28 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
 
     public static Connection getConnection(Start start) throws SQLException {
         if (getInstance(start) == null) {
-            throw new QuitProgramFromPluginException("Please call initPool before getConnection");
+            throw new IllegalStateException("Please call initPool before getConnection");
         }
         if (!start.enabled) {
             throw new SQLException("Storage layer disabled");
         }
-        return ConnectionPool.hikariDataSource.getConnection();
+        if (getInstance(start).hikariDataSource == null) {
+            getInstance(start).initialiseHikariDataSource();
+        }
+        return getInstance(start).hikariDataSource.getConnection();
     }
 
     static void close(Start start) {
         if (getInstance(start) == null) {
             return;
         }
-        ConnectionPool.hikariDataSource.close();
-        ConnectionPool.hikariDataSource = null;
+        if (getInstance(start).hikariDataSource != null) {
+            try {
+                getInstance(start).hikariDataSource.close();
+            } finally {
+                // we mark it as null so that next time it's being initialised, it will be initialised again
+                getInstance(start).hikariDataSource = null;
+            }
+        }
     }
 }

@@ -22,6 +22,8 @@ import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.dashboard.DashboardSearchTags;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -33,10 +35,7 @@ import org.jetbrains.annotations.TestOnly;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
 import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.CREATING_NEW_TABLE;
@@ -44,20 +43,13 @@ import static io.supertokens.storage.postgresql.ProcessState.getInstance;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
-import static io.supertokens.storage.postgresql.queries.EmailPasswordQueries.getQueryToCreatePasswordResetTokenExpiryIndex;
-import static io.supertokens.storage.postgresql.queries.EmailPasswordQueries.getQueryToCreatePasswordResetTokensTable;
-import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.getQueryToCreateEmailVerificationTable;
-import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.getQueryToCreateEmailVerificationTokenExpiryIndex;
-import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.getQueryToCreateEmailVerificationTokensTable;
+import static io.supertokens.storage.postgresql.queries.EmailPasswordQueries.*;
+import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.*;
+import static io.supertokens.storage.postgresql.queries.JWTSigningQueries.getQueryToCreateAppIdIndexForJWTSigningTable;
 import static io.supertokens.storage.postgresql.queries.JWTSigningQueries.getQueryToCreateJWTSigningTable;
-import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateCodeCreatedAtIndex;
-import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateCodeDeviceIdHashIndex;
-import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateCodesTable;
-import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateDeviceEmailIndex;
-import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateDevicePhoneNumberIndex;
-import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateDevicesTable;
-import static io.supertokens.storage.postgresql.queries.SessionQueries.getQueryToCreateAccessTokenSigningKeysTable;
-import static io.supertokens.storage.postgresql.queries.SessionQueries.getQueryToCreateSessionInfoTable;
+import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.*;
+import static io.supertokens.storage.postgresql.queries.SessionQueries.*;
+import static io.supertokens.storage.postgresql.queries.UserMetadataQueries.getQueryToCreateAppIdIndexForUserMetadataTable;
 import static io.supertokens.storage.postgresql.queries.UserMetadataQueries.getQueryToCreateUserMetadataTable;
 
 public class GeneralQueries {
@@ -77,17 +69,72 @@ public class GeneralQueries {
         String usersTable = Config.getConfig(start).getUsersTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + usersTable + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "tenant_id VARCHAR(64) DEFAULT 'public',"
                 + "user_id CHAR(36) NOT NULL,"
                 + "recipe_id VARCHAR(128) NOT NULL,"
                 + "time_joined BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, null, "pkey") +
-                " PRIMARY KEY (user_id));";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, null, "pkey")
+                + " PRIMARY KEY (app_id, tenant_id, user_id),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "tenant_id", "fkey")
+                + " FOREIGN KEY(app_id, tenant_id)"
+                + " REFERENCES " + Config.getConfig(start).getTenantsTable() + " (app_id, tenant_id) ON DELETE CASCADE,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "user_id", "fkey")
+                + " FOREIGN KEY(app_id, user_id)"
+                + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +
+                " (app_id, user_id) ON DELETE CASCADE"
+                + ");";
         // @formatter:on
+    }
+
+    public static String getQueryToCreateUserIdIndexForUsersTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS all_auth_recipe_user_id_index ON "
+                + Config.getConfig(start).getUsersTable() + "(app_id, user_id);";
+    }
+
+    public static String getQueryToCreateTenantIdIndexForUsersTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS all_auth_recipe_tenant_id_index ON "
+                + Config.getConfig(start).getUsersTable() + "(app_id, tenant_id);";
     }
 
     static String getQueryToCreateUserPaginationIndex(Start start) {
         return "CREATE INDEX all_auth_recipe_users_pagination_index ON " + Config.getConfig(start).getUsersTable()
-                + "(time_joined DESC, user_id " + "DESC);";
+                + "(time_joined DESC, user_id DESC, tenant_id DESC, app_id DESC);";
+    }
+
+    private static String getQueryToCreateAppsTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String appsTable = Config.getConfig(start).getAppsTable();
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + appsTable + " ("
+                + "app_id VARCHAR(64) NOT NULL DEFAULT 'public',"
+                + "created_at_time BIGINT ,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, appsTable, null, "pkey") 
+				+ " PRIMARY KEY(app_id)" +
+                " );";
+        // @formatter:on
+    }
+
+    private static String getQueryToCreateTenantsTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String tenantsTable = Config.getConfig(start).getTenantsTable();
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + tenantsTable + " ("
+                + "app_id VARCHAR(64) NOT NULL DEFAULT 'public',"
+                + "tenant_id VARCHAR(64) NOT NULL DEFAULT 'public',"
+                + "created_at_time BIGINT ,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tenantsTable, null, "pkey") +
+                " PRIMARY KEY(app_id, tenant_id) ,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tenantsTable, "app_id", "fkey")
+                + " FOREIGN KEY(app_id)"
+                + " REFERENCES " + Config.getConfig(start).getAppsTable() + " (app_id) ON DELETE CASCADE"
+                + ");";
+        // @formatter:on
+    }
+
+    static String getQueryToCreateAppIdIndexForTenantsTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS tenants_app_id_index ON "
+                + Config.getConfig(start).getTenantsTable() + "(app_id);";
     }
 
     private static String getQueryToCreateKeyValueTable(Start start) {
@@ -95,12 +142,45 @@ public class GeneralQueries {
         String keyValueTable = Config.getConfig(start).getKeyValueTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + keyValueTable + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "tenant_id VARCHAR(64) DEFAULT 'public',"
                 + "name VARCHAR(128),"
                 + "value TEXT,"
                 + "created_at_time BIGINT ,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, keyValueTable, null, "pkey") + " PRIMARY KEY(name)" +
-                " );";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, keyValueTable, null, "pkey")
+                + " PRIMARY KEY(app_id, tenant_id, name),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, keyValueTable, "tenant_id", "fkey")
+                + " FOREIGN KEY(app_id, tenant_id)"
+                + " REFERENCES " + Config.getConfig(start).getTenantsTable() + " (app_id, tenant_id) ON DELETE CASCADE"
+                + ");";
         // @formatter:on
+    }
+
+    static String getQueryToCreateTenantIdIndexForKeyValueTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS key_value_tenant_id_index ON "
+                + Config.getConfig(start).getKeyValueTable() + "(app_id, tenant_id);";
+    }
+
+    private static String getQueryToCreateAppIdToUserIdTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String appToUserTable = Config.getConfig(start).getAppIdToUserIdTable();
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + appToUserTable + " ("
+                + "app_id VARCHAR(64) NOT NULL DEFAULT 'public',"
+                + "user_id CHAR(36) NOT NULL,"
+                + "recipe_id VARCHAR(128) NOT NULL,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, null, "pkey")
+                + " PRIMARY KEY (app_id, user_id), "
+                + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, "app_id", "fkey")
+                + " FOREIGN KEY(app_id) REFERENCES " + Config.getConfig(start).getAppsTable()
+                + " (app_id) ON DELETE CASCADE"
+                + ");";
+        // @formatter:on
+    }
+
+    static String getQueryToCreateAppIdIndexForAppIdToUserIdTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS app_id_to_user_id_app_id_index ON "
+                + Config.getConfig(start).getAppIdToUserIdTable() + "(app_id);";
     }
 
     public static void createTablesIfNotExists(Start start) throws SQLException, StorageQueryException {
@@ -109,9 +189,33 @@ public class GeneralQueries {
         while (retry) {
             retry = false;
             try {
+                if (!doesTableExists(start, Config.getConfig(start).getAppsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreateAppsTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getTenantsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreateTenantsTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, getQueryToCreateAppIdIndexForTenantsTable(start), NO_OP_SETTER);
+                }
+
                 if (!doesTableExists(start, Config.getConfig(start).getKeyValueTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateKeyValueTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, getQueryToCreateTenantIdIndexForKeyValueTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getAppIdToUserIdTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, getQueryToCreateAppIdToUserIdTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, getQueryToCreateAppIdIndexForAppIdToUserIdTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getUsersTable())) {
@@ -125,16 +229,51 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getUserLastActiveTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, ActiveUsersQueries.getQueryToCreateUserLastActiveTable(start), NO_OP_SETTER);
+
+                    // Index
+                    update(start, ActiveUsersQueries.getQueryToCreateAppIdIndexForUserLastActiveTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateAccessTokenSigningKeysTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, getQueryToCreateAppIdIndexForAccessTokenSigningKeysTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getSessionInfoTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateSessionInfoTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, getQueryToCreateSessionExpiryIndex(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateTenantIdIndexForSessionInfoTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getTenantConfigsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, MultitenancyQueries.getQueryToCreateTenantConfigsTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getTenantThirdPartyProvidersTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, MultitenancyQueries.getQueryToCreateTenantThirdPartyProvidersTable(start),
+                            NO_OP_SETTER);
+
+                    // index
+                    update(start, MultitenancyQueries.getQueryToCreateTenantIdIndexForTenantThirdPartyProvidersTable(start),
+                            NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getTenantThirdPartyProviderClientsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, MultitenancyQueries.getQueryToCreateTenantThirdPartyProviderClientsTable(start),
+                            NO_OP_SETTER);
+
+                    // index
+                    update(start, MultitenancyQueries.getQueryToCreateThirdPartyIdIndexForTenantThirdPartyProviderClientsTable(start),
+                            NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getEmailPasswordUsersTable())) {
@@ -142,16 +281,26 @@ public class GeneralQueries {
                     update(start, EmailPasswordQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getEmailPasswordUserToTenantTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, EmailPasswordQueries.getQueryToCreateEmailPasswordUserToTenantTable(start),
+                            NO_OP_SETTER);
+                }
+
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordResetTokensTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreatePasswordResetTokensTable(start), NO_OP_SETTER);
                     // index
                     update(start, getQueryToCreatePasswordResetTokenExpiryIndex(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateUserIdIndexForPasswordResetTokensTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getEmailVerificationTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateEmailVerificationTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, getQueryToCreateAppIdIndexForEmailVerificationTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getEmailVerificationTokensTable())) {
@@ -159,21 +308,43 @@ public class GeneralQueries {
                     update(start, getQueryToCreateEmailVerificationTokensTable(start), NO_OP_SETTER);
                     // index
                     update(start, getQueryToCreateEmailVerificationTokenExpiryIndex(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateTenantIdIndexForEmailVerificationTokensTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getThirdPartyUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, ThirdPartyQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
+                    // index
+                    update(start, ThirdPartyQueries.getQueryToThirdPartyUserEmailIndex(start), NO_OP_SETTER);
+                    update(start, ThirdPartyQueries.getQueryToThirdPartyUserIdIndex(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getThirdPartyUserToTenantTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, ThirdPartyQueries.getQueryToCreateThirdPartyUserToTenantTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getJWTSigningKeysTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateJWTSigningTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, getQueryToCreateAppIdIndexForJWTSigningTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, PasswordlessQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, getQueryToCreateUserIdIndexForUsersTable(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateTenantIdIndexForUsersTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getPasswordlessUserToTenantTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, PasswordlessQueries.getQueryToCreatePasswordlessUserToTenantTable(start),
+                            NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessDevicesTable())) {
@@ -182,6 +353,7 @@ public class GeneralQueries {
                     // index
                     update(start, getQueryToCreateDeviceEmailIndex(start), NO_OP_SETTER);
                     update(start, getQueryToCreateDevicePhoneNumberIndex(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateTenantIdIndexForDevicesTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getPasswordlessCodesTable())) {
@@ -189,8 +361,8 @@ public class GeneralQueries {
                     update(start, getQueryToCreateCodesTable(start), NO_OP_SETTER);
                     // index
                     update(start, getQueryToCreateCodeCreatedAtIndex(start), NO_OP_SETTER);
-                }
 
+                }
                 // This PostgreSQL specific, because it's created automatically in MySQL and it
                 // doesn't support "create
                 // index if not exists"
@@ -201,11 +373,17 @@ public class GeneralQueries {
                 if (!doesTableExists(start, Config.getConfig(start).getUserMetadataTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateUserMetadataTable(start), NO_OP_SETTER);
+
+                    // Index
+                    update(start, getQueryToCreateAppIdIndexForUserMetadataTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getRolesTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, UserRolesQueries.getQueryToCreateRolesTable(start), NO_OP_SETTER);
+
+                    // Index
+                    update(start, UserRolesQueries.getQueryToCreateAppIdIndexForRolesTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getUserRolesPermissionsTable())) {
@@ -213,23 +391,33 @@ public class GeneralQueries {
                     update(start, UserRolesQueries.getQueryToCreateRolePermissionsTable(start), NO_OP_SETTER);
                     // index
                     update(start, UserRolesQueries.getQueryToCreateRolePermissionsPermissionIndex(start), NO_OP_SETTER);
+                    update(start, UserRolesQueries.getQueryToCreateRoleIndexForRolePermissionsTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getUserRolesTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, UserRolesQueries.getQueryToCreateUserRolesTable(start), NO_OP_SETTER);
+
                     // index
                     update(start, UserRolesQueries.getQueryToCreateUserRolesRoleIndex(start), NO_OP_SETTER);
+                    update(start, UserRolesQueries.getQueryToCreateTenantIdIndexForUserRolesTable(start), NO_OP_SETTER);
+                    update(start, UserRolesQueries.getQueryToCreateRoleIndexForUserRolesTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getUserIdMappingTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, UserIdMappingQueries.getQueryToCreateUserIdMappingTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, UserIdMappingQueries.getQueryToCreateSupertokensUserIdIndexForUserIdMappingTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getDashboardUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, DashboardQueries.getQueryToCreateDashboardUsersTable(start), NO_OP_SETTER);
+
+                    // Index
+                    update(start, DashboardQueries.getQueryToCreateAppIdIndexForDashboardUsersTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getDashboardSessionsTable())) {
@@ -238,16 +426,24 @@ public class GeneralQueries {
                     // index
                     update(start, DashboardQueries.getQueryToCreateDashboardUserSessionsExpiryIndex(start),
                             NO_OP_SETTER);
+                    update(start, DashboardQueries.getQueryToCreateUserIdIndexForDashboardUserSessionsTable(start),
+                            NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getTotpUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, TOTPQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, TOTPQueries.getQueryToCreateAppIdIndexForUsersTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getTotpUserDevicesTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, TOTPQueries.getQueryToCreateUserDevicesTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, TOTPQueries.getQueryToCreateUserIdIndexForUserDevicesTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getTotpUsedCodesTable())) {
@@ -255,6 +451,8 @@ public class GeneralQueries {
                     update(start, TOTPQueries.getQueryToCreateUsedCodesTable(start), NO_OP_SETTER);
                     // index:
                     update(start, TOTPQueries.getQueryToCreateUsedCodesExpiryTimeIndex(start), NO_OP_SETTER);
+                    update(start, TOTPQueries.getQueryToCreateUserIdIndexForUsedCodesTable(start), NO_OP_SETTER);
+                    update(start, TOTPQueries.getQueryToCreateTenantIdIndexForUsedCodesTable(start), NO_OP_SETTER);
                 }
 
             } catch (Exception e) {
@@ -291,20 +489,36 @@ public class GeneralQueries {
         }
 
         {
-            String DROP_QUERY = "DROP TABLE IF EXISTS " + getConfig(start).getKeyValueTable() + ","
+            String DROP_QUERY = "DROP TABLE IF EXISTS "
+                    + getConfig(start).getAppsTable() + ","
                     + getConfig(start).getUserLastActiveTable() + ","
-                    + getConfig(start).getUserIdMappingTable() + "," + getConfig(start).getUsersTable() + ","
-                    + getConfig(start).getAccessTokenSigningKeysTable() + "," + getConfig(start).getSessionInfoTable()
-                    + "," + getConfig(start).getEmailPasswordUsersTable() + ","
+                    + getConfig(start).getTenantsTable() + ","
+                    + getConfig(start).getKeyValueTable() + ","
+                    + getConfig(start).getAppIdToUserIdTable() + ","
+                    + getConfig(start).getUserIdMappingTable() + ","
+                    + getConfig(start).getUsersTable() + ","
+                    + getConfig(start).getAccessTokenSigningKeysTable() + ","
+                    + getConfig(start).getTenantConfigsTable() + ","
+                    + getConfig(start).getTenantThirdPartyProvidersTable() + ","
+                    + getConfig(start).getTenantThirdPartyProviderClientsTable() + ","
+                    + getConfig(start).getSessionInfoTable() + ","
+                    + getConfig(start).getEmailPasswordUserToTenantTable() + ","
+                    + getConfig(start).getEmailPasswordUsersTable() + ","
                     + getConfig(start).getPasswordResetTokensTable() + ","
                     + getConfig(start).getEmailVerificationTokensTable() + ","
-                    + getConfig(start).getEmailVerificationTable() + "," + getConfig(start).getThirdPartyUsersTable()
-                    + "," + getConfig(start).getJWTSigningKeysTable() + ","
+                    + getConfig(start).getEmailVerificationTable() + ","
+                    + getConfig(start).getThirdPartyUsersTable() + ","
+                    + getConfig(start).getThirdPartyUserToTenantTable() + ","
+                    + getConfig(start).getJWTSigningKeysTable() + ","
                     + getConfig(start).getPasswordlessCodesTable() + ","
                     + getConfig(start).getPasswordlessDevicesTable() + ","
-                    + getConfig(start).getPasswordlessUsersTable() + "," + getConfig(start).getUserMetadataTable() + ","
-                    + getConfig(start).getRolesTable() + "," + getConfig(start).getUserRolesPermissionsTable() + ","
-                    + getConfig(start).getUserRolesTable() + "," + getConfig(start).getDashboardUsersTable() + ","
+                    + getConfig(start).getPasswordlessUserToTenantTable() + ","
+                    + getConfig(start).getPasswordlessUsersTable() + ","
+                    + getConfig(start).getUserMetadataTable() + ","
+                    + getConfig(start).getRolesTable() + ","
+                    + getConfig(start).getUserRolesPermissionsTable() + ","
+                    + getConfig(start).getUserRolesTable() + ","
+                    + getConfig(start).getDashboardUsersTable() + ","
                     + getConfig(start).getDashboardSessionsTable() + ","
                     + getConfig(start).getTotpUsedCodesTable() + "," + getConfig(start).getTotpUserDevicesTable() + ","
                     + getConfig(start).getTotpUsersTable();
@@ -312,45 +526,41 @@ public class GeneralQueries {
         }
     }
 
-    public static void setKeyValue_Transaction(Start start, Connection con, String key, KeyValueInfo info)
+    public static void setKeyValue_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,
+                                               String key, KeyValueInfo info)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getKeyValueTable()
-                + "(name, value, created_at_time) VALUES(?, ?, ?) "
-                + "ON CONFLICT (name) DO UPDATE SET value = ?, created_at_time = ?";
+                + "(app_id, tenant_id, name, value, created_at_time) VALUES(?, ?, ?, ?, ?) "
+                + "ON CONFLICT (app_id, tenant_id, name) DO UPDATE SET value = ?, created_at_time = ?";
 
         update(con, QUERY, pst -> {
-            pst.setString(1, key);
-            pst.setString(2, info.value);
-            pst.setLong(3, info.createdAtTime);
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, key);
             pst.setString(4, info.value);
             pst.setLong(5, info.createdAtTime);
+            pst.setString(6, info.value);
+            pst.setLong(7, info.createdAtTime);
         });
     }
 
-    public static void setKeyValue(Start start, String key, KeyValueInfo info)
+    public static void setKeyValue(Start start, TenantIdentifier tenantIdentifier, String key, KeyValueInfo info)
             throws SQLException, StorageQueryException {
         try (Connection con = ConnectionPool.getConnection(start)) {
-            setKeyValue_Transaction(start, con, key, info);
+            setKeyValue_Transaction(start, con, tenantIdentifier, key, info);
         }
     }
 
-    public static KeyValueInfo getKeyValue(Start start, String key) throws SQLException, StorageQueryException {
-        String QUERY = "SELECT value, created_at_time FROM " + getConfig(start).getKeyValueTable() + " WHERE name = ?";
-
-        return execute(start, QUERY, pst -> pst.setString(1, key), result -> {
-            if (result.next()) {
-                return KeyValueInfoRowMapper.getInstance().mapOrThrow(result);
-            }
-            return null;
-        });
-    }
-
-    public static KeyValueInfo getKeyValue_Transaction(Start start, Connection con, String key)
+    public static KeyValueInfo getKeyValue(Start start, TenantIdentifier tenantIdentifier, String key)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT value, created_at_time FROM " + getConfig(start).getKeyValueTable()
-                + " WHERE name = ? FOR UPDATE";
+                + " WHERE app_id = ? AND tenant_id = ? AND name = ?";
 
-        return execute(con, QUERY, pst -> pst.setString(1, key), result -> {
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, key);
+        }, result -> {
             if (result.next()) {
                 return KeyValueInfoRowMapper.getInstance().mapOrThrow(result);
             }
@@ -358,21 +568,45 @@ public class GeneralQueries {
         });
     }
 
-    public static void deleteKeyValue_Transaction(Start start, Connection con, String key)
+    public static KeyValueInfo getKeyValue_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,
+                                                       String key)
             throws SQLException, StorageQueryException {
-        String QUERY = "DELETE FROM " + getConfig(start).getKeyValueTable() + " WHERE name = ?";
+        String QUERY = "SELECT value, created_at_time FROM " + getConfig(start).getKeyValueTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND name = ? FOR UPDATE";
 
-        update(con, QUERY, pst -> pst.setString(1, key));
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, key);
+        }, result -> {
+            if (result.next()) {
+                return KeyValueInfoRowMapper.getInstance().mapOrThrow(result);
+            }
+            return null;
+        });
     }
 
-    public static long getUsersCount(Start start, RECIPE_ID[] includeRecipeIds)
+    public static void deleteKeyValue_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,
+                                                  String key)
+            throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + getConfig(start).getKeyValueTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND name = ?";
+
+        update(con, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, key);
+        });
+    }
+
+    public static long getUsersCount(Start start, AppIdentifier appIdentifier, RECIPE_ID[] includeRecipeIds)
             throws SQLException, StorageQueryException {
         StringBuilder QUERY = new StringBuilder("SELECT COUNT(*) as total FROM " + getConfig(start).getUsersTable());
+        QUERY.append(" WHERE app_id = ?");
         if (includeRecipeIds != null && includeRecipeIds.length > 0) {
-            QUERY.append(" WHERE recipe_id IN (");
+            QUERY.append(" AND recipe_id IN (");
             for (int i = 0; i < includeRecipeIds.length; i++) {
-                String recipeId = includeRecipeIds[i].toString();
-                QUERY.append("'").append(recipeId).append("'");
+                QUERY.append("?");
                 if (i != includeRecipeIds.length - 1) {
                     // not the last element
                     QUERY.append(",");
@@ -381,7 +615,15 @@ public class GeneralQueries {
             QUERY.append(")");
         }
 
-        return execute(start, QUERY.toString(), NO_OP_SETTER, result -> {
+        return execute(start, QUERY.toString(), pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            if (includeRecipeIds != null) {
+                for (int i = 0; i < includeRecipeIds.length; i++) {
+                    // i+2 cause this starts with 1 and not 0, and 1 is appId
+                    pst.setString(i + 2, includeRecipeIds[i].toString());
+                }
+            }
+        }, result -> {
             if (result.next()) {
                 return result.getLong("total");
             }
@@ -389,16 +631,67 @@ public class GeneralQueries {
         });
     }
 
-    public static boolean doesUserIdExist(Start start, String userId) throws SQLException, StorageQueryException {
+    public static long getUsersCount(Start start, TenantIdentifier tenantIdentifier, RECIPE_ID[] includeRecipeIds)
+            throws SQLException, StorageQueryException {
+        StringBuilder QUERY = new StringBuilder("SELECT COUNT(*) as total FROM " + getConfig(start).getUsersTable());
+        QUERY.append(" WHERE app_id = ? AND tenant_id = ?");
+        if (includeRecipeIds != null && includeRecipeIds.length > 0) {
+            QUERY.append(" AND recipe_id IN (");
+            for (int i = 0; i < includeRecipeIds.length; i++) {
+                QUERY.append("?");
+                if (i != includeRecipeIds.length - 1) {
+                    // not the last element
+                    QUERY.append(",");
+                }
+            }
+            QUERY.append(")");
+        }
 
-        String QUERY = "SELECT 1 FROM " + getConfig(start).getUsersTable() + " WHERE user_id = ?";
-        return execute(start, QUERY, pst -> pst.setString(1, userId), ResultSet::next);
-
+        return execute(start, QUERY.toString(), pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            if (includeRecipeIds != null) {
+                for (int i = 0; i < includeRecipeIds.length; i++) {
+                    // i+3 cause this starts with 1 and not 0, and 1 is appId, 2 is tenantId
+                    pst.setString(i + 3, includeRecipeIds[i].toString());
+                }
+            }
+        }, result -> {
+            if (result.next()) {
+                return result.getLong("total");
+            }
+            return 0L;
+        });
     }
 
-    public static AuthRecipeUserInfo[] getUsers(Start start, @NotNull Integer limit, @NotNull String timeJoinedOrder,
-            @Nullable RECIPE_ID[] includeRecipeIds, @Nullable String userId, @Nullable Long timeJoined,
-            @Nullable DashboardSearchTags dashboardSearchTags)
+    public static boolean doesUserIdExist(Start start, AppIdentifier appIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+
+        String QUERY = "SELECT 1 FROM " + getConfig(start).getAppIdToUserIdTable()
+                + " WHERE app_id = ? AND user_id = ?";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, ResultSet::next);
+    }
+
+    public static boolean doesUserIdExist(Start start, TenantIdentifier tenantIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+
+        String QUERY = "SELECT 1 FROM " + getConfig(start).getUsersTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND user_id = ?";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, userId);
+        }, ResultSet::next);
+    }
+
+    public static AuthRecipeUserInfo[] getUsers(Start start, TenantIdentifier tenantIdentifier, @NotNull Integer limit,
+                                                @NotNull String timeJoinedOrder,
+                                                @Nullable RECIPE_ID[] includeRecipeIds, @Nullable String userId,
+                                                @Nullable Long timeJoined,
+                                                @Nullable DashboardSearchTags dashboardSearchTags)
             throws SQLException, StorageQueryException {
 
         // This list will be used to keep track of the result's order from the db
@@ -414,11 +707,16 @@ public class GeneralQueries {
                     if (dashboardSearchTags.shouldEmailPasswordTableBeSearched()) {
                         String QUERY = "SELECT  allAuthUsersTable.*" + " FROM " + getConfig(start).getUsersTable()
                                 + " AS allAuthUsersTable" +
-                                " JOIN " + getConfig(start).getEmailPasswordUsersTable()
-                                + " AS emailpasswordTable ON allAuthUsersTable.user_id = emailpasswordTable.user_id";
+                                " JOIN " + getConfig(start).getEmailPasswordUserToTenantTable()
+                                + " AS emailpasswordTable ON allAuthUsersTable.app_id = emailpasswordTable.app_id AND "
+                                + "allAuthUsersTable.user_id = emailpasswordTable.user_id";
 
                         // attach email tags to queries
-                        QUERY = QUERY + " WHERE emailpasswordTable.email LIKE ? OR emailpasswordTable.email LIKE ?";
+                        QUERY = QUERY +
+                                " WHERE (emailpasswordTable.app_id = ? AND emailpasswordTable.tenant_id = ?) AND"
+                                + " (emailpasswordTable.email LIKE ? OR emailpasswordTable.email LIKE ?)";
+                        queryList.add(tenantIdentifier.getAppId());
+                        queryList.add(tenantIdentifier.getTenantId());
                         queryList.add(dashboardSearchTags.emails.get(0) + "%");
                         queryList.add("%@" + dashboardSearchTags.emails.get(0) + "%");
                         for (int i = 1; i < dashboardSearchTags.emails.size(); i++) {
@@ -427,7 +725,8 @@ public class GeneralQueries {
                             queryList.add("%@" + dashboardSearchTags.emails.get(i) + "%");
                         }
 
-                        USER_SEARCH_TAG_CONDITION.append("SELECT * FROM ( ").append(QUERY).append(" LIMIT 1000) AS emailpasswordResultTable");
+                        USER_SEARCH_TAG_CONDITION.append("SELECT * FROM ( ").append(QUERY)
+                                .append(" LIMIT 1000) AS emailpasswordResultTable");
                     }
                 }
 
@@ -437,12 +736,23 @@ public class GeneralQueries {
                         String QUERY = "SELECT  allAuthUsersTable.*" + " FROM " + getConfig(start).getUsersTable()
                                 + " AS allAuthUsersTable" +
                                 " JOIN " + getConfig(start).getThirdPartyUsersTable()
-                                + " AS thirdPartyTable ON allAuthUsersTable.user_id = thirdPartyTable.user_id";
+                                + " AS thirdPartyTable ON allAuthUsersTable.app_id = thirdPartyTable.app_id AND"
+                                + " allAuthUsersTable.user_id = thirdPartyTable.user_id"
+                                + " JOIN " + getConfig(start).getThirdPartyUserToTenantTable()
+                                +
+                                " AS thirdPartyToTenantTable ON thirdPartyTable.app_id = thirdPartyToTenantTable" +
+                                ".app_id AND"
+                                + " thirdPartyTable.user_id = thirdPartyToTenantTable.user_id";
 
                         // check if email tag is present
                         if (dashboardSearchTags.emails != null) {
 
-                            QUERY += " WHERE ( thirdPartyTable.email LIKE ? OR thirdPartyTable.email LIKE ?";
+                            QUERY +=
+                                    " WHERE (thirdPartyToTenantTable.app_id = ? AND thirdPartyToTenantTable.tenant_id" +
+                                            " = ?)"
+                                            + " AND ( thirdPartyTable.email LIKE ? OR thirdPartyTable.email LIKE ?";
+                            queryList.add(tenantIdentifier.getAppId());
+                            queryList.add(tenantIdentifier.getTenantId());
                             queryList.add(dashboardSearchTags.emails.get(0) + "%");
                             queryList.add("%@" + dashboardSearchTags.emails.get(0) + "%");
 
@@ -461,7 +771,10 @@ public class GeneralQueries {
                             if (dashboardSearchTags.emails != null) {
                                 QUERY += " AND ";
                             } else {
-                                QUERY += " WHERE ";
+                                QUERY += " WHERE (thirdPartyToTenantTable.app_id = ? AND thirdPartyToTenantTable" +
+                                        ".tenant_id = ?) AND ";
+                                queryList.add(tenantIdentifier.getAppId());
+                                queryList.add(tenantIdentifier.getTenantId());
                             }
 
                             QUERY += " ( thirdPartyTable.third_party_id LIKE ?";
@@ -480,7 +793,8 @@ public class GeneralQueries {
                                     .append(" LIMIT 1000) AS thirdPartyResultTable");
 
                         } else {
-                            USER_SEARCH_TAG_CONDITION.append("SELECT * FROM ( ").append(QUERY).append(" LIMIT 1000) AS thirdPartyResultTable");
+                            USER_SEARCH_TAG_CONDITION.append("SELECT * FROM ( ").append(QUERY)
+                                    .append(" LIMIT 1000) AS thirdPartyResultTable");
 
                         }
                     }
@@ -491,13 +805,17 @@ public class GeneralQueries {
                     if (dashboardSearchTags.shouldPasswordlessTableBeSearched()) {
                         String QUERY = "SELECT  allAuthUsersTable.*" + " FROM " + getConfig(start).getUsersTable()
                                 + " AS allAuthUsersTable" +
-                                " JOIN " + getConfig(start).getPasswordlessUsersTable()
-                                + " AS passwordlessTable ON allAuthUsersTable.user_id = passwordlessTable.user_id";
+                                " JOIN " + getConfig(start).getPasswordlessUserToTenantTable()
+                                + " AS passwordlessTable ON allAuthUsersTable.app_id = passwordlessTable.app_id AND"
+                                + " allAuthUsersTable.user_id = passwordlessTable.user_id";
 
                         // check if email tag is present
                         if (dashboardSearchTags.emails != null) {
 
-                            QUERY = QUERY + " WHERE ( passwordlessTable.email LIKE ? OR passwordlessTable.email LIKE ?";
+                            QUERY = QUERY + " WHERE (passwordlessTable.app_id = ? AND passwordlessTable.tenant_id = ?)"
+                                    + " AND ( passwordlessTable.email LIKE ? OR passwordlessTable.email LIKE ?";
+                            queryList.add(tenantIdentifier.getAppId());
+                            queryList.add(tenantIdentifier.getTenantId());
                             queryList.add(dashboardSearchTags.emails.get(0) + "%");
                             queryList.add("%@" + dashboardSearchTags.emails.get(0) + "%");
                             for (int i = 1; i < dashboardSearchTags.emails.size(); i++) {
@@ -515,7 +833,10 @@ public class GeneralQueries {
                             if (dashboardSearchTags.emails != null) {
                                 QUERY += " AND ";
                             } else {
-                                QUERY += " WHERE ";
+                                QUERY += " WHERE (passwordlessTable.app_id = ? AND passwordlessTable.tenant_id = ?) " +
+                                        "AND ";
+                                queryList.add(tenantIdentifier.getAppId());
+                                queryList.add(tenantIdentifier.getTenantId());
                             }
 
                             QUERY += " ( passwordlessTable.phone_number LIKE ?";
@@ -534,7 +855,8 @@ public class GeneralQueries {
                                     .append(" LIMIT 1000) AS passwordlessResultTable");
 
                         } else {
-                            USER_SEARCH_TAG_CONDITION.append("SELECT * FROM ( ").append(QUERY).append(" LIMIT 1000) AS passwordlessResultTable");
+                            USER_SEARCH_TAG_CONDITION.append("SELECT * FROM ( ").append(QUERY)
+                                    .append(" LIMIT 1000) AS passwordlessResultTable");
 
                         }
                     }
@@ -567,8 +889,8 @@ public class GeneralQueries {
             if (includeRecipeIds != null && includeRecipeIds.length > 0) {
                 RECIPE_ID_CONDITION.append("recipe_id IN (");
                 for (int i = 0; i < includeRecipeIds.length; i++) {
-                    String recipeId = includeRecipeIds[i].toString();
-                    RECIPE_ID_CONDITION.append("'").append(recipeId).append("'");
+
+                    RECIPE_ID_CONDITION.append("?");
                     if (i != includeRecipeIds.length - 1) {
                         // not the last element
                         RECIPE_ID_CONDITION.append(",");
@@ -585,13 +907,23 @@ public class GeneralQueries {
                 String timeJoinedOrderSymbol = timeJoinedOrder.equals("ASC") ? ">" : "<";
                 String QUERY = "SELECT user_id, recipe_id FROM " + getConfig(start).getUsersTable() + " WHERE "
                         + recipeIdCondition + " (time_joined " + timeJoinedOrderSymbol
-                        + " ? OR (time_joined = ? AND user_id <= ?)) ORDER BY time_joined " + timeJoinedOrder
+                        + " ? OR (time_joined = ? AND user_id <= ?)) AND app_id = ? AND tenant_id = ?"
+                        + " ORDER BY time_joined " + timeJoinedOrder
                         + ", user_id DESC LIMIT ?";
                 usersFromQuery = execute(start, QUERY, pst -> {
-                    pst.setLong(1, timeJoined);
-                    pst.setLong(2, timeJoined);
-                    pst.setString(3, userId);
-                    pst.setInt(4, limit);
+                    if (includeRecipeIds != null) {
+                        for (int i = 0; i < includeRecipeIds.length; i++) {
+                            // i+1 cause this starts with 1 and not 0
+                            pst.setString(i + 1, includeRecipeIds[i].toString());
+                        }
+                    }
+                    int baseIndex = includeRecipeIds == null ? 0 : includeRecipeIds.length;
+                    pst.setLong(baseIndex + 1, timeJoined);
+                    pst.setLong(baseIndex + 2, timeJoined);
+                    pst.setString(baseIndex + 3, userId);
+                    pst.setString(baseIndex + 4, tenantIdentifier.getAppId());
+                    pst.setString(baseIndex + 5, tenantIdentifier.getTenantId());
+                    pst.setInt(baseIndex + 6, limit);
                 }, result -> {
                     List<UserInfoPaginationResultHolder> temp = new ArrayList<>();
                     while (result.next()) {
@@ -602,12 +934,24 @@ public class GeneralQueries {
                 });
             } else {
                 String recipeIdCondition = RECIPE_ID_CONDITION.toString();
+                String QUERY = "SELECT user_id, recipe_id FROM " + getConfig(start).getUsersTable() + " WHERE ";
                 if (!recipeIdCondition.equals("")) {
-                    recipeIdCondition = " WHERE " + recipeIdCondition;
+                    QUERY += recipeIdCondition + " AND";
                 }
-                String QUERY = "SELECT user_id, recipe_id FROM " + getConfig(start).getUsersTable() + recipeIdCondition
-                        + " ORDER BY time_joined " + timeJoinedOrder + ", user_id DESC LIMIT ?";
-                usersFromQuery = execute(start, QUERY, pst -> pst.setInt(1, limit), result -> {
+                QUERY += " app_id = ? AND tenant_id = ? ORDER BY time_joined " + timeJoinedOrder
+                        + ", user_id DESC LIMIT ?";
+                usersFromQuery = execute(start, QUERY, pst -> {
+                    if (includeRecipeIds != null) {
+                        for (int i = 0; i < includeRecipeIds.length; i++) {
+                            // i+1 cause this starts with 1 and not 0
+                            pst.setString(i + 1, includeRecipeIds[i].toString());
+                        }
+                    }
+                    int baseIndex = includeRecipeIds == null ? 0 : includeRecipeIds.length;
+                    pst.setString(baseIndex + 1, tenantIdentifier.getAppId());
+                    pst.setString(baseIndex + 2, tenantIdentifier.getTenantId());
+                    pst.setInt(baseIndex + 3, limit);
+                }, result -> {
                     List<UserInfoPaginationResultHolder> temp = new ArrayList<>();
                     while (result.next()) {
                         temp.add(new UserInfoPaginationResultHolder(result.getString("user_id"),
@@ -637,8 +981,8 @@ public class GeneralQueries {
 
         // we give the userId[] for each recipe to fetch all those user's details
         for (RECIPE_ID recipeId : recipeIdToUserIdListMap.keySet()) {
-            List<? extends AuthRecipeUserInfo> users = getUserInfoForRecipeIdFromUserIds(start, recipeId,
-                    recipeIdToUserIdListMap.get(recipeId));
+            List<? extends AuthRecipeUserInfo> users = getUserInfoForRecipeIdFromUserIds(start,
+                    tenantIdentifier, recipeId, recipeIdToUserIdListMap.get(recipeId));
 
             // we fill in all the slots in finalResult based on their position in
             // usersFromQuery
@@ -656,8 +1000,11 @@ public class GeneralQueries {
         return finalResult;
     }
 
-    private static List<? extends AuthRecipeUserInfo> getUserInfoForRecipeIdFromUserIds(Start start, RECIPE_ID recipeId,
-            List<String> userIds) throws StorageQueryException, SQLException {
+    private static List<? extends AuthRecipeUserInfo> getUserInfoForRecipeIdFromUserIds(Start start,
+                                                                                        TenantIdentifier tenantIdentifier,
+                                                                                        RECIPE_ID recipeId,
+                                                                                        List<String> userIds)
+            throws StorageQueryException, SQLException {
         if (recipeId == RECIPE_ID.EMAIL_PASSWORD) {
             return EmailPasswordQueries.getUsersInfoUsingIdList(start, userIds);
         } else if (recipeId == RECIPE_ID.THIRD_PARTY) {
@@ -667,6 +1014,61 @@ public class GeneralQueries {
         } else {
             throw new IllegalArgumentException("No implementation of get users for recipe: " + recipeId.toString());
         }
+    }
+
+    public static String getRecipeIdForUser_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT recipe_id FROM " + getConfig(start).getAppIdToUserIdTable()
+                + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
+
+        return execute(sqlCon, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, result -> {
+            if (result.next()) {
+                return result.getString("recipe_id");
+            }
+            return null;
+        });
+    }
+
+    public static Map<String, List<String>> getTenantIdsForUserIds_transaction(Start start, Connection sqlCon, String[] userIds)
+            throws SQLException, StorageQueryException {
+        if (userIds != null && userIds.length > 0) {
+            StringBuilder QUERY = new StringBuilder("SELECT user_id, tenant_id "
+                    + "FROM " + getConfig(start).getUsersTable());
+            QUERY.append(" WHERE user_id IN (");
+            for (int i = 0; i < userIds.length; i++) {
+
+                QUERY.append("?");
+                if (i != userIds.length - 1) {
+                    // not the last element
+                    QUERY.append(",");
+                }
+            }
+            QUERY.append(")");
+
+            return execute(sqlCon, QUERY.toString(), pst -> {
+                for (int i = 0; i < userIds.length; i++) {
+                    // i+1 cause this starts with 1 and not 0
+                    pst.setString(i + 1, userIds[i]);
+                }
+            }, result -> {
+                Map<String, List<String>> finalResult = new HashMap<>();
+                while (result.next()) {
+                    String userId = result.getString("user_id").trim();
+                    String tenantId = result.getString("tenant_id");
+
+                    if (!finalResult.containsKey(userId)) {
+                        finalResult.put(userId, new ArrayList<>());
+                    }
+                    finalResult.get(userId).add(tenantId);
+                }
+                return finalResult;
+            });
+        }
+
+        return new HashMap<>();
     }
 
     private static class UserInfoPaginationResultHolder {
