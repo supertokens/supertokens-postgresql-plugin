@@ -239,6 +239,11 @@ public class DeadlockTest {
         es.shutdown();
         es.awaitTermination(2, TimeUnit.MINUTES);
 
+        assertNull(process
+                .checkOrWaitForEventInPlugin(io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
+        assertNotNull(process
+                .checkOrWaitForEventInPlugin(io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
+
         assert (pass.get());
 
         process.kill();

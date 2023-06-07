@@ -61,7 +61,7 @@ public class ProcessState extends ResourceDistributor.SingletonResource {
      * DEADLOCK_FOUND: In case of a deadlock situation, we put this event
      */
     public enum PROCESS_STATE {
-        CREATING_NEW_TABLE, DEADLOCK_FOUND
+        CREATING_NEW_TABLE, DEADLOCK_FOUND, DEADLOCK_NOT_RESOLVED
     }
 
     public static class EventAndException {
