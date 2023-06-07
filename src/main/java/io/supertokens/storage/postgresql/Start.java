@@ -225,6 +225,7 @@ public class Start
     @Override
     public <T> T startTransaction(TransactionLogic<T> logic, TransactionIsolationLevel isolationLevel)
             throws StorageTransactionLogicException, StorageQueryException {
+        final int NUM_TRIES = 50;
         int tries = 0;
         while (true) {
             tries++;
@@ -265,7 +266,7 @@ public class Start
                         // we have deadlock as well due to the DeadlockTest.java
                         exceptionMessage.toLowerCase().contains("deadlock");
 
-                if ((isPSQLRollbackException || isDeadlockException) && tries < 50) {
+                if ((isPSQLRollbackException || isDeadlockException) && tries < NUM_TRIES) {
                     try {
                         Thread.sleep((long) (10 + Math.min(tries, 10) * (Math.random() * 20)));
                     } catch (InterruptedException ignored) {
@@ -274,6 +275,10 @@ public class Start
                     // this because deadlocks are not necessarily a result of faulty logic. They can
                     // happen
                     continue;
+                }
+
+                if ((isPSQLRollbackException || isDeadlockException) && tries == NUM_TRIES) {
+                    ProcessState.getInstance(this).addState(ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED, e);
                 }
                 if (e instanceof StorageQueryException) {
                     throw (StorageQueryException) e;
