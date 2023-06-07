@@ -2950,10 +2950,29 @@ public class Start
     }
 
     @Override
-    public void upsertOAuth2ClientScope_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+    public void insertOAuth2ClientScope_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
                                                     String clientId, String scope, boolean requiresConsent)
-            throws StorageQueryException, UnknownOAuth2ClientIdException, UnknownOAuth2ScopeException {
-        //TODO:
+            throws StorageQueryException, UnknownOAuth2ClientIdException, UnknownOAuth2ScopeException, DuplicateOAuth2ClientScopeException {
+
+        Connection sqlCon = (Connection) con.getConnection();
+
+        try {
+            OAuth2Queries.insertOAuth2ClientScope_Transaction(this, sqlCon, appIdentifier,clientId, scope, requiresConsent);
+        } catch ( SQLException e) {
+            if (e instanceof PSQLException) {
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+                if (isPrimaryKeyError(serverMessage, Config.getConfig(this).getOAuth2ClientAllowedScopesTable())) {
+                    throw new DuplicateOAuth2ClientScopeException();
+                }
+                if (isForeignKeyConstraintError(serverMessage, Config.getConfig(this).getOAuth2ClientAllowedScopesTable(), "client_id")) {
+                    throw new UnknownOAuth2ClientIdException();
+                }
+                if (isForeignKeyConstraintError(serverMessage, Config.getConfig(this).getOAuth2ClientAllowedScopesTable(), "scope")) {
+                    throw new UnknownOAuth2ScopeException();
+                }
+            }
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override

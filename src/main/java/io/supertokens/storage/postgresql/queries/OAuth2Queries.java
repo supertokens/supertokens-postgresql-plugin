@@ -261,6 +261,21 @@ public class OAuth2Queries {
         });
     }
 
+    public static void insertOAuth2ClientScope_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
+                                                           String clientId, String scope, boolean requiresConsent)
+            throws SQLException, StorageQueryException {
+        String QUERY = "INSERT INTO " + getConfig(start).getOAuth2ClientAllowedScopesTable()
+                + "(app_id, client_id, scope, requires_consent)" +
+                " VALUES(?, ?, ?, ?) ";
+
+        update(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, clientId);
+            pst.setString(3, scope);
+            pst.setBoolean(4, requiresConsent);
+        });
+    }
+
     private static class OAuth2ClientRowMapper implements RowMapper<OAuth2Client, ResultSet> {
         private static final OAuth2Queries.OAuth2ClientRowMapper INSTANCE = new OAuth2Queries.OAuth2ClientRowMapper();
 
