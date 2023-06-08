@@ -268,7 +268,7 @@ public class Start
 
                 if ((isPSQLRollbackException || isDeadlockException) && tries < NUM_TRIES) {
                     try {
-                        Thread.sleep((long) (10 + Math.min(tries, 10) * (Math.random() * 20)));
+                        Thread.sleep((long) (10 + (250 + Math.min(Math.pow(2, tries), 3000)) * Math.random()));
                     } catch (InterruptedException ignored) {
                     }
                     ProcessState.getInstance(this).addState(ProcessState.PROCESS_STATE.DEADLOCK_FOUND, e);
