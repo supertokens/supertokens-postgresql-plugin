@@ -132,9 +132,10 @@ public class Start
     }
 
     @Override
-    public void constructor(String processId, boolean silent) {
+    public void constructor(String processId, boolean silent, boolean isTesting) {
         this.processId = processId;
         Start.silent = silent;
+        Start.isTesting = isTesting;
     }
 
     @Override
@@ -441,6 +442,9 @@ public class Start
     @TestOnly
     @Override
     public void deleteAllInformation() throws StorageQueryException {
+        if (!isTesting) {
+            throw new UnsupportedOperationException("This method is only for testing");
+        }
         ProcessState.getInstance(this).clear();
         try {
             GeneralQueries.deleteAllTables(this);
@@ -727,6 +731,9 @@ public class Start
     @TestOnly
     @Override
     public void addInfoToNonAuthRecipesBasedOnUserId(TenantIdentifier tenantIdentifier, String className, String userId) throws StorageQueryException {
+        if (!isTesting) {
+            throw new UnsupportedOperationException("This method is only for testing");
+        }
         // add entries to nonAuthRecipe tables with input userId
         if (className.equals(SessionStorage.class.getName())) {
             try {
@@ -2761,5 +2768,31 @@ public class Start
     @Override
     public void setLogLevels(Set<LOG_LEVEL> logLevels) {
         Config.setLogLevels(this, logLevels);
+    }
+
+    @TestOnly
+    @Override
+    public String[] getAllTablesInTheDatabase() throws StorageQueryException {
+        if (!isTesting) {
+            throw new UnsupportedOperationException();
+        }
+        try {
+            return GeneralQueries.getAllTablesInTheDatabase(this);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @TestOnly
+    @Override
+    public String[] getAllTablesInTheDatabaseThatHasDataForAppId(String appId) throws StorageQueryException {
+        if (!isTesting) {
+            throw new UnsupportedOperationException();
+        }
+        try {
+            return GeneralQueries.getAllTablesInTheDatabaseThatHasDataForAppId(this, appId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 }
