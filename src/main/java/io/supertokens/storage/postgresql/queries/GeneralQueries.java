@@ -1074,7 +1074,11 @@ public class GeneralQueries {
         return new HashMap<>();
     }
 
+    @TestOnly
     public static String[] getAllTablesInTheDatabase(Start start) throws StorageQueryException, SQLException {
+        if (!Start.isTesting) {
+            throw new UnsupportedOperationException();
+        }
         String QUERY = "SELECT tablename, schemaname FROM pg_catalog.pg_tables "
                 + " WHERE schemaname = ?";
 
@@ -1090,8 +1094,12 @@ public class GeneralQueries {
         });
     }
 
+    @TestOnly
     public static String[] getAllTablesInTheDatabaseThatHasDataForAppId(Start start, String appId)
             throws StorageQueryException, SQLException {
+        if (!Start.isTesting) {
+            throw new UnsupportedOperationException();
+        }
         String[] tableNames = getAllTablesInTheDatabase(start);
 
         List<String> result = new ArrayList<>();
