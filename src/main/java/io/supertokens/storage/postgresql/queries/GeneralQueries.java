@@ -475,6 +475,9 @@ public class GeneralQueries {
 
     @TestOnly
     public static void deleteAllTables(Start start) throws SQLException, StorageQueryException {
+        if (!Start.isTesting) {
+            throw new UnsupportedOperationException();
+        }
         {
             String DROP_QUERY = "DROP INDEX IF EXISTS emailpassword_password_reset_token_expiry_index";
             update(start, DROP_QUERY, NO_OP_SETTER);
