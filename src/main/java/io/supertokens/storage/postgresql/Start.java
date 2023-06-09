@@ -2762,4 +2762,22 @@ public class Start
     public void setLogLevels(Set<LOG_LEVEL> logLevels) {
         Config.setLogLevels(this, logLevels);
     }
+
+    @Override
+    public String[] getAllTablesInTheDatabase() throws StorageQueryException {
+        try {
+            return GeneralQueries.getAllTablesInTheDatabase(this);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public String[] getAllTablesInTheDatabaseThatHasDataForAppId(String appId) throws StorageQueryException {
+        try {
+            return GeneralQueries.getAllTablesInTheDatabaseThatHasDataForAppId(this, appId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
 }

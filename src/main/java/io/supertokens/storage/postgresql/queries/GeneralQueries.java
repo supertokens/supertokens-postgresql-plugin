@@ -1071,6 +1071,43 @@ public class GeneralQueries {
         return new HashMap<>();
     }
 
+    public static String[] getAllTablesInTheDatabase(Start start) throws StorageQueryException, SQLException {
+        String QUERY = "SELECT tablename, schemaname FROM pg_catalog.pg_tables "
+                + " WHERE schemaname = ?";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, Config.getConfig(start).getTableSchema());
+        }, result -> {
+            List<String> tableNames = new ArrayList<>();
+
+            while (result.next()) {
+                tableNames.add(result.getString("tablename"));
+            }
+            return tableNames.toArray(new String[0]);
+        });
+    }
+
+    public static String[] getAllTablesInTheDatabaseThatHasDataForAppId(Start start, String appId)
+            throws StorageQueryException, SQLException {
+        String[] tableNames = getAllTablesInTheDatabase(start);
+
+        List<String> result = new ArrayList<>();
+        for (String tableName : tableNames) {
+            String QUERY = "SELECT 1 FROM " + Config.getConfig(start).getTableSchema() + "." + tableName + " WHERE app_id = ?";
+
+            boolean hasRows = execute(start, QUERY, pst -> {
+                pst.setString(1, appId);
+            }, res -> {
+                 return res.next();
+            });
+            if (hasRows) {
+                result.add(tableName);
+            }
+        }
+
+        return result.toArray(new String[0]);
+    }
+
     private static class UserInfoPaginationResultHolder {
         String userId;
         String recipeId;
