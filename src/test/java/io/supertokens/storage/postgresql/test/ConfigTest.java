@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.gson.JsonObject;
 import io.supertokens.ProcessState;
+import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.session.SessionStorage;
 import io.supertokens.session.Session;
@@ -666,6 +667,12 @@ public class ConfigTest {
     public static void checkConfig(PostgreSQLConfig config) throws IOException {
         final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         PostgreSQLConfig userConfig = mapper.readValue(new File("../config.yaml"), PostgreSQLConfig.class);
+        try {
+            userConfig.validateAndNormalise();
+        } catch (InvalidConfigException e) {
+            throw new IllegalStateException(e);
+        }
+
         String hostname = userConfig.getHostName();
         assertEquals("Config getAttributes did not match default", config.getConnectionAttributes(),
                 "allowPublicKeyRetrieval=true");

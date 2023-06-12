@@ -315,7 +315,7 @@ public class PostgreSQLConfig {
         return name;
     }
 
-    void validateAndNormalise() throws InvalidConfigException {
+    public void validateAndNormalise() throws InvalidConfigException {
         if (isNormalizedAndValid) {
             return;
         }
