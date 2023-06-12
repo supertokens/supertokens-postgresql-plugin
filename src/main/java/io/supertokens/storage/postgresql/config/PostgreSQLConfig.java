@@ -112,6 +112,9 @@ public class PostgreSQLConfig {
     @ConnectionPoolProperty
     private String postgresql_connection_scheme = "postgresql";
 
+    @IgnoreForAnnotationCheck
+    private boolean isNormalizedAndValid = false;
+
     public static Set<String> getValidFields() {
         PostgreSQLConfig config = new PostgreSQLConfig();
         JsonObject configObj = new GsonBuilder().serializeNulls().create().toJsonTree(config).getAsJsonObject();
@@ -140,38 +143,23 @@ public class PostgreSQLConfig {
     }
 
     public String getHostName() {
-        if (postgresql_host != null) {
-            return postgresql_host;
-        }
-        return "localhost";
+        return postgresql_host;
     }
 
     public int getPort() {
-        if (postgresql_port != -1) {
-            return postgresql_port;
-        }
-        return 5432;
+        return postgresql_port;
     }
 
     public String getUser() {
-        if (postgresql_user != null) {
-            return postgresql_user;
-        }
-        return null;
+        return postgresql_user;
     }
 
     public String getPassword() {
-        if (postgresql_password != null) {
-            return postgresql_password;
-        }
-        return null;
+        return postgresql_password;
     }
 
     public String getDatabaseName() {
-        if (postgresql_database_name != null) {
-            return postgresql_database_name;
-        }
-        return "supertokens";
+        return postgresql_database_name;
     }
 
     public String getConnectionURI() {
@@ -207,13 +195,8 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName(tableName);
     }
 
-
     public String getKeyValueTable() {
-        String tableName = "key_value";
-        if (postgresql_key_value_table_name != null) {
-            return addSchemaToTableName(postgresql_key_value_table_name);
-        }
-        return addSchemaAndPrefixToTableName(tableName);
+        return postgresql_key_value_table_name;
     }
 
     public String getAppIdToUserIdTable() {
@@ -229,81 +212,51 @@ public class PostgreSQLConfig {
     }
 
     public String getSessionInfoTable() {
-        String tableName = "session_info";
-        if (postgresql_session_info_table_name != null) {
-            return addSchemaToTableName(postgresql_session_info_table_name);
-        }
-        return addSchemaAndPrefixToTableName(tableName);
+        return postgresql_session_info_table_name;
     }
 
     public String getEmailPasswordUserToTenantTable() {
-        String tableName = "emailpassword_user_to_tenant";
-        return addSchemaAndPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName("emailpassword_user_to_tenant");
     }
 
     public String getEmailPasswordUsersTable() {
-        String tableName = "emailpassword_users";
-        if (postgresql_emailpassword_users_table_name != null) {
-            return addSchemaToTableName(postgresql_emailpassword_users_table_name);
-        }
-        return addSchemaAndPrefixToTableName(tableName);
+        return postgresql_emailpassword_users_table_name;
     }
 
     public String getPasswordResetTokensTable() {
-        String tableName = "emailpassword_pswd_reset_tokens";
-        if (postgresql_emailpassword_pswd_reset_tokens_table_name != null) {
-            return addSchemaToTableName(postgresql_emailpassword_pswd_reset_tokens_table_name);
-        }
-        return addSchemaAndPrefixToTableName(tableName);
+        return postgresql_emailpassword_pswd_reset_tokens_table_name;
     }
 
     public String getEmailVerificationTokensTable() {
-        String tableName = "emailverification_tokens";
-        if (postgresql_emailverification_tokens_table_name != null) {
-            return addSchemaToTableName(postgresql_emailverification_tokens_table_name);
-        }
-        return addSchemaAndPrefixToTableName(tableName);
+        return postgresql_emailverification_tokens_table_name;
     }
 
     public String getEmailVerificationTable() {
-        String tableName = "emailverification_verified_emails";
-        if (postgresql_emailverification_verified_emails_table_name != null) {
-            return addSchemaToTableName(postgresql_emailverification_verified_emails_table_name);
-        }
-        return addSchemaAndPrefixToTableName(tableName);
+        return postgresql_emailverification_verified_emails_table_name;
     }
 
     public String getThirdPartyUsersTable() {
-        String tableName = "thirdparty_users";
-        if (postgresql_thirdparty_users_table_name != null) {
-            return addSchemaToTableName(postgresql_thirdparty_users_table_name);
-        }
-        return addSchemaAndPrefixToTableName(tableName);
+        return postgresql_thirdparty_users_table_name;
     }
 
     public String getThirdPartyUserToTenantTable() {
-        String tableName = "thirdparty_user_to_tenant";
-        return addSchemaAndPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName("thirdparty_user_to_tenant");
     }
 
     public String getPasswordlessUsersTable() {
-        String tableName = "passwordless_users";
-        return addSchemaAndPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName("passwordless_users");
     }
 
     public String getPasswordlessUserToTenantTable() {
-        String tableName = "passwordless_user_to_tenant";
-        return addSchemaAndPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName("passwordless_user_to_tenant");
     }
 
     public String getPasswordlessDevicesTable() {
-        String tableName = "passwordless_devices";
-        return addSchemaAndPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName("passwordless_devices");
     }
 
     public String getPasswordlessCodesTable() {
-        String tableName = "passwordless_codes";
-        return addSchemaAndPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName("passwordless_codes");
     }
 
     public String getJWTSigningKeysTable() {
@@ -331,7 +284,7 @@ public class PostgreSQLConfig {
     }
 
     public String getTablePrefix() {
-        return postgresql_table_names_prefix.trim();
+        return postgresql_table_names_prefix;
     }
 
     public String getDashboardUsersTable() {
@@ -355,11 +308,7 @@ public class PostgreSQLConfig {
     }
 
     private String addSchemaAndPrefixToTableName(String tableName) {
-        String name = tableName;
-        if (!getTablePrefix().equals("")) {
-            name = getTablePrefix() + "_" + name;
-        }
-        return addSchemaToTableName(name);
+        return addSchemaToTableName(getTablePrefix() + tableName);
     }
 
     private String addSchemaToTableName(String tableName) {
@@ -370,26 +319,9 @@ public class PostgreSQLConfig {
         return name;
     }
 
-    void validateAndNormalise() throws InvalidConfigException {
-        if (postgresql_connection_uri != null) {
-            try {
-                URI ignored = URI.create(postgresql_connection_uri);
-            } catch (Exception e) {
-                throw new InvalidConfigException(
-                        "The provided postgresql connection URI has an incorrect format. Please use a format like "
-                                + "postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2...");
-            }
-        } else {
-            if (this.getUser() == null) {
-                throw new InvalidConfigException(
-                        "'postgresql_user' and 'postgresql_connection_uri' are not set. Please set at least one of "
-                                + "these values");
-            }
-        }
-
-        if (getConnectionPoolSize() <= 0) {
-            throw new InvalidConfigException(
-                    "'postgresql_connection_pool_size' in the config.yaml file must be > 0");
+    void normalizeAndValidate() throws InvalidConfigException {
+        if (isNormalizedAndValid) {
+            return;
         }
 
         // Normalisation
@@ -480,6 +412,96 @@ public class PostgreSQLConfig {
                 }
             }
         }
+
+        if (postgresql_host == null) {
+            postgresql_host = "localhost";
+        }
+
+        if (postgresql_port < 0) {
+            postgresql_port = 5432;
+        }
+
+        { // postgresql_table_names_prefix
+            if (postgresql_table_names_prefix == null) {
+                postgresql_table_names_prefix = "";
+            }
+            postgresql_table_names_prefix = postgresql_table_names_prefix.trim();
+            if (!postgresql_table_names_prefix.isEmpty()) {
+                postgresql_table_names_prefix = postgresql_table_names_prefix + "_";
+            }
+        }
+
+        if (postgresql_database_name == null) {
+            postgresql_database_name = "supertokens";
+        }
+
+        if (postgresql_key_value_table_name == null) {
+            postgresql_key_value_table_name = addSchemaAndPrefixToTableName("key_value");
+        } else {
+            postgresql_key_value_table_name = addSchemaToTableName(postgresql_key_value_table_name);
+        }
+
+        if (postgresql_session_info_table_name == null) {
+            postgresql_session_info_table_name = addSchemaAndPrefixToTableName("session_info");
+        } else {
+            postgresql_session_info_table_name = addSchemaToTableName(postgresql_session_info_table_name);
+        }
+
+        if (postgresql_emailpassword_users_table_name == null) {
+            postgresql_emailpassword_users_table_name = addSchemaAndPrefixToTableName("emailpassword_users");
+        } else {
+            postgresql_emailpassword_users_table_name = addSchemaToTableName(postgresql_emailpassword_users_table_name);
+        }
+
+        if (postgresql_emailpassword_pswd_reset_tokens_table_name == null) {
+            postgresql_emailpassword_pswd_reset_tokens_table_name = addSchemaAndPrefixToTableName("emailpassword_pswd_reset_tokens");
+        } else {
+            postgresql_emailpassword_pswd_reset_tokens_table_name = addSchemaToTableName(postgresql_emailpassword_pswd_reset_tokens_table_name);
+        }
+
+        if (postgresql_emailverification_tokens_table_name == null) {
+            postgresql_emailverification_tokens_table_name = addSchemaAndPrefixToTableName("emailverification_tokens");
+        } else {
+            postgresql_emailverification_tokens_table_name = addSchemaToTableName(postgresql_emailverification_tokens_table_name);
+        }
+
+        if (postgresql_emailverification_verified_emails_table_name == null) {
+            postgresql_emailverification_verified_emails_table_name = addSchemaAndPrefixToTableName("emailverification_verified_emails");
+        } else {
+            postgresql_emailverification_verified_emails_table_name = addSchemaToTableName(postgresql_emailverification_verified_emails_table_name);
+        }
+
+        if (postgresql_thirdparty_users_table_name == null) {
+            postgresql_thirdparty_users_table_name = addSchemaAndPrefixToTableName("thirdparty_users");
+        } else {
+            postgresql_thirdparty_users_table_name = addSchemaToTableName(postgresql_thirdparty_users_table_name);
+        }
+
+        postgresql_table_names_prefix = postgresql_table_names_prefix.trim();
+
+        // Validate
+        if (postgresql_connection_uri != null) {
+            try {
+                URI ignored = URI.create(postgresql_connection_uri);
+            } catch (Exception e) {
+                throw new InvalidConfigException(
+                        "The provided postgresql connection URI has an incorrect format. Please use a format like "
+                                + "postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2...");
+            }
+        } else {
+            if (this.getUser() == null) {
+                throw new InvalidConfigException(
+                        "'postgresql_user' and 'postgresql_connection_uri' are not set. Please set at least one of "
+                                + "these values");
+            }
+        }
+
+        if (getConnectionPoolSize() <= 0) {
+            throw new InvalidConfigException(
+                    "'postgresql_connection_pool_size' in the config.yaml file must be > 0");
+        }
+
+        isNormalizedAndValid = true;
     }
 
     void assertThatConfigFromSameUserPoolIsNotConflicting(PostgreSQLConfig otherConfig) throws InvalidConfigException {
