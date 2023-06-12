@@ -447,7 +447,9 @@ public class Start
         }
         ProcessState.getInstance(this).clear();
         try {
+            initStorage(true);
             GeneralQueries.deleteAllTables(this);
+            close();
         } catch (SQLException e) {
             if (e.getCause() instanceof HikariPool.PoolInitializationException) {
                 // this can happen if the db being connected to is not actually present.
@@ -456,6 +458,8 @@ public class Start
             } else {
                 throw new StorageQueryException(e);
             }
+        } catch (DbInitException e) {
+            // ignore
         }
     }
 
