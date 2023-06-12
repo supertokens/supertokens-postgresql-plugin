@@ -99,7 +99,7 @@ public class Config extends ResourceDistributor.SingletonResource {
     private PostgreSQLConfig loadPostgreSQLConfig(JsonObject configJson) throws IOException, InvalidConfigException {
         final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         PostgreSQLConfig config = mapper.readValue(configJson.toString(), PostgreSQLConfig.class);
-        config.normalizeAndValidate();
+        config.validateAndNormalise();
         return config;
     }
 

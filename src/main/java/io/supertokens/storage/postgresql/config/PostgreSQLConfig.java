@@ -315,9 +315,31 @@ public class PostgreSQLConfig {
         return name;
     }
 
-    void normalizeAndValidate() throws InvalidConfigException {
+    void validateAndNormalise() throws InvalidConfigException {
         if (isNormalizedAndValid) {
             return;
+        }
+
+        // Validate
+        if (postgresql_connection_uri != null) {
+            try {
+                URI ignored = URI.create(postgresql_connection_uri);
+            } catch (Exception e) {
+                throw new InvalidConfigException(
+                        "The provided postgresql connection URI has an incorrect format. Please use a format like "
+                                + "postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2...");
+            }
+        } else {
+            if (this.getUser() == null) {
+                throw new InvalidConfigException(
+                        "'postgresql_user' and 'postgresql_connection_uri' are not set. Please set at least one of "
+                                + "these values");
+            }
+        }
+
+        if (getConnectionPoolSize() <= 0) {
+            throw new InvalidConfigException(
+                    "'postgresql_connection_pool_size' in the config.yaml file must be > 0");
         }
 
         // Normalisation
@@ -471,30 +493,6 @@ public class PostgreSQLConfig {
             postgresql_thirdparty_users_table_name = addSchemaAndPrefixToTableName("thirdparty_users");
         } else {
             postgresql_thirdparty_users_table_name = addSchemaToTableName(postgresql_thirdparty_users_table_name);
-        }
-
-        postgresql_table_names_prefix = postgresql_table_names_prefix.trim();
-
-        // Validate
-        if (postgresql_connection_uri != null) {
-            try {
-                URI ignored = URI.create(postgresql_connection_uri);
-            } catch (Exception e) {
-                throw new InvalidConfigException(
-                        "The provided postgresql connection URI has an incorrect format. Please use a format like "
-                                + "postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2...");
-            }
-        } else {
-            if (this.getUser() == null) {
-                throw new InvalidConfigException(
-                        "'postgresql_user' and 'postgresql_connection_uri' are not set. Please set at least one of "
-                                + "these values");
-            }
-        }
-
-        if (getConnectionPoolSize() <= 0) {
-            throw new InvalidConfigException(
-                    "'postgresql_connection_pool_size' in the config.yaml file must be > 0");
         }
 
         isNormalizedAndValid = true;
