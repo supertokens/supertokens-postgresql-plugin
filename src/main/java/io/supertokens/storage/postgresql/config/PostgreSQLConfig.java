@@ -176,23 +176,19 @@ public class PostgreSQLConfig {
     }
 
     public String getTenantsTable() {
-        String tableName = "tenants";
-        return addSchemaAndPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName("tenants");
     }
 
     public String getTenantConfigsTable() {
-        String tableName = "tenant_configs";
-        return addSchemaAndPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName("tenant_configs");
     }
 
     public String getTenantThirdPartyProvidersTable() {
-        String tableName = "tenant_thirdparty_providers";
-        return addSchemaAndPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName("tenant_thirdparty_providers");
     }
 
     public String getTenantThirdPartyProviderClientsTable() {
-        String tableName = "tenant_thirdparty_provider_clients";
-        return addSchemaAndPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName("tenant_thirdparty_provider_clients");
     }
 
     public String getKeyValueTable() {
