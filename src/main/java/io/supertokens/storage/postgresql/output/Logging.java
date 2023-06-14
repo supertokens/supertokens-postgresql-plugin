@@ -168,8 +168,8 @@ public class Logging extends ResourceDistributor.SingletonResource {
         if (getInstance(start) == null) {
             return;
         }
-        getInstance(start).infoLogger.detachAppender(APPENDER_PREFIX + start.getUserPoolId());
-        getInstance(start).errorLogger.detachAppender(APPENDER_PREFIX + start.getUserPoolId());
+        getInstance(start).infoLogger.detachAppender(APPENDER_PREFIX + start.getUserPoolId() + "~" + start.getConnectionPoolId());
+        getInstance(start).errorLogger.detachAppender(APPENDER_PREFIX + start.getUserPoolId() + "~" + start.getConnectionPoolId());
     }
 
     private Logger createLoggerForFile(Start start, String file, String name) {
@@ -178,7 +178,7 @@ public class Logging extends ResourceDistributor.SingletonResource {
         ple.setContext(lc);
         ple.start();
         FileAppender<ILoggingEvent> fileAppender = new FileAppender<>();
-        fileAppender.setName(APPENDER_PREFIX + start.getUserPoolId());
+        fileAppender.setName(APPENDER_PREFIX + start.getUserPoolId() + "~" + start.getConnectionPoolId());
         fileAppender.setFile(file);
         fileAppender.setEncoder(ple);
         fileAppender.setContext(lc);
@@ -197,7 +197,7 @@ public class Logging extends ResourceDistributor.SingletonResource {
         ple.setContext(lc);
         ple.start();
         ConsoleAppender<ILoggingEvent> logConsoleAppender = new ConsoleAppender<>();
-        logConsoleAppender.setName(APPENDER_PREFIX + start.getUserPoolId());
+        logConsoleAppender.setName(APPENDER_PREFIX + start.getUserPoolId() + "~" + start.getConnectionPoolId());
         logConsoleAppender.setEncoder(ple);
         logConsoleAppender.setContext(lc);
         logConsoleAppender.start();
