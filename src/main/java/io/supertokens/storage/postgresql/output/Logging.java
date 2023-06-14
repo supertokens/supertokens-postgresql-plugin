@@ -35,6 +35,8 @@ public class Logging extends ResourceDistributor.SingletonResource {
     private final Logger infoLogger;
     private final Logger errorLogger;
 
+    private static final String APPENDER_PREFIX = "io.supertokens.storage.postgresql.Logging~";
+
     private Logging(Start start, String infoLogPath, String errorLogPath) {
         this.infoLogger = infoLogPath.equals("null")
                 ? createLoggerForConsole(start, "io.supertokens.storage.postgresql.Info")
@@ -166,8 +168,8 @@ public class Logging extends ResourceDistributor.SingletonResource {
         if (getInstance(start) == null) {
             return;
         }
-        getInstance(start).infoLogger.detachAndStopAllAppenders();
-        getInstance(start).errorLogger.detachAndStopAllAppenders();
+        getInstance(start).infoLogger.detachAppender(APPENDER_PREFIX + start.getUserPoolId());
+        getInstance(start).errorLogger.detachAppender(APPENDER_PREFIX + start.getUserPoolId());
     }
 
     private Logger createLoggerForFile(Start start, String file, String name) {
@@ -176,6 +178,7 @@ public class Logging extends ResourceDistributor.SingletonResource {
         ple.setContext(lc);
         ple.start();
         FileAppender<ILoggingEvent> fileAppender = new FileAppender<>();
+        fileAppender.setName(APPENDER_PREFIX + start.getUserPoolId());
         fileAppender.setFile(file);
         fileAppender.setEncoder(ple);
         fileAppender.setContext(lc);
@@ -194,6 +197,7 @@ public class Logging extends ResourceDistributor.SingletonResource {
         ple.setContext(lc);
         ple.start();
         ConsoleAppender<ILoggingEvent> logConsoleAppender = new ConsoleAppender<>();
+        logConsoleAppender.setName(APPENDER_PREFIX + start.getUserPoolId());
         logConsoleAppender.setEncoder(ple);
         logConsoleAppender.setContext(lc);
         logConsoleAppender.start();
