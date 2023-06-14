@@ -196,12 +196,7 @@ public class Start
     public void stopLogging() {
         Logging.stopLogging(this);
 
-        synchronized (appenderLock) {
-            final Logger infoLog = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
-            if (infoLog.getAppender(HikariLoggingAppender.NAME) != null) {
-                infoLog.detachAppender(HikariLoggingAppender.NAME);
-            }
-        }
+        // not removing hikari appender because deleting tenant/app stops the hikari logger overall
     }
 
     @Override
