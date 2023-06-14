@@ -669,7 +669,7 @@ public class ConfigTest {
         }
     }
 
-    public static void checkConfig(PostgreSQLConfig config) throws IOException {
+    public static void checkConfig(PostgreSQLConfig config) throws IOException, InvalidConfigException {
         final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         PostgreSQLConfig userConfig = mapper.readValue(new File("../config.yaml"), PostgreSQLConfig.class);
         userConfig.validateAndNormalise();
