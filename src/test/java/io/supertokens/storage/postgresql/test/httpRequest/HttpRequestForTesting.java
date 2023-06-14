@@ -296,11 +296,12 @@ public class HttpRequestForTesting {
 
     public static String getMultitenantUrl(TenantIdentifier tenantIdentifier, String path) {
         StringBuilder sb = new StringBuilder();
-        if (tenantIdentifier.getConnectionUriDomain() == TenantIdentifier.DEFAULT_CONNECTION_URI) {
+        if (tenantIdentifier.getConnectionUriDomain().equals(TenantIdentifier.DEFAULT_CONNECTION_URI)) {
             sb.append("http://localhost:3567");
         } else {
             sb.append("http://");
             sb.append(tenantIdentifier.getConnectionUriDomain());
+            sb.append(":3567");
         }
 
         if (!tenantIdentifier.getAppId().equals(TenantIdentifier.DEFAULT_APP_ID)) {
