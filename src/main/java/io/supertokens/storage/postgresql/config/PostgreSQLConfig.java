@@ -191,11 +191,7 @@ public class PostgreSQLConfig {
     }
 
     public String getKeyValueTable() {
-        String tableName = "key_value";
-        if (postgresql_key_value_table_name != null) {
-            return addSchemaToTableName(postgresql_key_value_table_name);
-        }
-        return addSchemaAndPrefixToTableName(tableName);
+        return postgresql_key_value_table_name;
     }
 
     public String getAppIdToUserIdTable() {
@@ -468,6 +464,12 @@ public class PostgreSQLConfig {
                 postgresql_database_name = "supertokens";
             }
             postgresql_database_name = postgresql_database_name.trim();
+        }
+
+        if (postgresql_key_value_table_name != null) {
+            postgresql_key_value_table_name = addSchemaToTableName(postgresql_key_value_table_name);
+        } else {
+            postgresql_key_value_table_name = addSchemaAndPrefixToTableName("key_value");
         }
 
         if (postgresql_session_info_table_name != null) {
