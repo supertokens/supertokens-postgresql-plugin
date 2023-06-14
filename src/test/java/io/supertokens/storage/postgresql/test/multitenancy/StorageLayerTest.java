@@ -130,7 +130,7 @@ public class StorageLayerTest {
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
                         (Start) StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()))
-                .getTablePrefix(), "test");
+                .getTablePrefix(), "test_");
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
                         (Start) StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()))
                 .getTableSchema(), "random");

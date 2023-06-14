@@ -447,7 +447,7 @@ public class Start
         }
         ProcessState.getInstance(this).clear();
         try {
-            initStorage(true);
+            initStorage(false);
             GeneralQueries.deleteAllTables(this);
             close();
         } catch (SQLException e) {
