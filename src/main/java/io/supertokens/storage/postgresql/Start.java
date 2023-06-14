@@ -123,6 +123,8 @@ public class Start
     Thread mainThread = Thread.currentThread();
     private Thread shutdownHook;
 
+    private boolean isBaseTenant = false;
+
     public ResourceDistributor getResourceDistributor() {
         return resourceDistributor;
     }
@@ -196,7 +198,14 @@ public class Start
     public void stopLogging() {
         Logging.stopLogging(this);
 
-        // not removing hikari appender because deleting tenant/app stops the hikari logger overall
+        if (isBaseTenant) {
+            synchronized (appenderLock) {
+                final Logger infoLog = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
+                if (infoLog.getAppender(HikariLoggingAppender.NAME) != null) {
+                    infoLog.detachAppender(HikariLoggingAppender.NAME);
+                }
+            }
+        }
     }
 
     @Override
@@ -204,6 +213,7 @@ public class Start
         if (ConnectionPool.isAlreadyInitialised(this)) {
             return;
         }
+        this.isBaseTenant = shouldWait;
         try {
             ConnectionPool.initPool(this, shouldWait);
             GeneralQueries.createTablesIfNotExists(this);

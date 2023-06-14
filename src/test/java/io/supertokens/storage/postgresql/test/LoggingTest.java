@@ -18,8 +18,13 @@
 package io.supertokens.storage.postgresql.test;
 
 import ch.qos.logback.classic.Logger;
+import com.google.gson.JsonObject;
 import io.supertokens.ProcessState;
 import io.supertokens.config.Config;
+import io.supertokens.featureflag.EE_FEATURES;
+import io.supertokens.featureflag.FeatureFlagTestContent;
+import io.supertokens.multitenancy.Multitenancy;
+import io.supertokens.pluginInterface.multitenancy.*;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.output.Logging;
 import io.supertokens.storageLayer.StorageLayer;
@@ -33,6 +38,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Scanner;
 
 import static org.junit.Assert.*;
@@ -244,6 +250,45 @@ public class LoggingTest {
             System.setErr(new PrintStream(new FileOutputStream(FileDescriptor.err)));
         }
 
+    }
+
+    @Test
+    public void confirmHikariLoggerClosedOnlyWhenProcessEnds() throws Exception {
+        StorageLayer.close();
+        String[] args = { "../" };
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        ch.qos.logback.classic.Logger hikariLogger = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
+
+        assertEquals(1, List.of(hikariLogger.iteratorForAppenders()).size());
+
+        TenantIdentifier tenant = new TenantIdentifier(null, null, "t1");
+        JsonObject config = new JsonObject();
+        Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
+                tenant,
+                new EmailPasswordConfig(true),
+                new ThirdPartyConfig(true, null),
+                new PasswordlessConfig(true),
+                config
+        ), false);
+
+        // No new appenders were added
+        assertEquals(1, List.of(hikariLogger.iteratorForAppenders()).size());
+
+        Multitenancy.deleteTenant(tenant, process.getProcess());
+
+        // No appenders were removed
+        assertEquals(1, List.of(hikariLogger.iteratorForAppenders()).size());
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+        assertFalse(hikariLogger.iteratorForAppenders().hasNext());
     }
 
     private static boolean fileContainsString(ByteArrayOutputStream log, String value) throws IOException {
