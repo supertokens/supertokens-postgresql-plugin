@@ -454,6 +454,7 @@ public class Start
         ProcessState.getInstance(this).clear();
         try {
             initStorage(false);
+            enabled = true; // Allow get connection to work, to delete the data
             GeneralQueries.deleteAllTables(this);
 
             // had initStorage with false, so stop logging needs to be forced here
@@ -465,8 +466,6 @@ public class Start
                 // this can happen if the db being connected to is not actually present.
                 // So we ignore this since there are tests in which we are adding a non existent db for a tenant,
                 // and we want to not throw errors in the next test wherein this function is called.
-            } else if (e.getMessage().contains("Storage layer disabled")) {
-                // ignore
             } else {
                 throw new StorageQueryException(e);
             }
