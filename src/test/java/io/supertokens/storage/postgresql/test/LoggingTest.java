@@ -288,8 +288,8 @@ public class LoggingTest {
         ), false);
 
         // No new appenders were added
-        assertEquals(2, countAppenders(postgresqlError));
-        assertEquals(2, countAppenders(postgresqlInfo));
+        assertEquals(1, countAppenders(postgresqlError));
+        assertEquals(1, countAppenders(postgresqlInfo));
         assertEquals(1, countAppenders(hikariLogger));
 
         Multitenancy.deleteTenant(tenant, process.getProcess());
@@ -302,6 +302,10 @@ public class LoggingTest {
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
 
+        assertEquals(0, countAppenders(postgresqlError));
+        assertEquals(0, countAppenders(postgresqlInfo));
+        assertEquals(0, countAppenders(hikariLogger));
+
         assertFalse(hikariLogger.iteratorForAppenders().hasNext());
     }
 
@@ -310,7 +314,6 @@ public class LoggingTest {
         Iterator<Appender<ILoggingEvent>> appenderIter = logger.iteratorForAppenders();
         while (appenderIter.hasNext()) {
             Appender<ILoggingEvent> appender = appenderIter.next();
-            System.out.println(appender.getName());
             count++;
         }
         return count;

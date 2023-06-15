@@ -34,8 +34,7 @@ public class Logging extends ResourceDistributor.SingletonResource {
     private static final String RESOURCE_ID = "io.supertokens.storage.postgresql.output.Logging";
     private final Logger infoLogger;
     private final Logger errorLogger;
-
-    private static final String APPENDER_PREFIX = "io.supertokens.storage.postgresql.Logging~";
+    private static final String APPENDER_NAME = "io.supertokens.storage.postgresql.output.Logging.appender";
 
     private Logging(Start start, String infoLogPath, String errorLogPath) {
         this.infoLogger = infoLogPath.equals("null")
@@ -168,23 +167,29 @@ public class Logging extends ResourceDistributor.SingletonResource {
         if (getInstance(start) == null) {
             return;
         }
-        getInstance(start).infoLogger.detachAppender(APPENDER_PREFIX + start.getUserPoolId() + "~" + start.getConnectionPoolId());
-        getInstance(start).errorLogger.detachAppender(APPENDER_PREFIX + start.getUserPoolId() + "~" + start.getConnectionPoolId());
+        getInstance(start).infoLogger.detachAndStopAllAppenders();
+        getInstance(start).errorLogger.detachAndStopAllAppenders();
     }
 
     private Logger createLoggerForFile(Start start, String file, String name) {
+        Logger logger = (Logger) LoggerFactory.getLogger(name);
+
+        // We don't need to add appender if it is already added
+        if (logger.getAppender(APPENDER_NAME) != null) {
+            return logger;
+        }
+
         LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
         LayoutWrappingEncoder ple = new LayoutWrappingEncoder(start.getProcessId());
         ple.setContext(lc);
         ple.start();
         FileAppender<ILoggingEvent> fileAppender = new FileAppender<>();
-        fileAppender.setName(APPENDER_PREFIX + start.getUserPoolId() + "~" + start.getConnectionPoolId());
+        fileAppender.setName(APPENDER_NAME);
         fileAppender.setFile(file);
         fileAppender.setEncoder(ple);
         fileAppender.setContext(lc);
         fileAppender.start();
 
-        Logger logger = (Logger) LoggerFactory.getLogger(name);
         logger.addAppender(fileAppender);
         logger.setAdditive(false); /* set to true if root should log too */
 
@@ -192,17 +197,23 @@ public class Logging extends ResourceDistributor.SingletonResource {
     }
 
     private Logger createLoggerForConsole(Start start, String name) {
+        Logger logger = (Logger) LoggerFactory.getLogger(name);
+
+        // We don't need to add appender if it is already added
+        if (logger.getAppender(APPENDER_NAME) != null) {
+            return logger;
+        }
+
         LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
         LayoutWrappingEncoder ple = new LayoutWrappingEncoder(start.getProcessId());
         ple.setContext(lc);
         ple.start();
         ConsoleAppender<ILoggingEvent> logConsoleAppender = new ConsoleAppender<>();
-        logConsoleAppender.setName(APPENDER_PREFIX + start.getUserPoolId() + "~" + start.getConnectionPoolId());
+        logConsoleAppender.setName(APPENDER_NAME);
         logConsoleAppender.setEncoder(ple);
         logConsoleAppender.setContext(lc);
         logConsoleAppender.start();
 
-        Logger logger = (Logger) LoggerFactory.getLogger(name);
         logger.addAppender(logConsoleAppender);
         logger.setAdditive(false); /* set to true if root should log too */
 
