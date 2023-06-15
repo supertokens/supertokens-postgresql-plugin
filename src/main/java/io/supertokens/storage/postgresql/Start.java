@@ -454,6 +454,7 @@ public class Start
         ProcessState.getInstance(this).clear();
         try {
             initStorage(false);
+            enabled = true; // Allow get connection to work, to delete the data
             GeneralQueries.deleteAllTables(this);
 
             // had initStorage with false, so stop logging needs to be forced here
