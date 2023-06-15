@@ -198,9 +198,9 @@ public class Start
     @Override
     public void stopLogging() {
         if (isBaseTenant) {
-            Logging.stopLogging(this);
-
             synchronized (appenderLock) {
+                Logging.stopLogging(this);
+
                 final Logger infoLog = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
                 if (infoLog.getAppender(HikariLoggingAppender.NAME) != null) {
                     infoLog.detachAppender(HikariLoggingAppender.NAME);
@@ -455,6 +455,10 @@ public class Start
         try {
             initStorage(false);
             GeneralQueries.deleteAllTables(this);
+
+            // had initStorage with false, so stop logging needs to be forced here
+            isBaseTenant = true;
+            stopLogging();
             close();
         } catch (SQLException e) {
             if (e.getCause() instanceof HikariPool.PoolInitializationException) {
