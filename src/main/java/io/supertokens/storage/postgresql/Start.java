@@ -114,7 +114,7 @@ public class Start
     public static boolean silent = false;
     private ResourceDistributor resourceDistributor = new ResourceDistributor();
     private String processId;
-    private HikariLoggingAppender appender = new HikariLoggingAppender(this);
+    private HikariLoggingAppender appender;
     private static final String APP_ID_KEY_NAME = "app_id";
     private static final String ACCESS_TOKEN_SIGNING_KEY_NAME = "access_token_signing_key";
     private static final String REFRESH_TOKEN_KEY_NAME = "refresh_token_key";
@@ -122,6 +122,8 @@ public class Start
     boolean enabled = true;
     Thread mainThread = Thread.currentThread();
     private Thread shutdownHook;
+
+    private boolean isBaseTenant = false;
 
     public ResourceDistributor getResourceDistributor() {
         return resourceDistributor;
@@ -168,35 +170,43 @@ public class Start
         if (Logging.isAlreadyInitialised(this)) {
             return;
         }
-        Logging.initFileLogging(this, infoLogPath, errorLogPath);
 
-        /*
-         * NOTE: The log this produces is only accurate in production or development.
-         *
-         * For testing, it may happen that multiple processes are running at the same
-         * time which can lead to one of them being the winner and its start instance
-         * being attached to logger class. This would yield inaccurate processIds during
-         * logging.
-         *
-         * Finally, during testing, the winner's logger might be removed, in which case
-         * nothing will be handling logging and hikari's logs would not be outputed
-         * anywhere.
-         */
         synchronized (appenderLock) {
+            Logging.initFileLogging(this, infoLogPath, errorLogPath);
+
+            /*
+             * NOTE: The log this produces is only accurate in production or development.
+             *
+             * For testing, it may happen that multiple processes are running at the same
+             * time which can lead to one of them being the winner and its start instance
+             * being attached to logger class. This would yield inaccurate processIds during
+             * logging.
+             *
+             * Finally, during testing, the winner's logger might be removed, in which case
+             * nothing will be handling logging and hikari's logs would not be outputed
+             * anywhere.
+             */
             final Logger infoLog = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
+            appender = new HikariLoggingAppender(this);
             if (infoLog.getAppender(HikariLoggingAppender.NAME) == null) {
                 infoLog.setAdditive(false);
                 infoLog.addAppender(appender);
             }
         }
-
     }
 
     @Override
     public void stopLogging() {
-        Logging.stopLogging(this);
+        if (isBaseTenant) {
+            Logging.stopLogging(this);
 
-        // not removing hikari appender because deleting tenant/app stops the hikari logger overall
+            synchronized (appenderLock) {
+                final Logger infoLog = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
+                if (infoLog.getAppender(HikariLoggingAppender.NAME) != null) {
+                    infoLog.detachAppender(HikariLoggingAppender.NAME);
+                }
+            }
+        }
     }
 
     @Override
@@ -204,6 +214,7 @@ public class Start
         if (ConnectionPool.isAlreadyInitialised(this)) {
             return;
         }
+        this.isBaseTenant = shouldWait;
         try {
             ConnectionPool.initPool(this, shouldWait);
             GeneralQueries.createTablesIfNotExists(this);
