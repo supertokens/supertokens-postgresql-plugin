@@ -133,9 +133,6 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         if (isAlreadyInitialised(start)) {
             return;
         }
-        if (Thread.currentThread() != start.mainThread) {
-            throw new DbInitException("Should not come here");
-        }
         Logging.info(start, "Setting up PostgreSQL connection pool.", true);
         boolean longMessagePrinted = false;
         long maxTryTime = System.currentTimeMillis() + getTimeToWaitToInit(start);
