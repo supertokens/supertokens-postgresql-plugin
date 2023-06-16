@@ -120,7 +120,7 @@ public class Start
     private static final String REFRESH_TOKEN_KEY_NAME = "refresh_token_key";
     public static boolean isTesting = false;
     boolean enabled = true;
-    Thread mainThread = Thread.currentThread();
+    static Thread mainThread = Thread.currentThread();
     private Thread shutdownHook;
 
     private boolean isBaseTenant = false;
