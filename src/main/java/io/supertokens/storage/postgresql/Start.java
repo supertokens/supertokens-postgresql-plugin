@@ -2810,4 +2810,9 @@ public class Start
             throw new StorageQueryException(e);
         }
     }
+
+    @TestOnly
+    public Thread getMainThread() {
+        return mainThread;
+    }
 }
