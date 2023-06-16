@@ -68,6 +68,10 @@ public class PostgreSQLConfig {
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    private String postgresql_table_names_prefix = "";
+
+    @JsonProperty
+    @NotConflictingWithinUserPool
     private String postgresql_key_value_table_name = null;
 
     @JsonProperty
@@ -93,10 +97,6 @@ public class PostgreSQLConfig {
     @JsonProperty
     @NotConflictingWithinUserPool
     private String postgresql_thirdparty_users_table_name = null;
-
-    @JsonProperty
-    @NotConflictingWithinUserPool
-    private String postgresql_table_names_prefix = "";
 
     @JsonProperty
     @UserPoolProperty
