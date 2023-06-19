@@ -215,6 +215,10 @@ public class Start
             return;
         }
         this.isBaseTenant = shouldWait;
+        if (isBaseTenant) {
+            // We are doing this so that the tests don't hang on to the first main thread
+            mainThread = Thread.currentThread();
+        }
         try {
             ConnectionPool.initPool(this, shouldWait);
             GeneralQueries.createTablesIfNotExists(this);
