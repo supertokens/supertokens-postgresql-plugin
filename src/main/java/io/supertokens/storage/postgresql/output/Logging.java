@@ -166,6 +166,10 @@ public class Logging extends ResourceDistributor.SingletonResource {
         if (getInstance(start) == null) {
             return;
         }
+        getInstance(start).infoLogger.getLoggerContext().stop();
+        getInstance(start).errorLogger.getLoggerContext().stop();
+        getInstance(start).infoLogger.getLoggerContext().getStatusManager().clear();
+        getInstance(start).errorLogger.getLoggerContext().getStatusManager().clear();
         getInstance(start).infoLogger.detachAndStopAllAppenders();
         getInstance(start).errorLogger.detachAndStopAllAppenders();
     }
