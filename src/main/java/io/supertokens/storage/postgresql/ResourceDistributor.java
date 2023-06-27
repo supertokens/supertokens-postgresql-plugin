@@ -39,6 +39,12 @@ public class ResourceDistributor {
         }
     }
 
+    public SingletonResource removeResource(String key) {
+        synchronized (lock) {
+            return resources.remove(key);
+        }
+    }
+
     public static class SingletonResource {
 
     }

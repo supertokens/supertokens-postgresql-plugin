@@ -166,11 +166,22 @@ public class Logging extends ResourceDistributor.SingletonResource {
         if (getInstance(start) == null) {
             return;
         }
+        getInstance(start).infoLogger.getLoggerContext().stop();
+        getInstance(start).errorLogger.getLoggerContext().stop();
+        getInstance(start).infoLogger.getLoggerContext().getStatusManager().clear();
+        getInstance(start).errorLogger.getLoggerContext().getStatusManager().clear();
         getInstance(start).infoLogger.detachAndStopAllAppenders();
         getInstance(start).errorLogger.detachAndStopAllAppenders();
     }
 
     private Logger createLoggerForFile(Start start, String file, String name) {
+        Logger logger = (Logger) LoggerFactory.getLogger(name);
+
+        // We don't need to add appender if it is already added
+        if (logger.iteratorForAppenders().hasNext()) {
+            return logger;
+        }
+
         LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
         LayoutWrappingEncoder ple = new LayoutWrappingEncoder(start.getProcessId());
         ple.setContext(lc);
@@ -181,7 +192,6 @@ public class Logging extends ResourceDistributor.SingletonResource {
         fileAppender.setContext(lc);
         fileAppender.start();
 
-        Logger logger = (Logger) LoggerFactory.getLogger(name);
         logger.addAppender(fileAppender);
         logger.setAdditive(false); /* set to true if root should log too */
 
@@ -189,6 +199,12 @@ public class Logging extends ResourceDistributor.SingletonResource {
     }
 
     private Logger createLoggerForConsole(Start start, String name) {
+        Logger logger = (Logger) LoggerFactory.getLogger(name);
+
+        if (logger.iteratorForAppenders().hasNext()) {
+            return logger;
+        }
+
         LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
         LayoutWrappingEncoder ple = new LayoutWrappingEncoder(start.getProcessId());
         ple.setContext(lc);
@@ -198,7 +214,6 @@ public class Logging extends ResourceDistributor.SingletonResource {
         logConsoleAppender.setContext(lc);
         logConsoleAppender.start();
 
-        Logger logger = (Logger) LoggerFactory.getLogger(name);
         logger.addAppender(logConsoleAppender);
         logger.setAdditive(false); /* set to true if root should log too */
 

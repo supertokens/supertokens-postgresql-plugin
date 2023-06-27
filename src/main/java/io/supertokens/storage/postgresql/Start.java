@@ -104,7 +104,7 @@ import java.util.*;
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
-        MultitenancyStorage, DashboardSQLStorage, TOTPSQLStorage, ActiveUsersStorage, MfaStorage {
+        MultitenancyStorage, DashboardSQLStorage, TOTPSQLStorage, MfaStorage, ActiveUsersStorage {
 
     // these configs are protected from being modified / viewed by the dev using the SuperTokens
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
@@ -115,14 +115,16 @@ public class Start
     public static boolean silent = false;
     private ResourceDistributor resourceDistributor = new ResourceDistributor();
     private String processId;
-    private HikariLoggingAppender appender = new HikariLoggingAppender(this);
+    private HikariLoggingAppender appender;
     private static final String APP_ID_KEY_NAME = "app_id";
     private static final String ACCESS_TOKEN_SIGNING_KEY_NAME = "access_token_signing_key";
     private static final String REFRESH_TOKEN_KEY_NAME = "refresh_token_key";
     public static boolean isTesting = false;
     boolean enabled = true;
-    Thread mainThread = Thread.currentThread();
+    static Thread mainThread = Thread.currentThread();
     private Thread shutdownHook;
+
+    private boolean isBaseTenant = false;
 
     public ResourceDistributor getResourceDistributor() {
         return resourceDistributor;
@@ -133,9 +135,10 @@ public class Start
     }
 
     @Override
-    public void constructor(String processId, boolean silent) {
+    public void constructor(String processId, boolean silent, boolean isTesting) {
         this.processId = processId;
         Start.silent = silent;
+        Start.isTesting = isTesting;
     }
 
     @Override
@@ -168,38 +171,41 @@ public class Start
         if (Logging.isAlreadyInitialised(this)) {
             return;
         }
-        Logging.initFileLogging(this, infoLogPath, errorLogPath);
 
-        /*
-         * NOTE: The log this produces is only accurate in production or development.
-         *
-         * For testing, it may happen that multiple processes are running at the same
-         * time which can lead to one of them being the winner and its start instance
-         * being attached to logger class. This would yield inaccurate processIds during
-         * logging.
-         *
-         * Finally, during testing, the winner's logger might be removed, in which case
-         * nothing will be handling logging and hikari's logs would not be outputed
-         * anywhere.
-         */
         synchronized (appenderLock) {
+            Logging.initFileLogging(this, infoLogPath, errorLogPath);
+
+            /*
+             * NOTE: The log this produces is only accurate in production or development.
+             *
+             * For testing, it may happen that multiple processes are running at the same
+             * time which can lead to one of them being the winner and its start instance
+             * being attached to logger class. This would yield inaccurate processIds during
+             * logging.
+             *
+             * Finally, during testing, the winner's logger might be removed, in which case
+             * nothing will be handling logging and hikari's logs would not be outputed
+             * anywhere.
+             */
             final Logger infoLog = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
+            appender = new HikariLoggingAppender(this);
             if (infoLog.getAppender(HikariLoggingAppender.NAME) == null) {
                 infoLog.setAdditive(false);
                 infoLog.addAppender(appender);
             }
         }
-
     }
 
     @Override
     public void stopLogging() {
-        Logging.stopLogging(this);
+        if (isBaseTenant) {
+            synchronized (appenderLock) {
+                Logging.stopLogging(this);
 
-        synchronized (appenderLock) {
-            final Logger infoLog = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
-            if (infoLog.getAppender(HikariLoggingAppender.NAME) != null) {
-                infoLog.detachAppender(HikariLoggingAppender.NAME);
+                final Logger infoLog = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
+                if (infoLog.getAppender(HikariLoggingAppender.NAME) != null) {
+                    infoLog.detachAppender(HikariLoggingAppender.NAME);
+                }
             }
         }
     }
@@ -208,6 +214,11 @@ public class Start
     public void initStorage(boolean shouldWait) throws DbInitException {
         if (ConnectionPool.isAlreadyInitialised(this)) {
             return;
+        }
+        this.isBaseTenant = shouldWait;
+        if (isBaseTenant) {
+            // We are doing this so that the tests don't hang on to the first main thread
+            mainThread = Thread.currentThread();
         }
         try {
             ConnectionPool.initPool(this, shouldWait);
@@ -226,6 +237,7 @@ public class Start
     @Override
     public <T> T startTransaction(TransactionLogic<T> logic, TransactionIsolationLevel isolationLevel)
             throws StorageTransactionLogicException, StorageQueryException {
+        final int NUM_TRIES = 50;
         int tries = 0;
         while (true) {
             tries++;
@@ -266,15 +278,19 @@ public class Start
                         // we have deadlock as well due to the DeadlockTest.java
                         exceptionMessage.toLowerCase().contains("deadlock");
 
-                if ((isPSQLRollbackException || isDeadlockException) && tries < 20) {
+                if ((isPSQLRollbackException || isDeadlockException) && tries < NUM_TRIES) {
                     try {
-                        Thread.sleep((long) (10 + Math.min(tries, 10) * (Math.random() * 20)));
+                        Thread.sleep((long) (10 + (250 + Math.min(Math.pow(2, tries), 3000)) * Math.random()));
                     } catch (InterruptedException ignored) {
                     }
                     ProcessState.getInstance(this).addState(ProcessState.PROCESS_STATE.DEADLOCK_FOUND, e);
                     // this because deadlocks are not necessarily a result of faulty logic. They can
                     // happen
                     continue;
+                }
+
+                if ((isPSQLRollbackException || isDeadlockException) && tries == NUM_TRIES) {
+                    ProcessState.getInstance(this).addState(ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED, e);
                 }
                 if (e instanceof StorageQueryException) {
                     throw (StorageQueryException) e;
@@ -437,9 +453,19 @@ public class Start
     @TestOnly
     @Override
     public void deleteAllInformation() throws StorageQueryException {
+        if (!isTesting) {
+            throw new UnsupportedOperationException("This method is only for testing");
+        }
         ProcessState.getInstance(this).clear();
         try {
+            initStorage(false);
+            enabled = true; // Allow get connection to work, to delete the data
             GeneralQueries.deleteAllTables(this);
+
+            // had initStorage with false, so stop logging needs to be forced here
+            isBaseTenant = true;
+            stopLogging();
+            close();
         } catch (SQLException e) {
             if (e.getCause() instanceof HikariPool.PoolInitializationException) {
                 // this can happen if the db being connected to is not actually present.
@@ -448,6 +474,8 @@ public class Start
             } else {
                 throw new StorageQueryException(e);
             }
+        } catch (DbInitException e) {
+            // ignore
         }
     }
 
@@ -723,6 +751,9 @@ public class Start
     @TestOnly
     @Override
     public void addInfoToNonAuthRecipesBasedOnUserId(TenantIdentifier tenantIdentifier, String className, String userId) throws StorageQueryException {
+        if (!isTesting) {
+            throw new UnsupportedOperationException("This method is only for testing");
+        }
         // add entries to nonAuthRecipe tables with input userId
         if (className.equals(SessionStorage.class.getName())) {
             try {
@@ -1360,20 +1391,10 @@ public class Start
             throw new StorageQueryException(e);
         }
     }
-
-    @Override
+    
     public int countUsersEnabledMfa(AppIdentifier appIdentifier) throws StorageQueryException {
         try {
             return ActiveUsersQueries.countUsersEnabledMfa(this, appIdentifier);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public void deleteUserActive(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
-        try {
-            ActiveUsersQueries.deleteUserActive(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1384,6 +1405,15 @@ public class Start
             throws StorageQueryException {
         try {
             return ActiveUsersQueries.countUsersEnabledMfaAndActiveSince(this, appIdentifier, time);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void deleteUserActive(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
+        try {
+            ActiveUsersQueries.deleteUserActive(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -2767,7 +2797,7 @@ public class Start
             throw new StorageQueryException(e);
         }
     }
-
+    
     // MFA recipe:
     @Override
     public boolean enableFactor(TenantIdentifier tenantIdentifier, String userId, String factor)
@@ -2833,7 +2863,6 @@ public class Start
         }
     }
 
-
     @Override
     public Set<String> getValidFieldsInConfig() {
         return PostgreSQLConfig.getValidFields();
@@ -2842,5 +2871,36 @@ public class Start
     @Override
     public void setLogLevels(Set<LOG_LEVEL> logLevels) {
         Config.setLogLevels(this, logLevels);
+    }
+
+    @TestOnly
+    @Override
+    public String[] getAllTablesInTheDatabase() throws StorageQueryException {
+        if (!isTesting) {
+            throw new UnsupportedOperationException();
+        }
+        try {
+            return GeneralQueries.getAllTablesInTheDatabase(this);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @TestOnly
+    @Override
+    public String[] getAllTablesInTheDatabaseThatHasDataForAppId(String appId) throws StorageQueryException {
+        if (!isTesting) {
+            throw new UnsupportedOperationException();
+        }
+        try {
+            return GeneralQueries.getAllTablesInTheDatabaseThatHasDataForAppId(this, appId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @TestOnly
+    public Thread getMainThread() {
+        return mainThread;
     }
 }

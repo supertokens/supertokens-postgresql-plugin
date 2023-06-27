@@ -53,7 +53,7 @@ public class TableCreationTest {
         assertNotNull(process.checkOrWaitForEventInPlugin(
                 io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.CREATING_NEW_TABLE));
 
-        process.kill();
+        process.kill(false);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
 
         StorageLayer.close();
