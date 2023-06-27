@@ -7,6 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Replace `TOTP_NOT_ENABLED_ERROR` with other TOTP exceptions.
 - Support for MFA recipe
 
 ### Changes
