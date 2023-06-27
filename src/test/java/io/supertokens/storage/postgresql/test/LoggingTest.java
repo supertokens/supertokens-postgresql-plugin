@@ -18,8 +18,15 @@
 package io.supertokens.storage.postgresql.test;
 
 import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.Appender;
+import com.google.gson.JsonObject;
 import io.supertokens.ProcessState;
 import io.supertokens.config.Config;
+import io.supertokens.featureflag.EE_FEATURES;
+import io.supertokens.featureflag.FeatureFlagTestContent;
+import io.supertokens.multitenancy.Multitenancy;
+import io.supertokens.pluginInterface.multitenancy.*;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.output.Logging;
 import io.supertokens.storageLayer.StorageLayer;
@@ -33,6 +40,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Scanner;
 
 import static org.junit.Assert.*;
@@ -244,6 +253,70 @@ public class LoggingTest {
             System.setErr(new PrintStream(new FileOutputStream(FileDescriptor.err)));
         }
 
+    }
+
+    @Test
+    public void confirmHikariLoggerClosedOnlyWhenProcessEnds() throws Exception {
+        StorageLayer.close();
+        String[] args = { "../" };
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        ch.qos.logback.classic.Logger postgresqlInfo = (ch.qos.logback.classic.Logger) LoggerFactory
+                .getLogger("io.supertokens.storage.postgresql.Info");
+        ch.qos.logback.classic.Logger postgresqlError = (ch.qos.logback.classic.Logger) LoggerFactory
+                .getLogger("io.supertokens.storage.postgresql.Error");
+        ch.qos.logback.classic.Logger hikariLogger = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
+
+        assertEquals(1, countAppenders(postgresqlError));
+        assertEquals(1, countAppenders(postgresqlInfo));
+        assertEquals(1, countAppenders(hikariLogger));
+
+        TenantIdentifier tenant = new TenantIdentifier(null, null, "t1");
+        JsonObject config = new JsonObject();
+        StorageLayer.getBaseStorage(process.getProcess()).modifyConfigToAddANewUserPoolForTesting(config, 1);
+        Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
+                tenant,
+                new EmailPasswordConfig(true),
+                new ThirdPartyConfig(true, null),
+                new PasswordlessConfig(true),
+                config
+        ), false);
+
+        // No new appenders were added
+        assertEquals(1, countAppenders(postgresqlError));
+        assertEquals(1, countAppenders(postgresqlInfo));
+        assertEquals(1, countAppenders(hikariLogger));
+
+        Multitenancy.deleteTenant(tenant, process.getProcess());
+
+        // No appenders were removed
+        assertEquals(1, countAppenders(postgresqlError));
+        assertEquals(1, countAppenders(postgresqlInfo));
+        assertEquals(1, countAppenders(hikariLogger));
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+        assertEquals(0, countAppenders(postgresqlError));
+        assertEquals(0, countAppenders(postgresqlInfo));
+        assertEquals(0, countAppenders(hikariLogger));
+
+        assertFalse(hikariLogger.iteratorForAppenders().hasNext());
+    }
+
+    private static int countAppenders(ch.qos.logback.classic.Logger logger) {
+        int count = 0;
+        Iterator<Appender<ILoggingEvent>> appenderIter = logger.iteratorForAppenders();
+        while (appenderIter.hasNext()) {
+            Appender<ILoggingEvent> appender = appenderIter.next();
+            count++;
+        }
+        return count;
     }
 
     private static boolean fileContainsString(ByteArrayOutputStream log, String value) throws IOException {

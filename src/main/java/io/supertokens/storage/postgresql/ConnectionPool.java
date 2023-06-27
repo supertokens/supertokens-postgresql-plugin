@@ -121,6 +121,10 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         return (ConnectionPool) start.getResourceDistributor().getResource(RESOURCE_KEY);
     }
 
+    private static void removeInstance(Start start) {
+        start.getResourceDistributor().removeResource(RESOURCE_KEY);
+    }
+
     static boolean isAlreadyInitialised(Start start) {
         return getInstance(start) != null && getInstance(start).hikariDataSource != null;
     }
@@ -128,9 +132,6 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
     static void initPool(Start start, boolean shouldWait) throws DbInitException {
         if (isAlreadyInitialised(start)) {
             return;
-        }
-        if (Thread.currentThread() != start.mainThread) {
-            throw new DbInitException("Should not come here");
         }
         Logging.info(start, "Setting up PostgreSQL connection pool.", true);
         boolean longMessagePrinted = false;
@@ -207,6 +208,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
             } finally {
                 // we mark it as null so that next time it's being initialised, it will be initialised again
                 getInstance(start).hikariDataSource = null;
+                removeInstance(start);
             }
         }
     }

@@ -16,6 +16,7 @@
 
 package io.supertokens.storage.postgresql.test;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.supertokens.ProcessState;
 import io.supertokens.featureflag.EE_FEATURES;
@@ -28,18 +29,17 @@ import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.*;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
+import io.supertokens.storage.postgresql.test.httpRequest.HttpRequestForTesting;
+import io.supertokens.storage.postgresql.test.httpRequest.HttpResponseException;
 import io.supertokens.thirdparty.InvalidProviderConfigException;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import io.supertokens.utils.SemVer;
+import org.junit.*;
 import org.junit.rules.TestRule;
 
 import java.io.IOException;
 
 import static junit.framework.TestCase.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 public class SuperTokensSaaSSecretTest {
 
@@ -69,7 +69,7 @@ public class SuperTokensSaaSSecretTest {
     public void testThatTenantCannotSetDatabaseRelatedConfigIfSuperTokensSaaSSecretIsSet()
             throws InterruptedException, IOException, InvalidConfigException, TenantOrAppNotFoundException,
             InvalidProviderConfigException, StorageQueryException,
-            FeatureNotEnabledException, CannotModifyBaseConfigException {
+            FeatureNotEnabledException, CannotModifyBaseConfigException, HttpResponseException {
         String[] args = {"../"};
 
         String saasSecret = "hg40239oirjgBHD9450=Beew123--hg40239oirjgBHD9450=Beew123--hg40239oirjgBHD9450=Beew123-";
@@ -96,10 +96,44 @@ public class SuperTokensSaaSSecretTest {
             }
         }
 
-        // TODO: we should call the API to add a new tenant with api key (not supertokens saas secret), and check
-        //  that it fails too if we try and add the protected db configs.
+        try {
+            JsonObject coreConfig = new JsonObject();
+            coreConfig.addProperty("postgresql_database_name", "st1");
 
-        // TODO: we should call the API to add a new tenant with supertokens_saas_secret key and test that it passes.
+            JsonObject requestBody = new JsonObject();
+            requestBody.addProperty("appId", "a1");
+            requestBody.addProperty("emailPasswordEnabled", true);
+            requestBody.addProperty("thirdPartyEnabled", true);
+            requestBody.addProperty("passwordlessEnabled", true);
+            requestBody.add("coreConfig", coreConfig);
+
+            JsonObject response = HttpRequestForTesting.sendJsonRequest(process.getProcess(), "",
+                    HttpRequestForTesting.getMultitenantUrl(TenantIdentifier.BASE_TENANT, "/recipe/multitenancy/app"),
+                    requestBody, 1000, 2500, null,
+                    SemVer.v3_0.get(), "PUT", apiKey, "multitenancy");
+
+            Assert.assertEquals("OK", response.getAsJsonPrimitive("status").getAsString());
+            fail();
+        } catch (HttpResponseException e) {
+            assertTrue(e.getMessage().contains("Not allowed to modify DB related configs."));
+        }
+
+        JsonObject coreConfig = new JsonObject();
+        coreConfig.addProperty("postgresql_database_name", "st1");
+
+        JsonObject requestBody = new JsonObject();
+        requestBody.addProperty("appId", "a1");
+        requestBody.addProperty("emailPasswordEnabled", true);
+        requestBody.addProperty("thirdPartyEnabled", true);
+        requestBody.addProperty("passwordlessEnabled", true);
+        requestBody.add("coreConfig", coreConfig);
+
+        JsonObject response = HttpRequestForTesting.sendJsonRequest(process.getProcess(), "",
+                HttpRequestForTesting.getMultitenantUrl(TenantIdentifier.BASE_TENANT, "/recipe/multitenancy/app"),
+                requestBody, 1000, 2500, null,
+                SemVer.v3_0.get(), "PUT", saasSecret, "multitenancy");
+
+        Assert.assertEquals("OK", response.getAsJsonPrimitive("status").getAsString());
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -109,7 +143,7 @@ public class SuperTokensSaaSSecretTest {
     public void testThatTenantCanSetDatabaseRelatedConfigIfSuperTokensSaaSSecretIsNotSet()
             throws InterruptedException, IOException, InvalidConfigException, TenantOrAppNotFoundException,
             InvalidProviderConfigException, StorageQueryException,
-            FeatureNotEnabledException, CannotModifyBaseConfigException, BadPermissionException {
+            FeatureNotEnabledException, CannotModifyBaseConfigException, BadPermissionException, HttpResponseException {
         String[] args = {"../"};
 
         String apiKey = "hg40239oirjgBHD9450=Beew123--hg40239oiBeew123-";
@@ -134,8 +168,22 @@ public class SuperTokensSaaSSecretTest {
                     j), false);
         }
 
-        // TODO: we should call the API to add a new tenant with api key, and check
-        //  that it passes and is allowed to read
+        JsonObject coreConfig = new JsonObject();
+        coreConfig.addProperty("postgresql_database_name", "st1");
+
+        JsonObject requestBody = new JsonObject();
+        requestBody.addProperty("appId", "a1");
+        requestBody.addProperty("emailPasswordEnabled", true);
+        requestBody.addProperty("thirdPartyEnabled", true);
+        requestBody.addProperty("passwordlessEnabled", true);
+        requestBody.add("coreConfig", coreConfig);
+
+        JsonObject response = HttpRequestForTesting.sendJsonRequest(process.getProcess(), "",
+                HttpRequestForTesting.getMultitenantUrl(TenantIdentifier.BASE_TENANT, "/recipe/multitenancy/app"),
+                requestBody, 1000, 2500, null,
+                SemVer.v3_0.get(), "PUT", apiKey, "multitenancy");
+
+        Assert.assertEquals("OK", response.getAsJsonPrimitive("status").getAsString());
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -145,7 +193,7 @@ public class SuperTokensSaaSSecretTest {
     public void testThatTenantCannotGetDatabaseRelatedConfigIfSuperTokensSaaSSecretIsSet()
             throws InterruptedException, IOException, InvalidConfigException, TenantOrAppNotFoundException,
             InvalidProviderConfigException, StorageQueryException,
-            FeatureNotEnabledException, CannotModifyBaseConfigException, BadPermissionException {
+            FeatureNotEnabledException, CannotModifyBaseConfigException, BadPermissionException, HttpResponseException {
         String[] args = {"../"};
 
         String saasSecret = "hg40239oirjgBHD9450=Beew123--hg40239oirjgBHD9450=Beew123--hg40239oirjgBHD9450=Beew123-";
@@ -171,12 +219,47 @@ public class SuperTokensSaaSSecretTest {
                             new PasswordlessConfig(false),
                             j));
 
-            // TODO: we should call the API to get tenant with just api key and check that
-            //  that it does not return he protected props
+            {
+                JsonObject response = HttpRequestForTesting.sendJsonRequest(process.getProcess(), "",
+                        HttpRequestForTesting.getMultitenantUrl(TenantIdentifier.BASE_TENANT, "/recipe/multitenancy/tenant/list"),
+                        null, 1000, 1000, null,
+                        SemVer.v3_0.get(), "GET", apiKey, "multitenancy");
 
-            // TODO: We should call the API with the supertokens_saas_secret and check that it does return the db
-            //  config.
+                Assert.assertEquals("OK", response.getAsJsonPrimitive("status").getAsString());
 
+                boolean found = false;
+                for (JsonElement tenant : response.get("tenants").getAsJsonArray()) {
+                    JsonObject tenantObj = tenant.getAsJsonObject();
+
+                    if (tenantObj.get("tenantId").getAsString().equals("t" + i)) {
+                        found = true;
+
+                        assertFalse(tenantObj.get("coreConfig").getAsJsonObject().has(PROTECTED_DB_CONFIG[i]));
+                    }
+                }
+                assertTrue(found);
+            }
+
+            {
+                JsonObject response = HttpRequestForTesting.sendJsonRequest(process.getProcess(), "",
+                        HttpRequestForTesting.getMultitenantUrl(TenantIdentifier.BASE_TENANT, "/recipe/multitenancy/tenant/list"),
+                        null, 1000, 1000, null,
+                        SemVer.v3_0.get(), "GET", saasSecret, "multitenancy");
+
+                Assert.assertEquals("OK", response.getAsJsonPrimitive("status").getAsString());
+
+                boolean found = false;
+                for (JsonElement tenant : response.get("tenants").getAsJsonArray()) {
+                    JsonObject tenantObj = tenant.getAsJsonObject();
+
+                    if (tenantObj.get("tenantId").getAsString().equals("t" + i)) {
+                        found = true;
+
+                        assertTrue(tenantObj.get("coreConfig").getAsJsonObject().has(PROTECTED_DB_CONFIG[i]));
+                    }
+                }
+                assertTrue(found);
+            }
         }
 
         process.kill();
