@@ -1392,6 +1392,7 @@ public class Start
         }
     }
     
+    @Override
     public int countUsersEnabledMfa(AppIdentifier appIdentifier) throws StorageQueryException {
         try {
             return ActiveUsersQueries.countUsersEnabledMfa(this, appIdentifier);

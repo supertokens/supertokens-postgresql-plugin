@@ -127,7 +127,7 @@ public class PostgreSQLConfig {
     }
 
     public String getTableSchema() {
-        return postgresql_table_schema.trim();
+        return postgresql_table_schema;
     }
 
     public int getConnectionPoolSize() {
@@ -211,8 +211,7 @@ public class PostgreSQLConfig {
     }
 
     public String getEmailPasswordUserToTenantTable() {
-        String tableName = "emailpassword_user_to_tenant";
-        return addSchemaAndPrefixToTableName(tableName);
+        return addSchemaAndPrefixToTableName("emailpassword_user_to_tenant");
     }
 
     public String getEmailPasswordUsersTable() {
