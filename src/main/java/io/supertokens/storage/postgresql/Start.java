@@ -71,6 +71,7 @@ import io.supertokens.pluginInterface.totp.TOTPStorage;
 import io.supertokens.pluginInterface.totp.TOTPUsedCode;
 import io.supertokens.pluginInterface.totp.exception.DeviceAlreadyExistsException;
 import io.supertokens.pluginInterface.totp.exception.UnknownDeviceException;
+import io.supertokens.pluginInterface.totp.exception.UnknownUserIdTotpException;
 import io.supertokens.pluginInterface.totp.exception.UsedCodeAlreadyExistsException;
 import io.supertokens.pluginInterface.totp.sqlStorage.TOTPSQLStorage;
 import io.supertokens.pluginInterface.useridmapping.UserIdMapping;
@@ -1390,7 +1391,7 @@ public class Start
             throw new StorageQueryException(e);
         }
     }
-    
+
     @Override
     public int countUsersEnabledMfa(AppIdentifier appIdentifier) throws StorageQueryException {
         try {
@@ -2465,7 +2466,7 @@ public class Start
                 throw (StorageQueryException) e.actualException;
             }
             throw new StorageQueryException(e.actualException);
-        }    
+        }
     }
 
     @Override
@@ -2755,7 +2756,7 @@ public class Start
     @Override
     public void insertUsedCode_Transaction(TransactionConnection con, TenantIdentifier tenantIdentifier,
                                            TOTPUsedCode usedCodeObj)
-            throws StorageQueryException, UnknownDeviceException, UsedCodeAlreadyExistsException,
+            throws StorageQueryException, UnknownUserIdTotpException, UsedCodeAlreadyExistsException,
             TenantOrAppNotFoundException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
@@ -2767,7 +2768,7 @@ public class Start
                 throw new UsedCodeAlreadyExistsException();
             } else if (isForeignKeyConstraintError(err, Config.getConfig(this).getTotpUsedCodesTable(),
                     "user_id")) {
-                throw new UnknownDeviceException();
+                throw new UnknownUserIdTotpException();
             } else if (isForeignKeyConstraintError(err, Config.getConfig(this).getTotpUsedCodesTable(), "tenant_id")) {
                 throw new TenantOrAppNotFoundException(tenantIdentifier);
             }
@@ -2797,7 +2798,7 @@ public class Start
             throw new StorageQueryException(e);
         }
     }
-    
+
     // MFA recipe:
     @Override
     public boolean enableFactor(TenantIdentifier tenantIdentifier, String userId, String factor)
