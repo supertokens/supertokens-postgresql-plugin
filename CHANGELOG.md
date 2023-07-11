@@ -7,6 +7,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [4.0.1] - 2023-07-11
+
+- Fixes duplicate users in users search queries when user is associated to multiple tenants
+
+
 ## [4.0.0] - 2023-06-02
 
 ### Changes
