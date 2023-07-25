@@ -20,6 +20,7 @@ import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.RECIPE_ID;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
+import io.supertokens.pluginInterface.authRecipe.LoginMethod;
 import io.supertokens.pluginInterface.dashboard.DashboardSearchTags;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
@@ -36,6 +37,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
 import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.CREATING_NEW_TABLE;
@@ -72,6 +74,8 @@ public class GeneralQueries {
                 + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "tenant_id VARCHAR(64) DEFAULT 'public',"
                 + "user_id CHAR(36) NOT NULL,"
+                + "primary_or_recipe_user_id CHAR(36) NOT NULL,"
+                + "is_linked_or_is_a_primary_user BOOLEAN NOT NULL DEFAULT FALSE,"
                 + "recipe_id VARCHAR(128) NOT NULL,"
                 + "time_joined BIGINT NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, null, "pkey")
@@ -99,7 +103,27 @@ public class GeneralQueries {
 
     static String getQueryToCreateUserPaginationIndex(Start start) {
         return "CREATE INDEX all_auth_recipe_users_pagination_index ON " + Config.getConfig(start).getUsersTable()
-                + "(time_joined DESC, user_id DESC, tenant_id DESC, app_id DESC);";
+                + "(time_joined DESC, primary_or_recipe_user_id DESC, tenant_id DESC, app_id DESC);";
+    }
+
+    static String getQueryToCreatePrimaryUserIdIndex(Start start) {
+        /*
+         * Used in:
+         *
+         * */
+        return "CREATE INDEX all_auth_recipe_users_primary_user_id_index ON " + Config.getConfig(start).getUsersTable()
+                + "(app_id, primary_or_recipe_user_id);";
+    }
+
+    static String getQueryToCreatePrimaryUserIdAndTenantIndex(Start start) {
+        /*
+         * Used in:
+         * - user count query
+         *
+         * */
+        return "CREATE INDEX all_auth_recipe_users_primary_user_id_and_tenant_id_index ON " +
+                Config.getConfig(start).getUsersTable()
+                + "(app_id, tenant_id, primary_or_recipe_user_id);";
     }
 
     private static String getQueryToCreateAppsTable(Start start) {
@@ -109,8 +133,8 @@ public class GeneralQueries {
         return "CREATE TABLE IF NOT EXISTS " + appsTable + " ("
                 + "app_id VARCHAR(64) NOT NULL DEFAULT 'public',"
                 + "created_at_time BIGINT ,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, appsTable, null, "pkey") 
-				+ " PRIMARY KEY(app_id)" +
+                + "CONSTRAINT " + Utils.getConstraintName(schema, appsTable, null, "pkey")
+                + " PRIMARY KEY(app_id)" +
                 " );";
         // @formatter:on
     }
@@ -223,7 +247,9 @@ public class GeneralQueries {
                     update(start, getQueryToCreateUsersTable(start), NO_OP_SETTER);
 
                     // index
+                    update(start, getQueryToCreatePrimaryUserIdIndex(start), NO_OP_SETTER);
                     update(start, getQueryToCreateUserPaginationIndex(start), NO_OP_SETTER);
+                    update(start, getQueryToCreatePrimaryUserIdAndTenantIndex(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getUserLastActiveTable())) {
@@ -231,7 +257,8 @@ public class GeneralQueries {
                     update(start, ActiveUsersQueries.getQueryToCreateUserLastActiveTable(start), NO_OP_SETTER);
 
                     // Index
-                    update(start, ActiveUsersQueries.getQueryToCreateAppIdIndexForUserLastActiveTable(start), NO_OP_SETTER);
+                    update(start, ActiveUsersQueries.getQueryToCreateAppIdIndexForUserLastActiveTable(start),
+                            NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
@@ -262,7 +289,8 @@ public class GeneralQueries {
                             NO_OP_SETTER);
 
                     // index
-                    update(start, MultitenancyQueries.getQueryToCreateTenantIdIndexForTenantThirdPartyProvidersTable(start),
+                    update(start,
+                            MultitenancyQueries.getQueryToCreateTenantIdIndexForTenantThirdPartyProvidersTable(start),
                             NO_OP_SETTER);
                 }
 
@@ -272,7 +300,9 @@ public class GeneralQueries {
                             NO_OP_SETTER);
 
                     // index
-                    update(start, MultitenancyQueries.getQueryToCreateThirdPartyIdIndexForTenantThirdPartyProviderClientsTable(start),
+                    update(start,
+                            MultitenancyQueries.getQueryToCreateThirdPartyIdIndexForTenantThirdPartyProviderClientsTable(
+                                    start),
                             NO_OP_SETTER);
                 }
 
@@ -391,7 +421,8 @@ public class GeneralQueries {
                     update(start, UserRolesQueries.getQueryToCreateRolePermissionsTable(start), NO_OP_SETTER);
                     // index
                     update(start, UserRolesQueries.getQueryToCreateRolePermissionsPermissionIndex(start), NO_OP_SETTER);
-                    update(start, UserRolesQueries.getQueryToCreateRoleIndexForRolePermissionsTable(start), NO_OP_SETTER);
+                    update(start, UserRolesQueries.getQueryToCreateRoleIndexForRolePermissionsTable(start),
+                            NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getUserRolesTable())) {
@@ -409,7 +440,9 @@ public class GeneralQueries {
                     update(start, UserIdMappingQueries.getQueryToCreateUserIdMappingTable(start), NO_OP_SETTER);
 
                     // index
-                    update(start, UserIdMappingQueries.getQueryToCreateSupertokensUserIdIndexForUserIdMappingTable(start), NO_OP_SETTER);
+                    update(start,
+                            UserIdMappingQueries.getQueryToCreateSupertokensUserIdIndexForUserIdMappingTable(start),
+                            NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getDashboardUsersTable())) {
@@ -417,7 +450,8 @@ public class GeneralQueries {
                     update(start, DashboardQueries.getQueryToCreateDashboardUsersTable(start), NO_OP_SETTER);
 
                     // Index
-                    update(start, DashboardQueries.getQueryToCreateAppIdIndexForDashboardUsersTable(start), NO_OP_SETTER);
+                    update(start, DashboardQueries.getQueryToCreateAppIdIndexForDashboardUsersTable(start),
+                            NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getDashboardSessionsTable())) {
@@ -604,7 +638,9 @@ public class GeneralQueries {
 
     public static long getUsersCount(Start start, AppIdentifier appIdentifier, RECIPE_ID[] includeRecipeIds)
             throws SQLException, StorageQueryException {
-        StringBuilder QUERY = new StringBuilder("SELECT COUNT(*) as total FROM " + getConfig(start).getUsersTable());
+        StringBuilder QUERY = new StringBuilder(
+                "SELECT COUNT(DISTINCT primary_or_recipe_user_id) AS total FROM " +
+                        getConfig(start).getUsersTable());
         QUERY.append(" WHERE app_id = ?");
         if (includeRecipeIds != null && includeRecipeIds.length > 0) {
             QUERY.append(" AND recipe_id IN (");
@@ -636,7 +672,8 @@ public class GeneralQueries {
 
     public static long getUsersCount(Start start, TenantIdentifier tenantIdentifier, RECIPE_ID[] includeRecipeIds)
             throws SQLException, StorageQueryException {
-        StringBuilder QUERY = new StringBuilder("SELECT COUNT(*) as total FROM " + getConfig(start).getUsersTable());
+        StringBuilder QUERY = new StringBuilder(
+                "SELECT COUNT(DISTINCT primary_or_recipe_user_id) AS total FROM " + getConfig(start).getUsersTable());
         QUERY.append(" WHERE app_id = ? AND tenant_id = ?");
         if (includeRecipeIds != null && includeRecipeIds.length > 0) {
             QUERY.append(" AND recipe_id IN (");
@@ -669,24 +706,34 @@ public class GeneralQueries {
 
     public static boolean doesUserIdExist(Start start, AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
-
+        // We query both tables cause there is a case where a primary user ID exists, but its associated
+        // recipe user ID has been deleted AND there are other recipe user IDs linked to this primary user ID already.
         String QUERY = "SELECT 1 FROM " + getConfig(start).getAppIdToUserIdTable()
-                + " WHERE app_id = ? AND user_id = ?";
+                + " WHERE app_id = ? AND user_id = ? UNION SELECT 1 FROM " + getConfig(start).getUsersTable() +
+                " WHERE app_id = ? AND primary_or_recipe_user_id = ?";
         return execute(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, userId);
+            pst.setString(3, appIdentifier.getAppId());
+            pst.setString(4, userId);
         }, ResultSet::next);
     }
 
     public static boolean doesUserIdExist(Start start, TenantIdentifier tenantIdentifier, String userId)
             throws SQLException, StorageQueryException {
-
+        // We query both tables cause there is a case where a primary user ID exists, but its associated
+        // recipe user ID has been deleted AND there are other recipe user IDs linked to this primary user ID already.
         String QUERY = "SELECT 1 FROM " + getConfig(start).getUsersTable()
-                + " WHERE app_id = ? AND tenant_id = ? AND user_id = ?";
+                + " WHERE app_id = ? AND tenant_id = ? AND user_id = ? UNION SELECT 1 FROM " +
+                getConfig(start).getUsersTable() +
+                " WHERE app_id = ? AND tenant_id = ? AND primary_or_recipe_user_id = ?";
         return execute(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, userId);
+            pst.setString(4, tenantIdentifier.getAppId());
+            pst.setString(5, tenantIdentifier.getTenantId());
+            pst.setString(6, userId);
         }, ResultSet::next);
     }
 
@@ -740,7 +787,9 @@ public class GeneralQueries {
                         String QUERY = "SELECT  allAuthUsersTable.*" + " FROM " + getConfig(start).getUsersTable()
                                 + " AS allAuthUsersTable"
                                 + " JOIN " + getConfig(start).getThirdPartyUserToTenantTable()
-                                + " AS thirdPartyToTenantTable ON allAuthUsersTable.app_id = thirdPartyToTenantTable.app_id AND"
+                                +
+                                " AS thirdPartyToTenantTable ON allAuthUsersTable.app_id = thirdPartyToTenantTable" +
+                                ".app_id AND"
                                 + " allAuthUsersTable.tenant_id = thirdPartyToTenantTable.tenant_id AND"
                                 + " allAuthUsersTable.user_id = thirdPartyToTenantTable.user_id"
                                 + " JOIN " + getConfig(start).getThirdPartyUsersTable()
@@ -985,8 +1034,9 @@ public class GeneralQueries {
 
         // we give the userId[] for each recipe to fetch all those user's details
         for (RECIPE_ID recipeId : recipeIdToUserIdListMap.keySet()) {
-            List<? extends AuthRecipeUserInfo> users = getUserInfoForRecipeIdFromUserIds(start,
-                    tenantIdentifier.toAppIdentifier(), recipeId, recipeIdToUserIdListMap.get(recipeId));
+            List<AuthRecipeUserInfo> users = getPrimaryUserInfoForUserIds(start,
+                    tenantIdentifier.toAppIdentifier(),
+                    recipeIdToUserIdListMap.get(recipeId));
 
             // we fill in all the slots in finalResult based on their position in
             // usersFromQuery
@@ -1004,27 +1054,318 @@ public class GeneralQueries {
         return finalResult;
     }
 
-    private static List<? extends AuthRecipeUserInfo> getUserInfoForRecipeIdFromUserIds(Start start,
-                                                                                        AppIdentifier appIdentifier,
-                                                                                        RECIPE_ID recipeId,
-                                                                                        List<String> userIds)
+    public static void makePrimaryUser_Transaction(Start start, Connection sqlCon, String userId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "UPDATE " + getConfig(start).getUsersTable() +
+                " SET is_linked_or_is_a_primary_user = true WHERE user_id = ?";
+
+        execute(sqlCon, QUERY, pst -> {
+            pst.setString(1, userId);
+        }, result -> null);
+    }
+
+    public static AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber_Transaction(Start start, Connection sqlCon,
+                                                                                 TenantIdentifier tenantIdentifier,
+                                                                                 String phoneNumber)
+            throws SQLException, StorageQueryException {
+        // we first lock on the table based on phoneNumber and tenant - this will ensure that any other
+        // query happening related to the account linking on this phone number / tenant will wait for this to finish,
+        // and vice versa.
+
+        PasswordlessQueries.lockPhoneAndTenant_Transaction(start, sqlCon, tenantIdentifier, phoneNumber);
+
+        // now that we have locks on all the relevant tables, we can read from them safely
+        return listPrimaryUsersByPhoneNumberHelper(start, sqlCon, tenantIdentifier, phoneNumber);
+    }
+
+    public static AuthRecipeUserInfo getPrimaryUsersByThirdPartyInfo_Transaction(Start start, Connection sqlCon,
+                                                                                 TenantIdentifier tenantIdentifier,
+                                                                                 String thirdPartyId,
+                                                                                 String thirdPartyUserId)
+            throws SQLException, StorageQueryException {
+        // we first lock on the table based on thirdparty info and tenant - this will ensure that any other
+        // query happening related to the account linking on this third party info / tenant will wait for this to
+        // finish,
+        // and vice versa.
+
+        ThirdPartyQueries.lockThirdPartyInfoAndTenant_Transaction(start, sqlCon, tenantIdentifier, thirdPartyId,
+                thirdPartyUserId);
+
+        // now that we have locks on all the relevant tables, we can read from them safely
+        return getPrimaryUserByThirdPartyInfoHelper(start, sqlCon, tenantIdentifier, thirdPartyId, thirdPartyUserId);
+    }
+
+    public static AuthRecipeUserInfo[] listPrimaryUsersByEmail_Transaction(Start start, Connection sqlCon,
+                                                                           TenantIdentifier tenantIdentifier,
+                                                                           String email)
+            throws SQLException, StorageQueryException {
+        // we first lock on the three tables based on email and tenant - this will ensure that any other
+        // query happening related to the account linking on this email / tenant will wait for this to finish,
+        // and vice versa.
+
+        EmailPasswordQueries.lockEmailAndTenant_Transaction(start, sqlCon, tenantIdentifier, email);
+
+        ThirdPartyQueries.lockEmailAndTenant_Transaction(start, sqlCon, tenantIdentifier, email);
+
+        PasswordlessQueries.lockEmailAndTenant_Transaction(start, sqlCon, tenantIdentifier, email);
+
+        // now that we have locks on all the relevant tables, we can read from them safely
+        return listPrimaryUsersByEmailHelper(start, sqlCon, tenantIdentifier, email);
+    }
+
+    public static AuthRecipeUserInfo[] listPrimaryUsersByEmail(Start start, TenantIdentifier tenantIdentifier,
+                                                               String email)
             throws StorageQueryException, SQLException {
-        if (recipeId == RECIPE_ID.EMAIL_PASSWORD) {
-            return EmailPasswordQueries.getUsersInfoUsingIdList(start, appIdentifier, userIds);
-        } else if (recipeId == RECIPE_ID.THIRD_PARTY) {
-            return ThirdPartyQueries.getUsersInfoUsingIdList(start, appIdentifier, userIds);
-        } else if (recipeId == RECIPE_ID.PASSWORDLESS) {
-            return PasswordlessQueries.getUsersByIdList(start, appIdentifier, userIds);
-        } else {
-            throw new IllegalArgumentException("No implementation of get users for recipe: " + recipeId.toString());
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            return listPrimaryUsersByEmailHelper(start, con, tenantIdentifier, email);
         }
     }
 
-    public static String getRecipeIdForUser_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId)
+    private static AuthRecipeUserInfo[] listPrimaryUsersByEmailHelper(Start start, Connection con,
+                                                                      TenantIdentifier tenantIdentifier,
+                                                                      String email)
+            throws StorageQueryException, SQLException {
+        List<String> userIds = new ArrayList<>();
+        String emailPasswordUserId = EmailPasswordQueries.getPrimaryUserIdUsingEmail(start, con, tenantIdentifier,
+                email);
+        if (emailPasswordUserId != null) {
+            userIds.add(emailPasswordUserId);
+        }
+
+        String passwordlessUserId = PasswordlessQueries.getPrimaryUserIdUsingEmail(start, con, tenantIdentifier,
+                email);
+        if (passwordlessUserId != null) {
+            userIds.add(passwordlessUserId);
+        }
+
+        userIds.addAll(ThirdPartyQueries.getPrimaryUserIdUsingEmail(start, con, tenantIdentifier, email));
+
+        // remove duplicates from userIds
+        Set<String> userIdsSet = new HashSet<>(userIds);
+        userIds = new ArrayList<>(userIdsSet);
+
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, con, tenantIdentifier.toAppIdentifier(),
+                userIds);
+
+        // this is going to order them based on oldest that joined to newest that joined.
+        result.sort(Comparator.comparingLong(o -> o.timeJoined));
+
+        return result.toArray(new AuthRecipeUserInfo[0]);
+    }
+
+    public static AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber(Start start,
+                                                                     TenantIdentifier tenantIdentifier,
+                                                                     String phoneNumber)
+            throws StorageQueryException, SQLException {
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            return listPrimaryUsersByPhoneNumberHelper(start, con, tenantIdentifier, phoneNumber);
+        }
+    }
+
+    private static AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumberHelper(Start start, Connection con,
+                                                                            TenantIdentifier tenantIdentifier,
+                                                                            String phoneNumber)
+            throws StorageQueryException, SQLException {
+        List<String> userIds = new ArrayList<>();
+
+        String passwordlessUserId = PasswordlessQueries.getPrimaryUserByPhoneNumber(start, con, tenantIdentifier,
+                phoneNumber);
+        if (passwordlessUserId != null) {
+            userIds.add(passwordlessUserId);
+        }
+
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, con, tenantIdentifier.toAppIdentifier(),
+                userIds);
+
+        return result.toArray(new AuthRecipeUserInfo[0]);
+    }
+
+    public static AuthRecipeUserInfo getPrimaryUserByThirdPartyInfo(Start start,
+                                                                    TenantIdentifier tenantIdentifier,
+                                                                    String thirdPartyId,
+                                                                    String thirdPartyUserId)
+            throws StorageQueryException, SQLException {
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            return getPrimaryUserByThirdPartyInfoHelper(start, con, tenantIdentifier, thirdPartyId, thirdPartyUserId);
+        }
+    }
+
+    private static AuthRecipeUserInfo getPrimaryUserByThirdPartyInfoHelper(Start start, Connection con,
+                                                                           TenantIdentifier tenantIdentifier,
+                                                                           String thirdPartyId,
+                                                                           String thirdPartyUserId)
+            throws StorageQueryException, SQLException {
+
+        String userId = ThirdPartyQueries.getThirdPartyUserInfoUsingId(start, con, tenantIdentifier,
+                thirdPartyId, thirdPartyUserId);
+        if (userId != null) {
+            return getPrimaryUserInfoForUserId(start, con, tenantIdentifier.toAppIdentifier(),
+                    userId);
+        }
+        return null;
+    }
+
+    public static AuthRecipeUserInfo getPrimaryUserInfoForUserId_Transaction(Start start, Connection sqlCon,
+                                                                             AppIdentifier appIdentifier, String id)
             throws SQLException, StorageQueryException {
+
+        String QUERY = "SELECT * FROM " + getConfig(start).getUsersTable() +
+                " WHERE (user_id = ? OR primary_or_recipe_user_id = ?) AND app_id = ? FOR UPDATE";
+
+        AllAuthRecipeUsersResultHolder allAuthUsersResult = execute(sqlCon, QUERY, pst -> {
+            pst.setString(1, id);
+            pst.setString(2, id);
+            pst.setString(3, appIdentifier.getAppId());
+        }, result -> {
+            AllAuthRecipeUsersResultHolder finalResult = null;
+            if (result.next()) {
+                finalResult = new AllAuthRecipeUsersResultHolder(result.getString("user_id"),
+                        result.getString("tenant_id"),
+                        result.getString("primary_or_recipe_user_id"),
+                        result.getBoolean("is_linked_or_is_a_primary_user"),
+                        result.getString("recipe_id"),
+                        result.getLong("time_joined"));
+            }
+            return finalResult;
+        });
+
+        if (allAuthUsersResult == null) {
+            return null;
+        }
+
+        // Now we form the userIds again, but based on the user_id in the result from above.
+        Set<String> recipeUserIdsToFetch = new HashSet<>();
+        recipeUserIdsToFetch.add(allAuthUsersResult.userId);
+
+        List<LoginMethod> loginMethods = new ArrayList<>();
+        loginMethods.addAll(
+                EmailPasswordQueries.getUsersInfoUsingIdList(start, sqlCon, recipeUserIdsToFetch,
+                        appIdentifier));
+        loginMethods.addAll(ThirdPartyQueries.getUsersInfoUsingIdList(start, sqlCon, recipeUserIdsToFetch,
+                appIdentifier));
+        loginMethods.addAll(PasswordlessQueries.getUsersInfoUsingIdList(start, sqlCon, recipeUserIdsToFetch,
+                appIdentifier));
+
+        // we do this in such a strange way cause the create function takes just one login method at the moment.
+        AuthRecipeUserInfo result = AuthRecipeUserInfo.create(allAuthUsersResult.primaryOrRecipeUserId,
+                allAuthUsersResult.isLinkedOrIsAPrimaryUser, loginMethods.get(0));
+        for (int i = 1; i < loginMethods.size(); i++) {
+            result.addLoginMethod(loginMethods.get(i));
+        }
+
+        return result;
+    }
+
+    public static AuthRecipeUserInfo getPrimaryUserInfoForUserId(Start start, AppIdentifier appIdentifier, String id)
+            throws SQLException, StorageQueryException {
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            return getPrimaryUserInfoForUserId(start, con, appIdentifier, id);
+        }
+    }
+
+    private static AuthRecipeUserInfo getPrimaryUserInfoForUserId(Start start, Connection con,
+                                                                  AppIdentifier appIdentifier, String id)
+            throws SQLException, StorageQueryException {
+        List<String> ids = new ArrayList<>();
+        ids.add(id);
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, con, appIdentifier, ids);
+        if (result.isEmpty()) {
+            return null;
+        }
+        return result.get(0);
+    }
+
+    private static List<AuthRecipeUserInfo> getPrimaryUserInfoForUserIds(Start start,
+                                                                         Connection con,
+                                                                         AppIdentifier appIdentifier,
+                                                                         List<String> userIds)
+            throws StorageQueryException, SQLException {
+        if (userIds.size() == 0) {
+            return new ArrayList<>();
+        }
+
+        // We check both user_id and primary_or_recipe_user_id because the input may have a recipe userId
+        // which is linked to a primary user ID in which case it won't be in the primary_or_recipe_user_id column,
+        // or the input may have a primary user ID whose recipe user ID was removed, so it won't be in the user_id
+        // column
+        String QUERY = "SELECT * FROM " + getConfig(start).getUsersTable() + " WHERE (user_id IN ("
+                + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
+                ") OR primary_or_recipe_user_id IN (" +
+                Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
+                ")) AND app_id = ?";
+
+        List<AllAuthRecipeUsersResultHolder> allAuthUsersResult = execute(con, QUERY, pst -> {
+            // IN user_id
+            int index = 1;
+            for (int i = 0; i < userIds.size(); i++, index++) {
+                pst.setString(index, userIds.get(i));
+            }
+            // IN primary_or_recipe_user_id
+            for (int i = 0; i < userIds.size(); i++, index++) {
+                pst.setString(index, userIds.get(i));
+            }
+            // for app_id
+            pst.setString(index, appIdentifier.getAppId());
+        }, result -> {
+            List<AllAuthRecipeUsersResultHolder> parsedResult = new ArrayList<>();
+            while (result.next()) {
+                parsedResult.add(new AllAuthRecipeUsersResultHolder(result.getString("user_id"),
+                        result.getString("tenant_id"),
+                        result.getString("primary_or_recipe_user_id"),
+                        result.getBoolean("is_linked_or_is_a_primary_user"),
+                        result.getString("recipe_id"),
+                        result.getLong("time_joined")));
+            }
+            return parsedResult;
+        });
+
+        // Now we form the userIds again, but based on the user_id in the result from above.
+        Set<String> recipeUserIdsToFetch = new HashSet<>();
+        for (AllAuthRecipeUsersResultHolder user : allAuthUsersResult) {
+            // this will remove duplicate entries wherein a user id is shared across several tenants.
+            recipeUserIdsToFetch.add(user.userId);
+        }
+
+        List<LoginMethod> loginMethods = new ArrayList<>();
+        loginMethods.addAll(
+                EmailPasswordQueries.getUsersInfoUsingIdList(start, con, recipeUserIdsToFetch, appIdentifier));
+        loginMethods.addAll(ThirdPartyQueries.getUsersInfoUsingIdList(start, con, recipeUserIdsToFetch, appIdentifier));
+        loginMethods.addAll(
+                PasswordlessQueries.getUsersInfoUsingIdList(start, con, recipeUserIdsToFetch, appIdentifier));
+
+        Map<String, LoginMethod> recipeUserIdToLoginMethodMap = new HashMap<>();
+        for (LoginMethod loginMethod : loginMethods) {
+            recipeUserIdToLoginMethodMap.put(loginMethod.recipeUserId, loginMethod);
+        }
+
+        Map<String, AuthRecipeUserInfo> userIdToAuthRecipeUserInfo = new HashMap<>();
+
+        for (AllAuthRecipeUsersResultHolder authRecipeUsersResultHolder : allAuthUsersResult) {
+            String recipeUserId = authRecipeUsersResultHolder.userId;
+            LoginMethod loginMethod = recipeUserIdToLoginMethodMap.get(recipeUserId);
+            assert (loginMethod != null);
+            String primaryUserId = authRecipeUsersResultHolder.primaryOrRecipeUserId;
+            AuthRecipeUserInfo curr = userIdToAuthRecipeUserInfo.get(primaryUserId);
+            if (curr == null) {
+                curr = AuthRecipeUserInfo.create(primaryUserId, authRecipeUsersResultHolder.isLinkedOrIsAPrimaryUser,
+                        loginMethod);
+            } else {
+                curr.addLoginMethod(loginMethod);
+            }
+            userIdToAuthRecipeUserInfo.put(primaryUserId, curr);
+        }
+
+        return userIdToAuthRecipeUserInfo.keySet().stream().map(userIdToAuthRecipeUserInfo::get)
+                .collect(Collectors.toList());
+    }
+
+    public static String getRecipeIdForUser_Transaction(Start start, Connection sqlCon,
+                                                        TenantIdentifier tenantIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+
+
         String QUERY = "SELECT recipe_id FROM " + getConfig(start).getAppIdToUserIdTable()
                 + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
-
         return execute(sqlCon, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, userId);
@@ -1036,12 +1377,28 @@ public class GeneralQueries {
         });
     }
 
-    public static Map<String, List<String>> getTenantIdsForUserIds_transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier, String[] userIds)
+    private static List<AuthRecipeUserInfo> getPrimaryUserInfoForUserIds(Start start,
+                                                                         AppIdentifier appIdentifier,
+                                                                         List<String> userIds)
+            throws StorageQueryException, SQLException {
+        if (userIds.size() == 0) {
+            return new ArrayList<>();
+        }
+
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            return getPrimaryUserInfoForUserIds(start, con, appIdentifier, userIds);
+        }
+
+    }
+
+    public static Map<String, List<String>> getTenantIdsForUserIds_transaction(Start start, Connection sqlCon,
+                                                                               AppIdentifier appIdentifier,
+                                                                               String[] userIds)
             throws SQLException, StorageQueryException {
         if (userIds != null && userIds.length > 0) {
             StringBuilder QUERY = new StringBuilder("SELECT user_id, tenant_id "
                     + "FROM " + getConfig(start).getUsersTable());
-            QUERY.append(" WHERE app_id = ? AND user_id IN (");
+            QUERY.append(" WHERE user_id IN (");
             for (int i = 0; i < userIds.length; i++) {
 
                 QUERY.append("?");
@@ -1050,14 +1407,14 @@ public class GeneralQueries {
                     QUERY.append(",");
                 }
             }
-            QUERY.append(")");
+            QUERY.append(") AND app_id = ?");
 
             return execute(sqlCon, QUERY.toString(), pst -> {
-                pst.setString(1, appIdentifier.getAppId());
                 for (int i = 0; i < userIds.length; i++) {
-                    // i+2 cause this starts with 1 and not 0, and 1 is appId
-                    pst.setString(i + 2, userIds[i]);
+                    // i+1 cause this starts with 1 and not 0, and 1 is appId
+                    pst.setString(i + 1, userIds[i]);
                 }
+                pst.setString(userIds.length + 1, appIdentifier.getAppId());
             }, result -> {
                 Map<String, List<String>> finalResult = new HashMap<>();
                 for (String userId : userIds) {
@@ -1107,12 +1464,13 @@ public class GeneralQueries {
 
         List<String> result = new ArrayList<>();
         for (String tableName : tableNames) {
-            String QUERY = "SELECT 1 FROM " + Config.getConfig(start).getTableSchema() + "." + tableName + " WHERE app_id = ?";
+            String QUERY =
+                    "SELECT 1 FROM " + Config.getConfig(start).getTableSchema() + "." + tableName + " WHERE app_id = ?";
 
             boolean hasRows = execute(start, QUERY, pst -> {
                 pst.setString(1, appId);
             }, res -> {
-                 return res.next();
+                return res.next();
             });
             if (hasRows) {
                 result.add(tableName);
@@ -1129,6 +1487,25 @@ public class GeneralQueries {
         UserInfoPaginationResultHolder(String userId, String recipeId) {
             this.userId = userId;
             this.recipeId = recipeId;
+        }
+    }
+
+    private static class AllAuthRecipeUsersResultHolder {
+        String userId;
+        String tenantId;
+        String primaryOrRecipeUserId;
+        boolean isLinkedOrIsAPrimaryUser;
+        RECIPE_ID recipeId;
+        long timeJoined;
+
+        AllAuthRecipeUsersResultHolder(String userId, String tenantId, String primaryOrRecipeUserId,
+                                       boolean isLinkedOrIsAPrimaryUser, String recipeId, long timeJoined) {
+            this.userId = userId;
+            this.tenantId = tenantId;
+            this.primaryOrRecipeUserId = primaryOrRecipeUserId;
+            this.isLinkedOrIsAPrimaryUser = isLinkedOrIsAPrimaryUser;
+            this.recipeId = RECIPE_ID.getEnumFromString(recipeId);
+            this.timeJoined = timeJoined;
         }
     }
 
