@@ -115,6 +115,16 @@ public class GeneralQueries {
                 + "(app_id, primary_or_recipe_user_id);";
     }
 
+    static String getQueryToCreateUserIdIndex(Start start) {
+        /*
+         * Used in:
+         * - making user a primary user.
+         *
+         * */
+        return "CREATE INDEX all_auth_recipe_users_user_id_index ON " + Config.getConfig(start).getUsersTable()
+                + "(app_id, user_id);";
+    }
+
     static String getQueryToCreatePrimaryUserIdAndTenantIndex(Start start) {
         /*
          * Used in:
@@ -248,6 +258,7 @@ public class GeneralQueries {
 
                     // index
                     update(start, getQueryToCreatePrimaryUserIdIndex(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateUserIdIndex(start), NO_OP_SETTER);
                     update(start, getQueryToCreateUserPaginationIndex(start), NO_OP_SETTER);
                     update(start, getQueryToCreatePrimaryUserIdAndTenantIndex(start), NO_OP_SETTER);
                 }
@@ -1054,13 +1065,29 @@ public class GeneralQueries {
         return finalResult;
     }
 
-    public static void makePrimaryUser_Transaction(Start start, Connection sqlCon, String userId)
+    public static void makePrimaryUser_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
+                                                   String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "UPDATE " + getConfig(start).getUsersTable() +
-                " SET is_linked_or_is_a_primary_user = true WHERE user_id = ?";
+                " SET is_linked_or_is_a_primary_user = true WHERE app_id = ? AND user_id = ?";
 
         update(sqlCon, QUERY, pst -> {
-            pst.setString(1, userId);
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        });
+    }
+
+    public static void linkAccounts_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
+                                                String recipeUserId, String primaryUserId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "UPDATE " + getConfig(start).getUsersTable() +
+                " SET is_linked_or_is_a_primary_user = true, primary_or_recipe_user_id = ? WHERE app_id = ? AND " +
+                "user_id = ?";
+
+        update(sqlCon, QUERY, pst -> {
+            pst.setString(1, primaryUserId);
+            pst.setString(2, appIdentifier.getAppId());
+            pst.setString(3, recipeUserId);
         });
     }
 
