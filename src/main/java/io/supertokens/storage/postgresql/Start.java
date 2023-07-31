@@ -656,6 +656,17 @@ public class Start
     }
 
     @Override
+    public void deleteSessionsOfUser_Transaction(TransactionConnection con, AppIdentifier appIdentifier, String userId)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            SessionQueries.deleteSessionsOfUser_Transaction(sqlCon, this, appIdentifier, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public void setKeyValue_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con, String key,
                                         KeyValueInfo info)
             throws StorageQueryException, TenantOrAppNotFoundException {
@@ -894,11 +905,14 @@ public class Start
     }
 
     @Override
-    public void deleteEmailPasswordUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
+    public void deleteEmailPasswordUser_Transaction(TransactionConnection con, AppIdentifier appIdentifier,
+                                                    String userId, boolean deleteUserIdMappingToo)
+            throws StorageQueryException {
         try {
-            EmailPasswordQueries.deleteUser(this, appIdentifier, userId);
-        } catch (StorageTransactionLogicException e) {
-            throw new StorageQueryException(e.actualException);
+            Connection sqlCon = (Connection) con.getConnection();
+            EmailPasswordQueries.deleteUser_Transaction(sqlCon, this, appIdentifier, userId, deleteUserIdMappingToo);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
         }
     }
 
@@ -1080,12 +1094,14 @@ public class Start
     }
 
     @Override
-    public void deleteEmailVerificationUserInfo(AppIdentifier appIdentifier, String userId)
+    public void deleteEmailVerificationUserInfo_Transaction(TransactionConnection con, AppIdentifier appIdentifier,
+                                                            String userId)
             throws StorageQueryException {
         try {
-            EmailVerificationQueries.deleteUserInfo(this, appIdentifier, userId);
-        } catch (StorageTransactionLogicException e) {
-            throw new StorageQueryException(e.actualException);
+            Connection sqlCon = (Connection) con.getConnection();
+            EmailVerificationQueries.deleteUserInfo_Transaction(sqlCon, this, appIdentifier, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
         }
     }
 
@@ -1258,11 +1274,14 @@ public class Start
     }
 
     @Override
-    public void deleteThirdPartyUser(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
+    public void deleteThirdPartyUser_Transaction(TransactionConnection con, AppIdentifier appIdentifier, String userId,
+                                                 boolean deleteUserIdMappingToo)
+            throws StorageQueryException {
         try {
-            ThirdPartyQueries.deleteUser(this, appIdentifier, userId);
-        } catch (StorageTransactionLogicException e) {
-            throw new StorageQueryException(e.actualException);
+            Connection sqlCon = (Connection) con.getConnection();
+            ThirdPartyQueries.deleteUser_Transaction(sqlCon, this, appIdentifier, userId, deleteUserIdMappingToo);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
         }
     }
 
@@ -1347,9 +1366,11 @@ public class Start
     }
 
     @Override
-    public void deleteUserActive(AppIdentifier appIdentifier, String userId) throws StorageQueryException {
+    public void deleteUserActive_Transaction(TransactionConnection con, AppIdentifier appIdentifier, String userId)
+            throws StorageQueryException {
         try {
-            ActiveUsersQueries.deleteUserActive(this, appIdentifier, userId);
+            Connection sqlCon = (Connection) con.getConnection();
+            ActiveUsersQueries.deleteUserActive_Transaction(sqlCon, this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -1771,12 +1792,14 @@ public class Start
     }
 
     @Override
-    public void deletePasswordlessUser(AppIdentifier appIdentifier, String userId) throws
+    public void deletePasswordlessUser_Transaction(TransactionConnection con, AppIdentifier appIdentifier,
+                                                   String userId, boolean deleteUserIdMappingToo) throws
             StorageQueryException {
         try {
-            PasswordlessQueries.deleteUser(this, appIdentifier, userId);
-        } catch (StorageTransactionLogicException e) {
-            throw new StorageQueryException(e.actualException);
+            Connection sqlCon = (Connection) con.getConnection();
+            PasswordlessQueries.deleteUser_Transaction(sqlCon, this, appIdentifier, userId, deleteUserIdMappingToo);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
         }
     }
 
@@ -1889,6 +1912,17 @@ public class Start
                     throw new TenantOrAppNotFoundException(appIdentifier);
                 }
             }
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public int deleteUserMetadata_Transaction(TransactionConnection con, AppIdentifier appIdentifier, String userId)
+            throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            return UserMetadataQueries.deleteUserMetadata_Transaction(sqlCon, this, appIdentifier, userId);
+        } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
@@ -2015,10 +2049,12 @@ public class Start
     }
 
     @Override
-    public void deleteAllRolesForUser(AppIdentifier appIdentifier, String userId) throws
+    public void deleteAllRolesForUser_Transaction(TransactionConnection con, AppIdentifier appIdentifier, String userId)
+            throws
             StorageQueryException {
         try {
-            UserRolesQueries.deleteAllRolesForUser(this, appIdentifier, userId);
+            Connection sqlCon = (Connection) con.getConnection();
+            UserRolesQueries.deleteAllRolesForUser_Transaction(sqlCon, this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

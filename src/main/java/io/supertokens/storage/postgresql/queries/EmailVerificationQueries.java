@@ -19,7 +19,6 @@ package io.supertokens.storage.postgresql.queries;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.emailverification.EmailVerificationTokenInfo;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
-import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.Start;
@@ -298,36 +297,27 @@ public class EmailVerificationQueries {
         });
     }
 
-    public static void deleteUserInfo(Start start, AppIdentifier appIdentifier, String userId)
-            throws StorageQueryException, StorageTransactionLogicException {
-        start.startTransaction(con -> {
-            Connection sqlCon = (Connection) con.getConnection();
-            try {
-                {
-                    String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTable()
-                            + " WHERE app_id = ? AND user_id = ?";
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, appIdentifier.getAppId());
-                        pst.setString(2, userId);
-                    });
-                }
+    public static void deleteUserInfo_Transaction(Connection sqlCon, Start start, AppIdentifier appIdentifier,
+                                                  String userId)
+            throws StorageQueryException, SQLException {
+        {
+            String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTable()
+                    + " WHERE app_id = ? AND user_id = ?";
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, userId);
+            });
+        }
 
-                {
-                    String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTokensTable()
-                            + " WHERE app_id = ? AND user_id = ?";
+        {
+            String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTokensTable()
+                    + " WHERE app_id = ? AND user_id = ?";
 
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, appIdentifier.getAppId());
-                        pst.setString(2, userId);
-                    });
-                }
-
-                sqlCon.commit();
-            } catch (SQLException throwables) {
-                throw new StorageTransactionLogicException(throwables);
-            }
-            return null;
-        });
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, userId);
+            });
+        }
     }
 
     public static boolean deleteUserInfo(Start start, TenantIdentifier tenantIdentifier, String userId)
