@@ -1081,6 +1081,20 @@ public class GeneralQueries {
         });
     }
 
+    public static void unlinkAccounts_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
+                                                  String recipeUserId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "UPDATE " + getConfig(start).getUsersTable() +
+                " SET is_linked_or_is_a_primary_user = false, primary_or_recipe_user_id = ? WHERE app_id = ? AND " +
+                "user_id = ?";
+
+        update(sqlCon, QUERY, pst -> {
+            pst.setString(1, recipeUserId);
+            pst.setString(2, appIdentifier.getAppId());
+            pst.setString(3, recipeUserId);
+        });
+    }
+
     public static AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber_Transaction(Start start, Connection sqlCon,
                                                                                  TenantIdentifier tenantIdentifier,
                                                                                  String phoneNumber)
