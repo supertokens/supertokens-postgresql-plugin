@@ -2915,6 +2915,19 @@ public class Start
         }
     }
 
+    @Override
+    public void unlinkAccounts_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String recipeUserId)
+            throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            // we do not bother returning if a row was updated here or not, cause it's happening
+            // in a transaction anyway.
+            GeneralQueries.unlinkAccounts_Transaction(this, sqlCon, appIdentifier, recipeUserId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
     @TestOnly
     public Thread getMainThread() {
         return mainThread;
