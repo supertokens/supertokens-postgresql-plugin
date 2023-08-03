@@ -92,12 +92,13 @@ public class EmailPasswordQueries {
                 + "token VARCHAR(128) NOT NULL"
                 + " CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, "token", "key") +
                 " UNIQUE,"
+                + "email VARCHAR(256)," // nullable cause of backwards compatibility.
                 + "token_expiry BIGINT NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, null, "pkey")
                 + " PRIMARY KEY (app_id, user_id, token),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, "user_id", "fkey")
                 + " FOREIGN KEY (app_id, user_id)"
-                + " REFERENCES " + Config.getConfig(start).getEmailPasswordUsersTable() + "(app_id, user_id)"
+                + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() + "(app_id, user_id)"
                 + " ON DELETE CASCADE ON UPDATE CASCADE"
                 + ");";
         // @formatter:on
@@ -173,8 +174,9 @@ public class EmailPasswordQueries {
     public static PasswordResetTokenInfo[] getAllPasswordResetTokenInfoForUser(Start start, AppIdentifier appIdentifier,
                                                                                String userId)
             throws StorageQueryException, SQLException {
-        String QUERY = "SELECT user_id, token, token_expiry FROM " + getConfig(start).getPasswordResetTokensTable()
-                + " WHERE app_id = ? AND user_id = ?";
+        String QUERY =
+                "SELECT user_id, token, token_expiry, email FROM " + getConfig(start).getPasswordResetTokensTable()
+                        + " WHERE app_id = ? AND user_id = ?";
 
         return execute(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
@@ -197,8 +199,9 @@ public class EmailPasswordQueries {
                                                                                            String userId)
             throws SQLException, StorageQueryException {
 
-        String QUERY = "SELECT user_id, token, token_expiry FROM " + getConfig(start).getPasswordResetTokensTable()
-                + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
+        String QUERY =
+                "SELECT user_id, token, token_expiry, email FROM " + getConfig(start).getPasswordResetTokensTable()
+                        + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
 
         return execute(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
@@ -232,8 +235,9 @@ public class EmailPasswordQueries {
     public static PasswordResetTokenInfo getPasswordResetTokenInfo(Start start, AppIdentifier appIdentifier,
                                                                    String token)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT user_id, token, token_expiry FROM " + getConfig(start).getPasswordResetTokensTable()
-                + " WHERE app_id = ? AND token = ?";
+        String QUERY =
+                "SELECT user_id, token, token_expiry, email FROM " + getConfig(start).getPasswordResetTokensTable()
+                        + " WHERE app_id = ? AND token = ?";
         return execute(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, token);
@@ -246,17 +250,30 @@ public class EmailPasswordQueries {
     }
 
     public static void addPasswordResetToken(Start start, AppIdentifier appIdentifier, String userId, String tokenHash,
-                                             long expiry)
+                                             long expiry, String email)
             throws SQLException, StorageQueryException {
-        String QUERY = "INSERT INTO " + getConfig(start).getPasswordResetTokensTable()
-                + "(app_id, user_id, token, token_expiry)" + " VALUES(?, ?, ?, ?)";
+        if (email != null) {
+            String QUERY = "INSERT INTO " + getConfig(start).getPasswordResetTokensTable()
+                    + "(app_id, user_id, token, token_expiry, email)" + " VALUES(?, ?, ?, ?, ?)";
 
-        update(start, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, userId);
-            pst.setString(3, tokenHash);
-            pst.setLong(4, expiry);
-        });
+            update(start, QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, userId);
+                pst.setString(3, tokenHash);
+                pst.setLong(4, expiry);
+                pst.setString(5, email);
+            });
+        } else {
+            String QUERY = "INSERT INTO " + getConfig(start).getPasswordResetTokensTable()
+                    + "(app_id, user_id, token, token_expiry)" + " VALUES(?, ?, ?, ?)";
+
+            update(start, QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, userId);
+                pst.setString(3, tokenHash);
+                pst.setLong(4, expiry);
+            });
+        }
     }
 
     public static UserInfo signUp(Start start, TenantIdentifier tenantIdentifier, String userId, String email,
@@ -348,6 +365,15 @@ public class EmailPasswordQueries {
 
             {
                 String QUERY = "DELETE FROM " + getConfig(start).getEmailPasswordUsersTable()
+                        + " WHERE app_id = ? AND user_id = ?";
+                update(sqlCon, QUERY, pst -> {
+                    pst.setString(1, appIdentifier.getAppId());
+                    pst.setString(2, userId);
+                });
+            }
+
+            {
+                String QUERY = "DELETE FROM " + getConfig(start).getPasswordResetTokensTable()
                         + " WHERE app_id = ? AND user_id = ?";
                 update(sqlCon, QUERY, pst -> {
                     pst.setString(1, appIdentifier.getAppId());
@@ -596,7 +622,7 @@ public class EmailPasswordQueries {
         public PasswordResetTokenInfo map(ResultSet result) throws StorageQueryException {
             try {
                 return new PasswordResetTokenInfo(result.getString("user_id"), result.getString("token"),
-                        result.getLong("token_expiry"));
+                        result.getLong("token_expiry"), result.getString("email"));
             } catch (Exception e) {
                 throw new StorageQueryException(e);
             }
