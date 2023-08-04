@@ -219,19 +219,6 @@ public class EmailPasswordQueries {
         });
     }
 
-    public static boolean lockEmailPasswordTableUsingId_Transaction(Start start, Connection con,
-                                                                    AppIdentifier appIdentifier,
-                                                                    String id)
-            throws SQLException, StorageQueryException {
-        String QUERY = "SELECT user_id FROM "
-                + getConfig(start).getEmailPasswordUsersTable()
-                + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, id);
-        }, ResultSet::next);
-    }
-
     public static PasswordResetTokenInfo getPasswordResetTokenInfo(Start start, AppIdentifier appIdentifier,
                                                                    String token)
             throws SQLException, StorageQueryException {
