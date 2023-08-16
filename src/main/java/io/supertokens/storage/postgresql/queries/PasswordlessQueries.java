@@ -405,8 +405,8 @@ public class PasswordlessQueries {
 
                 { // all_auth_recipe_users
                     String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
-                            + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined)" +
-                            " VALUES(?, ?, ?, ?, ?, ?)";
+                            + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)" +
+                            " VALUES(?, ?, ?, ?, ?, ?, ?)";
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
                         pst.setString(2, tenantIdentifier.getTenantId());
@@ -414,6 +414,7 @@ public class PasswordlessQueries {
                         pst.setString(4, id);
                         pst.setString(5, PASSWORDLESS.toString());
                         pst.setLong(6, timeJoined);
+                        pst.setLong(7, timeJoined);
                     });
                 }
 
@@ -845,8 +846,8 @@ public class PasswordlessQueries {
 
         { // all_auth_recipe_users
             String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
-                    + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined)"
-                    + " VALUES(?, ?, ?, ?, ?, ?)" + " ON CONFLICT DO NOTHING";
+                    + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
+                    + " VALUES(?, ?, ?, ?, ?, ?, ?)" + " ON CONFLICT DO NOTHING";
             update(sqlCon, QUERY, pst -> {
                 pst.setString(1, tenantIdentifier.getAppId());
                 pst.setString(2, tenantIdentifier.getTenantId());
@@ -854,6 +855,7 @@ public class PasswordlessQueries {
                 pst.setString(4, userInfo.id);
                 pst.setString(5, PASSWORDLESS.toString());
                 pst.setLong(6, userInfo.timeJoined);
+                pst.setLong(7, userInfo.timeJoined);
             });
         }
 
