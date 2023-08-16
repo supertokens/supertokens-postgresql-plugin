@@ -921,8 +921,8 @@ public class GeneralQueries {
                     usersFromQuery = new ArrayList<>();
                 } else {
 
-                    String finalQuery = "SELECT * FROM ( " + USER_SEARCH_TAG_CONDITION.toString() + " )"
-                            + " AS finalResultTable ORDER BY time_joined " + timeJoinedOrder + ", primary_or_recipe_user_id DESC ";
+                    String finalQuery = "SELECT DISTINCT primary_or_recipe_user_id, primary_or_recipe_user_time_joined  FROM ( " + USER_SEARCH_TAG_CONDITION.toString() + " )"
+                            + " AS finalResultTable ORDER BY primary_or_recipe_user_time_joined " + timeJoinedOrder + ", primary_or_recipe_user_id DESC ";
                     usersFromQuery = execute(start, finalQuery, pst -> {
                         for (int i = 1; i <= queryList.size(); i++) {
                             pst.setString(i, queryList.get(i - 1));
@@ -935,7 +935,6 @@ public class GeneralQueries {
                         return temp;
                     });
                 }
-
             }
 
         } else {
@@ -959,7 +958,7 @@ public class GeneralQueries {
                     recipeIdCondition = recipeIdCondition + " AND";
                 }
                 String timeJoinedOrderSymbol = timeJoinedOrder.equals("ASC") ? ">" : "<";
-                String QUERY = "SELECT primary_or_recipe_user_id FROM " + getConfig(start).getUsersTable() + " WHERE "
+                String QUERY = "SELECT DISTINCT primary_or_recipe_user_id, primary_or_recipe_user_time_joined FROM " + getConfig(start).getUsersTable() + " WHERE "
                         + recipeIdCondition + " (primary_or_recipe_user_time_joined " + timeJoinedOrderSymbol
                         + " ? OR (primary_or_recipe_user_time_joined = ? AND primary_or_recipe_user_id <= ?)) AND app_id = ? AND tenant_id = ?"
                         + " ORDER BY primary_or_recipe_user_time_joined " + timeJoinedOrder
@@ -987,7 +986,7 @@ public class GeneralQueries {
                 });
             } else {
                 String recipeIdCondition = RECIPE_ID_CONDITION.toString();
-                String QUERY = "SELECT primary_or_recipe_user_id, recipe_id FROM " + getConfig(start).getUsersTable() + " WHERE ";
+                String QUERY = "SELECT DISTINCT primary_or_recipe_user_id, primary_or_recipe_user_time_joined FROM " + getConfig(start).getUsersTable() + " WHERE ";
                 if (!recipeIdCondition.equals("")) {
                     QUERY += recipeIdCondition + " AND";
                 }
