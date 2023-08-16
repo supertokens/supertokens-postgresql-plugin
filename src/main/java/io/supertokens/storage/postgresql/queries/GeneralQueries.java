@@ -959,7 +959,7 @@ public class GeneralQueries {
                     recipeIdCondition = recipeIdCondition + " AND";
                 }
                 String timeJoinedOrderSymbol = timeJoinedOrder.equals("ASC") ? ">" : "<";
-                String QUERY = "SELECT DISTINCT(primary_or_recipe_user_id) FROM " + getConfig(start).getUsersTable() + " WHERE "
+                String QUERY = "SELECT primary_or_recipe_user_id FROM " + getConfig(start).getUsersTable() + " WHERE "
                         + recipeIdCondition + " (primary_or_recipe_user_time_joined " + timeJoinedOrderSymbol
                         + " ? OR (primary_or_recipe_user_time_joined = ? AND primary_or_recipe_user_id <= ?)) AND app_id = ? AND tenant_id = ?"
                         + " ORDER BY primary_or_recipe_user_time_joined " + timeJoinedOrder
