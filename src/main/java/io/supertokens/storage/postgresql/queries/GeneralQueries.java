@@ -960,9 +960,9 @@ public class GeneralQueries {
                 }
                 String timeJoinedOrderSymbol = timeJoinedOrder.equals("ASC") ? ">" : "<";
                 String QUERY = "SELECT DISTINCT(primary_or_recipe_user_id) FROM " + getConfig(start).getUsersTable() + " WHERE "
-                        + recipeIdCondition + " (time_joined " + timeJoinedOrderSymbol
-                        + " ? OR (time_joined = ? AND primary_or_recipe_user_id <= ?)) AND app_id = ? AND tenant_id = ?"
-                        + " ORDER BY time_joined " + timeJoinedOrder
+                        + recipeIdCondition + " (primary_or_recipe_user_time_joined " + timeJoinedOrderSymbol
+                        + " ? OR (primary_or_recipe_user_time_joined = ? AND primary_or_recipe_user_id <= ?)) AND app_id = ? AND tenant_id = ?"
+                        + " ORDER BY primary_or_recipe_user_time_joined " + timeJoinedOrder
                         + ", primary_or_recipe_user_id DESC LIMIT ?";
                 usersFromQuery = execute(start, QUERY, pst -> {
                     if (includeRecipeIds != null) {
@@ -991,7 +991,7 @@ public class GeneralQueries {
                 if (!recipeIdCondition.equals("")) {
                     QUERY += recipeIdCondition + " AND";
                 }
-                QUERY += " app_id = ? AND tenant_id = ? ORDER BY time_joined " + timeJoinedOrder
+                QUERY += " app_id = ? AND tenant_id = ? ORDER BY primary_or_recipe_user_time_joined " + timeJoinedOrder
                         + ", primary_or_recipe_user_id DESC LIMIT ?";
                 usersFromQuery = execute(start, QUERY, pst -> {
                     if (includeRecipeIds != null) {
