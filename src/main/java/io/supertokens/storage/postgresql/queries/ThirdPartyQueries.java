@@ -112,8 +112,8 @@ public class ThirdPartyQueries {
 
                 { // all_auth_recipe_users
                     String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
-                            + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined)" +
-                            " VALUES(?, ?, ?, ?, ?, ?)";
+                            + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)" +
+                            " VALUES(?, ?, ?, ?, ?, ?, ?)";
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
                         pst.setString(2, tenantIdentifier.getTenantId());
@@ -121,6 +121,7 @@ public class ThirdPartyQueries {
                         pst.setString(4, id);
                         pst.setString(5, THIRD_PARTY.toString());
                         pst.setLong(6, timeJoined);
+                        pst.setLong(7, timeJoined);
                     });
                 }
 
