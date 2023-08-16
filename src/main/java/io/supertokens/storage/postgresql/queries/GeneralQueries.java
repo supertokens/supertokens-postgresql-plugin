@@ -929,7 +929,7 @@ public class GeneralQueries {
                     }, result -> {
                         List<UserInfoPaginationResultHolder> temp = new ArrayList<>();
                         while (result.next()) {
-                            temp.add(new UserInfoPaginationResultHolder(result.getString("user_id"),
+                            temp.add(new UserInfoPaginationResultHolder(result.getString("primary_or_recipe_user_id"),
                                     result.getString("recipe_id")));
                         }
                         return temp;
@@ -959,11 +959,11 @@ public class GeneralQueries {
                     recipeIdCondition = recipeIdCondition + " AND";
                 }
                 String timeJoinedOrderSymbol = timeJoinedOrder.equals("ASC") ? ">" : "<";
-                String QUERY = "SELECT user_id, recipe_id FROM " + getConfig(start).getUsersTable() + " WHERE "
+                String QUERY = "SELECT primary_or_recipe_user_id, recipe_id FROM " + getConfig(start).getUsersTable() + " WHERE "
                         + recipeIdCondition + " (time_joined " + timeJoinedOrderSymbol
-                        + " ? OR (time_joined = ? AND user_id <= ?)) AND app_id = ? AND tenant_id = ?"
+                        + " ? OR (time_joined = ? AND primary_or_recipe_user_id <= ?)) AND app_id = ? AND tenant_id = ?"
                         + " ORDER BY time_joined " + timeJoinedOrder
-                        + ", user_id DESC LIMIT ?";
+                        + ", primary_or_recipe_user_id DESC LIMIT ?";
                 usersFromQuery = execute(start, QUERY, pst -> {
                     if (includeRecipeIds != null) {
                         for (int i = 0; i < includeRecipeIds.length; i++) {
@@ -981,19 +981,19 @@ public class GeneralQueries {
                 }, result -> {
                     List<UserInfoPaginationResultHolder> temp = new ArrayList<>();
                     while (result.next()) {
-                        temp.add(new UserInfoPaginationResultHolder(result.getString("user_id"),
+                        temp.add(new UserInfoPaginationResultHolder(result.getString("primary_or_recipe_user_id"),
                                 result.getString("recipe_id")));
                     }
                     return temp;
                 });
             } else {
                 String recipeIdCondition = RECIPE_ID_CONDITION.toString();
-                String QUERY = "SELECT user_id, recipe_id FROM " + getConfig(start).getUsersTable() + " WHERE ";
+                String QUERY = "SELECT primary_or_recipe_user_id, recipe_id FROM " + getConfig(start).getUsersTable() + " WHERE ";
                 if (!recipeIdCondition.equals("")) {
                     QUERY += recipeIdCondition + " AND";
                 }
                 QUERY += " app_id = ? AND tenant_id = ? ORDER BY time_joined " + timeJoinedOrder
-                        + ", user_id DESC LIMIT ?";
+                        + ", primary_or_recipe_user_id DESC LIMIT ?";
                 usersFromQuery = execute(start, QUERY, pst -> {
                     if (includeRecipeIds != null) {
                         for (int i = 0; i < includeRecipeIds.length; i++) {
@@ -1008,7 +1008,7 @@ public class GeneralQueries {
                 }, result -> {
                     List<UserInfoPaginationResultHolder> temp = new ArrayList<>();
                     while (result.next()) {
-                        temp.add(new UserInfoPaginationResultHolder(result.getString("user_id"),
+                        temp.add(new UserInfoPaginationResultHolder(result.getString("primary_or_recipe_user_id"),
                                 result.getString("recipe_id")));
                     }
                     return temp;
@@ -1179,7 +1179,7 @@ public class GeneralQueries {
                 userIds);
 
         // this is going to order them based on oldest that joined to newest that joined.
-        result.sort(Comparator.comparingLong(o -> o.timeJoined));
+         result.sort(Comparator.comparingLong(o -> o.timeJoined));
 
         return result.toArray(new AuthRecipeUserInfo[0]);
     }

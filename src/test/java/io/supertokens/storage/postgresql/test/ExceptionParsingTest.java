@@ -287,7 +287,7 @@ public class ExceptionParsingTest {
             String pwHash = "fakehash";
             String userEmail = "useremail@asdf.fdas";
 
-            var info = new PasswordResetTokenInfo(userId, tokenHash, System.currentTimeMillis() + 10000);
+            var info = new PasswordResetTokenInfo(userId, tokenHash, System.currentTimeMillis() + 10000, userEmail);
             try {
                 storage.addPasswordResetToken(new AppIdentifier(null, null), info);
             } catch (UnknownUserIdException ex) {
