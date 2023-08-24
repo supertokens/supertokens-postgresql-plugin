@@ -1023,7 +1023,7 @@ public class GeneralQueries {
         // usersFromQuery
         Map<String, AuthRecipeUserInfo> userIdToInfoMap = new HashMap<>();
         for (AuthRecipeUserInfo user : users) {
-            userIdToInfoMap.put(user.getUserIdNotToBeReturnedFromAPI(), user);
+            userIdToInfoMap.put(user.getSupertokensUserId(), user);
         }
         for (int i = 0; i < usersFromQuery.size(); i++) {
             if (finalResult[i] == null) {
