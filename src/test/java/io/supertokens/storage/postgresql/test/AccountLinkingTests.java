@@ -94,7 +94,7 @@ public class AccountLinkingTests {
 
         AuthRecipeUserInfo user1 = EmailPassword.signUp(process.getProcess(), "test@example.com", "abcd1234");
 
-        AuthRecipe.createPrimaryUser(process.main, user1.id);
+        AuthRecipe.createPrimaryUser(process.main, user1.getUserIdNotToBeReturnedFromAPI());
 
         AuthRecipeUserInfo user2 = EmailPassword.signUp(
                 tenantIdentifier.withStorage(StorageLayer.getStorage(tenantIdentifier, process.main)),
@@ -102,8 +102,8 @@ public class AccountLinkingTests {
 
         try {
             Map<String, String> params = new HashMap<>();
-            params.put("recipeUserId", user2.id);
-            params.put("primaryUserId", user1.id);
+            params.put("recipeUserId", user2.getUserIdNotToBeReturnedFromAPI());
+            params.put("primaryUserId", user1.getUserIdNotToBeReturnedFromAPI());
 
             HttpRequestForTesting.sendGETRequest(process.getProcess(), "",
                     "http://localhost:3567/recipe/accountlinking/user/link/check", params, 1000, 1000, null,
@@ -139,8 +139,8 @@ public class AccountLinkingTests {
                 process.getProcess(), "test2@example.com", "abcd1234");
 
         Map<String, String> params = new HashMap<>();
-        params.put("recipeUserId", user3.id);
-        params.put("primaryUserId", user1.id);
+        params.put("recipeUserId", user3.getUserIdNotToBeReturnedFromAPI());
+        params.put("primaryUserId", user1.getUserIdNotToBeReturnedFromAPI());
 
         JsonObject response = HttpRequestForTesting.sendGETRequest(process.getProcess(), "",
                 "http://localhost:3567/recipe/accountlinking/user/link/check", params, 1000, 1000, null,
