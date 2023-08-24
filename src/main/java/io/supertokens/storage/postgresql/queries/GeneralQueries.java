@@ -1296,7 +1296,7 @@ public class GeneralQueries {
 
         Map<String, LoginMethod> recipeUserIdToLoginMethodMap = new HashMap<>();
         for (LoginMethod loginMethod : loginMethods) {
-            recipeUserIdToLoginMethodMap.put(loginMethod.getRecipeUserIdNotToBeReturnedFromAPI(), loginMethod);
+            recipeUserIdToLoginMethodMap.put(loginMethod.getSupertokensUserId(), loginMethod);
         }
 
         Map<String, AuthRecipeUserInfo> userIdToAuthRecipeUserInfo = new HashMap<>();
@@ -1420,7 +1420,7 @@ public class GeneralQueries {
 
         Map<String, LoginMethod> recipeUserIdToLoginMethodMap = new HashMap<>();
         for (LoginMethod loginMethod : loginMethods) {
-            recipeUserIdToLoginMethodMap.put(loginMethod.getRecipeUserIdNotToBeReturnedFromAPI(), loginMethod);
+            recipeUserIdToLoginMethodMap.put(loginMethod.getSupertokensUserId(), loginMethod);
         }
 
         Map<String, AuthRecipeUserInfo> userIdToAuthRecipeUserInfo = new HashMap<>();
