@@ -31,7 +31,6 @@ import io.supertokens.pluginInterface.dashboard.DashboardUser;
 import io.supertokens.pluginInterface.dashboard.exceptions.UserIdNotFoundException;
 import io.supertokens.pluginInterface.dashboard.sqlStorage.DashboardSQLStorage;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
-import io.supertokens.pluginInterface.emailpassword.UserInfo;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicatePasswordResetTokenException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateUserIdException;
@@ -871,7 +870,7 @@ public class Start
     }
 
     @Override
-    public UserInfo signUp(TenantIdentifier tenantIdentifier, String id, String email, String passwordHash,
+    public AuthRecipeUserInfo signUp(TenantIdentifier tenantIdentifier, String id, String email, String passwordHash,
                            long timeJoined)
             throws StorageQueryException, DuplicateUserIdException, DuplicateEmailException,
             TenantOrAppNotFoundException {
@@ -1204,7 +1203,7 @@ public class Start
     }
 
     @Override
-    public io.supertokens.pluginInterface.thirdparty.UserInfo signUp(
+    public AuthRecipeUserInfo signUp(
             TenantIdentifier tenantIdentifier, String id, String email,
             LoginMethod.ThirdParty thirdParty, long timeJoined)
             throws StorageQueryException, io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException,
@@ -1717,7 +1716,7 @@ public class Start
     }
 
     @Override
-    public io.supertokens.pluginInterface.passwordless.UserInfo createUser(TenantIdentifier tenantIdentifier,
+    public AuthRecipeUserInfo createUser(TenantIdentifier tenantIdentifier,
                                                                            String id,
                                                                            @javax.annotation.Nullable String email,
                                                                            @javax.annotation.Nullable

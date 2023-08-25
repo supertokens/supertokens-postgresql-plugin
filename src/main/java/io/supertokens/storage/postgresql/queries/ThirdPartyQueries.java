@@ -17,12 +17,12 @@
 package io.supertokens.storage.postgresql.queries;
 
 import io.supertokens.pluginInterface.RowMapper;
+import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
-import io.supertokens.pluginInterface.thirdparty.UserInfo;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -94,8 +94,8 @@ public class ThirdPartyQueries {
         // @formatter:on
     }
 
-    public static UserInfo signUp(Start start, TenantIdentifier tenantIdentifier, String id, String email,
-                                  LoginMethod.ThirdParty thirdParty, long timeJoined)
+    public static AuthRecipeUserInfo signUp(Start start, TenantIdentifier tenantIdentifier, String id, String email,
+                                            LoginMethod.ThirdParty thirdParty, long timeJoined)
             throws StorageQueryException, StorageTransactionLogicException {
         return start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
@@ -156,7 +156,7 @@ public class ThirdPartyQueries {
                 fillUserInfoWithTenantIds_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
                 fillUserInfoWithVerified_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
                 sqlCon.commit();
-                return new UserInfo(id, false, userInfo.toLoginMethod());
+                return AuthRecipeUserInfo.create(id, false, userInfo.toLoginMethod());
 
             } catch (SQLException throwables) {
                 throw new StorageTransactionLogicException(throwables);
