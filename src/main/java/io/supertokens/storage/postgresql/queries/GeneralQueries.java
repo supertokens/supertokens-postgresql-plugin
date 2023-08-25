@@ -1585,7 +1585,7 @@ public class GeneralQueries {
 
         AllAuthRecipeUsersResultHolder(String userId, String tenantId, String primaryOrRecipeUserId,
                                        boolean isLinkedOrIsAPrimaryUser, String recipeId, long timeJoined) {
-            this.userId = userId;
+            this.userId = userId.trim();
             this.tenantId = tenantId;
             this.primaryOrRecipeUserId = primaryOrRecipeUserId;
             this.isLinkedOrIsAPrimaryUser = isLinkedOrIsAPrimaryUser;
