@@ -2366,7 +2366,7 @@ public class Start
 
                     sqlCon.commit();
                     return added;
-                } catch (SQLException throwables) {
+                } catch (SQLException | DuplicateEmailException | DuplicatePhoneNumberException | DuplicateThirdPartyUserException throwables) {
                     throw new StorageTransactionLogicException(throwables);
                 }
             });
@@ -2399,6 +2399,12 @@ public class Start
                 throw (UnknownUserIdException) e.actualException;
             } else if (e.actualException instanceof StorageQueryException) {
                 throw (StorageQueryException) e.actualException;
+            } else if (e.actualException instanceof DuplicateEmailException) {
+                throw (DuplicateEmailException) e.actualException;
+            } else if (e.actualException instanceof DuplicatePhoneNumberException) {
+                throw (DuplicatePhoneNumberException) e.actualException;
+            } else if (e.actualException instanceof DuplicateThirdPartyUserException) {
+                throw (DuplicateThirdPartyUserException) e.actualException;
             }
             throw new StorageQueryException(e.actualException);
         }
@@ -2831,25 +2837,25 @@ public class Start
     }
 
     @Override
-    public AuthRecipeUserInfo[] listPrimaryUsersByEmail_Transaction(TenantIdentifier tenantIdentifier,
+    public AuthRecipeUserInfo[] listPrimaryUsersByEmail_Transaction(AppIdentifier appIdentifier,
                                                                     TransactionConnection con, String email)
             throws StorageQueryException {
         try {
             Connection sqlCon = (Connection) con.getConnection();
-            return GeneralQueries.listPrimaryUsersByEmail_Transaction(this, sqlCon, tenantIdentifier, email);
+            return GeneralQueries.listPrimaryUsersByEmail_Transaction(this, sqlCon, appIdentifier, email);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
 
     @Override
-    public AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber_Transaction(TenantIdentifier tenantIdentifier,
+    public AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber_Transaction(AppIdentifier appIdentifier,
                                                                           TransactionConnection con,
                                                                           String phoneNumber)
             throws StorageQueryException {
         try {
             Connection sqlCon = (Connection) con.getConnection();
-            return GeneralQueries.listPrimaryUsersByPhoneNumber_Transaction(this, sqlCon, tenantIdentifier,
+            return GeneralQueries.listPrimaryUsersByPhoneNumber_Transaction(this, sqlCon, appIdentifier,
                     phoneNumber);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -2857,14 +2863,14 @@ public class Start
     }
 
     @Override
-    public AuthRecipeUserInfo getPrimaryUsersByThirdPartyInfo_Transaction(TenantIdentifier tenantIdentifier,
-                                                                          TransactionConnection con,
-                                                                          String thirdPartyId,
-                                                                          String thirdPartyUserId)
+    public AuthRecipeUserInfo[] listPrimaryUsersByThirdPartyInfo_Transaction(AppIdentifier appIdentifier,
+                                                                             TransactionConnection con,
+                                                                             String thirdPartyId,
+                                                                             String thirdPartyUserId)
             throws StorageQueryException {
         try {
             Connection sqlCon = (Connection) con.getConnection();
-            return GeneralQueries.getPrimaryUsersByThirdPartyInfo_Transaction(this, sqlCon, tenantIdentifier,
+            return GeneralQueries.getPrimaryUsersByThirdPartyInfo_Transaction(this, sqlCon, appIdentifier,
                     thirdPartyId, thirdPartyUserId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
