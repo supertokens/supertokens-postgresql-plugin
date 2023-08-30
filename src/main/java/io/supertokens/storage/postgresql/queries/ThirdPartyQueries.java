@@ -375,7 +375,9 @@ public class ThirdPartyQueries {
         { // thirdparty_user_to_tenant
             String QUERY = "INSERT INTO " + getConfig(start).getThirdPartyUserToTenantTable()
                     + "(app_id, tenant_id, user_id, third_party_id, third_party_user_id)"
-                    + " VALUES(?, ?, ?, ?, ?)" + " ON CONFLICT DO NOTHING";
+                    + " VALUES(?, ?, ?, ?, ?)" + " ON CONFLICT ON CONSTRAINT "
+                    + Utils.getConstraintName(Config.getConfig(start).getTableSchema(), getConfig(start).getThirdPartyUserToTenantTable(), null, "pkey")
+                    + " DO NOTHING";
             int numRows = update(sqlCon, QUERY, pst -> {
                 pst.setString(1, tenantIdentifier.getAppId());
                 pst.setString(2, tenantIdentifier.getTenantId());

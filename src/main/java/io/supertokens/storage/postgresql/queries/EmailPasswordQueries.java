@@ -485,7 +485,9 @@ public class EmailPasswordQueries {
         { // emailpassword_user_to_tenant
             String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUserToTenantTable()
                     + "(app_id, tenant_id, user_id, email)"
-                    + " VALUES(?, ?, ?, ?) " + " ON CONFLICT DO NOTHING";
+                    + " VALUES(?, ?, ?, ?) " + " ON CONFLICT ON CONSTRAINT "
+                    + Utils.getConstraintName(Config.getConfig(start).getTableSchema(), getConfig(start).getEmailPasswordUserToTenantTable(), null, "pkey")
+                    + " DO NOTHING";
 
             int numRows = update(sqlCon, QUERY, pst -> {
                 pst.setString(1, tenantIdentifier.getAppId());

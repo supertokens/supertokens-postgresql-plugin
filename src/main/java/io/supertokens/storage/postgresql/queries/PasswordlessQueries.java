@@ -862,7 +862,9 @@ public class PasswordlessQueries {
         { // passwordless_user_to_tenant
             String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUserToTenantTable()
                     + "(app_id, tenant_id, user_id, email, phone_number)"
-                    + " VALUES(?, ?, ?, ?, ?)" + " ON CONFLICT DO NOTHING";
+                    + " VALUES(?, ?, ?, ?, ?)" + " ON CONFLICT ON CONSTRAINT "
+                    + Utils.getConstraintName(Config.getConfig(start).getTableSchema(), getConfig(start).getPasswordlessUserToTenantTable(), null, "pkey")
+                    + " DO NOTHING";
 
             int numRows = update(sqlCon, QUERY, pst -> {
                 pst.setString(1, tenantIdentifier.getAppId());
