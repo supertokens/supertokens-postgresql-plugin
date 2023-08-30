@@ -1135,24 +1135,6 @@ public class GeneralQueries {
     }
 
     public static AuthRecipeUserInfo[] listPrimaryUsersByEmail_Transaction(Start start, Connection sqlCon,
-                                                                           TenantIdentifier tenantIdentifier,
-                                                                           String email)
-            throws SQLException, StorageQueryException {
-        // we first lock on the three tables based on email and tenant - this will ensure that any other
-        // query happening related to the account linking on this email / tenant will wait for this to finish,
-        // and vice versa.
-
-        EmailPasswordQueries.lockEmailAndTenant_Transaction(start, sqlCon, tenantIdentifier, email);
-
-        ThirdPartyQueries.lockEmailAndTenant_Transaction(start, sqlCon, tenantIdentifier, email);
-
-        PasswordlessQueries.lockEmailAndTenant_Transaction(start, sqlCon, tenantIdentifier, email);
-
-        // now that we have locks on all the relevant tables, we can read from them safely
-        return listPrimaryUsersByEmailHelper(start, sqlCon, tenantIdentifier, email);
-    }
-
-    public static AuthRecipeUserInfo[] listPrimaryUsersByEmail_Transaction(Start start, Connection sqlCon,
                                                                            AppIdentifier appIdentifier,
                                                                            String email)
             throws SQLException, StorageQueryException {
@@ -1160,11 +1142,11 @@ public class GeneralQueries {
         // query happening related to the account linking on this email / tenant will wait for this to finish,
         // and vice versa.
 
-        EmailPasswordQueries.lockEmailAndTenant_Transaction(start, sqlCon, appIdentifier, email);
+        EmailPasswordQueries.lockEmail_Transaction(start, sqlCon, appIdentifier, email);
 
-        ThirdPartyQueries.lockEmailAndTenant_Transaction(start, sqlCon, appIdentifier, email);
+        ThirdPartyQueries.lockEmail_Transaction(start, sqlCon, appIdentifier, email);
 
-        PasswordlessQueries.lockEmailAndTenant_Transaction(start, sqlCon, appIdentifier, email);
+        PasswordlessQueries.lockEmail_Transaction(start, sqlCon, appIdentifier, email);
 
         // now that we have locks on all the relevant tables, we can read from them safely
         return listPrimaryUsersByEmailHelper(start, sqlCon, appIdentifier, email);

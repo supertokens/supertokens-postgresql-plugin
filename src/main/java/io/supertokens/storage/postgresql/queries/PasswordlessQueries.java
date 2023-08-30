@@ -760,27 +760,8 @@ public class PasswordlessQueries {
         });
     }
 
-    public static String lockEmailAndTenant_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,
-                                                        String email) throws StorageQueryException, SQLException {
-        // we don't need a FOR UPDATE here because this is already part of a transaction, and locked on
-        // app_id_to_user_id table
-        String QUERY = "SELECT user_id FROM " + getConfig(start).getPasswordlessUserToTenantTable() +
-                " WHERE app_id = ? AND tenant_id = ? AND email = ? FOR UPDATE";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, tenantIdentifier.getTenantId());
-            pst.setString(3, email);
-        }, result -> {
-            if (result.next()) {
-                return result.getString("user_id");
-            }
-            return null;
-        });
-    }
-
-    public static List<String> lockEmailAndTenant_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
-                                                        String email) throws StorageQueryException, SQLException {
+    public static List<String> lockEmail_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
+                                                     String email) throws StorageQueryException, SQLException {
         // we don't need a FOR UPDATE here because this is already part of a transaction, and locked on
         // app_id_to_user_id table
         String QUERY = "SELECT user_id FROM " + getConfig(start).getPasswordlessUsersTable() +

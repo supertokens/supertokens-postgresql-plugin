@@ -24,7 +24,6 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
-import io.supertokens.pluginInterface.passwordless.exception.DuplicatePhoneNumberException;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -199,31 +198,9 @@ public class ThirdPartyQueries {
         }
     }
 
-    public static List<String> lockEmailAndTenant_Transaction(Start start, Connection con,
-                                                              TenantIdentifier tenantIdentifier,
-                                                              String email) throws SQLException, StorageQueryException {
-        String QUERY = "SELECT tp.user_id as user_id "
-                + "FROM " + getConfig(start).getThirdPartyUsersTable() + " AS tp" +
-                " JOIN " + getConfig(start).getThirdPartyUserToTenantTable() + " AS tp_tenants" +
-                " ON tp_tenants.app_id = tp.app_id AND tp_tenants.user_id = tp.user_id" +
-                " WHERE tp.app_id = ? AND tp_tenants.tenant_id = ? AND tp.email = ? FOR UPDATE";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, tenantIdentifier.getTenantId());
-            pst.setString(3, email);
-        }, result -> {
-            List<String> finalResult = new ArrayList<>();
-            while (result.next()) {
-                finalResult.add(result.getString("user_id"));
-            }
-            return finalResult;
-        });
-    }
-
-    public static List<String> lockEmailAndTenant_Transaction(Start start, Connection con,
-                                                              AppIdentifier appIdentifier,
-                                                              String email) throws SQLException, StorageQueryException {
+    public static List<String> lockEmail_Transaction(Start start, Connection con,
+                                                     AppIdentifier appIdentifier,
+                                                     String email) throws SQLException, StorageQueryException {
         String QUERY = "SELECT tp.user_id as user_id "
                 + "FROM " + getConfig(start).getThirdPartyUsersTable() + " AS tp" +
                 " WHERE tp.app_id = ? AND tp.email = ? FOR UPDATE";

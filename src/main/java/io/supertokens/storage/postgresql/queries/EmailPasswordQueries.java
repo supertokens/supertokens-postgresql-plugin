@@ -422,28 +422,9 @@ public class EmailPasswordQueries {
         return Collections.emptyList();
     }
 
-    public static String lockEmailAndTenant_Transaction(Start start, Connection con,
-                                                        TenantIdentifier tenantIdentifier,
-                                                        String email)
-            throws StorageQueryException, SQLException {
-        String QUERY = "SELECT user_id FROM " + getConfig(start).getEmailPasswordUserToTenantTable() +
-                " WHERE app_id = ? AND tenant_id = ? AND email = ? FOR UPDATE";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, tenantIdentifier.getTenantId());
-            pst.setString(3, email);
-        }, result -> {
-            if (result.next()) {
-                return result.getString("user_id");
-            }
-            return null;
-        });
-    }
-
-    public static String lockEmailAndTenant_Transaction(Start start, Connection con,
-                                                        AppIdentifier appIdentifier,
-                                                        String email)
+    public static String lockEmail_Transaction(Start start, Connection con,
+                                               AppIdentifier appIdentifier,
+                                               String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT user_id FROM " + getConfig(start).getEmailPasswordUsersTable() +
                 " WHERE app_id = ? AND email = ? FOR UPDATE";
