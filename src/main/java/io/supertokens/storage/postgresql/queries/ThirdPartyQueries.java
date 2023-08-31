@@ -19,10 +19,12 @@ package io.supertokens.storage.postgresql.queries;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
+import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -196,19 +198,16 @@ public class ThirdPartyQueries {
         }
     }
 
-    public static List<String> lockEmailAndTenant_Transaction(Start start, Connection con,
-                                                              TenantIdentifier tenantIdentifier,
-                                                              String email) throws SQLException, StorageQueryException {
+    public static List<String> lockEmail_Transaction(Start start, Connection con,
+                                                     AppIdentifier appIdentifier,
+                                                     String email) throws SQLException, StorageQueryException {
         String QUERY = "SELECT tp.user_id as user_id "
                 + "FROM " + getConfig(start).getThirdPartyUsersTable() + " AS tp" +
-                " JOIN " + getConfig(start).getThirdPartyUserToTenantTable() + " AS tp_tenants" +
-                " ON tp_tenants.app_id = tp.app_id AND tp_tenants.user_id = tp.user_id" +
-                " WHERE tp.app_id = ? AND tp_tenants.tenant_id = ? AND tp.email = ? FOR UPDATE";
+                " WHERE tp.app_id = ? AND tp.email = ? FOR UPDATE";
 
         return execute(con, QUERY, pst -> {
-            pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, tenantIdentifier.getTenantId());
-            pst.setString(3, email);
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, email);
         }, result -> {
             List<String> finalResult = new ArrayList<>();
             while (result.next()) {
@@ -219,18 +218,17 @@ public class ThirdPartyQueries {
     }
 
     public static List<String> lockThirdPartyInfoAndTenant_Transaction(Start start, Connection con,
-                                                                       TenantIdentifier tenantIdentifier,
+                                                                       AppIdentifier appIdentifier,
                                                                        String thirdPartyId, String thirdPartyUserId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT user_id " +
-                " FROM " + getConfig(start).getThirdPartyUserToTenantTable() +
-                " WHERE app_id = ? AND tenant_id = ? AND third_party_id = ? AND third_party_user_id = ? FOR UPDATE";
+                " FROM " + getConfig(start).getThirdPartyUsersTable() +
+                " WHERE app_id = ? AND third_party_id = ? AND third_party_user_id = ? FOR UPDATE";
 
         return execute(con, QUERY, pst -> {
-            pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, tenantIdentifier.getTenantId());
-            pst.setString(3, thirdPartyId);
-            pst.setString(4, thirdPartyUserId);
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, thirdPartyId);
+            pst.setString(3, thirdPartyUserId);
         }, result -> {
             List<String> finalResult = new ArrayList<>();
             while (result.next()) {
@@ -270,8 +268,32 @@ public class ThirdPartyQueries {
         return Collections.emptyList();
     }
 
-    public static String getThirdPartyUserInfoUsingId(Start start, Connection con, TenantIdentifier tenantIdentifier,
-                                                      String thirdPartyId, String thirdPartyUserId)
+    public static List<String> listUserIdsByThirdPartyInfo(Start start, Connection con, AppIdentifier appIdentifier,
+                                                     String thirdPartyId, String thirdPartyUserId)
+            throws SQLException, StorageQueryException {
+
+        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
+                + "FROM " + getConfig(start).getThirdPartyUsersTable() + " AS tp" +
+                " JOIN " + getConfig(start).getUsersTable() + " AS all_users" +
+                " ON tp.app_id = all_users.app_id AND tp.user_id = all_users.user_id" +
+                " WHERE tp.app_id = ? AND tp.third_party_id = ? AND tp.third_party_user_id = ?";
+
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, thirdPartyId);
+            pst.setString(3, thirdPartyUserId);
+        }, result -> {
+            List<String> userIds = new ArrayList<>();
+            while (result.next()) {
+                userIds.add(result.getString("user_id"));
+            }
+            return userIds;
+        });
+    }
+
+
+    public static String getUserIdByThirdPartyInfo(Start start, Connection con, TenantIdentifier tenantIdentifier,
+                                                           String thirdPartyId, String thirdPartyUserId)
             throws SQLException, StorageQueryException {
 
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
@@ -351,9 +373,30 @@ public class ThirdPartyQueries {
         });
     }
 
+    public static List<String> getPrimaryUserIdUsingEmail(Start start, Connection con,
+                                                          AppIdentifier appIdentifier, String email)
+            throws StorageQueryException, SQLException {
+        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
+                + "FROM " + getConfig(start).getThirdPartyUsersTable() + " AS tp" +
+                " JOIN " + getConfig(start).getUsersTable() + " AS all_users" +
+                " ON tp.app_id = all_users.app_id AND tp.user_id = all_users.user_id" +
+                " WHERE tp.app_id = ? AND tp.email = ?";
+
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, email);
+        }, result -> {
+            List<String> finalResult = new ArrayList<>();
+            while (result.next()) {
+                finalResult.add(result.getString("user_id"));
+            }
+            return finalResult;
+        });
+    }
+
     public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon,
                                                         TenantIdentifier tenantIdentifier, String userId)
-            throws SQLException, StorageQueryException {
+            throws SQLException, StorageQueryException, DuplicateEmailException, DuplicateThirdPartyUserException {
         UserInfoPartial userInfo = ThirdPartyQueries.getUserInfoUsingUserId(start, sqlCon,
                 tenantIdentifier.toAppIdentifier(), userId);
 
@@ -375,7 +418,9 @@ public class ThirdPartyQueries {
         { // thirdparty_user_to_tenant
             String QUERY = "INSERT INTO " + getConfig(start).getThirdPartyUserToTenantTable()
                     + "(app_id, tenant_id, user_id, third_party_id, third_party_user_id)"
-                    + " VALUES(?, ?, ?, ?, ?)" + " ON CONFLICT DO NOTHING";
+                    + " VALUES(?, ?, ?, ?, ?)" + " ON CONFLICT ON CONSTRAINT "
+                    + Utils.getConstraintName(Config.getConfig(start).getTableSchema(), getConfig(start).getThirdPartyUserToTenantTable(), null, "pkey")
+                    + " DO NOTHING";
             int numRows = update(sqlCon, QUERY, pst -> {
                 pst.setString(1, tenantIdentifier.getAppId());
                 pst.setString(2, tenantIdentifier.getTenantId());

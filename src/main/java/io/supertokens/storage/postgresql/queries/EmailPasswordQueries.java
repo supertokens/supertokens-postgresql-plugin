@@ -20,6 +20,7 @@ import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
+import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
@@ -421,17 +422,16 @@ public class EmailPasswordQueries {
         return Collections.emptyList();
     }
 
-    public static String lockEmailAndTenant_Transaction(Start start, Connection con,
-                                                        TenantIdentifier tenantIdentifier,
-                                                        String email)
+    public static String lockEmail_Transaction(Start start, Connection con,
+                                               AppIdentifier appIdentifier,
+                                               String email)
             throws StorageQueryException, SQLException {
-        String QUERY = "SELECT user_id FROM " + getConfig(start).getEmailPasswordUserToTenantTable() +
-                " WHERE app_id = ? AND tenant_id = ? AND email = ? FOR UPDATE";
+        String QUERY = "SELECT user_id FROM " + getConfig(start).getEmailPasswordUsersTable() +
+                " WHERE app_id = ? AND email = ? FOR UPDATE";
 
         return execute(con, QUERY, pst -> {
-            pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, tenantIdentifier.getTenantId());
-            pst.setString(3, email);
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, email);
         }, result -> {
             if (result.next()) {
                 return result.getString("user_id");
@@ -441,7 +441,7 @@ public class EmailPasswordQueries {
     }
 
     public static String getPrimaryUserIdUsingEmail(Start start, Connection con, TenantIdentifier tenantIdentifier,
-                                                    String email)
+                                                     String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getEmailPasswordUserToTenantTable() + " AS ep" +
@@ -461,9 +461,30 @@ public class EmailPasswordQueries {
         });
     }
 
+    public static List<String> getPrimaryUserIdsUsingEmail(Start start, Connection con, AppIdentifier appIdentifier,
+                                                     String email)
+            throws StorageQueryException, SQLException {
+        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
+                + "FROM " + getConfig(start).getEmailPasswordUsersTable() + " AS ep" +
+                " JOIN " + getConfig(start).getUsersTable() + " AS all_users" +
+                " ON ep.app_id = all_users.app_id AND ep.user_id = all_users.user_id" +
+                " WHERE ep.app_id = ? AND ep.email = ?";
+
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, email);
+        }, result -> {
+            List<String> userIds = new ArrayList<>();
+            while (result.next()) {
+                userIds.add(result.getString("user_id"));
+            }
+            return userIds;
+        });
+    }
+
     public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon,
                                                         TenantIdentifier tenantIdentifier, String userId)
-            throws SQLException, StorageQueryException {
+            throws SQLException, StorageQueryException, DuplicateEmailException {
         UserInfoPartial userInfo = EmailPasswordQueries.getUserInfoUsingId(start, sqlCon,
                 tenantIdentifier.toAppIdentifier(), userId);
 
@@ -485,7 +506,9 @@ public class EmailPasswordQueries {
         { // emailpassword_user_to_tenant
             String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUserToTenantTable()
                     + "(app_id, tenant_id, user_id, email)"
-                    + " VALUES(?, ?, ?, ?) " + " ON CONFLICT DO NOTHING";
+                    + " VALUES(?, ?, ?, ?) " + " ON CONFLICT ON CONSTRAINT "
+                    + Utils.getConstraintName(Config.getConfig(start).getTableSchema(), getConfig(start).getEmailPasswordUserToTenantTable(), null, "pkey")
+                    + " DO NOTHING";
 
             int numRows = update(sqlCon, QUERY, pst -> {
                 pst.setString(1, tenantIdentifier.getAppId());
