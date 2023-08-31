@@ -1197,17 +1197,11 @@ public class GeneralQueries {
                                                                      String email)
             throws StorageQueryException, SQLException {
         List<String> userIds = new ArrayList<>();
-        List<String> emailPasswordUserId = EmailPasswordQueries.getPrimaryUserIdsUsingEmail(start, con, appIdentifier,
-                email);
-        if (emailPasswordUserId != null) {
-            userIds.addAll(emailPasswordUserId);
-        }
+        userIds.addAll(EmailPasswordQueries.getPrimaryUserIdsUsingEmail(start, con, appIdentifier,
+                    email));
 
-        String passwordlessUserId = PasswordlessQueries.getPrimaryUserIdUsingEmail(start, con, appIdentifier,
-                email);
-        if (passwordlessUserId != null) {
-            userIds.add(passwordlessUserId);
-        }
+        userIds.addAll(PasswordlessQueries.getPrimaryUserIdsUsingEmail(start, con, appIdentifier,
+                email));
 
         userIds.addAll(ThirdPartyQueries.getPrimaryUserIdUsingEmail(start, con, appIdentifier, email));
 

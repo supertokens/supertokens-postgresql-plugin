@@ -481,20 +481,12 @@ public class EmailPasswordQueries {
             return userIds;
         });
     }
+
     public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon,
                                                         TenantIdentifier tenantIdentifier, String userId)
             throws SQLException, StorageQueryException, DuplicateEmailException {
         UserInfoPartial userInfo = EmailPasswordQueries.getUserInfoUsingId(start, sqlCon,
                 tenantIdentifier.toAppIdentifier(), userId);
-
-        AuthRecipeUserInfo[] primaryUsers = GeneralQueries.listPrimaryUsersByEmail_Transaction(start, sqlCon,
-                tenantIdentifier.toAppIdentifier(), userInfo.email);
-
-        for (AuthRecipeUserInfo primaryUser : primaryUsers) {
-            if (primaryUser.tenantIds.contains(tenantIdentifier.getTenantId()) && !primaryUser.getSupertokensUserId().equals(userInfo.id)) {
-                throw new DuplicateEmailException();
-            }
-        }
 
         { // all_auth_recipe_users
             String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()

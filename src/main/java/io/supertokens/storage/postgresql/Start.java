@@ -56,6 +56,7 @@ import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateClientTyp
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateTenantException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateThirdPartyIdException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
+import io.supertokens.pluginInterface.multitenancy.sqlStorage.MultitenancySQLStorage;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.exception.*;
@@ -107,7 +108,7 @@ import java.util.Set;
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
-        MultitenancyStorage, DashboardSQLStorage, TOTPSQLStorage, ActiveUsersStorage, AuthRecipeSQLStorage {
+        MultitenancyStorage, MultitenancySQLStorage, DashboardSQLStorage, TOTPSQLStorage, ActiveUsersStorage, AuthRecipeSQLStorage {
 
     // these configs are protected from being modified / viewed by the dev using the SuperTokens
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
@@ -2337,76 +2338,57 @@ public class Start
     }
 
     @Override
-    public boolean addUserIdToTenant(TenantIdentifier tenantIdentifier, String userId)
+    public boolean addUserIdToTenant_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con, String userId)
             throws TenantOrAppNotFoundException, UnknownUserIdException, StorageQueryException,
             DuplicateEmailException, DuplicateThirdPartyUserException, DuplicatePhoneNumberException {
+        Connection sqlCon = (Connection) con.getConnection();
         try {
-            return this.startTransaction(con -> {
-                Connection sqlCon = (Connection) con.getConnection();
-                try {
-                    String recipeId = GeneralQueries.getRecipeIdForUser_Transaction(this, sqlCon, tenantIdentifier,
-                            userId);
+            String recipeId = GeneralQueries.getRecipeIdForUser_Transaction(this, sqlCon, tenantIdentifier,
+                    userId);
 
-                    if (recipeId == null) {
-                        throw new StorageTransactionLogicException(new UnknownUserIdException());
-                    }
-
-                    boolean added;
-                    if (recipeId.equals("emailpassword")) {
-                        added = EmailPasswordQueries.addUserIdToTenant_Transaction(this, sqlCon, tenantIdentifier,
-                                userId);
-                    } else if (recipeId.equals("thirdparty")) {
-                        added = ThirdPartyQueries.addUserIdToTenant_Transaction(this, sqlCon, tenantIdentifier, userId);
-                    } else if (recipeId.equals("passwordless")) {
-                        added = PasswordlessQueries.addUserIdToTenant_Transaction(this, sqlCon, tenantIdentifier,
-                                userId);
-                    } else {
-                        throw new IllegalStateException("Should never come here!");
-                    }
-
-                    sqlCon.commit();
-                    return added;
-                } catch (SQLException | DuplicateEmailException | DuplicatePhoneNumberException | DuplicateThirdPartyUserException throwables) {
-                    throw new StorageTransactionLogicException(throwables);
-                }
-            });
-        } catch (StorageTransactionLogicException e) {
-            if (e.actualException instanceof SQLException) {
-                PostgreSQLConfig config = Config.getConfig(this);
-                ServerErrorMessage serverErrorMessage = ((PSQLException) e.actualException).getServerErrorMessage();
-
-                if (isForeignKeyConstraintError(serverErrorMessage, config.getUsersTable(), "tenant_id")) {
-                    throw new TenantOrAppNotFoundException(tenantIdentifier);
-                }
-                if (isUniqueConstraintError(serverErrorMessage, config.getEmailPasswordUserToTenantTable(), "email")) {
-                    throw new DuplicateEmailException();
-                }
-                if (isUniqueConstraintError(serverErrorMessage, config.getThirdPartyUserToTenantTable(),
-                        "third_party_user_id")) {
-                    throw new DuplicateThirdPartyUserException();
-                }
-                if (isUniqueConstraintError(serverErrorMessage,
-                        Config.getConfig(this).getPasswordlessUserToTenantTable(), "phone_number")) {
-                    throw new DuplicatePhoneNumberException();
-                }
-                if (isUniqueConstraintError(serverErrorMessage,
-                        Config.getConfig(this).getPasswordlessUserToTenantTable(), "email")) {
-                    throw new DuplicateEmailException();
-                }
-
-                throw new StorageQueryException(e.actualException);
-            } else if (e.actualException instanceof UnknownUserIdException) {
-                throw (UnknownUserIdException) e.actualException;
-            } else if (e.actualException instanceof StorageQueryException) {
-                throw (StorageQueryException) e.actualException;
-            } else if (e.actualException instanceof DuplicateEmailException) {
-                throw (DuplicateEmailException) e.actualException;
-            } else if (e.actualException instanceof DuplicatePhoneNumberException) {
-                throw (DuplicatePhoneNumberException) e.actualException;
-            } else if (e.actualException instanceof DuplicateThirdPartyUserException) {
-                throw (DuplicateThirdPartyUserException) e.actualException;
+            if (recipeId == null) {
+                throw new UnknownUserIdException();
             }
-            throw new StorageQueryException(e.actualException);
+
+            boolean added;
+            if (recipeId.equals("emailpassword")) {
+                added = EmailPasswordQueries.addUserIdToTenant_Transaction(this, sqlCon, tenantIdentifier,
+                        userId);
+            } else if (recipeId.equals("thirdparty")) {
+                added = ThirdPartyQueries.addUserIdToTenant_Transaction(this, sqlCon, tenantIdentifier, userId);
+            } else if (recipeId.equals("passwordless")) {
+                added = PasswordlessQueries.addUserIdToTenant_Transaction(this, sqlCon, tenantIdentifier,
+                        userId);
+            } else {
+                throw new IllegalStateException("Should never come here!");
+            }
+
+            sqlCon.commit();
+            return added;
+        } catch (SQLException throwables) {
+            PostgreSQLConfig config = Config.getConfig(this);
+            ServerErrorMessage serverErrorMessage = ((PSQLException) throwables).getServerErrorMessage();
+
+            if (isForeignKeyConstraintError(serverErrorMessage, config.getUsersTable(), "tenant_id")) {
+                throw new TenantOrAppNotFoundException(tenantIdentifier);
+            }
+            if (isUniqueConstraintError(serverErrorMessage, config.getEmailPasswordUserToTenantTable(), "email")) {
+                throw new DuplicateEmailException();
+            }
+            if (isUniqueConstraintError(serverErrorMessage, config.getThirdPartyUserToTenantTable(),
+                    "third_party_user_id")) {
+                throw new DuplicateThirdPartyUserException();
+            }
+            if (isUniqueConstraintError(serverErrorMessage,
+                    Config.getConfig(this).getPasswordlessUserToTenantTable(), "phone_number")) {
+                throw new DuplicatePhoneNumberException();
+            }
+            if (isUniqueConstraintError(serverErrorMessage,
+                    Config.getConfig(this).getPasswordlessUserToTenantTable(), "email")) {
+                throw new DuplicateEmailException();
+            }
+
+            throw new StorageQueryException(throwables);
         }
     }
 

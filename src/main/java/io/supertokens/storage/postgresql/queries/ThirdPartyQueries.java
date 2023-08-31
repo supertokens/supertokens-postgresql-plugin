@@ -400,23 +400,6 @@ public class ThirdPartyQueries {
         UserInfoPartial userInfo = ThirdPartyQueries.getUserInfoUsingUserId(start, sqlCon,
                 tenantIdentifier.toAppIdentifier(), userId);
 
-        AuthRecipeUserInfo[] primaryUsers = GeneralQueries.listPrimaryUsersByEmail_Transaction(start, sqlCon,
-                tenantIdentifier.toAppIdentifier(), userInfo.email);
-
-        for (AuthRecipeUserInfo primaryUser : primaryUsers) {
-            if (primaryUser.tenantIds.contains(tenantIdentifier.getTenantId()) && !primaryUser.getSupertokensUserId().equals(userInfo.id)) {
-                throw new DuplicateEmailException();
-            }
-        }
-
-        primaryUsers = GeneralQueries.listPrimaryUsersByThirdPartyInfo_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo.thirdParty.id, userInfo.thirdParty.userId);
-
-        for (AuthRecipeUserInfo primaryUser : primaryUsers) {
-            if (primaryUser.tenantIds.contains(tenantIdentifier.getTenantId()) && !primaryUser.getSupertokensUserId().equals(userInfo.id)) {
-                throw new DuplicateEmailException();
-            }
-        }
-
         { // all_auth_recipe_users
             String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
                     + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)"

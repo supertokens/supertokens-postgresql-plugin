@@ -799,7 +799,7 @@ public class PasswordlessQueries {
     }
 
     public static String getPrimaryUserIdUsingEmail(Start start, Connection con, TenantIdentifier tenantIdentifier,
-                                                    String email)
+                                                     String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getPasswordlessUserToTenantTable() + " AS pless" +
@@ -819,8 +819,8 @@ public class PasswordlessQueries {
         });
     }
 
-    public static String getPrimaryUserIdUsingEmail(Start start, Connection con, AppIdentifier appIdentifier,
-                                                    String email)
+    public static List<String> getPrimaryUserIdsUsingEmail(Start start, Connection con, AppIdentifier appIdentifier,
+                                                     String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getPasswordlessUsersTable() + " AS pless" +
@@ -832,10 +832,11 @@ public class PasswordlessQueries {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, email);
         }, result -> {
-            if (result.next()) {
-                return result.getString("user_id");
+            List<String> userIds = new ArrayList<>();
+            while (result.next()) {
+                userIds.add(result.getString("user_id"));
             }
-            return null;
+            return userIds;
         });
     }
 
@@ -885,27 +886,6 @@ public class PasswordlessQueries {
             throws StorageQueryException, SQLException, DuplicateEmailException, DuplicatePhoneNumberException {
         UserInfoPartial userInfo = PasswordlessQueries.getUserById(start, sqlCon,
                 tenantIdentifier.toAppIdentifier(), userId);
-
-        if (userInfo.email != null) {
-            AuthRecipeUserInfo[] primaryUsers = GeneralQueries.listPrimaryUsersByEmail_Transaction(start, sqlCon,
-                    tenantIdentifier.toAppIdentifier(), userInfo.email);
-            for (AuthRecipeUserInfo primaryUser : primaryUsers) {
-                if (primaryUser.tenantIds.contains(tenantIdentifier.getTenantId()) && !primaryUser.getSupertokensUserId().equals(userInfo.id)) {
-                    throw new DuplicateEmailException();
-                }
-            }
-        }
-
-        if (userInfo.phoneNumber != null) {
-            AuthRecipeUserInfo[] primaryUsers = GeneralQueries.listPrimaryUsersByPhoneNumber_Transaction(start, sqlCon,
-                    tenantIdentifier.toAppIdentifier(), userInfo.phoneNumber);
-
-            for (AuthRecipeUserInfo primaryUser : primaryUsers) {
-                if (primaryUser.tenantIds.contains(tenantIdentifier.getTenantId()) && !primaryUser.getSupertokensUserId().equals(userInfo.id)) {
-                    throw new DuplicatePhoneNumberException();
-                }
-            }
-        }
 
         { // all_auth_recipe_users
             String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
