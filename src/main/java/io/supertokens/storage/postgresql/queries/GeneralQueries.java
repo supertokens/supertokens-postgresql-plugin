@@ -1165,7 +1165,7 @@ public class GeneralQueries {
                                                                       String email)
             throws StorageQueryException, SQLException {
         List<String> userIds = new ArrayList<>();
-        String emailPasswordUserId = EmailPasswordQueries.getPrimaryUserIdsUsingEmail(start, con, tenantIdentifier,
+        String emailPasswordUserId = EmailPasswordQueries.getPrimaryUserIdUsingEmail(start, con, tenantIdentifier,
                 email);
         if (emailPasswordUserId != null) {
             userIds.add(emailPasswordUserId);

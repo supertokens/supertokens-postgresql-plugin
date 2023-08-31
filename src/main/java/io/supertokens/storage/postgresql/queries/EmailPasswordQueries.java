@@ -440,7 +440,7 @@ public class EmailPasswordQueries {
         });
     }
 
-    public static String getPrimaryUserIdsUsingEmail(Start start, Connection con, TenantIdentifier tenantIdentifier,
+    public static String getPrimaryUserIdUsingEmail(Start start, Connection con, TenantIdentifier tenantIdentifier,
                                                      String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
