@@ -25,6 +25,7 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -390,7 +391,7 @@ public class EmailPasswordQueries {
         });
     }
 
-    public static List<LoginMethod> getUsersInfoUsingIdList(Start start, Connection con, Set<String> ids,
+    public static List<LoginMethod> getUsersInfoUsingIdList(Start start, Set<String> ids,
                                                             AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
         if (ids.size() > 0) {
@@ -414,6 +415,40 @@ public class EmailPasswordQueries {
                 }
                 return finalResult;
             });
+            try (Connection con = ConnectionPool.getConnection(start)) {
+                fillUserInfoWithTenantIds_transaction(start, con, appIdentifier, userInfos);
+                fillUserInfoWithVerified_transaction(start, con, appIdentifier, userInfos);
+            }
+            return userInfos.stream().map(UserInfoPartial::toLoginMethod)
+                    .collect(Collectors.toList());
+        }
+        return Collections.emptyList();
+    }
+
+    public static List<LoginMethod> getUsersInfoUsingIdList_Transaction(Start start, Connection con, Set<String> ids,
+                                                            AppIdentifier appIdentifier)
+            throws SQLException, StorageQueryException {
+        if (ids.size() > 0) {
+            // No need to filter based on tenantId because the id list is already filtered for a tenant
+            String QUERY = "SELECT user_id, email,  password_hash, time_joined "
+                    + "FROM " + getConfig(start).getEmailPasswordUsersTable()
+                    + " WHERE user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(ids.size()) +
+                    " ) AND app_id = ?";
+
+            List<UserInfoPartial> userInfos = execute(con, QUERY, pst -> {
+                int index = 1;
+                for (String id : ids) {
+                    pst.setString(index, id);
+                    index++;
+                }
+                pst.setString(index, appIdentifier.getAppId());
+            }, result -> {
+                List<UserInfoPartial> finalResult = new ArrayList<>();
+                while (result.next()) {
+                    finalResult.add(UserInfoRowMapper.getInstance().mapOrThrow(result));
+                }
+                return finalResult;
+            });
             fillUserInfoWithTenantIds_transaction(start, con, appIdentifier, userInfos);
             fillUserInfoWithVerified_transaction(start, con, appIdentifier, userInfos);
             return userInfos.stream().map(UserInfoPartial::toLoginMethod)
@@ -421,7 +456,6 @@ public class EmailPasswordQueries {
         }
         return Collections.emptyList();
     }
-
     public static String lockEmail_Transaction(Start start, Connection con,
                                                AppIdentifier appIdentifier,
                                                String email)
@@ -440,7 +474,7 @@ public class EmailPasswordQueries {
         });
     }
 
-    public static String getPrimaryUserIdUsingEmail(Start start, Connection con, TenantIdentifier tenantIdentifier,
+    public static String getPrimaryUserIdUsingEmail(Start start, TenantIdentifier tenantIdentifier,
                                                      String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
@@ -449,7 +483,7 @@ public class EmailPasswordQueries {
                 " ON ep.app_id = all_users.app_id AND ep.user_id = all_users.user_id" +
                 " WHERE ep.app_id = ? AND ep.tenant_id = ? AND ep.email = ?";
 
-        return execute(con, QUERY, pst -> {
+        return execute(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, email);
