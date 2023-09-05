@@ -2850,7 +2850,7 @@ public class Start
                                                                  String thirdPartyUserId)
             throws StorageQueryException {
         try {
-            return GeneralQueries.getPrimaryUsersByThirdPartyInfo(this, appIdentifier,
+            return GeneralQueries.listPrimaryUsersByThirdPartyInfo(this, appIdentifier,
                     thirdPartyId, thirdPartyUserId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -2865,7 +2865,7 @@ public class Start
             throws StorageQueryException {
         try {
             Connection sqlCon = (Connection) con.getConnection();
-            return GeneralQueries.getPrimaryUsersByThirdPartyInfo_Transaction(this, sqlCon, appIdentifier,
+            return GeneralQueries.listPrimaryUsersByThirdPartyInfo_Transaction(this, sqlCon, appIdentifier,
                     thirdPartyId, thirdPartyUserId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
