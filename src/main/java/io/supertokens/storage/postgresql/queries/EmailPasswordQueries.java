@@ -373,7 +373,7 @@ public class EmailPasswordQueries {
         }
     }
 
-    public static UserInfoPartial getUserInfoUsingId(Start start, Connection sqlCon, AppIdentifier appIdentifier,
+    public static UserInfoPartial getUserInfoUsingId_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
                                                      String id) throws SQLException, StorageQueryException {
         // we don't need a FOR UPDATE here because this is already part of a transaction, and locked on
         // app_id_to_user_id table
@@ -415,10 +415,8 @@ public class EmailPasswordQueries {
                 }
                 return finalResult;
             });
-            try (Connection con = ConnectionPool.getConnection(start)) {
-                fillUserInfoWithTenantIds_transaction(start, con, appIdentifier, userInfos);
-                fillUserInfoWithVerified_transaction(start, con, appIdentifier, userInfos);
-            }
+            fillUserInfoWithTenantIds(start, appIdentifier, userInfos);
+            fillUserInfoWithVerified(start, appIdentifier, userInfos);
             return userInfos.stream().map(UserInfoPartial::toLoginMethod)
                     .collect(Collectors.toList());
         }
@@ -495,7 +493,7 @@ public class EmailPasswordQueries {
         });
     }
 
-    public static List<String> getPrimaryUserIdsUsingEmail(Start start, Connection con, AppIdentifier appIdentifier,
+    public static List<String> getPrimaryUserIdsUsingEmail_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                      String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
@@ -518,8 +516,8 @@ public class EmailPasswordQueries {
 
     public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon,
                                                         TenantIdentifier tenantIdentifier, String userId)
-            throws SQLException, StorageQueryException, DuplicateEmailException {
-        UserInfoPartial userInfo = EmailPasswordQueries.getUserInfoUsingId(start, sqlCon,
+            throws SQLException, StorageQueryException {
+        UserInfoPartial userInfo = EmailPasswordQueries.getUserInfoUsingId_Transaction(start, sqlCon,
                 tenantIdentifier.toAppIdentifier(), userId);
 
         { // all_auth_recipe_users
@@ -602,6 +600,28 @@ public class EmailPasswordQueries {
         return userInfos;
     }
 
+    private static List<UserInfoPartial> fillUserInfoWithVerified(Start start,
+                                                                  AppIdentifier appIdentifier,
+                                                                  List<UserInfoPartial> userInfos)
+            throws SQLException, StorageQueryException {
+        List<EmailVerificationQueries.UserIdAndEmail> userIdsAndEmails = new ArrayList<>();
+        for (UserInfoPartial userInfo : userInfos) {
+            userIdsAndEmails.add(new EmailVerificationQueries.UserIdAndEmail(userInfo.id, userInfo.email));
+        }
+        List<String> userIdsThatAreVerified = EmailVerificationQueries.isEmailVerified(start,
+                appIdentifier,
+                userIdsAndEmails);
+        Set<String> verifiedUserIdsSet = new HashSet<>(userIdsThatAreVerified);
+        for (UserInfoPartial userInfo : userInfos) {
+            if (verifiedUserIdsSet.contains(userInfo.id)) {
+                userInfo.verified = true;
+            } else {
+                userInfo.verified = false;
+            }
+        }
+        return userInfos;
+    }
+
     private static UserInfoPartial fillUserInfoWithTenantIds_transaction(Start start, Connection sqlCon,
                                                                          AppIdentifier appIdentifier,
                                                                          UserInfoPartial userInfo)
@@ -623,6 +643,25 @@ public class EmailPasswordQueries {
                 appIdentifier,
                 userIds);
         List<AuthRecipeUserInfo> result = new ArrayList<>();
+        for (UserInfoPartial userInfo : userInfos) {
+            userInfo.tenantIds = tenantIdsForUserIds.get(userInfo.id).toArray(new String[0]);
+        }
+
+        return userInfos;
+    }
+
+    private static List<UserInfoPartial> fillUserInfoWithTenantIds(Start start,
+                                                                   AppIdentifier appIdentifier,
+                                                                   List<UserInfoPartial> userInfos)
+            throws SQLException, StorageQueryException {
+        String[] userIds = new String[userInfos.size()];
+        for (int i = 0; i < userInfos.size(); i++) {
+            userIds[i] = userInfos.get(i).id;
+        }
+
+        Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds(start,
+                appIdentifier,
+                userIds);
         for (UserInfoPartial userInfo : userInfos) {
             userInfo.tenantIds = tenantIdsForUserIds.get(userInfo.id).toArray(new String[0]);
         }

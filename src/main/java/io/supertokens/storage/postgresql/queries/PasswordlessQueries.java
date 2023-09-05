@@ -456,7 +456,7 @@ public class PasswordlessQueries {
         });
     }
 
-    private static UserInfoWithTenantId[] getUserInfosWithTenant(Start start, Connection con,
+    private static UserInfoWithTenantId[] getUserInfosWithTenant_Transaction(Start start, Connection con,
                                                                  AppIdentifier appIdentifier, String userId)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT pl_users.user_id as user_id, pl_users.email as email, "
@@ -487,7 +487,7 @@ public class PasswordlessQueries {
     public static void deleteUser_Transaction(Connection sqlCon, Start start, AppIdentifier appIdentifier,
                                               String userId, boolean deleteUserIdMappingToo)
             throws StorageQueryException, SQLException {
-        UserInfoWithTenantId[] userInfos = getUserInfosWithTenant(start, sqlCon, appIdentifier, userId);
+        UserInfoWithTenantId[] userInfos = getUserInfosWithTenant_Transaction(start, sqlCon, appIdentifier, userId);
 
         if (deleteUserIdMappingToo) {
             String QUERY = "DELETE FROM " + getConfig(start).getAppIdToUserIdTable()
@@ -734,10 +734,8 @@ public class PasswordlessQueries {
                 }
                 return finalResult;
             });
-            try (Connection con = ConnectionPool.getConnection(start)) {
-                fillUserInfoWithTenantIds_transaction(start, con, appIdentifier, userInfos);
-                fillUserInfoWithVerified_transaction(start, con, appIdentifier, userInfos);
-            }
+            fillUserInfoWithTenantIds(start, appIdentifier, userInfos);
+            fillUserInfoWithVerified(start, appIdentifier, userInfos);
             return userInfos.stream().map(UserInfoPartial::toLoginMethod).collect(Collectors.toList());
         }
         return Collections.emptyList();
@@ -773,7 +771,7 @@ public class PasswordlessQueries {
         return Collections.emptyList();
     }
 
-    public static UserInfoPartial getUserById(Start start, Connection sqlCon, AppIdentifier appIdentifier,
+    public static UserInfoPartial getUserById_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
                                               String userId)
             throws StorageQueryException, SQLException {
         // we don't need a LOCK here because this is already part of a transaction, and locked on app_id_to_user_id
@@ -851,7 +849,7 @@ public class PasswordlessQueries {
         });
     }
 
-    public static List<String> getPrimaryUserIdsUsingEmail(Start start, Connection con, AppIdentifier appIdentifier,
+    public static List<String> getPrimaryUserIdsUsingEmail_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                      String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
@@ -893,7 +891,7 @@ public class PasswordlessQueries {
         });
     }
 
-    public static String getPrimaryUserByPhoneNumber(Start start, Connection con, AppIdentifier appIdentifier,
+    public static String getPrimaryUserByPhoneNumber_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                      @Nonnull String phoneNumber)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
@@ -916,7 +914,7 @@ public class PasswordlessQueries {
     public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon,
                                                         TenantIdentifier tenantIdentifier, String userId)
             throws StorageQueryException, SQLException, DuplicateEmailException, DuplicatePhoneNumberException {
-        UserInfoPartial userInfo = PasswordlessQueries.getUserById(start, sqlCon,
+        UserInfoPartial userInfo = PasswordlessQueries.getUserById_Transaction(start, sqlCon,
                 tenantIdentifier.toAppIdentifier(), userId);
 
         { // all_auth_recipe_users
@@ -1014,6 +1012,38 @@ public class PasswordlessQueries {
         return userInfos;
     }
 
+    private static List<UserInfoPartial> fillUserInfoWithVerified(Start start,
+                                                                  AppIdentifier appIdentifier,
+                                                                  List<UserInfoPartial> userInfos)
+            throws SQLException, StorageQueryException {
+        List<EmailVerificationQueries.UserIdAndEmail> userIdsAndEmails = new ArrayList<>();
+        for (UserInfoPartial userInfo : userInfos) {
+            if (userInfo.email == null) {
+                // phone number, so we mark it as verified
+                userInfo.verified = true;
+            } else {
+                userIdsAndEmails.add(new EmailVerificationQueries.UserIdAndEmail(userInfo.id, userInfo.email));
+            }
+        }
+        List<String> userIdsThatAreVerified = EmailVerificationQueries.isEmailVerified(start,
+                appIdentifier,
+                userIdsAndEmails);
+        Set<String> verifiedUserIdsSet = new HashSet<>(userIdsThatAreVerified);
+        for (UserInfoPartial userInfo : userInfos) {
+            if (userInfo.verified != null) {
+                // this means phone number
+                assert (userInfo.email == null);
+                continue;
+            }
+            if (verifiedUserIdsSet.contains(userInfo.id)) {
+                userInfo.verified = true;
+            } else {
+                userInfo.verified = false;
+            }
+        }
+        return userInfos;
+    }
+
     private static UserInfoPartial fillUserInfoWithTenantIds_transaction(Start start, Connection sqlCon,
                                                                          AppIdentifier appIdentifier,
                                                                          UserInfoPartial userInfo)
@@ -1032,6 +1062,25 @@ public class PasswordlessQueries {
         }
 
         Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds_transaction(start, sqlCon,
+                appIdentifier,
+                userIds);
+        List<AuthRecipeUserInfo> result = new ArrayList<>();
+        for (UserInfoPartial userInfo : userInfos) {
+            userInfo.tenantIds = tenantIdsForUserIds.get(userInfo.id).toArray(new String[0]);
+        }
+        return userInfos;
+    }
+
+    private static List<UserInfoPartial> fillUserInfoWithTenantIds(Start start,
+                                                                   AppIdentifier appIdentifier,
+                                                                   List<UserInfoPartial> userInfos)
+            throws SQLException, StorageQueryException {
+        String[] userIds = new String[userInfos.size()];
+        for (int i = 0; i < userInfos.size(); i++) {
+            userIds[i] = userInfos.get(i).id;
+        }
+
+        Map<String, List<String>> tenantIdsForUserIds = GeneralQueries.getTenantIdsForUserIds(start,
                 appIdentifier,
                 userIds);
         List<AuthRecipeUserInfo> result = new ArrayList<>();

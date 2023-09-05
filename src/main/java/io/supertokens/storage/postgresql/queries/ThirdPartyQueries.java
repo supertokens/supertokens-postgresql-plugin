@@ -386,7 +386,7 @@ public class ThirdPartyQueries {
         });
     }
 
-    private static UserInfoPartial getUserInfoUsingUserId(Start start, Connection con,
+    private static UserInfoPartial getUserInfoUsingUserId_Transaction(Start start, Connection con,
                                                           AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
 
@@ -430,7 +430,7 @@ public class ThirdPartyQueries {
         });
     }
 
-    public static List<String> getPrimaryUserIdUsingEmail(Start start, Connection con,
+    public static List<String> getPrimaryUserIdUsingEmail_Transaction(Start start, Connection con,
                                                           AppIdentifier appIdentifier, String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
@@ -454,7 +454,7 @@ public class ThirdPartyQueries {
     public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon,
                                                         TenantIdentifier tenantIdentifier, String userId)
             throws SQLException, StorageQueryException, DuplicateEmailException, DuplicateThirdPartyUserException {
-        UserInfoPartial userInfo = ThirdPartyQueries.getUserInfoUsingUserId(start, sqlCon,
+        UserInfoPartial userInfo = ThirdPartyQueries.getUserInfoUsingUserId_Transaction(start, sqlCon,
                 tenantIdentifier.toAppIdentifier(), userId);
 
         { // all_auth_recipe_users
