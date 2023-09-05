@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.4.1] - 2023-09-05
+
+- Exponential backoff and increased retries for transactions
+
 ## [2.4.0] - 2023-03-30
 
 - Support for Dashboard Search
