@@ -373,7 +373,7 @@ public class EmailPasswordQueries {
         }
     }
 
-    public static UserInfoPartial getUserInfoUsingId_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
+    private static UserInfoPartial getUserInfoUsingId_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
                                                      String id) throws SQLException, StorageQueryException {
         // we don't need a FOR UPDATE here because this is already part of a transaction, and locked on
         // app_id_to_user_id table

@@ -771,7 +771,7 @@ public class PasswordlessQueries {
         return Collections.emptyList();
     }
 
-    public static UserInfoPartial getUserById_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
+    private static UserInfoPartial getUserById_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
                                               String userId)
             throws StorageQueryException, SQLException {
         // we don't need a LOCK here because this is already part of a transaction, and locked on app_id_to_user_id
@@ -913,7 +913,7 @@ public class PasswordlessQueries {
 
     public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon,
                                                         TenantIdentifier tenantIdentifier, String userId)
-            throws StorageQueryException, SQLException, DuplicateEmailException, DuplicatePhoneNumberException {
+            throws StorageQueryException, SQLException {
         UserInfoPartial userInfo = PasswordlessQueries.getUserById_Transaction(start, sqlCon,
                 tenantIdentifier.toAppIdentifier(), userId);
 
@@ -1170,7 +1170,6 @@ public class PasswordlessQueries {
                     result.getString("phone_number"), result.getLong("time_joined"));
         }
     }
-
 
     private static class UserInfoWithTenantId {
         public final String userId;
