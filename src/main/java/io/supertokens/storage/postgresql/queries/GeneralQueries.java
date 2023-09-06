@@ -1114,13 +1114,37 @@ public class GeneralQueries {
         PasswordlessQueries.lockPhoneAndTenant_Transaction(start, sqlCon, appIdentifier, phoneNumber);
 
         // now that we have locks on all the relevant tables, we can read from them safely
-        return listPrimaryUsersByPhoneNumberHelper(start, sqlCon, appIdentifier, phoneNumber);
+        List<String> userIds = PasswordlessQueries.listUserIdsByPhoneNumber_Transaction(start, sqlCon, appIdentifier,
+                phoneNumber);
+
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds_Transaction(start, sqlCon, appIdentifier,
+                userIds);
+
+        // this is going to order them based on oldest that joined to newest that joined.
+        result.sort(Comparator.comparingLong(o -> o.timeJoined));
+
+        return result.toArray(new AuthRecipeUserInfo[0]);
     }
 
-    public static AuthRecipeUserInfo[] getPrimaryUsersByThirdPartyInfo_Transaction(Start start, Connection sqlCon,
-                                                                                 AppIdentifier appIdentifier,
-                                                                                 String thirdPartyId,
-                                                                                 String thirdPartyUserId)
+    public static AuthRecipeUserInfo[] listPrimaryUsersByThirdPartyInfo(Start start,
+                                                                        AppIdentifier appIdentifier,
+                                                                        String thirdPartyId,
+                                                                        String thirdPartyUserId)
+            throws SQLException, StorageQueryException {
+        List<String> userIds = ThirdPartyQueries.listUserIdsByThirdPartyInfo(start, appIdentifier,
+                thirdPartyId, thirdPartyUserId);
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, appIdentifier, userIds);
+
+        // this is going to order them based on oldest that joined to newest that joined.
+        result.sort(Comparator.comparingLong(o -> o.timeJoined));
+
+        return result.toArray(new AuthRecipeUserInfo[0]);
+    }
+
+    public static AuthRecipeUserInfo[] listPrimaryUsersByThirdPartyInfo_Transaction(Start start, Connection sqlCon,
+                                                                                    AppIdentifier appIdentifier,
+                                                                                    String thirdPartyId,
+                                                                                    String thirdPartyUserId)
             throws SQLException, StorageQueryException {
         // we first lock on the table based on thirdparty info and tenant - this will ensure that any other
         // query happening related to the account linking on this third party info / tenant will wait for this to
@@ -1131,7 +1155,14 @@ public class GeneralQueries {
                 thirdPartyUserId);
 
         // now that we have locks on all the relevant tables, we can read from them safely
-        return listPrimaryUsersByThirdPartyInfoHelper(start, sqlCon, appIdentifier, thirdPartyId, thirdPartyUserId);
+        List<String> userIds = ThirdPartyQueries.listUserIdsByThirdPartyInfo_Transaction(start, sqlCon, appIdentifier,
+                thirdPartyId, thirdPartyUserId);
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds_Transaction(start, sqlCon, appIdentifier, userIds);
+
+        // this is going to order them based on oldest that joined to newest that joined.
+        result.sort(Comparator.comparingLong(o -> o.timeJoined));
+
+        return result.toArray(new AuthRecipeUserInfo[0]);
     }
 
     public static AuthRecipeUserInfo[] listPrimaryUsersByEmail_Transaction(Start start, Connection sqlCon,
@@ -1149,41 +1180,20 @@ public class GeneralQueries {
         PasswordlessQueries.lockEmail_Transaction(start, sqlCon, appIdentifier, email);
 
         // now that we have locks on all the relevant tables, we can read from them safely
-        return listPrimaryUsersByEmailHelper(start, sqlCon, appIdentifier, email);
-    }
-
-    public static AuthRecipeUserInfo[] listPrimaryUsersByEmail(Start start, TenantIdentifier tenantIdentifier,
-                                                               String email)
-            throws StorageQueryException, SQLException {
-        try (Connection con = ConnectionPool.getConnection(start)) {
-            return listPrimaryUsersByEmailHelper(start, con, tenantIdentifier, email);
-        }
-    }
-
-    public static AuthRecipeUserInfo[] listPrimaryUsersByEmailHelper(Start start, Connection con,
-                                                                      TenantIdentifier tenantIdentifier,
-                                                                      String email)
-            throws StorageQueryException, SQLException {
         List<String> userIds = new ArrayList<>();
-        String emailPasswordUserId = EmailPasswordQueries.getPrimaryUserIdUsingEmail(start, con, tenantIdentifier,
-                email);
-        if (emailPasswordUserId != null) {
-            userIds.add(emailPasswordUserId);
-        }
+        userIds.addAll(EmailPasswordQueries.getPrimaryUserIdsUsingEmail_Transaction(start, sqlCon, appIdentifier,
+                email));
 
-        String passwordlessUserId = PasswordlessQueries.getPrimaryUserIdUsingEmail(start, con, tenantIdentifier,
-                email);
-        if (passwordlessUserId != null) {
-            userIds.add(passwordlessUserId);
-        }
+        userIds.addAll(PasswordlessQueries.getPrimaryUserIdsUsingEmail_Transaction(start, sqlCon, appIdentifier,
+                email));
 
-        userIds.addAll(ThirdPartyQueries.getPrimaryUserIdUsingEmail(start, con, tenantIdentifier, email));
+        userIds.addAll(ThirdPartyQueries.getPrimaryUserIdUsingEmail_Transaction(start, sqlCon, appIdentifier, email));
 
         // remove duplicates from userIds
         Set<String> userIdsSet = new HashSet<>(userIds);
         userIds = new ArrayList<>(userIdsSet);
 
-        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, con, tenantIdentifier.toAppIdentifier(),
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, appIdentifier,
                 userIds);
 
         // this is going to order them based on oldest that joined to newest that joined.
@@ -1192,24 +1202,29 @@ public class GeneralQueries {
         return result.toArray(new AuthRecipeUserInfo[0]);
     }
 
-    public static AuthRecipeUserInfo[] listPrimaryUsersByEmailHelper(Start start, Connection con,
-                                                                     AppIdentifier appIdentifier,
-                                                                     String email)
+    public static AuthRecipeUserInfo[] listPrimaryUsersByEmail(Start start, TenantIdentifier tenantIdentifier,
+                                                               String email)
             throws StorageQueryException, SQLException {
         List<String> userIds = new ArrayList<>();
-        userIds.addAll(EmailPasswordQueries.getPrimaryUserIdsUsingEmail(start, con, appIdentifier,
-                    email));
+        String emailPasswordUserId = EmailPasswordQueries.getPrimaryUserIdUsingEmail(start, tenantIdentifier,
+                email);
+        if (emailPasswordUserId != null) {
+            userIds.add(emailPasswordUserId);
+        }
 
-        userIds.addAll(PasswordlessQueries.getPrimaryUserIdsUsingEmail(start, con, appIdentifier,
-                email));
+        String passwordlessUserId = PasswordlessQueries.getPrimaryUserIdUsingEmail(start, tenantIdentifier,
+                email);
+        if (passwordlessUserId != null) {
+            userIds.add(passwordlessUserId);
+        }
 
-        userIds.addAll(ThirdPartyQueries.getPrimaryUserIdUsingEmail(start, con, appIdentifier, email));
+        userIds.addAll(ThirdPartyQueries.getPrimaryUserIdUsingEmail(start, tenantIdentifier, email));
 
         // remove duplicates from userIds
         Set<String> userIdsSet = new HashSet<>(userIds);
         userIds = new ArrayList<>(userIdsSet);
 
-        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, con, appIdentifier,
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, tenantIdentifier.toAppIdentifier(),
                 userIds);
 
         // this is going to order them based on oldest that joined to newest that joined.
@@ -1222,70 +1237,21 @@ public class GeneralQueries {
                                                                      TenantIdentifier tenantIdentifier,
                                                                      String phoneNumber)
             throws StorageQueryException, SQLException {
-        try (Connection con = ConnectionPool.getConnection(start)) {
-            return listPrimaryUsersByPhoneNumberHelper(start, con, tenantIdentifier, phoneNumber);
-        }
-    }
-
-    private static AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumberHelper(Start start, Connection con,
-                                                                            TenantIdentifier tenantIdentifier,
-                                                                            String phoneNumber)
-            throws StorageQueryException, SQLException {
         List<String> userIds = new ArrayList<>();
 
-        String passwordlessUserId = PasswordlessQueries.getPrimaryUserByPhoneNumber(start, con, tenantIdentifier,
+        String passwordlessUserId = PasswordlessQueries.getPrimaryUserByPhoneNumber(start, tenantIdentifier,
                 phoneNumber);
         if (passwordlessUserId != null) {
             userIds.add(passwordlessUserId);
         }
 
-        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, con, tenantIdentifier.toAppIdentifier(),
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, tenantIdentifier.toAppIdentifier(),
                 userIds);
 
         // this is going to order them based on oldest that joined to newest that joined.
         result.sort(Comparator.comparingLong(o -> o.timeJoined));
 
         return result.toArray(new AuthRecipeUserInfo[0]);
-    }
-
-    private static AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumberHelper(Start start, Connection con,
-                                                                            AppIdentifier appIdentifier,
-                                                                            String phoneNumber)
-            throws StorageQueryException, SQLException {
-        List<String> userIds = new ArrayList<>();
-
-        String passwordlessUserId = PasswordlessQueries.getPrimaryUserByPhoneNumber(start, con, appIdentifier,
-                phoneNumber);
-        if (passwordlessUserId != null) {
-            userIds.add(passwordlessUserId);
-        }
-
-        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, con, appIdentifier,
-                userIds);
-
-        // this is going to order them based on oldest that joined to newest that joined.
-        result.sort(Comparator.comparingLong(o -> o.timeJoined));
-
-        return result.toArray(new AuthRecipeUserInfo[0]);
-    }
-
-    public static AuthRecipeUserInfo[] listPrimaryUsersByThirdPartyInfo(Start start,
-                                                                        AppIdentifier appIdentifier,
-                                                                        String thirdPartyId,
-                                                                        String thirdPartyUserId)
-            throws StorageQueryException, SQLException {
-        try (Connection con = ConnectionPool.getConnection(start)) {
-            return listPrimaryUsersByThirdPartyInfoHelper(start, con, appIdentifier, thirdPartyId, thirdPartyUserId);
-        }
-    }
-
-    public static AuthRecipeUserInfo[] listPrimaryUsersByThirdPartyInfo_transaction(Start start,
-                                                                        Connection sqlCon,
-                                                                        AppIdentifier appIdentifier,
-                                                                        String thirdPartyId,
-                                                                        String thirdPartyUserId)
-            throws StorageQueryException, SQLException {
-        return listPrimaryUsersByThirdPartyInfoHelper(start, sqlCon, appIdentifier, thirdPartyId, thirdPartyUserId);
     }
 
     public static AuthRecipeUserInfo getPrimaryUserByThirdPartyInfo(Start start,
@@ -1293,112 +1259,9 @@ public class GeneralQueries {
                                                                         String thirdPartyId,
                                                                         String thirdPartyUserId)
             throws StorageQueryException, SQLException {
-        try (Connection con = ConnectionPool.getConnection(start)) {
-            return getPrimaryUserByThirdPartyInfoHelper(start, con, tenantIdentifier, thirdPartyId, thirdPartyUserId);
-        }
-    }
-
-    private static AuthRecipeUserInfo[] listPrimaryUsersByThirdPartyInfoHelper(Start start, Connection con,
-                                                                               AppIdentifier appIdentifier,
-                                                                               String thirdPartyId,
-                                                                               String thirdPartyUserId)
-            throws StorageQueryException, SQLException {
-
-        List<String> userIds = ThirdPartyQueries.listUserIdsByThirdPartyInfo(start, con, appIdentifier,
+        String userId = ThirdPartyQueries.getUserIdByThirdPartyInfo(start, tenantIdentifier,
                 thirdPartyId, thirdPartyUserId);
-        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, con, appIdentifier, userIds);
-
-        // this is going to order them based on oldest that joined to newest that joined.
-        result.sort(Comparator.comparingLong(o -> o.timeJoined));
-
-        return result.toArray(new AuthRecipeUserInfo[0]);
-    }
-
-    private static AuthRecipeUserInfo getPrimaryUserByThirdPartyInfoHelper(Start start, Connection con,
-                                                                               TenantIdentifier tenantIdentifier,
-                                                                               String thirdPartyId,
-                                                                               String thirdPartyUserId)
-            throws StorageQueryException, SQLException {
-
-        String userId = ThirdPartyQueries.getUserIdByThirdPartyInfo(start, con, tenantIdentifier,
-                thirdPartyId, thirdPartyUserId);
-        return getPrimaryUserInfoForUserId(start, con, tenantIdentifier.toAppIdentifier(), userId);
-    }
-
-    public static AuthRecipeUserInfo getPrimaryUserInfoForUserId_Transaction(Start start, Connection sqlCon,
-                                                                             AppIdentifier appIdentifier, String id)
-            throws SQLException, StorageQueryException {
-
-        // We do for update on the outer query cause the outer one will lock at least all the ones
-        // that the inner one locks.
-        String QUERY = "SELECT * FROM " + getConfig(start).getUsersTable() +
-                " WHERE primary_or_recipe_user_id IN (SELECT primary_or_recipe_user_id FROM " +
-                getConfig(start).getUsersTable() +
-                " WHERE user_id = ? OR primary_or_recipe_user_id = ? AND app_id = ?) AND app_id = ? FOR UPDATE";
-
-        List<AllAuthRecipeUsersResultHolder> allAuthUsersResult = execute(sqlCon, QUERY, pst -> {
-            pst.setString(1, id);
-            pst.setString(2, id);
-            pst.setString(3, appIdentifier.getAppId());
-            pst.setString(4, appIdentifier.getAppId());
-        }, result -> {
-            List<AllAuthRecipeUsersResultHolder> finalResult = new ArrayList<>();
-            while (result.next()) {
-                finalResult.add(new AllAuthRecipeUsersResultHolder(result.getString("user_id"),
-                        result.getString("tenant_id"),
-                        result.getString("primary_or_recipe_user_id"),
-                        result.getBoolean("is_linked_or_is_a_primary_user"),
-                        result.getString("recipe_id"),
-                        result.getLong("time_joined")));
-            }
-            return finalResult;
-        });
-
-        if (allAuthUsersResult.size() == 0) {
-            return null;
-        }
-
-        Set<String> recipeUserIdsToFetch = new HashSet<>();
-        for (AllAuthRecipeUsersResultHolder user : allAuthUsersResult) {
-            // this will remove duplicate entries wherein a user id is shared across several tenants.
-            recipeUserIdsToFetch.add(user.userId);
-        }
-
-        List<LoginMethod> loginMethods = new ArrayList<>();
-        loginMethods.addAll(
-                EmailPasswordQueries.getUsersInfoUsingIdList(start, sqlCon, recipeUserIdsToFetch, appIdentifier));
-        loginMethods.addAll(
-                ThirdPartyQueries.getUsersInfoUsingIdList(start, sqlCon, recipeUserIdsToFetch, appIdentifier));
-        loginMethods.addAll(
-                PasswordlessQueries.getUsersInfoUsingIdList(start, sqlCon, recipeUserIdsToFetch, appIdentifier));
-
-        Map<String, LoginMethod> recipeUserIdToLoginMethodMap = new HashMap<>();
-        for (LoginMethod loginMethod : loginMethods) {
-            recipeUserIdToLoginMethodMap.put(loginMethod.getSupertokensUserId(), loginMethod);
-        }
-
-        Map<String, AuthRecipeUserInfo> userIdToAuthRecipeUserInfo = new HashMap<>();
-
-        String pUserId = null;
-        for (AllAuthRecipeUsersResultHolder authRecipeUsersResultHolder : allAuthUsersResult) {
-            String recipeUserId = authRecipeUsersResultHolder.userId;
-            LoginMethod loginMethod = recipeUserIdToLoginMethodMap.get(recipeUserId);
-            assert (loginMethod != null);
-            String primaryUserId = authRecipeUsersResultHolder.primaryOrRecipeUserId;
-            pUserId = primaryUserId;
-            AuthRecipeUserInfo curr = userIdToAuthRecipeUserInfo.get(primaryUserId);
-            if (curr == null) {
-                curr = AuthRecipeUserInfo.create(primaryUserId, authRecipeUsersResultHolder.isLinkedOrIsAPrimaryUser,
-                        loginMethod);
-            } else {
-                curr.addLoginMethod(loginMethod);
-            }
-            userIdToAuthRecipeUserInfo.put(primaryUserId, curr);
-        }
-
-        assert (userIdToAuthRecipeUserInfo.size() == 1 && pUserId != null);
-
-        return userIdToAuthRecipeUserInfo.get(pUserId);
+        return getPrimaryUserInfoForUserId(start, tenantIdentifier.toAppIdentifier(), userId);
     }
 
     public static String getPrimaryUserIdStrForUserId(Start start, AppIdentifier appIdentifier, String id)
@@ -1418,17 +1281,21 @@ public class GeneralQueries {
 
     public static AuthRecipeUserInfo getPrimaryUserInfoForUserId(Start start, AppIdentifier appIdentifier, String id)
             throws SQLException, StorageQueryException {
-        try (Connection con = ConnectionPool.getConnection(start)) {
-            return getPrimaryUserInfoForUserId(start, con, appIdentifier, id);
+        List<String> ids = new ArrayList<>();
+        ids.add(id);
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, appIdentifier, ids);
+        if (result.isEmpty()) {
+            return null;
         }
+        return result.get(0);
     }
 
-    private static AuthRecipeUserInfo getPrimaryUserInfoForUserId(Start start, Connection con,
+    public static AuthRecipeUserInfo getPrimaryUserInfoForUserId_Transaction(Start start, Connection con,
                                                                   AppIdentifier appIdentifier, String id)
             throws SQLException, StorageQueryException {
         List<String> ids = new ArrayList<>();
         ids.add(id);
-        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, con, appIdentifier, ids);
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds_Transaction(start, con, appIdentifier, ids);
         if (result.isEmpty()) {
             return null;
         }
@@ -1436,7 +1303,6 @@ public class GeneralQueries {
     }
 
     private static List<AuthRecipeUserInfo> getPrimaryUserInfoForUserIds(Start start,
-                                                                         Connection con,
                                                                          AppIdentifier appIdentifier,
                                                                          List<String> userIds)
             throws StorageQueryException, SQLException {
@@ -1456,7 +1322,7 @@ public class GeneralQueries {
                 Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
                 ")) AND app_id = ?) AND app_id = ?";
 
-        List<AllAuthRecipeUsersResultHolder> allAuthUsersResult = execute(con, QUERY, pst -> {
+        List<AllAuthRecipeUsersResultHolder> allAuthUsersResult = execute(start, QUERY, pst -> {
             // IN user_id
             int index = 1;
             for (int i = 0; i < userIds.size(); i++, index++) {
@@ -1491,10 +1357,96 @@ public class GeneralQueries {
 
         List<LoginMethod> loginMethods = new ArrayList<>();
         loginMethods.addAll(
-                EmailPasswordQueries.getUsersInfoUsingIdList(start, con, recipeUserIdsToFetch, appIdentifier));
-        loginMethods.addAll(ThirdPartyQueries.getUsersInfoUsingIdList(start, con, recipeUserIdsToFetch, appIdentifier));
+                EmailPasswordQueries.getUsersInfoUsingIdList(start, recipeUserIdsToFetch, appIdentifier));
+        loginMethods.addAll(ThirdPartyQueries.getUsersInfoUsingIdList(start, recipeUserIdsToFetch, appIdentifier));
         loginMethods.addAll(
-                PasswordlessQueries.getUsersInfoUsingIdList(start, con, recipeUserIdsToFetch, appIdentifier));
+                PasswordlessQueries.getUsersInfoUsingIdList(start, recipeUserIdsToFetch, appIdentifier));
+
+        Map<String, LoginMethod> recipeUserIdToLoginMethodMap = new HashMap<>();
+        for (LoginMethod loginMethod : loginMethods) {
+            recipeUserIdToLoginMethodMap.put(loginMethod.getSupertokensUserId(), loginMethod);
+        }
+
+        Map<String, AuthRecipeUserInfo> userIdToAuthRecipeUserInfo = new HashMap<>();
+
+        for (AllAuthRecipeUsersResultHolder authRecipeUsersResultHolder : allAuthUsersResult) {
+            String recipeUserId = authRecipeUsersResultHolder.userId;
+            LoginMethod loginMethod = recipeUserIdToLoginMethodMap.get(recipeUserId);
+            assert (loginMethod != null);
+            String primaryUserId = authRecipeUsersResultHolder.primaryOrRecipeUserId;
+            AuthRecipeUserInfo curr = userIdToAuthRecipeUserInfo.get(primaryUserId);
+            if (curr == null) {
+                curr = AuthRecipeUserInfo.create(primaryUserId, authRecipeUsersResultHolder.isLinkedOrIsAPrimaryUser,
+                        loginMethod);
+            } else {
+                curr.addLoginMethod(loginMethod);
+            }
+            userIdToAuthRecipeUserInfo.put(primaryUserId, curr);
+        }
+
+        return userIdToAuthRecipeUserInfo.keySet().stream().map(userIdToAuthRecipeUserInfo::get)
+                .collect(Collectors.toList());
+    }
+
+    private static List<AuthRecipeUserInfo> getPrimaryUserInfoForUserIds_Transaction(Start start, Connection sqlCon,
+                                                                         AppIdentifier appIdentifier,
+                                                                         List<String> userIds)
+            throws StorageQueryException, SQLException {
+        if (userIds.size() == 0) {
+            return new ArrayList<>();
+        }
+
+        // We check both user_id and primary_or_recipe_user_id because the input may have a recipe userId
+        // which is linked to a primary user ID in which case it won't be in the primary_or_recipe_user_id column,
+        // or the input may have a primary user ID whose recipe user ID was removed, so it won't be in the user_id
+        // column
+        String QUERY = "SELECT * FROM " + getConfig(start).getUsersTable() +
+                " WHERE primary_or_recipe_user_id IN (SELECT primary_or_recipe_user_id FROM " +
+                getConfig(start).getUsersTable() + " WHERE (user_id IN ("
+                + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
+                ") OR primary_or_recipe_user_id IN (" +
+                Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
+                ")) AND app_id = ?) AND app_id = ?";
+
+        List<AllAuthRecipeUsersResultHolder> allAuthUsersResult = execute(sqlCon, QUERY, pst -> {
+            // IN user_id
+            int index = 1;
+            for (int i = 0; i < userIds.size(); i++, index++) {
+                pst.setString(index, userIds.get(i));
+            }
+            // IN primary_or_recipe_user_id
+            for (int i = 0; i < userIds.size(); i++, index++) {
+                pst.setString(index, userIds.get(i));
+            }
+            // for app_id
+            pst.setString(index, appIdentifier.getAppId());
+            pst.setString(index + 1, appIdentifier.getAppId());
+        }, result -> {
+            List<AllAuthRecipeUsersResultHolder> parsedResult = new ArrayList<>();
+            while (result.next()) {
+                parsedResult.add(new AllAuthRecipeUsersResultHolder(result.getString("user_id"),
+                        result.getString("tenant_id"),
+                        result.getString("primary_or_recipe_user_id"),
+                        result.getBoolean("is_linked_or_is_a_primary_user"),
+                        result.getString("recipe_id"),
+                        result.getLong("time_joined")));
+            }
+            return parsedResult;
+        });
+
+        // Now we form the userIds again, but based on the user_id in the result from above.
+        Set<String> recipeUserIdsToFetch = new HashSet<>();
+        for (AllAuthRecipeUsersResultHolder user : allAuthUsersResult) {
+            // this will remove duplicate entries wherein a user id is shared across several tenants.
+            recipeUserIdsToFetch.add(user.userId);
+        }
+
+        List<LoginMethod> loginMethods = new ArrayList<>();
+        loginMethods.addAll(
+                EmailPasswordQueries.getUsersInfoUsingIdList_Transaction(start, sqlCon, recipeUserIdsToFetch, appIdentifier));
+        loginMethods.addAll(ThirdPartyQueries.getUsersInfoUsingIdList_Transaction(start, sqlCon, recipeUserIdsToFetch, appIdentifier));
+        loginMethods.addAll(
+                PasswordlessQueries.getUsersInfoUsingIdList_Transaction(start, sqlCon, recipeUserIdsToFetch, appIdentifier));
 
         Map<String, LoginMethod> recipeUserIdToLoginMethodMap = new HashMap<>();
         for (LoginMethod loginMethod : loginMethods) {
@@ -1540,20 +1492,6 @@ public class GeneralQueries {
         });
     }
 
-    private static List<AuthRecipeUserInfo> getPrimaryUserInfoForUserIds(Start start,
-                                                                         AppIdentifier appIdentifier,
-                                                                         List<String> userIds)
-            throws StorageQueryException, SQLException {
-        if (userIds.size() == 0) {
-            return new ArrayList<>();
-        }
-
-        try (Connection con = ConnectionPool.getConnection(start)) {
-            return getPrimaryUserInfoForUserIds(start, con, appIdentifier, userIds);
-        }
-
-    }
-
     public static Map<String, List<String>> getTenantIdsForUserIds_transaction(Start start, Connection sqlCon,
                                                                                AppIdentifier appIdentifier,
                                                                                String[] userIds)
@@ -1573,6 +1511,49 @@ public class GeneralQueries {
             QUERY.append(") AND app_id = ?");
 
             return execute(sqlCon, QUERY.toString(), pst -> {
+                for (int i = 0; i < userIds.length; i++) {
+                    // i+1 cause this starts with 1 and not 0, and 1 is appId
+                    pst.setString(i + 1, userIds[i]);
+                }
+                pst.setString(userIds.length + 1, appIdentifier.getAppId());
+            }, result -> {
+                Map<String, List<String>> finalResult = new HashMap<>();
+                for (String userId : userIds) {
+                    finalResult.put(userId, new ArrayList<>());
+                }
+
+                while (result.next()) {
+                    String userId = result.getString("user_id").trim();
+                    String tenantId = result.getString("tenant_id");
+
+                    finalResult.get(userId).add(tenantId);
+                }
+                return finalResult;
+            });
+        }
+
+        return new HashMap<>();
+    }
+
+    public static Map<String, List<String>> getTenantIdsForUserIds(Start start,
+                                                                   AppIdentifier appIdentifier,
+                                                                   String[] userIds)
+            throws SQLException, StorageQueryException {
+        if (userIds != null && userIds.length > 0) {
+            StringBuilder QUERY = new StringBuilder("SELECT user_id, tenant_id "
+                    + "FROM " + getConfig(start).getUsersTable());
+            QUERY.append(" WHERE user_id IN (");
+            for (int i = 0; i < userIds.length; i++) {
+
+                QUERY.append("?");
+                if (i != userIds.length - 1) {
+                    // not the last element
+                    QUERY.append(",");
+                }
+            }
+            QUERY.append(") AND app_id = ?");
+
+            return execute(start, QUERY.toString(), pst -> {
                 for (int i = 0; i < userIds.length; i++) {
                     // i+1 cause this starts with 1 and not 0, and 1 is appId
                     pst.setString(i + 1, userIds[i]);
@@ -1641,16 +1622,6 @@ public class GeneralQueries {
         }
 
         return result.toArray(new String[0]);
-    }
-
-    private static class UserInfoPaginationResultHolder {
-        String userId;
-        String recipeId;
-
-        UserInfoPaginationResultHolder(String userId, String recipeId) {
-            this.userId = userId;
-            this.recipeId = recipeId;
-        }
     }
 
     private static class AllAuthRecipeUsersResultHolder {

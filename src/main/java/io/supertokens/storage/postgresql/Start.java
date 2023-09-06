@@ -2845,6 +2845,19 @@ public class Start
     }
 
     @Override
+    public AuthRecipeUserInfo[] listPrimaryUsersByThirdPartyInfo(AppIdentifier appIdentifier,
+                                                                 String thirdPartyId,
+                                                                 String thirdPartyUserId)
+            throws StorageQueryException {
+        try {
+            return GeneralQueries.listPrimaryUsersByThirdPartyInfo(this, appIdentifier,
+                    thirdPartyId, thirdPartyUserId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public AuthRecipeUserInfo[] listPrimaryUsersByThirdPartyInfo_Transaction(AppIdentifier appIdentifier,
                                                                              TransactionConnection con,
                                                                              String thirdPartyId,
@@ -2852,7 +2865,7 @@ public class Start
             throws StorageQueryException {
         try {
             Connection sqlCon = (Connection) con.getConnection();
-            return GeneralQueries.getPrimaryUsersByThirdPartyInfo_Transaction(this, sqlCon, appIdentifier,
+            return GeneralQueries.listPrimaryUsersByThirdPartyInfo_Transaction(this, sqlCon, appIdentifier,
                     thirdPartyId, thirdPartyUserId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
