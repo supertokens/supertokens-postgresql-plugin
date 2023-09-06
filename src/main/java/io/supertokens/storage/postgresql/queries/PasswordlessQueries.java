@@ -19,14 +19,12 @@ package io.supertokens.storage.postgresql.queries;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
-import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
-import io.supertokens.pluginInterface.passwordless.exception.DuplicatePhoneNumberException;
 import io.supertokens.pluginInterface.sqlStorage.SQLStorage.TransactionIsolationLevel;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
@@ -891,8 +889,8 @@ public class PasswordlessQueries {
         });
     }
 
-    public static String getPrimaryUserByPhoneNumber_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
-                                                     @Nonnull String phoneNumber)
+    public static List<String> listUserIdsByPhoneNumber_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
+                                                              @Nonnull String phoneNumber)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getPasswordlessUsersTable() + " AS pless" +
@@ -904,10 +902,11 @@ public class PasswordlessQueries {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, phoneNumber);
         }, result -> {
-            if (result.next()) {
-                return result.getString("user_id");
+            List<String> userIds = new ArrayList<>();
+            while (result.next()) {
+                userIds.add(result.getString("user_id"));
             }
-            return null;
+            return userIds;
         });
     }
 

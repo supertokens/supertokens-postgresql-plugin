@@ -1114,15 +1114,10 @@ public class GeneralQueries {
         PasswordlessQueries.lockPhoneAndTenant_Transaction(start, sqlCon, appIdentifier, phoneNumber);
 
         // now that we have locks on all the relevant tables, we can read from them safely
-        List<String> userIds = new ArrayList<>();
-
-        String passwordlessUserId = PasswordlessQueries.getPrimaryUserByPhoneNumber_Transaction(start, sqlCon, appIdentifier,
+        List<String> userIds = PasswordlessQueries.listUserIdsByPhoneNumber_Transaction(start, sqlCon, appIdentifier,
                 phoneNumber);
-        if (passwordlessUserId != null) {
-            userIds.add(passwordlessUserId);
-        }
 
-        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, appIdentifier,
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds_Transaction(start, sqlCon, appIdentifier,
                 userIds);
 
         // this is going to order them based on oldest that joined to newest that joined.
