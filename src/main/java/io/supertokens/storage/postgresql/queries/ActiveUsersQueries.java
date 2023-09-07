@@ -51,7 +51,7 @@ public class ActiveUsersQueries {
 
     public static int countUsersActiveSinceAndHasMoreThanOneLoginMethod(Start start, AppIdentifier appIdentifier, long sinceTime)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT count(*) as c FROM " + Config.getConfig(start).getUserLastActiveTable()
+        String QUERY = "SELECT count(*) as c FROM " + Config.getConfig(start).getUserLastActiveTable() + " ula "
                 + " JOIN ("
                 + "   SELECT COUNT(user_id) as num_login_methods, app_id, primary_or_recipe_user_id "
                 + "   FROM " + Config.getConfig(start).getUsersTable()
