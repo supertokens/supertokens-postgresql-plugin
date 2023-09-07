@@ -102,30 +102,44 @@ public class GeneralQueries {
                 + Config.getConfig(start).getUsersTable() + "(app_id, tenant_id);";
     }
 
-    static String getQueryToCreateUserPaginationIndex(Start start) {
-        return "CREATE INDEX all_auth_recipe_users_pagination_index ON " + Config.getConfig(start).getUsersTable()
-                + "(primary_or_recipe_user_time_joined DESC, primary_or_recipe_user_id DESC, tenant_id DESC, app_id DESC);";
+    static String getQueryToCreateUserPaginationIndex1(Start start) {
+        return "CREATE INDEX all_auth_recipe_users_pagination_index1 ON " + Config.getConfig(start).getUsersTable()
+                + "(app_id, tenant_id, primary_or_recipe_user_time_joined DESC, primary_or_recipe_user_id DESC);";
     }
 
-    static String getQueryToCreatePrimaryUserIdIndex(Start start) {
-        /*
-         * Used in:
-         * - does user exist
-         *
-         * */
-        return "CREATE INDEX all_auth_recipe_users_primary_user_id_index ON " + Config.getConfig(start).getUsersTable()
-                + "(app_id, primary_or_recipe_user_id);";
+    static String getQueryToCreateUserPaginationIndex2(Start start) {
+        return "CREATE INDEX all_auth_recipe_users_pagination_index2 ON " + Config.getConfig(start).getUsersTable()
+                + "(app_id, tenant_id, primary_or_recipe_user_time_joined ASC, primary_or_recipe_user_id DESC);";
+    }
+
+    static String getQueryToCreateUserPaginationIndex3(Start start) {
+        return "CREATE INDEX all_auth_recipe_users_pagination_index3 ON " + Config.getConfig(start).getUsersTable()
+                + "(recipe_id, app_id, tenant_id, primary_or_recipe_user_time_joined DESC, primary_or_recipe_user_id DESC);";
+    }
+
+    static String getQueryToCreateUserPaginationIndex4(Start start) {
+        return "CREATE INDEX all_auth_recipe_users_pagination_index4 ON " + Config.getConfig(start).getUsersTable()
+                + "(recipe_id, app_id, tenant_id, primary_or_recipe_user_time_joined ASC, primary_or_recipe_user_id DESC);";
     }
 
     static String getQueryToCreatePrimaryUserIdAndTenantIndex(Start start) {
         /*
          * Used in:
-         * - user count query
-         *
+         * - does user exist
          * */
         return "CREATE INDEX all_auth_recipe_users_primary_user_id_and_tenant_id_index ON " +
                 Config.getConfig(start).getUsersTable()
-                + "(app_id, tenant_id, primary_or_recipe_user_id);";
+                + "(primary_or_recipe_user_id, app_id);";
+    }
+
+    static String getQueryToCreateRecipeIdIndex(Start start) {
+        /*
+         * Used in:
+         * - user count query
+         * */
+        return "CREATE INDEX all_auth_recipe_users_recipe_id_index ON " +
+                Config.getConfig(start).getUsersTable()
+                + "(recipe_id, app_id, tenant_id);";
     }
 
     private static String getQueryToCreateAppsTable(Start start) {
@@ -249,9 +263,12 @@ public class GeneralQueries {
                     update(start, getQueryToCreateUsersTable(start), NO_OP_SETTER);
 
                     // index
-                    update(start, getQueryToCreatePrimaryUserIdIndex(start), NO_OP_SETTER);
-                    update(start, getQueryToCreateUserPaginationIndex(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateUserPaginationIndex1(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateUserPaginationIndex2(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateUserPaginationIndex3(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateUserPaginationIndex4(start), NO_OP_SETTER);
                     update(start, getQueryToCreatePrimaryUserIdAndTenantIndex(start), NO_OP_SETTER);
+                    update(start, getQueryToCreateRecipeIdIndex(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getUserLastActiveTable())) {
