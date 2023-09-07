@@ -84,6 +84,9 @@ public class GeneralQueries {
                 + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "tenant_id", "fkey")
                 + " FOREIGN KEY(app_id, tenant_id)"
                 + " REFERENCES " + Config.getConfig(start).getTenantsTable() + " (app_id, tenant_id) ON DELETE CASCADE,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "primary_or_recipe_user_id", "fkey")
+                + " FOREIGN KEY(app_id, primary_or_recipe_user_id)"
+                + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() + " (app_id, user_id) ON DELETE CASCADE,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "user_id", "fkey")
                 + " FOREIGN KEY(app_id, user_id)"
                 + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +
