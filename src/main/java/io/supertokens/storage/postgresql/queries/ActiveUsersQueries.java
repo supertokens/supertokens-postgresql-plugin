@@ -49,6 +49,27 @@ public class ActiveUsersQueries {
         });
     }
 
+    public static int countUsersActiveSinceAndHasMoreThanOneLoginMethod(Start start, AppIdentifier appIdentifier, long sinceTime)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT count(*) as c FROM " + Config.getConfig(start).getUserLastActiveTable()
+                + " JOIN ("
+                + "   SELECT COUNT(user_id) as num_login_methods, app_id, primary_or_recipe_user_id "
+                + "   FROM " + Config.getConfig(start).getUsersTable()
+                + "   GROUP BY app_id, primary_or_recipe_user_id"
+                + ") uc "
+                + " ON ula.user_id = uc.primary_or_recipe_user_id AND ula.app_id = uc.app_id "
+                + " WHERE ula.app_id = ? AND ula.last_active_time >= ? AND uc.num_login_methods > 1";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setLong(2, sinceTime);
+        }, result -> {
+            if (result.next()) {
+                return result.getInt("c");
+            }
+            return 0;
+        });
+    }
+
     public static int countUsersEnabledTotp(Start start, AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT COUNT(*) as total FROM " + Config.getConfig(start).getTotpUsersTable()
