@@ -139,7 +139,7 @@ public class GeneralQueries {
          * */
         return "CREATE INDEX all_auth_recipe_users_recipe_id_index ON " +
                 Config.getConfig(start).getUsersTable()
-                + "(recipe_id, app_id, tenant_id);";
+                + "(app_id, recipe_id, tenant_id);";
     }
 
     private static String getQueryToCreateAppsTable(Start start) {
