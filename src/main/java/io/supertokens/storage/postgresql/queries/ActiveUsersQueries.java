@@ -51,14 +51,15 @@ public class ActiveUsersQueries {
 
     public static int countUsersActiveSinceAndHasMoreThanOneLoginMethod(Start start, AppIdentifier appIdentifier, long sinceTime)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT count(*) as c FROM " + Config.getConfig(start).getUserLastActiveTable() + " ula "
-                + " JOIN ("
-                + "   SELECT COUNT(user_id) as num_login_methods, app_id, primary_or_recipe_user_id "
-                + "   FROM " + Config.getConfig(start).getUsersTable()
-                + "   GROUP BY app_id, primary_or_recipe_user_id"
-                + ") uc "
-                + " ON ula.user_id = uc.primary_or_recipe_user_id AND ula.app_id = uc.app_id "
-                + " WHERE ula.app_id = ? AND ula.last_active_time >= ? AND uc.num_login_methods > 1";
+        String QUERY = "SELECT count(1) as c FROM ("
+                + "  SELECT count(user_id) as num_login_methods, app_id, primary_or_recipe_user_id"
+                + "  FROM " + Config.getConfig(start).getUsersTable()
+                + "  WHERE primary_or_recipe_user_id IN ("
+                + "    SELECT user_id FROM " + Config.getConfig(start).getUserLastActiveTable()
+                + "    WHERE app_id = ? AND last_active_time >= ?"
+                + "  )"
+                + "  GROUP BY app_id, primary_or_recipe_user_id"
+                + ") uc WHERE num_login_methods > 1";
         return execute(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setLong(2, sinceTime);
