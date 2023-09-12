@@ -396,11 +396,12 @@ public class PasswordlessQueries {
             try {
                 { // app_id_to_user_id
                     String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                            + "(app_id, user_id, recipe_id)" + " VALUES(?, ?, ?)";
+                            + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
                         pst.setString(2, id);
-                        pst.setString(3, PASSWORDLESS.toString());
+                        pst.setString(3, id);
+                        pst.setString(4, PASSWORDLESS.toString());
                     });
                 }
 
@@ -853,7 +854,7 @@ public class PasswordlessQueries {
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getPasswordlessUsersTable() + " AS pless" +
-                " JOIN " + getConfig(start).getUsersTable() + " AS all_users" +
+                " JOIN " + getConfig(start).getAppIdToUserIdTable() + " AS all_users" +
                 " ON pless.app_id = all_users.app_id AND pless.user_id = all_users.user_id" +
                 " WHERE pless.app_id = ? AND pless.email = ?";
 
@@ -921,18 +922,21 @@ public class PasswordlessQueries {
             throw new UnknownUserIdException();
         }
 
+        GeneralQueries.AccountLinkingInfo accountLinkingInfo = GeneralQueries.getAccountLinkingInfo_Transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userId);
+
         { // all_auth_recipe_users
             String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
-                    + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
-                    + " VALUES(?, ?, ?, ?, ?, ?, ?)" + " ON CONFLICT DO NOTHING";
+                    + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
+                    + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)" + " ON CONFLICT DO NOTHING";
             update(sqlCon, QUERY, pst -> {
                 pst.setString(1, tenantIdentifier.getAppId());
                 pst.setString(2, tenantIdentifier.getTenantId());
                 pst.setString(3, userInfo.id);
-                pst.setString(4, userInfo.id);
-                pst.setString(5, PASSWORDLESS.toString());
-                pst.setLong(6, userInfo.timeJoined);
+                pst.setString(4, accountLinkingInfo.primaryUserId);
+                pst.setBoolean(5, accountLinkingInfo.isLinked);
+                pst.setString(6, PASSWORDLESS.toString());
                 pst.setLong(7, userInfo.timeJoined);
+                pst.setLong(8, userInfo.timeJoined);
             });
         }
 
