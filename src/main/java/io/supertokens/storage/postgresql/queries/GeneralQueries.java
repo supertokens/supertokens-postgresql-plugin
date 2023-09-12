@@ -1375,7 +1375,7 @@ public class GeneralQueries {
         String QUERY = "SELECT au.user_id, au.primary_or_recipe_user_id, au.is_linked_or_is_a_primary_user, au.recipe_id, aaru.tenant_id, aaru.time_joined FROM " + getConfig(start).getAppIdToUserIdTable() + " as au " +
                 "LEFT JOIN " + getConfig(start).getUsersTable() + " as aaru ON au.app_id = aaru.app_id AND au.user_id = aaru.user_id" +
                 " WHERE au.primary_or_recipe_user_id IN (SELECT primary_or_recipe_user_id FROM " +
-                getConfig(start).getUsersTable() + " WHERE (user_id IN ("
+                getConfig(start).getAppIdToUserIdTable() + " WHERE (user_id IN ("
                 + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
                 ") OR au.primary_or_recipe_user_id IN (" +
                 Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
@@ -1545,7 +1545,6 @@ public class GeneralQueries {
     public static String getRecipeIdForUser_Transaction(Start start, Connection sqlCon,
                                                         TenantIdentifier tenantIdentifier, String userId)
             throws SQLException, StorageQueryException {
-
 
         String QUERY = "SELECT recipe_id FROM " + getConfig(start).getAppIdToUserIdTable()
                 + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
