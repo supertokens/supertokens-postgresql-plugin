@@ -87,7 +87,7 @@ public class ExceptionParsingTest {
             String thirdPartyUserId = "tp_userId";
             String userEmail = "useremail@asdf.fdas";
 
-            var tp = new io.supertokens.pluginInterface.thirdparty.UserInfo.ThirdParty(tpId, thirdPartyUserId);
+            var tp = new io.supertokens.pluginInterface.authRecipe.LoginMethod.ThirdParty(tpId, thirdPartyUserId);
             storage.signUp(new TenantIdentifier(null, null, null), userId, userEmail, tp,
                     System.currentTimeMillis());
             try {
@@ -128,15 +128,18 @@ public class ExceptionParsingTest {
             String pwHash = "fakehash";
             String userEmail = "useremail@asdf.fdas";
 
-            storage.signUp(new TenantIdentifier(null, null, null), userId, userEmail, pwHash, System.currentTimeMillis());
+            storage.signUp(new TenantIdentifier(null, null, null), userId, userEmail, pwHash,
+                    System.currentTimeMillis());
             try {
-                storage.signUp(new TenantIdentifier(null, null, null), userId, userEmail, pwHash, System.currentTimeMillis());
+                storage.signUp(new TenantIdentifier(null, null, null), userId, userEmail, pwHash,
+                        System.currentTimeMillis());
                 throw new Exception("This should throw");
             } catch (DuplicateUserIdException ex) {
                 // expected
             }
             try {
-                storage.signUp(new TenantIdentifier(null, null, null), userId2, userEmail, pwHash, System.currentTimeMillis());
+                storage.signUp(new TenantIdentifier(null, null, null), userId2, userEmail, pwHash,
+                        System.currentTimeMillis());
                 throw new Exception("This should throw");
             } catch (DuplicateEmailException ex) {
                 // expected
@@ -171,8 +174,10 @@ public class ExceptionParsingTest {
             String userEmail2 = "useremail2@asdf.fdas";
             String userEmail3 = "useremail3@asdf.fdas";
 
-            storage.signUp(new TenantIdentifier(null, null, null), userId, userEmail, pwHash, System.currentTimeMillis());
-            storage.signUp(new TenantIdentifier(null, null, null), userId2, userEmail2, pwHash, System.currentTimeMillis());
+            storage.signUp(new TenantIdentifier(null, null, null), userId, userEmail, pwHash,
+                    System.currentTimeMillis());
+            storage.signUp(new TenantIdentifier(null, null, null), userId2, userEmail2, pwHash,
+                    System.currentTimeMillis());
             storage.startTransaction(conn -> {
                 try {
                     storage.updateUsersEmail_Transaction(new AppIdentifier(null, null), conn, userId, userEmail2);
@@ -211,7 +216,8 @@ public class ExceptionParsingTest {
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-            EmailVerificationSQLStorage storage = (EmailVerificationSQLStorage) StorageLayer.getStorage(process.getProcess());
+            EmailVerificationSQLStorage storage = (EmailVerificationSQLStorage) StorageLayer.getStorage(
+                    process.getProcess());
 
             String userId = "userId";
             String userEmail = "useremail@asdf.fdas";
@@ -219,8 +225,9 @@ public class ExceptionParsingTest {
             storage.startTransaction(conn -> {
                 try {
                     storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail,
-                                true);
-                    storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail, true);
+                            true);
+                    storage.updateIsEmailVerified_Transaction(new AppIdentifier(null, null), conn, userId, userEmail,
+                            true);
                 } catch (TenantOrAppNotFoundException e) {
                     throw new RuntimeException(e);
                 }
@@ -280,11 +287,12 @@ public class ExceptionParsingTest {
             String pwHash = "fakehash";
             String userEmail = "useremail@asdf.fdas";
 
-            var info = new PasswordResetTokenInfo(userId, tokenHash, System.currentTimeMillis() + 10000);
+            var info = new PasswordResetTokenInfo(userId, tokenHash, System.currentTimeMillis() + 10000, userEmail);
             try {
                 storage.addPasswordResetToken(new AppIdentifier(null, null), info);
             } catch (UnknownUserIdException ex) {
-                storage.signUp(new TenantIdentifier(null, null, null), userId, userEmail, pwHash, System.currentTimeMillis());
+                storage.signUp(new TenantIdentifier(null, null, null), userId, userEmail, pwHash,
+                        System.currentTimeMillis());
             }
             storage.addPasswordResetToken(new AppIdentifier(null, null), info);
             try {
@@ -306,7 +314,8 @@ public class ExceptionParsingTest {
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-            EmailVerificationSQLStorage storage = (EmailVerificationSQLStorage) StorageLayer.getStorage(process.getProcess());
+            EmailVerificationSQLStorage storage = (EmailVerificationSQLStorage) StorageLayer.getStorage(
+                    process.getProcess());
 
             String userId = "userId";
             String tokenHash = "fakehash";
@@ -340,16 +349,19 @@ public class ExceptionParsingTest {
             String pwHash = "fakehash";
             String userEmail = "useremail@asdf.fdas";
 
-            storage.signUp(new TenantIdentifier(null, null, null), userId, userEmail, pwHash, System.currentTimeMillis());
+            storage.signUp(new TenantIdentifier(null, null, null), userId, userEmail, pwHash,
+                    System.currentTimeMillis());
             try {
-                storage.signUp(new TenantIdentifier(null, null, null), userId, userEmail, pwHash, System.currentTimeMillis());
+                storage.signUp(new TenantIdentifier(null, null, null), userId, userEmail, pwHash,
+                        System.currentTimeMillis());
                 throw new Exception("This should throw");
             } catch (DuplicateUserIdException ex) {
                 // expected
             }
 
             try {
-                storage.signUp(new TenantIdentifier(null, null, null), userId2, userEmail, pwHash, System.currentTimeMillis());
+                storage.signUp(new TenantIdentifier(null, null, null), userId2, userEmail, pwHash,
+                        System.currentTimeMillis());
                 throw new Exception("This should throw");
             } catch (DuplicateEmailException ex) {
                 // expected

@@ -25,7 +25,7 @@ import io.supertokens.featureflag.exceptions.FeatureNotEnabledException;
 import io.supertokens.multitenancy.Multitenancy;
 import io.supertokens.multitenancy.exception.BadPermissionException;
 import io.supertokens.multitenancy.exception.CannotModifyBaseConfigException;
-import io.supertokens.pluginInterface.emailpassword.UserInfo;
+import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.*;
@@ -91,7 +91,7 @@ public class TestUserPoolIdChangeBehaviour {
 
         String userPoolId = tenantIdentifierWithStorage.getStorage().getUserPoolId();
 
-        UserInfo userInfo = EmailPassword.signUp(
+        AuthRecipeUserInfo userInfo = EmailPassword.signUp(
                 tenantIdentifierWithStorage, process.getProcess(), "user@example.com", "password");
 
         coreConfig.addProperty("postgresql_host", "127.0.0.1");
@@ -108,7 +108,8 @@ public class TestUserPoolIdChangeBehaviour {
         String userPoolId2 = tenantIdentifierWithStorage.getStorage().getUserPoolId();
         assertNotEquals(userPoolId, userPoolId2);
 
-        UserInfo user2 = EmailPassword.signIn(tenantIdentifierWithStorage, process.getProcess(), "user@example.com", "password");
+        AuthRecipeUserInfo user2 = EmailPassword.signIn(tenantIdentifierWithStorage, process.getProcess(),
+                "user@example.com", "password");
 
         assertEquals(userInfo, user2);
 
@@ -134,7 +135,7 @@ public class TestUserPoolIdChangeBehaviour {
 
         String userPoolId = tenantIdentifierWithStorage.getStorage().getUserPoolId();
 
-        UserInfo userInfo = EmailPassword.signUp(
+        AuthRecipeUserInfo userInfo = EmailPassword.signUp(
                 tenantIdentifierWithStorage, process.getProcess(), "user@example.com", "password");
 
         coreConfig.addProperty("postgresql_host", "127.0.0.1");
@@ -157,7 +158,9 @@ public class TestUserPoolIdChangeBehaviour {
         String userPoolId2 = tenantIdentifierWithStorage.getStorage().getUserPoolId();
         assertNotEquals(userPoolId, userPoolId2);
 
-        UserInfo user2 = EmailPassword.signIn(tenantIdentifierWithStorage, process.getProcess(), "user@example.com", "password");
+        AuthRecipeUserInfo user2 = EmailPassword.signIn(tenantIdentifierWithStorage, process.getProcess(),
+                "user@example.com",
+                "password");
 
         assertEquals(userInfo, user2);
     }

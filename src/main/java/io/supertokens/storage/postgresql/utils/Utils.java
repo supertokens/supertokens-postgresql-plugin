@@ -42,4 +42,15 @@ public class Utils {
         constraintName.append('_').append(typeSuffix);
         return constraintName.toString();
     }
+
+    public static String generateCommaSeperatedQuestionMarks(int size) {
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < size; i++) {
+            builder.append("?");
+            if (i != size - 1) {
+                builder.append(",");
+            }
+        }
+        return builder.toString();
+    }
 }
