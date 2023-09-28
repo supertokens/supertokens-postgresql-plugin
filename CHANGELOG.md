@@ -7,6 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Replace `TotpNotEnabledError` with `UnknownUserIdTotpError`.
 - Support for MFA recipe
 
 ## [5.0.0] - 2023-09-19
