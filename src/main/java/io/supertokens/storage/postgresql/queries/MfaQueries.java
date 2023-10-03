@@ -22,6 +22,7 @@ import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -101,12 +102,11 @@ public class MfaQueries {
         });
     }
 
-
-    public static int deleteUser(Start start, AppIdentifier appIdentifier, String userId)
+    public static int deleteUser_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier, String userId)
             throws StorageQueryException, SQLException {
         String QUERY = "DELETE FROM " + Config.getConfig(start).getMfaUserFactorsTable() + " WHERE app_id = ? AND user_id = ?";
 
-        return update(start, QUERY, pst -> {
+        return update(sqlCon, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, userId);
         });
