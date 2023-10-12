@@ -1368,7 +1368,7 @@ public class GeneralQueries {
                 " WHERE au.primary_or_recipe_user_id IN (SELECT primary_or_recipe_user_id FROM " +
                 getConfig(start).getAppIdToUserIdTable() + " WHERE (user_id IN ("
                 + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
-                ") OR au.primary_or_recipe_user_id IN (" +
+                ") OR primary_or_recipe_user_id IN (" +
                 Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
                 ")) AND app_id = ?) AND au.app_id = ?";
 
@@ -1460,7 +1460,7 @@ public class GeneralQueries {
                 " WHERE au.primary_or_recipe_user_id IN (SELECT primary_or_recipe_user_id FROM " +
                 getConfig(start).getAppIdToUserIdTable() + " WHERE (user_id IN ("
                 + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
-                ") OR au.primary_or_recipe_user_id IN (" +
+                ") OR primary_or_recipe_user_id IN (" +
                 Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
                 ")) AND app_id = ?) AND au.app_id = ?";
 
