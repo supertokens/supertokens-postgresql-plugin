@@ -16,6 +16,7 @@
 
 package io.supertokens.storage.postgresql.queries.multitenancy;
 
+import com.google.gson.Gson;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.*;
@@ -45,14 +46,26 @@ public class TenantConfigSQLHelper {
             return new TenantConfigSQLHelper.TenantConfigRowMapper(providers);
         }
 
+        public static String[] getStringArrayFromJsonString(String input) {
+            if (input == null) {
+                return new String[0];
+            }
+            return new Gson().fromJson(input, String[].class);
+        }
+
         @Override
         public TenantConfig map(ResultSet result) throws StorageQueryException {
             try {
+                String[] firstFactors = getStringArrayFromJsonString(result.getString("first_factors"));
+                String[] defaultMFARequirements = getStringArrayFromJsonString(result.getString("default_mfa_requirements"));
+
                 return new TenantConfig(
                         new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id")),
                         new EmailPasswordConfig(result.getBoolean("email_password_enabled")),
                         new ThirdPartyConfig(result.getBoolean("third_party_enabled"), this.providers),
                         new PasswordlessConfig(result.getBoolean("passwordless_enabled")),
+                        new TotpConfig(result.getBoolean("totp_enabled")),
+                        new MfaConfig(firstFactors, defaultMFARequirements),
                         JsonUtils.stringToJsonObject(result.getString("core_config"))
                 );
             } catch (Exception e) {
@@ -63,7 +76,9 @@ public class TenantConfigSQLHelper {
 
     public static TenantConfig[] selectAll(Start start, HashMap<TenantIdentifier, HashMap<String, ThirdPartyConfig.Provider>> providerMap)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, core_config, email_password_enabled, passwordless_enabled, third_party_enabled FROM "
+        String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, core_config,"
+                + " email_password_enabled, passwordless_enabled, third_party_enabled,"
+                + " totp_enabled, first_factors, default_mfa_requirements FROM "
                 + getConfig(start).getTenantConfigsTable() + ";";
 
         TenantConfig[] tenantConfigs = execute(start, QUERY, pst -> {}, result -> {
@@ -88,7 +103,10 @@ public class TenantConfigSQLHelper {
     public static void create(Start start, Connection sqlCon, TenantConfig tenantConfig)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getTenantConfigsTable()
-                + "(connection_uri_domain, app_id, tenant_id, core_config, email_password_enabled, passwordless_enabled, third_party_enabled)" + " VALUES(?, ?, ?, ?, ?, ?, ?)";
+                + "(connection_uri_domain, app_id, tenant_id, core_config,"
+                + " email_password_enabled, passwordless_enabled, third_party_enabled,"
+                + " totp_enabled, first_factors, default_mfa_requirements)"
+                + " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         update(sqlCon, QUERY, pst -> {
             pst.setString(1, tenantConfig.tenantIdentifier.getConnectionUriDomain());
@@ -98,6 +116,9 @@ public class TenantConfigSQLHelper {
             pst.setBoolean(5, tenantConfig.emailPasswordConfig.enabled);
             pst.setBoolean(6, tenantConfig.passwordlessConfig.enabled);
             pst.setBoolean(7, tenantConfig.thirdPartyConfig.enabled);
+            pst.setBoolean(8, tenantConfig.totpConfig.enabled);
+            pst.setString(9, new Gson().toJsonTree(tenantConfig.mfaConfig.firstFactors).toString());
+            pst.setString(10, new Gson().toJsonTree(tenantConfig.mfaConfig.defaultMFARequirements).toString());
         });
     }
 

@@ -49,6 +49,9 @@ public class MultitenancyQueries {
                 + "email_password_enabled BOOLEAN,"
                 + "passwordless_enabled BOOLEAN,"
                 + "third_party_enabled BOOLEAN,"
+                + "totp_enabled BOOLEAN,"
+                + "first_factors TEXT,"
+                + "default_mfa_requirements TEXT,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tenantConfigsTable, null, "pkey") + " PRIMARY KEY (connection_uri_domain, app_id, tenant_id)"
                 + ");";
         // @formatter:on
