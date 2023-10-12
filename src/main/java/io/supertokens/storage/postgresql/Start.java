@@ -761,12 +761,7 @@ public class Start
         } else if (className.equals(ActiveUsersStorage.class.getName())) {
             return ActiveUsersQueries.getLastActiveByUserId(this, appIdentifier, userId) != null;
         } else if (className.equals(MfaStorage.class.getName())) {
-            try {
-                MultitenancyQueries.getAllTenants(this);
-                return MfaQueries.listFactors(this, appIdentifier, userId).length > 0;
-            } catch (SQLException e) {
-                throw new StorageQueryException(e);
-            }
+            return false; // there is nothing here
         } else {
             throw new IllegalStateException("ClassName: " + className + " is not part of NonAuthRecipeStorage");
         }
@@ -865,11 +860,7 @@ public class Start
                 throw new StorageQueryException(e);
             }
         } else if (className.equals(MfaStorage.class.getName())) {
-            try {
-                MfaQueries.enableFactor(this, tenantIdentifier, userId, "emailpassword");
-            } catch (SQLException e) {
-                throw new StorageQueryException(e);
-            }
+            /* nothing to be added here */
         } else {
             throw new IllegalStateException("ClassName: " + className + " is not part of NonAuthRecipeStorage");
         }
@@ -2833,71 +2824,6 @@ public class Start
             throws StorageQueryException {
         try {
             return TOTPQueries.removeExpiredCodes(this, tenantIdentifier, expiredBefore);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    // MFA recipe:
-    @Override
-    public boolean enableFactor(TenantIdentifier tenantIdentifier, String userId, String factor)
-            throws StorageQueryException {
-        try {
-            int insertedCount = MfaQueries.enableFactor(this, tenantIdentifier, userId, factor);
-            if (insertedCount == 0) {
-                return false;
-            }
-            return true;
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public String[] listFactors(TenantIdentifier tenantIdentifier, String userId)
-            throws StorageQueryException {
-        try {
-            return MfaQueries.listFactors(this, tenantIdentifier, userId);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public boolean disableFactor(TenantIdentifier tenantIdentifier, String userId, String factor)
-            throws StorageQueryException {
-        try {
-            int deletedCount = MfaQueries.disableFactor(this, tenantIdentifier, userId, factor);
-            if (deletedCount == 0) {
-                return false;
-            }
-            return true;
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public boolean deleteMfaInfoForUser_Transaction(TransactionConnection con, AppIdentifier appIdentifier, String userId) throws StorageQueryException {
-        try {
-            int deletedCount = MfaQueries.deleteUser_Transaction(this, (Connection) con.getConnection(), appIdentifier, userId);
-            if (deletedCount == 0) {
-                return false;
-            }
-            return true;
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public boolean deleteMfaInfoForUser(TenantIdentifier tenantIdentifier, String userId) throws StorageQueryException {
-        try {
-            int deletedCount = MfaQueries.deleteUser(this, tenantIdentifier, userId);
-            if (deletedCount == 0) {
-                return false;
-            }
-            return true;
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
