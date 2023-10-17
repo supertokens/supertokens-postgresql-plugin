@@ -28,6 +28,7 @@ import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
+import io.supertokens.storage.postgresql.queries.GeneralQueries.AccountLinkingInfo;
 import io.supertokens.storage.postgresql.utils.Utils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -516,11 +517,6 @@ public class GeneralQueries {
                     update(start, TOTPQueries.getQueryToCreateTenantIdIndexForUsedCodesTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getMfaUserFactorsTable())) {
-                    getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, MfaQueries.getQueryToCreateUserFactorsTable(start), NO_OP_SETTER);
-                }
-
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
@@ -589,8 +585,9 @@ public class GeneralQueries {
                     + getConfig(start).getUserRolesTable() + ","
                     + getConfig(start).getDashboardUsersTable() + ","
                     + getConfig(start).getDashboardSessionsTable() + ","
-                    + getConfig(start).getTotpUsedCodesTable() + "," + getConfig(start).getTotpUserDevicesTable() + ","
-                    + getConfig(start).getTotpUsersTable() + "," + getConfig(start).getMfaUserFactorsTable();
+                    + getConfig(start).getTotpUsedCodesTable() + "," 
+                    + getConfig(start).getTotpUserDevicesTable() + ","
+                    + getConfig(start).getTotpUsersTable();
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
     }
