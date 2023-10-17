@@ -17,8 +17,10 @@
 package io.supertokens.storage.postgresql.queries.multitenancy;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.mfa.MfaFirstFactors;
 import io.supertokens.pluginInterface.multitenancy.*;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.queries.utils.JsonUtils;
@@ -46,18 +48,25 @@ public class TenantConfigSQLHelper {
             return new TenantConfigSQLHelper.TenantConfigRowMapper(providers);
         }
 
-        public static String[] getStringArrayFromJsonString(String input) {
+        private static String[] getStringArrayFromJsonString(String input) {
             if (input == null) {
                 return new String[0];
             }
             return new Gson().fromJson(input, String[].class);
         }
 
+        private static JsonArray getJsonArrayFromJsonString(String input) {
+            if (input == null) {
+                return new JsonArray();
+            }
+            return new Gson().fromJson(input, JsonArray.class);
+        }
+
         @Override
         public TenantConfig map(ResultSet result) throws StorageQueryException {
             try {
-                String[] firstFactors = getStringArrayFromJsonString(result.getString("first_factors"));
-                String[] defaultMFARequirements = getStringArrayFromJsonString(result.getString("default_mfa_requirements"));
+                MfaFirstFactors firstFactors = MfaFirstFactors.fromJson(getJsonArrayFromJsonString(result.getString("first_factors")));
+                String[] defaultRequiredFactors = getStringArrayFromJsonString(result.getString("default_required_factors"));
 
                 return new TenantConfig(
                         new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id")),
@@ -65,7 +74,7 @@ public class TenantConfigSQLHelper {
                         new ThirdPartyConfig(result.getBoolean("third_party_enabled"), this.providers),
                         new PasswordlessConfig(result.getBoolean("passwordless_enabled")),
                         new TotpConfig(result.getBoolean("totp_enabled")),
-                        new MfaConfig(firstFactors, defaultMFARequirements),
+                        new MfaConfig(firstFactors, defaultRequiredFactors),
                         JsonUtils.stringToJsonObject(result.getString("core_config"))
                 );
             } catch (Exception e) {
@@ -78,7 +87,7 @@ public class TenantConfigSQLHelper {
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, core_config,"
                 + " email_password_enabled, passwordless_enabled, third_party_enabled,"
-                + " totp_enabled, first_factors, default_mfa_requirements FROM "
+                + " totp_enabled, first_factors, default_required_factors FROM "
                 + getConfig(start).getTenantConfigsTable() + ";";
 
         TenantConfig[] tenantConfigs = execute(start, QUERY, pst -> {}, result -> {
@@ -105,7 +114,7 @@ public class TenantConfigSQLHelper {
         String QUERY = "INSERT INTO " + getConfig(start).getTenantConfigsTable()
                 + "(connection_uri_domain, app_id, tenant_id, core_config,"
                 + " email_password_enabled, passwordless_enabled, third_party_enabled,"
-                + " totp_enabled, first_factors, default_mfa_requirements)"
+                + " totp_enabled, first_factors, default_required_factors)"
                 + " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         update(sqlCon, QUERY, pst -> {
@@ -117,8 +126,8 @@ public class TenantConfigSQLHelper {
             pst.setBoolean(6, tenantConfig.passwordlessConfig.enabled);
             pst.setBoolean(7, tenantConfig.thirdPartyConfig.enabled);
             pst.setBoolean(8, tenantConfig.totpConfig.enabled);
-            pst.setString(9, new Gson().toJsonTree(tenantConfig.mfaConfig.firstFactors).toString());
-            pst.setString(10, new Gson().toJsonTree(tenantConfig.mfaConfig.defaultMFARequirements).toString());
+            pst.setString(9, tenantConfig.mfaConfig.firstFactors.toJson().toString());
+            pst.setString(10, new Gson().toJsonTree(tenantConfig.mfaConfig.defaultRequiredFactors).toString());
         });
     }
 
