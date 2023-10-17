@@ -48,8 +48,6 @@ import io.supertokens.pluginInterface.jwt.JWTRecipeStorage;
 import io.supertokens.pluginInterface.jwt.JWTSigningKeyInfo;
 import io.supertokens.pluginInterface.jwt.exceptions.DuplicateKeyIdException;
 import io.supertokens.pluginInterface.jwt.sqlstorage.JWTRecipeSQLStorage;
-import io.supertokens.pluginInterface.mfa.MfaStorage;
-import io.supertokens.pluginInterface.mfa.sqlStorage.MfaSQLStorage;
 import io.supertokens.pluginInterface.multitenancy.*;
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateClientTypeException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateTenantException;
@@ -108,8 +106,8 @@ import java.util.Set;
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
-        UserIdMappingSQLStorage, MultitenancyStorage, MultitenancySQLStorage, DashboardSQLStorage, TOTPSQLStorage, MfaStorage,
-        MfaSQLStorage, ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage {
+        UserIdMappingSQLStorage, MultitenancyStorage, MultitenancySQLStorage, DashboardSQLStorage, TOTPSQLStorage,
+        ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage {
 
     // these configs are protected from being modified / viewed by the dev using the SuperTokens
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
@@ -760,8 +758,6 @@ public class Start
             return false;
         } else if (className.equals(ActiveUsersStorage.class.getName())) {
             return ActiveUsersQueries.getLastActiveByUserId(this, appIdentifier, userId) != null;
-        } else if (className.equals(MfaStorage.class.getName())) {
-            return false; // there is nothing here
         } else {
             throw new IllegalStateException("ClassName: " + className + " is not part of NonAuthRecipeStorage");
         }
@@ -859,8 +855,6 @@ public class Start
             } catch (SQLException e) {
                 throw new StorageQueryException(e);
             }
-        } else if (className.equals(MfaStorage.class.getName())) {
-            /* nothing to be added here */
         } else {
             throw new IllegalStateException("ClassName: " + className + " is not part of NonAuthRecipeStorage");
         }
