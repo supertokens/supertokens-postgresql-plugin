@@ -126,7 +126,7 @@ public class TenantConfigSQLHelper {
             pst.setBoolean(6, tenantConfig.passwordlessConfig.enabled);
             pst.setBoolean(7, tenantConfig.thirdPartyConfig.enabled);
             pst.setBoolean(8, tenantConfig.totpConfig.enabled);
-            pst.setString(9, new GsonBuilder().serializeNulls().create().toJson(tenantConfig.mfaConfig.defaultRequiredFactorIds));
+            pst.setString(9, new GsonBuilder().serializeNulls().create().toJson(tenantConfig.mfaConfig.firstFactors));
             pst.setString(10, new GsonBuilder().serializeNulls().create().toJson(tenantConfig.mfaConfig.defaultRequiredFactorIds));
         });
     }
