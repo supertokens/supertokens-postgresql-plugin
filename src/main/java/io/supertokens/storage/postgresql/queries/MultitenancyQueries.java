@@ -50,8 +50,8 @@ public class MultitenancyQueries {
                 + "passwordless_enabled BOOLEAN,"
                 + "third_party_enabled BOOLEAN,"
                 + "totp_enabled BOOLEAN,"
-                + "first_factors TEXT,"
-                + "default_required_factors TEXT,"
+                + "first_factors TEXT DEFAULT 'null',"
+                + "default_required_factors TEXT DEFAULT 'null',"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tenantConfigsTable, null, "pkey") + " PRIMARY KEY (connection_uri_domain, app_id, tenant_id)"
                 + ");";
         // @formatter:on
