@@ -17,10 +17,10 @@
 package io.supertokens.storage.postgresql.queries.multitenancy;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
-import io.supertokens.pluginInterface.mfa.MfaFirstFactors;
 import io.supertokens.pluginInterface.multitenancy.*;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.queries.utils.JsonUtils;
@@ -65,8 +65,8 @@ public class TenantConfigSQLHelper {
         @Override
         public TenantConfig map(ResultSet result) throws StorageQueryException {
             try {
-                MfaFirstFactors firstFactors = MfaFirstFactors.fromJson(getJsonArrayFromJsonString(result.getString("first_factors")));
-                String[] defaultRequiredFactors = getStringArrayFromJsonString(result.getString("default_required_factors"));
+                String[] firstFactors = getStringArrayFromJsonString(result.getString("first_factors"));
+                String[] defaultRequiredFactorIds = getStringArrayFromJsonString(result.getString("default_required_factors"));
 
                 return new TenantConfig(
                         new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id")),
@@ -74,7 +74,7 @@ public class TenantConfigSQLHelper {
                         new ThirdPartyConfig(result.getBoolean("third_party_enabled"), this.providers),
                         new PasswordlessConfig(result.getBoolean("passwordless_enabled")),
                         new TotpConfig(result.getBoolean("totp_enabled")),
-                        new MfaConfig(firstFactors, defaultRequiredFactors),
+                        new MfaConfig(firstFactors, defaultRequiredFactorIds),
                         JsonUtils.stringToJsonObject(result.getString("core_config"))
                 );
             } catch (Exception e) {
@@ -126,8 +126,8 @@ public class TenantConfigSQLHelper {
             pst.setBoolean(6, tenantConfig.passwordlessConfig.enabled);
             pst.setBoolean(7, tenantConfig.thirdPartyConfig.enabled);
             pst.setBoolean(8, tenantConfig.totpConfig.enabled);
-            pst.setString(9, tenantConfig.mfaConfig.firstFactors.toJson().toString());
-            pst.setString(10, new Gson().toJsonTree(tenantConfig.mfaConfig.defaultRequiredFactors).toString());
+            pst.setString(9, new GsonBuilder().serializeNulls().create().toJson(tenantConfig.mfaConfig.defaultRequiredFactorIds));
+            pst.setString(10, new GsonBuilder().serializeNulls().create().toJson(tenantConfig.mfaConfig.defaultRequiredFactorIds));
         });
     }
 
