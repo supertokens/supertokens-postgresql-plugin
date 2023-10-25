@@ -24,6 +24,7 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.*;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.queries.utils.JsonUtils;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -48,25 +49,11 @@ public class TenantConfigSQLHelper {
             return new TenantConfigSQLHelper.TenantConfigRowMapper(providers);
         }
 
-        private static String[] getStringArrayFromJsonString(String input) {
-            if (input == null) {
-                return new String[0];
-            }
-            return new Gson().fromJson(input, String[].class);
-        }
-
-        private static JsonArray getJsonArrayFromJsonString(String input) {
-            if (input == null) {
-                return new JsonArray();
-            }
-            return new Gson().fromJson(input, JsonArray.class);
-        }
-
         @Override
         public TenantConfig map(ResultSet result) throws StorageQueryException {
             try {
-                String[] firstFactors = getStringArrayFromJsonString(result.getString("first_factors"));
-                String[] defaultRequiredFactorIds = getStringArrayFromJsonString(result.getString("default_required_factors"));
+                String[] firstFactors = Utils.getStringArrayFromJsonString(result.getString("first_factors"));
+                String[] defaultRequiredFactorIds = Utils.getStringArrayFromJsonString(result.getString("default_required_factors"));
 
                 return new TenantConfig(
                         new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id")),
