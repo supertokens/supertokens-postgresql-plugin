@@ -182,6 +182,14 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("tenant_configs");
     }
 
+    public String getFirstFactorsTable() {
+        return addSchemaAndPrefixToTableName("first_factors");
+    }
+
+    public String getDefaultRequiredFactorIdsTable() {
+        return addSchemaAndPrefixToTableName("default_required_factor_ids");
+    }
+
     public String getTenantThirdPartyProvidersTable() {
         return addSchemaAndPrefixToTableName("tenant_thirdparty_providers");
     }

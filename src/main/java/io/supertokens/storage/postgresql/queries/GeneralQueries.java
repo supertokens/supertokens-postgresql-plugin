@@ -322,6 +322,25 @@ public class GeneralQueries {
                             NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getFirstFactorsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, MultitenancyQueries.getQueryToCreateFirstFactorsTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, MultitenancyQueries.getQueryToCreateTenantIdIndexForFirstFactorsTable(start),
+                            NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getDefaultRequiredFactorIdsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, MultitenancyQueries.getQueryToCreateDefaultRequiredFactorIdsTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start,
+                            MultitenancyQueries.getQueryToCreateTenantIdIndexForDefaultRequiredFactorIdsTable(start),
+                            NO_OP_SETTER);
+                }
+
                 if (!doesTableExists(start, Config.getConfig(start).getTenantThirdPartyProviderClientsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, MultitenancyQueries.getQueryToCreateTenantThirdPartyProviderClientsTable(start),
@@ -563,6 +582,8 @@ public class GeneralQueries {
                     + getConfig(start).getUserIdMappingTable() + ","
                     + getConfig(start).getUsersTable() + ","
                     + getConfig(start).getAccessTokenSigningKeysTable() + ","
+                    + getConfig(start).getFirstFactorsTable() + ","
+                    + getConfig(start).getDefaultRequiredFactorIdsTable() + ","
                     + getConfig(start).getTenantConfigsTable() + ","
                     + getConfig(start).getTenantThirdPartyProvidersTable() + ","
                     + getConfig(start).getTenantThirdPartyProviderClientsTable() + ","
