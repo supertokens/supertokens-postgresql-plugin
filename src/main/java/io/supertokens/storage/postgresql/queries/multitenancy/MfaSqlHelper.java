@@ -27,6 +27,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
@@ -91,7 +92,7 @@ public class MfaSqlHelper {
         }
 
         String QUERY = "INSERT INTO " + getConfig(start).getFirstFactorsTable() + "(connection_uri_domain, app_id, tenant_id, factor_id) VALUES (?, ?, ?, ?);";
-        for (String factorId : firstFactors) {
+        for (String factorId : Set.of(firstFactors)) {
             update(sqlCon, QUERY, pst -> {
                pst.setString(1, tenantIdentifier.getConnectionUriDomain());
                 pst.setString(2, tenantIdentifier.getAppId());
@@ -108,7 +109,7 @@ public class MfaSqlHelper {
         }
 
         String QUERY = "INSERT INTO " + getConfig(start).getDefaultRequiredFactorIdsTable() + "(connection_uri_domain, app_id, tenant_id, factor_id) VALUES (?, ?, ?, ?);";
-        for (String factorId : defaultRequiredFactorIds) {
+        for (String factorId : Set.of(defaultRequiredFactorIds)) {
             update(sqlCon, QUERY, pst -> {
                 pst.setString(1, tenantIdentifier.getConnectionUriDomain());
                 pst.setString(2, tenantIdentifier.getAppId());
