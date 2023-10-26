@@ -22,10 +22,7 @@ import io.supertokens.storage.postgresql.Start;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
@@ -90,7 +87,7 @@ public class MfaSqlHelper {
         }
 
         String QUERY = "INSERT INTO " + getConfig(start).getTenantFirstFactorsTable() + "(connection_uri_domain, app_id, tenant_id, factor_id) VALUES (?, ?, ?, ?);";
-        for (String factorId : Set.of(firstFactors)) {
+        for (String factorId : new HashSet<>(Arrays.asList(firstFactors))) {
             update(sqlCon, QUERY, pst -> {
                pst.setString(1, tenantIdentifier.getConnectionUriDomain());
                 pst.setString(2, tenantIdentifier.getAppId());
