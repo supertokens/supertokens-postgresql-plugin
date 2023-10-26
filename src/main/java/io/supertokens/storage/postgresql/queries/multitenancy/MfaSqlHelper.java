@@ -17,9 +17,7 @@
 package io.supertokens.storage.postgresql.queries.multitenancy;
 
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
-import io.supertokens.pluginInterface.multitenancy.TenantConfig;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
-import io.supertokens.pluginInterface.multitenancy.ThirdPartyConfig;
 import io.supertokens.storage.postgresql.Start;
 
 import java.sql.Connection;
@@ -37,7 +35,7 @@ public class MfaSqlHelper {
     public static HashMap<TenantIdentifier, String[]> selectAllFirstFactors(Start start)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, factor_id FROM "
-                + getConfig(start).getFirstFactorsTable() + ";";
+                + getConfig(start).getTenantFirstFactorsTable() + ";";
         return execute(start, QUERY, pst -> {}, result -> {
             HashMap<TenantIdentifier, List<String>> firstFactors = new HashMap<>();
 
@@ -61,8 +59,8 @@ public class MfaSqlHelper {
 
     public static HashMap<TenantIdentifier, String[]> selectAllDefaultRequiredFactorIds(Start start)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, factor_id FROM "
-                + getConfig(start).getDefaultRequiredFactorIdsTable() + ";";
+        String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, factor_id, order_idx FROM "
+                + getConfig(start).getTenantDefaultRequiredFactorIdsTable() + " ORDER BY order_idx ASC;";
         return execute(start, QUERY, pst -> {}, result -> {
             HashMap<TenantIdentifier, List<String>> defaultRequiredFactors = new HashMap<>();
 
@@ -91,7 +89,7 @@ public class MfaSqlHelper {
             return;
         }
 
-        String QUERY = "INSERT INTO " + getConfig(start).getFirstFactorsTable() + "(connection_uri_domain, app_id, tenant_id, factor_id) VALUES (?, ?, ?, ?);";
+        String QUERY = "INSERT INTO " + getConfig(start).getTenantFirstFactorsTable() + "(connection_uri_domain, app_id, tenant_id, factor_id) VALUES (?, ?, ?, ?);";
         for (String factorId : Set.of(firstFactors)) {
             update(sqlCon, QUERY, pst -> {
                pst.setString(1, tenantIdentifier.getConnectionUriDomain());
@@ -108,14 +106,18 @@ public class MfaSqlHelper {
             return;
         }
 
-        String QUERY = "INSERT INTO " + getConfig(start).getDefaultRequiredFactorIdsTable() + "(connection_uri_domain, app_id, tenant_id, factor_id) VALUES (?, ?, ?, ?);";
-        for (String factorId : Set.of(defaultRequiredFactorIds)) {
+        String QUERY = "INSERT INTO " + getConfig(start).getTenantDefaultRequiredFactorIdsTable() + "(connection_uri_domain, app_id, tenant_id, factor_id, order_idx) VALUES (?, ?, ?, ?, ?);";
+        int orderIdx = 0;
+        for (String factorId : defaultRequiredFactorIds) {
+            int finalOrderIdx = orderIdx;
             update(sqlCon, QUERY, pst -> {
                 pst.setString(1, tenantIdentifier.getConnectionUriDomain());
                 pst.setString(2, tenantIdentifier.getAppId());
                 pst.setString(3, tenantIdentifier.getTenantId());
                 pst.setString(4, factorId);
+                pst.setInt(5, finalOrderIdx);
             });
+            orderIdx++;
         }
     }
 }

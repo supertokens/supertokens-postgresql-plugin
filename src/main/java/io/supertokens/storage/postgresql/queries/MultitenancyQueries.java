@@ -124,7 +124,7 @@ public class MultitenancyQueries {
 
     public static String getQueryToCreateFirstFactorsTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
-        String tableName = Config.getConfig(start).getFirstFactorsTable();
+        String tableName = Config.getConfig(start).getTenantFirstFactorsTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
                 + "connection_uri_domain VARCHAR(256) DEFAULT '',"
@@ -142,18 +142,19 @@ public class MultitenancyQueries {
 
     public static String getQueryToCreateTenantIdIndexForFirstFactorsTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS tenant_first_factors_tenant_id_index ON "
-                + getConfig(start).getFirstFactorsTable() + " (connection_uri_domain, app_id, tenant_id);";
+                + getConfig(start).getTenantFirstFactorsTable() + " (connection_uri_domain, app_id, tenant_id);";
     }
 
     public static String getQueryToCreateDefaultRequiredFactorIdsTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
-        String tableName = Config.getConfig(start).getDefaultRequiredFactorIdsTable();
+        String tableName = Config.getConfig(start).getTenantDefaultRequiredFactorIdsTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
                 + "connection_uri_domain VARCHAR(256) DEFAULT '',"
                 + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "tenant_id VARCHAR(64) DEFAULT 'public',"
                 + "factor_id VARCHAR(64),"
+                + "order_idx INTEGER NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
                 + " PRIMARY KEY (connection_uri_domain, app_id, tenant_id, factor_id),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "tenant_id", "fkey")
@@ -165,7 +166,12 @@ public class MultitenancyQueries {
 
     public static String getQueryToCreateTenantIdIndexForDefaultRequiredFactorIdsTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS tenant_default_required_factor_ids_tenant_id_index ON "
-                + getConfig(start).getDefaultRequiredFactorIdsTable() + " (connection_uri_domain, app_id, tenant_id);";
+                + getConfig(start).getTenantDefaultRequiredFactorIdsTable() + " (connection_uri_domain, app_id, tenant_id);";
+    }
+
+    public static String getQueryToCreateOrderIndexForDefaultRequiredFactorIdsTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS tenant_default_required_factor_ids_tenant_id_index ON "
+                + getConfig(start).getTenantDefaultRequiredFactorIdsTable() + " (order_idx ASC);";
     }
 
     private static void executeCreateTenantQueries(Start start, Connection sqlCon, TenantConfig tenantConfig)
