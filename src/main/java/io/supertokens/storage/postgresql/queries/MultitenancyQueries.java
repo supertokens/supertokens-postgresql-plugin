@@ -130,7 +130,7 @@ public class MultitenancyQueries {
                 + "connection_uri_domain VARCHAR(256) DEFAULT '',"
                 + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "tenant_id VARCHAR(64) DEFAULT 'public',"
-                + "factor_id VARCHAR(64),"
+                + "factor_id VARCHAR(128),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
                 + " PRIMARY KEY (connection_uri_domain, app_id, tenant_id, factor_id),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "tenant_id", "fkey")
@@ -153,7 +153,7 @@ public class MultitenancyQueries {
                 + "connection_uri_domain VARCHAR(256) DEFAULT '',"
                 + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "tenant_id VARCHAR(64) DEFAULT 'public',"
-                + "factor_id VARCHAR(64),"
+                + "factor_id VARCHAR(128),"
                 + "order_idx INTEGER NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
                 + " PRIMARY KEY (connection_uri_domain, app_id, tenant_id, factor_id),"
