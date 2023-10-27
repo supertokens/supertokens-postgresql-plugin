@@ -28,7 +28,6 @@ import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
-import io.supertokens.storage.postgresql.queries.GeneralQueries.AccountLinkingInfo;
 import io.supertokens.storage.postgresql.utils.Utils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -322,6 +321,28 @@ public class GeneralQueries {
                             NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getTenantFirstFactorsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, MultitenancyQueries.getQueryToCreateFirstFactorsTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start, MultitenancyQueries.getQueryToCreateTenantIdIndexForFirstFactorsTable(start),
+                            NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, Config.getConfig(start).getTenantDefaultRequiredFactorIdsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, MultitenancyQueries.getQueryToCreateDefaultRequiredFactorIdsTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(start,
+                            MultitenancyQueries.getQueryToCreateTenantIdIndexForDefaultRequiredFactorIdsTable(start),
+                            NO_OP_SETTER);
+                    update(start,
+                            MultitenancyQueries.getQueryToCreateOrderIndexForDefaultRequiredFactorIdsTable(start),
+                            NO_OP_SETTER);
+                }
+
                 if (!doesTableExists(start, Config.getConfig(start).getTenantThirdPartyProviderClientsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, MultitenancyQueries.getQueryToCreateTenantThirdPartyProviderClientsTable(start),
@@ -563,6 +584,8 @@ public class GeneralQueries {
                     + getConfig(start).getUserIdMappingTable() + ","
                     + getConfig(start).getUsersTable() + ","
                     + getConfig(start).getAccessTokenSigningKeysTable() + ","
+                    + getConfig(start).getTenantFirstFactorsTable() + ","
+                    + getConfig(start).getTenantDefaultRequiredFactorIdsTable() + ","
                     + getConfig(start).getTenantConfigsTable() + ","
                     + getConfig(start).getTenantThirdPartyProvidersTable() + ","
                     + getConfig(start).getTenantThirdPartyProviderClientsTable() + ","
