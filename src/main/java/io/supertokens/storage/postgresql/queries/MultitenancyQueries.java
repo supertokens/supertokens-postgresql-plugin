@@ -159,7 +159,9 @@ public class MultitenancyQueries {
                 + " PRIMARY KEY (connection_uri_domain, app_id, tenant_id, factor_id),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "tenant_id", "fkey")
                 + " FOREIGN KEY (connection_uri_domain, app_id, tenant_id)"
-                + " REFERENCES " + Config.getConfig(start).getTenantConfigsTable() +  " (connection_uri_domain, app_id, tenant_id) ON DELETE CASCADE"
+                + " REFERENCES " + Config.getConfig(start).getTenantConfigsTable() +  " (connection_uri_domain, app_id, tenant_id) ON DELETE CASCADE,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "order_idx", "key")
+                + " UNIQUE (connection_uri_domain, app_id, tenant_id, order_idx)"
                 + ");";
         // @formatter:on
     }
