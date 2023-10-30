@@ -132,7 +132,7 @@ public class TOTPQueries {
             pst.setInt(5, device.period);
             pst.setInt(6, device.skew);
             pst.setBoolean(7, device.verified);
-            pst.setLong(8, System.currentTimeMillis());
+            pst.setLong(8, device.createdAt);
         });
     }
 
@@ -328,7 +328,8 @@ public class TOTPQueries {
                     result.getString("secret_key"),
                     result.getInt("period"),
                     result.getInt("skew"),
-                    result.getBoolean("verified"));
+                    result.getBoolean("verified"),
+                    result.getLong("created_at"));
         }
     }
 

@@ -284,7 +284,7 @@ public class DeadlockTest {
 
         // Create a device as well as a user:
         TOTPSQLStorage totpStorage = (TOTPSQLStorage) StorageLayer.getStorage(process.getProcess());
-        TOTPDevice device = new TOTPDevice("user", "d1", "secret", 30, 1, false);
+        TOTPDevice device = new TOTPDevice("user", "d1", "secret", 30, 1, false, System.currentTimeMillis());
         totpStorage.createDevice(new AppIdentifier(null, null), device);
 
         long now = System.currentTimeMillis();
@@ -446,7 +446,7 @@ public class DeadlockTest {
 
         // Create a device as well as a user:
         TOTPSQLStorage totpStorage = (TOTPSQLStorage) StorageLayer.getStorage(process.getProcess());
-        TOTPDevice device = new TOTPDevice("user", "d1", "secret", 30, 1, false);
+        TOTPDevice device = new TOTPDevice("user", "d1", "secret", 30, 1, false, System.currentTimeMillis());
         totpStorage.createDevice(new AppIdentifier(null, null), device);
 
         long now = System.currentTimeMillis();
