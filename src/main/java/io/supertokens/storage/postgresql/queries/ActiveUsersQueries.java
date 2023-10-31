@@ -11,6 +11,7 @@ import java.sql.SQLException;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class ActiveUsersQueries {
     static String getQueryToCreateUserLastActiveTable(Start start) {
@@ -104,14 +105,6 @@ public class ActiveUsersQueries {
             return 0;
         });
     }
-    
-    public static int countUsersEnabledMfa(Start start, AppIdentifier appIdentifier) throws SQLException, StorageQueryException {
-        return 0; // TODO
-    }
-
-    public static int countUsersEnabledMfaAndActiveSince(Start start, AppIdentifier appIdentifier, long sinceTime) throws SQLException, StorageQueryException {
-        return 0; // TODO
-    }
 
     public static int updateUserLastActive(Start start, AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
@@ -158,6 +151,42 @@ public class ActiveUsersQueries {
         update(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, userId);
+        });
+    }
+
+    public static int countUsersThatHaveMoreThanOneLoginMethodOrTOTPEnabledAndActiveSince(Start start, AppIdentifier appIdentifier, long sinceTime)
+            throws SQLException, StorageQueryException {
+        String QUERY =
+              "SELECT COUNT (user_id) as c FROM ("
+            + "  (" // users with more than one login method
+            + "    SELECT primary_or_recipe_user_id AS user_id FROM ("
+            + "      SELECT COUNT(user_id) as num_login_methods, app_id, primary_or_recipe_user_id"
+            + "      FROM " + getConfig(start).getUsersTable()
+            + "      WHERE app_id = ? AND primary_or_recipe_user_id IN ("
+            + "        SELECT user_id FROM " + getConfig(start).getUserLastActiveTable()
+            + "        WHERE app_id = ? AND last_active_time >= ?"
+            + "      )"
+            + "      GROUP BY (app_id, primary_or_recipe_user_id)"
+            + "    ) AS nloginmethods"
+            + "    WHERE num_login_methods > 1"
+            + "  ) UNION (" // TOTP users
+            + "    SELECT user_id FROM " + getConfig(start).getTotpUsersTable()
+            + "    WHERE app_id = ? AND user_id IN ("
+            + "      SELECT user_id FROM " + getConfig(start).getUserLastActiveTable()
+            + "      WHERE app_id = ? AND last_active_time >= ?"
+            + "    )"
+            + "  )"
+            + ") AS all_users";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, appIdentifier.getAppId());
+            pst.setLong(3, sinceTime);
+            pst.setString(4, appIdentifier.getAppId());
+            pst.setString(5, appIdentifier.getAppId());
+            pst.setLong(6, sinceTime);
+        }, result -> {
+            return result.next() ? result.getInt("c") : 0;
         });
     }
 }
