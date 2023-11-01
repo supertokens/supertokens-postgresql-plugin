@@ -265,20 +265,44 @@ public class EmailVerificationQueries {
             emails.add(ue.email);
             userIds.add(ue.userId);
         }
+
+        // We have external user id stored in the email verification table, so we need to fetch the mapped userids for
+        // calculating the verified emails
+
+        HashMap<String, String> userIdMappings = UserIdMappingQueries.getUserIdMappingWithUserIds_Transaction(start,
+                sqlCon, userIds);
+        HashMap<String, String> externalUserIdMappings = new HashMap<>();
+
+        List<String> userIdsToQuery = new ArrayList<>();
+        for (String userId : userIds) {
+            if (userIdMappings.containsKey(userId)) {
+                userIdsToQuery.add(userIdMappings.get(userId));
+                externalUserIdMappings.put(userIdMappings.get(userId), userId);
+            } else {
+                userIdsToQuery.add(userId);
+                externalUserIdMappings.put(userId, userId);
+            }
+        }
+
         for (UserIdAndEmail ue : userIdAndEmail) {
-            if (userIdToEmailMap.containsKey(ue.userId)) {
+            String userId = ue.userId;
+            if (userIdMappings.containsKey(userId)) {
+                userId = userIdMappings.get(userId);
+            }
+            if (userIdToEmailMap.containsKey(userId)) {
                 throw new RuntimeException("Found a bug!");
             }
-            userIdToEmailMap.put(ue.userId, ue.email);
+            userIdToEmailMap.put(userId, ue.email);
         }
+
         String QUERY = "SELECT * FROM " + getConfig(start).getEmailVerificationTable()
-                + " WHERE app_id = ? AND user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
+                + " WHERE app_id = ? AND user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(userIdsToQuery.size()) +
                 ") AND email IN (" + Utils.generateCommaSeperatedQuestionMarks(emails.size()) + ")";
 
         return execute(sqlCon, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             int index = 2;
-            for (String userId : userIds) {
+            for (String userId : userIdsToQuery) {
                 pst.setString(index++, userId);
             }
             for (String email : emails) {
@@ -290,7 +314,7 @@ public class EmailVerificationQueries {
                 String userId = result.getString("user_id");
                 String email = result.getString("email");
                 if (Objects.equals(userIdToEmailMap.get(userId), email)) {
-                    res.add(userId);
+                    res.add(externalUserIdMappings.get(userId));
                 }
             }
             return res;
@@ -310,11 +334,34 @@ public class EmailVerificationQueries {
             emails.add(ue.email);
             userIds.add(ue.userId);
         }
+
+        // We have external user id stored in the email verification table, so we need to fetch the mapped userids for
+        // calculating the verified emails
+
+        HashMap<String, String> userIdMappings = UserIdMappingQueries.getUserIdMappingWithUserIds(start,
+                userIds);
+        HashMap<String, String> externalUserIdMappings = new HashMap<>();
+
+        List<String> userIdsToQuery = new ArrayList<>();
+        for (String userId : userIds) {
+            if (userIdMappings.containsKey(userId)) {
+                userIdsToQuery.add(userIdMappings.get(userId));
+                externalUserIdMappings.put(userIdMappings.get(userId), userId);
+            } else {
+                userIdsToQuery.add(userId);
+                externalUserIdMappings.put(userId, userId);
+            }
+        }
+
         for (UserIdAndEmail ue : userIdAndEmail) {
-            if (userIdToEmailMap.containsKey(ue.userId)) {
+            String userId = ue.userId;
+            if (userIdMappings.containsKey(userId)) {
+                userId = userIdMappings.get(userId);
+            }
+            if (userIdToEmailMap.containsKey(userId)) {
                 throw new RuntimeException("Found a bug!");
             }
-            userIdToEmailMap.put(ue.userId, ue.email);
+            userIdToEmailMap.put(userId, ue.email);
         }
         String QUERY = "SELECT * FROM " + getConfig(start).getEmailVerificationTable()
                 + " WHERE app_id = ? AND user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
@@ -323,7 +370,7 @@ public class EmailVerificationQueries {
         return execute(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             int index = 2;
-            for (String userId : userIds) {
+            for (String userId : userIdsToQuery) {
                 pst.setString(index++, userId);
             }
             for (String email : emails) {
@@ -335,7 +382,7 @@ public class EmailVerificationQueries {
                 String userId = result.getString("user_id");
                 String email = result.getString("email");
                 if (Objects.equals(userIdToEmailMap.get(userId), email)) {
-                    res.add(userId);
+                    res.add(externalUserIdMappings.get(userId));
                 }
             }
             return res;
