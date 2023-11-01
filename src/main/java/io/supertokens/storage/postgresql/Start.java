@@ -1320,44 +1320,6 @@ public class Start
     }
 
     @Override
-    public int countUsersEnabledTotp(AppIdentifier appIdentifier) throws StorageQueryException {
-        try {
-            return ActiveUsersQueries.countUsersEnabledTotp(this, appIdentifier);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public int countUsersEnabledTotpAndActiveSince(AppIdentifier appIdentifier, long time)
-            throws StorageQueryException {
-        try {
-            return ActiveUsersQueries.countUsersEnabledTotpAndActiveSince(this, appIdentifier, time);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public int countUsersEnabledMfa(AppIdentifier appIdentifier) throws StorageQueryException {
-        try {
-            return ActiveUsersQueries.countUsersEnabledMfa(this, appIdentifier);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public int countUsersEnabledMfaAndActiveSince(AppIdentifier appIdentifier, long time)
-            throws StorageQueryException {
-        try {
-            return ActiveUsersQueries.countUsersEnabledMfaAndActiveSince(this, appIdentifier, time);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
     public void deleteUserActive_Transaction(TransactionConnection con, AppIdentifier appIdentifier, String userId)
             throws StorageQueryException {
         try {
@@ -3033,6 +2995,24 @@ public class Start
                     sqlCon,
                     appIdentifier,
                     userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public int getUsersCountWithMoreThanOneLoginMethodOrTOTPEnabled(AppIdentifier appIdentifier) throws StorageQueryException {
+        try {
+            return GeneralQueries.getUsersCountWithMoreThanOneLoginMethodOrTOTPEnabled(this, appIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public int countUsersThatHaveMoreThanOneLoginMethodOrTOTPEnabledAndActiveSince(AppIdentifier appIdentifier, long sinceTime) throws StorageQueryException {
+        try {
+            return ActiveUsersQueries.countUsersThatHaveMoreThanOneLoginMethodOrTOTPEnabledAndActiveSince(this, appIdentifier, sinceTime);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
