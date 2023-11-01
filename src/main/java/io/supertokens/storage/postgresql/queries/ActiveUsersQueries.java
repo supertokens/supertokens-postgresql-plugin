@@ -52,9 +52,10 @@ public class ActiveUsersQueries {
 
     public static int countUsersActiveSinceAndHasMoreThanOneLoginMethod(Start start, AppIdentifier appIdentifier, long sinceTime)
             throws SQLException, StorageQueryException {
+        // TODO: Active users are present only on public tenant and MFA users may be present on different storages
         String QUERY = "SELECT count(1) as c FROM ("
                 + "  SELECT count(user_id) as num_login_methods, app_id, primary_or_recipe_user_id"
-                + "  FROM " + Config.getConfig(start).getUsersTable()
+                + "  FROM " + Config.getConfig(start).getAppIdToUserIdTable()
                 + "  WHERE primary_or_recipe_user_id IN ("
                 + "    SELECT user_id FROM " + Config.getConfig(start).getUserLastActiveTable()
                 + "    WHERE app_id = ? AND last_active_time >= ?"
@@ -67,40 +68,6 @@ public class ActiveUsersQueries {
         }, result -> {
             if (result.next()) {
                 return result.getInt("c");
-            }
-            return 0;
-        });
-    }
-
-    public static int countUsersEnabledTotp(Start start, AppIdentifier appIdentifier)
-            throws SQLException, StorageQueryException {
-        String QUERY = "SELECT COUNT(*) as total FROM " + Config.getConfig(start).getTotpUsersTable()
-                + " WHERE app_id = ?";
-
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-        }, result -> {
-            if (result.next()) {
-                return result.getInt("total");
-            }
-            return 0;
-        });
-    }
-
-    public static int countUsersEnabledTotpAndActiveSince(Start start, AppIdentifier appIdentifier, long sinceTime)
-            throws SQLException, StorageQueryException {
-        String QUERY =
-                "SELECT COUNT(*) as total FROM " + Config.getConfig(start).getTotpUsersTable() + " AS totp_users "
-                        + "INNER JOIN " + Config.getConfig(start).getUserLastActiveTable() + " AS user_last_active "
-                        + "ON totp_users.user_id = user_last_active.user_id "
-                        + "WHERE user_last_active.app_id = ? AND user_last_active.last_active_time >= ?";
-
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setLong(2, sinceTime);
-        }, result -> {
-            if (result.next()) {
-                return result.getInt("total");
             }
             return 0;
         });
@@ -156,12 +123,13 @@ public class ActiveUsersQueries {
 
     public static int countUsersThatHaveMoreThanOneLoginMethodOrTOTPEnabledAndActiveSince(Start start, AppIdentifier appIdentifier, long sinceTime)
             throws SQLException, StorageQueryException {
+        // TODO: Active users are present only on public tenant and MFA users may be present on different storages
         String QUERY =
-              "SELECT COUNT (user_id) as c FROM ("
+              "SELECT COUNT (DISTINCT user_id) as c FROM ("
             + "  (" // users with more than one login method
             + "    SELECT primary_or_recipe_user_id AS user_id FROM ("
             + "      SELECT COUNT(user_id) as num_login_methods, app_id, primary_or_recipe_user_id"
-            + "      FROM " + getConfig(start).getUsersTable()
+            + "      FROM " + getConfig(start).getAppIdToUserIdTable()
             + "      WHERE app_id = ? AND primary_or_recipe_user_id IN ("
             + "        SELECT user_id FROM " + getConfig(start).getUserLastActiveTable()
             + "        WHERE app_id = ? AND last_active_time >= ?"

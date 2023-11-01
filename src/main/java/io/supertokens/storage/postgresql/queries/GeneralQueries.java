@@ -1711,7 +1711,7 @@ public class GeneralQueries {
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT COUNT (1) as c FROM ("
                 + "  SELECT COUNT(user_id) as num_login_methods "
-                + "  FROM " + getConfig(start).getUsersTable()
+                + "  FROM " + getConfig(start).getAppIdToUserIdTable()
                 + "  WHERE app_id = ? "
                 + "  GROUP BY (app_id, primary_or_recipe_user_id) "
                 + ") as nloginmethods WHERE num_login_methods > 1";
@@ -1730,7 +1730,7 @@ public class GeneralQueries {
                 + "  (" // Users with number of login methods > 1
                 + "    SELECT primary_or_recipe_user_id AS user_id FROM ("
                 + "      SELECT COUNT(user_id) as num_login_methods, app_id, primary_or_recipe_user_id"
-                + "      FROM " + getConfig(start).getUsersTable()
+                + "      FROM " + getConfig(start).getAppIdToUserIdTable()
                 + "      WHERE app_id = ? "
                 + "      GROUP BY (app_id, primary_or_recipe_user_id)"
                 + "    ) AS nloginmethods"
