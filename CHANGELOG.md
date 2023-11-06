@@ -10,6 +10,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Replace `TotpNotEnabledError` with `UnknownUserIdTotpError`.
 - Support for MFA recipe
 
+
+## [5.0.2] - 2023-11-01
+
+- Fixes `verified` in `loginMethods` for users with userId mapping
+
+
 ## [5.0.1] - 2023-10-12
 
 - Fixes user info from primary user id query
