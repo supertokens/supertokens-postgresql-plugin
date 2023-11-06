@@ -172,7 +172,7 @@ public class MultitenancyQueries {
     }
 
     public static String getQueryToCreateOrderIndexForDefaultRequiredFactorIdsTable(Start start) {
-        return "CREATE INDEX IF NOT EXISTS tenant_default_required_factor_ids_tenant_id_index ON "
+        return "CREATE INDEX IF NOT EXISTS tenant_default_required_factor_ids_order_idx_index ON "
                 + getConfig(start).getTenantDefaultRequiredFactorIdsTable() + " (order_idx ASC);";
     }
 
