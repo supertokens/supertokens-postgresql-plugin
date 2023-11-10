@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.0.3] - 2023-11-10
+
+- Fixes issue with email verification with user id mapping
+
 ## [5.0.2] - 2023-11-01
 
 - Fixes `verified` in `loginMethods` for users with userId mapping
