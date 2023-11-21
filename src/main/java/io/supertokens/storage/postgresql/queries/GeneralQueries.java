@@ -231,6 +231,11 @@ public class GeneralQueries {
                 + Config.getConfig(start).getAppIdToUserIdTable() + "(app_id);";
     }
 
+    static String getQueryToCreatePrimaryUserIdIndexForAppIdToUserIdTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS app_id_to_user_id_primary_user_id_index ON "
+                + Config.getConfig(start).getAppIdToUserIdTable() + "(primary_or_recipe_user_id, app_id);";
+    }
+
     public static void createTablesIfNotExists(Start start) throws SQLException, StorageQueryException {
         int numberOfRetries = 0;
         boolean retry = true;
@@ -264,6 +269,7 @@ public class GeneralQueries {
 
                     // index
                     update(start, getQueryToCreateAppIdIndexForAppIdToUserIdTable(start), NO_OP_SETTER);
+                    update(start, getQueryToCreatePrimaryUserIdIndexForAppIdToUserIdTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, Config.getConfig(start).getUsersTable())) {
