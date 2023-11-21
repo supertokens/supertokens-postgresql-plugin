@@ -7,6 +7,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.0.4] - 2023-11-23
+
+- Adds `app_id_to_user_id_primary_user_id_index` index on `app_id_to_user_id` table
+
+### Migration
+
+Run the following sql script:
+
+```sql
+CREATE INDEX IF NOT EXISTS app_id_to_user_id_primary_user_id_index ON app_id_to_user_id (primary_or_recipe_user_id, app_id);
+```
+
 ## [5.0.3] - 2023-11-10
 
 - Fixes issue with email verification with user id mapping
