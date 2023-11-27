@@ -1248,7 +1248,7 @@ public class GeneralQueries {
         Set<String> userIdsSet = new HashSet<>(userIds);
         userIds = new ArrayList<>(userIdsSet);
 
-        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, appIdentifier,
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds_Transaction(start, sqlCon, appIdentifier,
                 userIds);
 
         // this is going to order them based on oldest that joined to newest that joined.
