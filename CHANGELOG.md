@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.0.5] - 2023-11-23
+
+- Fixes call to `getPrimaryUserInfoForUserIds_Transaction` in `listPrimaryUsersByThirdPartyInfo_Transaction`
+
 ## [5.0.4] - 2023-11-23
 
 - Adds `app_id_to_user_id_primary_user_id_index` index on `app_id_to_user_id` table
