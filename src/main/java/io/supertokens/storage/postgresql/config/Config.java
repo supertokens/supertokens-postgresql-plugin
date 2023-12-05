@@ -18,6 +18,7 @@
 package io.supertokens.storage.postgresql.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.gson.JsonObject;
 import io.supertokens.pluginInterface.LOG_LEVEL;
@@ -103,11 +104,16 @@ public class Config extends ResourceDistributor.SingletonResource {
         return config;
     }
 
-    public static boolean canBeUsed(JsonObject configJson) {
+    public static boolean canBeUsed(JsonObject configJson) throws InvalidConfigException {
         try {
             final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
             PostgreSQLConfig config = mapper.readValue(configJson.toString(), PostgreSQLConfig.class);
             return config.getConnectionURI() != null || config.getUser() != null || config.getPassword() != null;
+        } catch (InvalidFormatException e) {
+            throw new InvalidConfigException(
+                    "Cannot set value " + e.getValue().toString() + " for field " + e.getPath().get(0).getFieldName()
+                            + " of type " + e.getTargetType().getSimpleName()
+            );
         } catch (Exception e) {
             return false;
         }

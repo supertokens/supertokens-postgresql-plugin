@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.0.6] - 2023-12-05
+
+- Validates db config types in `canBeUsed` function
+
 ## [5.0.5] - 2023-11-23
 
 - Fixes call to `getPrimaryUserInfoForUserIds_Transaction` in `listPrimaryUsersByThirdPartyInfo_Transaction`
