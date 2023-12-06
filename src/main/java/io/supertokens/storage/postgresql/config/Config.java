@@ -111,9 +111,7 @@ public class Config extends ResourceDistributor.SingletonResource {
             return config.getConnectionURI() != null || config.getUser() != null || config.getPassword() != null;
         } catch (InvalidFormatException e) {
             throw new InvalidConfigException(
-                    "Cannot set value " + e.getValue().toString() + " for field " + e.getPath().get(0).getFieldName()
-                            + " of type " + e.getTargetType().getSimpleName()
-            );
+                    "'" + e.getPath().get(0).getFieldName() + "' must be of type " + e.getTargetType().getSimpleName());
         } catch (Exception e) {
             return false;
         }
