@@ -23,10 +23,10 @@ import com.google.gson.JsonObject;
 import io.supertokens.pluginInterface.LOG_LEVEL;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
-import io.supertokens.pluginInterface.utils.ConfigMapper;
 import io.supertokens.storage.postgresql.ResourceDistributor;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.output.Logging;
+import io.supertokens.storage.postgresql.utils.ConfigMapper;
 
 import java.io.IOException;
 import java.util.HashSet;
