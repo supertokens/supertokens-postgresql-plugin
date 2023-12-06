@@ -18,12 +18,12 @@
 package io.supertokens.storage.postgresql.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.gson.JsonObject;
 import io.supertokens.pluginInterface.LOG_LEVEL;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.utils.ConfigMapper;
 import io.supertokens.storage.postgresql.ResourceDistributor;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.output.Logging;
@@ -106,12 +106,10 @@ public class Config extends ResourceDistributor.SingletonResource {
 
     public static boolean canBeUsed(JsonObject configJson) throws InvalidConfigException {
         try {
-            final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-            PostgreSQLConfig config = mapper.readValue(configJson.toString(), PostgreSQLConfig.class);
+            PostgreSQLConfig config = ConfigMapper.mapConfig(configJson, PostgreSQLConfig.class);
             return config.getConnectionURI() != null || config.getUser() != null || config.getPassword() != null;
-        } catch (InvalidFormatException e) {
-            throw new InvalidConfigException(
-                    "'" + e.getPath().get(0).getFieldName() + "' must be of type " + e.getTargetType().getSimpleName());
+        } catch (InvalidConfigException e) {
+            throw e;
         } catch (Exception e) {
             return false;
         }
