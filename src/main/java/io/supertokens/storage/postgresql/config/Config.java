@@ -26,6 +26,7 @@ import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ResourceDistributor;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.output.Logging;
+import io.supertokens.storage.postgresql.utils.ConfigMapper;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -103,11 +104,12 @@ public class Config extends ResourceDistributor.SingletonResource {
         return config;
     }
 
-    public static boolean canBeUsed(JsonObject configJson) {
+    public static boolean canBeUsed(JsonObject configJson) throws InvalidConfigException {
         try {
-            final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-            PostgreSQLConfig config = mapper.readValue(configJson.toString(), PostgreSQLConfig.class);
+            PostgreSQLConfig config = ConfigMapper.mapConfig(configJson, PostgreSQLConfig.class);
             return config.getConnectionURI() != null || config.getUser() != null || config.getPassword() != null;
+        } catch (InvalidConfigException e) {
+            throw e;
         } catch (Exception e) {
             return false;
         }
