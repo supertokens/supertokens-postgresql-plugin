@@ -88,7 +88,7 @@ public class AccountLinkingTests {
                         new EmailPasswordConfig(true),
                         new ThirdPartyConfig(true, null),
                         new PasswordlessConfig(true),
-                        new TotpConfig(false), null, null,
+                        null, null,
                         coreConfig
                 )
         );
@@ -131,7 +131,7 @@ public class AccountLinkingTests {
                         new EmailPasswordConfig(true),
                         new ThirdPartyConfig(true, null),
                         new PasswordlessConfig(true),
-                        new TotpConfig(false), null, null,
+                        null, null,
                         coreConfig
                 )
         );
