@@ -336,16 +336,13 @@ public class GeneralQueries {
                             NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getTenantDefaultRequiredFactorIdsTable())) {
+                if (!doesTableExists(start, Config.getConfig(start).getTenantRequiredSecondaryFactorsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, MultitenancyQueries.getQueryToCreateDefaultRequiredFactorIdsTable(start), NO_OP_SETTER);
+                    update(start, MultitenancyQueries.getQueryToCreateRequiredSecondaryFactorsTable(start), NO_OP_SETTER);
 
                     // index
                     update(start,
-                            MultitenancyQueries.getQueryToCreateTenantIdIndexForDefaultRequiredFactorIdsTable(start),
-                            NO_OP_SETTER);
-                    update(start,
-                            MultitenancyQueries.getQueryToCreateOrderIndexForDefaultRequiredFactorIdsTable(start),
+                            MultitenancyQueries.getQueryToCreateTenantIdIndexForRequiredSecondaryFactorsTable(start),
                             NO_OP_SETTER);
                 }
 
@@ -591,7 +588,7 @@ public class GeneralQueries {
                     + getConfig(start).getUsersTable() + ","
                     + getConfig(start).getAccessTokenSigningKeysTable() + ","
                     + getConfig(start).getTenantFirstFactorsTable() + ","
-                    + getConfig(start).getTenantDefaultRequiredFactorIdsTable() + ","
+                    + getConfig(start).getTenantRequiredSecondaryFactorsTable() + ","
                     + getConfig(start).getTenantConfigsTable() + ","
                     + getConfig(start).getTenantThirdPartyProvidersTable() + ","
                     + getConfig(start).getTenantThirdPartyProviderClientsTable() + ","
