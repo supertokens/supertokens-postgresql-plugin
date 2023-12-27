@@ -1,5 +1,14 @@
 plugins {
     id 'java-library'
+    id 'org.flywaydb.flyway' version "7.15.0"
+}
+
+flyway {
+    url = 'jdbc:postgresql://localhost:5432/supertokens'
+    user = 'root'
+    password = 'root'
+    driver = 'org.postgresql.Driver'
+    locations = ['filesystem:src/main/resources/db/migration']
 }
 
 version = "5.0.6"
