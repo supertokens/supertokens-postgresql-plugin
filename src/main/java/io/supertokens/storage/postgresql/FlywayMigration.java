@@ -40,7 +40,7 @@ public final class FlywayMigration {
                the migration. After that, check how to store the baselineversion in database. Flyway might have
                something.
             */
-            String baselineVersion = BaselineMigrationQueries.getBaselineMigrationVersion(start, ConnectionPool.getConnection(start));
+            String baselineVersion = BaselineMigrationQueries.getBaselineMigrationVersion(start);
             boolean access_token_signing_key_dynamic = true; //Add from Config.getBaseConfig(this);
             String location = "classpath:/db/migration/access_token_signing_key_dynamic_" + access_token_signing_key_dynamic;
 

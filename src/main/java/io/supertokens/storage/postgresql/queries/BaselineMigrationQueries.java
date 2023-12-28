@@ -17,57 +17,89 @@
 package io.supertokens.storage.postgresql.queries;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
 
 import java.sql.Connection;
-import java.sql.ResultSet;
+
 import java.sql.SQLException;
 
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.select;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 
 public class BaselineMigrationQueries {
-
+    /* To verify if a migration was done, we are verifying for creation of INDEXES, COLUMNS and TABLES. We do this by
+      counting. If the result is "1" => the migration is done. "0" => migration not done
+     */
+    private static final String MIGRATION_EXISTS = "1";
+    // This means Flyway is free to migrate starting with first migration.
+    private static final String NO_BASELINE_FOUND = "0";
+    private static final int LAST_MIGRATION = 5;
+    private static final int FIRST_MIGRATION = 1;
     /*
     We are dealing with existing users who have already performed manual database migration, so it's important to
     handle the situation carefully to avoid issues and data inconsistencies. To accomplish this, we need to ascertain
     the migration version that the user has manually executed. This will serve as the baseline for our subsequent Flyway migration.
     */
-    public static String getBaselineMigrationVersion(Start start, Connection con)
+    public static String getBaselineMigrationVersion(Start start)
             throws SQLException, StorageQueryException {
         /* TODO: Some migration include multiple SQL queries. Will have to define what a successful manual migration
             looks like.
             This is a bare implementation of the idea of checking if the latest migration is present in database. If
             the answer is yes, then we assume the all the migration until that were done.
          */
-        String resultSet = select(con, getQueryToCheckForMigrationV3(start));
-        if (resultSet.equals("1")) return "3";
+        for (int migrationVersion = LAST_MIGRATION; migrationVersion >= FIRST_MIGRATION; migrationVersion--) {
+            if (checkMigration(start, migrationVersion).equals(MIGRATION_EXISTS)) {
+                return String.valueOf(migrationVersion);
+            }
+        }
+       return NO_BASELINE_FOUND;
+    }
 
-        resultSet = select(con, getQueryToCheckForMigrationV2(start));
-        if (resultSet.equals("1")) return "2";
+    private static String checkMigration(Start start, int migrationVersion) throws SQLException, StorageQueryException {
+        return execute(start, getQueryToCheckForMigration(start, migrationVersion), null, result -> {
+            result.next();
+            return result.getString("MIGRATION_EXISTS");
+        });
+    }
 
-        resultSet = select(con, getQueryToCheckForMigrationV1(start));
-        if (resultSet.equals("1")) return "1";
-
-        return "0";
+    private static String getQueryToCheckForMigration(Start start, int migrationVersion) {
+        switch (migrationVersion) {
+            case 5:
+                return getQueryToCheckForMigrationV5(start);
+            case 4:
+                return getQueryToCheckForMigrationV4(start);
+            case 3:
+                return getQueryToCheckForMigrationV3(start);
+            case 2:
+                return getQueryToCheckForMigrationV2(start);
+            case 1:
+                return getQueryToCheckForMigrationV1(start);
+            default:
+                throw new IllegalArgumentException("Unknown migration version: " + migrationVersion);
+        }
     }
 
     private static String getQueryToCheckForMigrationV1(Start start) {
-        return "SELECT COUNT(*) AS table_exists\n" +
-                "FROM information_schema.tables\n" +
-                "WHERE table_catalog = 'supertokens'\n" +
-                "  AND table_name = 'something';";
+        return getQueryToCheckForMigrationV1(start);
     }
 
     private static String getQueryToCheckForMigrationV2(Start start) {
-        return "SELECT COUNT(*) AS table_exists\n" +
-                "FROM information_schema.tables\n" +
-                "WHERE table_catalog = 'supertokens'\n" +
-                "  AND table_name = 'something_else';";
+        return "SELECT COUNT(*) AS MIGRATION_EXISTS FROM information_schema.columns" +
+                " WHERE table_name = " + Config.getConfig(start).getSessionInfoTable() +
+                " AND column_name = 'use_static_key';";
     }
 
     private static String getQueryToCheckForMigrationV3(Start start) {
-        return "SELECT COUNT(*) AS table_exists\n" +
-                "FROM information_schema.tables\n" +
-                "WHERE table_catalog = 'supertokens'\n" +
-                "  AND table_name = 'something_else_but_nothing';";
+        return "SELECT COUNT(*) AS MIGRATION_EXISTS FROM information_schema.tables" +
+                " WHERE table_name =" +Config.getConfig(start).getTenantsTable();
+    }
+
+    private static String getQueryToCheckForMigrationV4(Start start) {
+        return "SELECT COUNT(*) AS MIGRATION_EXISTS FROM information_schema.columns" +
+                " WHERE table_name =" + Config.getConfig(start).getPasswordResetTokensTable() +
+                " AND column_name = 'email';";
+    }
+    private static String getQueryToCheckForMigrationV5(Start start) {
+        return "SELECT COUNT(*) AS MIGRATION_EXISTS FROM pg_indexes WHERE indexname = " +
+                "'app_id_to_user_id_primary_user_id_index'";
     }
 }
