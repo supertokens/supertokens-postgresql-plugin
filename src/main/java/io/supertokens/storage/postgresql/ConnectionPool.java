@@ -32,7 +32,7 @@ import java.util.Objects;
 
 public class ConnectionPool extends ResourceDistributor.SingletonResource {
 
-    private static final String RESOURCE_KEY = "io.supertokens.storage.postgresql.ConnectionPool";
+    public static final String RESOURCE_KEY = "io.supertokens.storage.postgresql.ConnectionPool";
     private HikariDataSource hikariDataSource;
     private final Start start;
 
@@ -196,6 +196,16 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
             getInstance(start).initialiseHikariDataSource();
         }
         return getInstance(start).hikariDataSource.getConnection();
+    }
+
+    public static HikariDataSource getHikariDataSource(Start start) throws SQLException {
+        if (getInstance(start) == null || getInstance(start).hikariDataSource == null ) {
+            throw new IllegalStateException("Please call initPool before getHikariDataSource");
+        }
+        if (!start.enabled) {
+            throw new SQLException("Storage layer disabled");
+        }
+        return getInstance(start).hikariDataSource;
     }
 
     static void close(Start start) {

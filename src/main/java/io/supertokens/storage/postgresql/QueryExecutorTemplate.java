@@ -59,4 +59,17 @@ public interface QueryExecutorTemplate {
         }
     }
 
+    /*
+        TODO: Come up with a better solution for this
+     */
+    static String select(Connection con, String QUERY)
+            throws SQLException, StorageQueryException {
+        try (PreparedStatement pst = con.prepareStatement(QUERY)) {
+            ResultSet resultSet = pst.executeQuery();
+            while (resultSet.next()) {
+                return resultSet.getString("table_exists");
+            }
+        }
+        return null;
+    }
 }
