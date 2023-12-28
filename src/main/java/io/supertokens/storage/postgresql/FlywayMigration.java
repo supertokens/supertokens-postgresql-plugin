@@ -40,12 +40,15 @@ public final class FlywayMigration {
                the migration. After that, check how to store the baselineversion in database. Flyway might have
                something.
             */
-            String baselineVersion = getBaselineVersion(start);
+            String baselineVersion = BaselineMigrationQueries.getBaselineMigrationVersion(start, ConnectionPool.getConnection(start));
+            boolean access_token_signing_key_dynamic = true; //Add from Config.getBaseConfig(this);
+            String location = "classpath:/db/migration/access_token_signing_key_dynamic_" + access_token_signing_key_dynamic;
 
             Flyway flyway = Flyway.configure()
                     .dataSource(ConnectionPool.getHikariDataSource(start))
                     .baselineOnMigrate(true)
                     .baselineVersion(baselineVersion)
+                    .locations("classpath:/db/migration/common", location)
                     .load();
             flyway.migrate();
         } catch (Exception e) {
@@ -53,31 +56,4 @@ public final class FlywayMigration {
            // TODO: Find all possible exception
         }
     }
-
-
-    private static String getBaselineVersion(Start start) throws IOException, SQLException, StorageQueryException {
-        return BaselineMigrationQueries.getBaselineMigrationVersion(start, ConnectionPool.getConnection(start));
-
-        /*
-         TODO: Remove this if current solution if validated.
-        Logging.info(start, "Starting baseline.", true);
-        ClassLoader classLoader = FlywayMigration.class.getClassLoader();
-        String migrationPath = "classpath:db/baseline";
-        Enumeration<URL> resources = classLoader.getResources(migrationPath);
-
-        while (resources.hasMoreElements()) {
-            URL resource = resources.nextElement();
-            try (InputStream inputStream = resource.openStream()) {
-                // Print the files at the specified path
-                Logging.info(start,"Files at " + resource + ":", true);
-                // For simplicity, just print the file names
-                // In a real-world scenario, you may want to parse the URLs and extract meaningful information
-                while (inputStream.read() != -1) {
-                    Logging.info(start,"  " + inputStream, true);
-                }
-            }
-        }
-         */
-    }
-
 }
