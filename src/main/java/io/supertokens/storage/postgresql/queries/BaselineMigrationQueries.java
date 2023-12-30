@@ -41,11 +41,6 @@ public class BaselineMigrationQueries {
     */
     public static String getBaselineMigrationVersion(Start start)
             throws SQLException, StorageQueryException {
-        /* TODO: Some migration include multiple SQL queries. Will have to define what a successful manual migration
-            looks like.
-            This is a bare implementation of the idea of checking if the latest migration is present in database. If
-            the answer is yes, then we assume the all the migration until that were done.
-         */
         for (int migrationVersion = LAST_MIGRATION; migrationVersion >= FIRST_MIGRATION; migrationVersion--) {
             if (checkMigration(start, migrationVersion).equals(MIGRATION_EXISTS)) {
                 return String.valueOf(migrationVersion);
@@ -79,25 +74,26 @@ public class BaselineMigrationQueries {
     }
 
     private static String getQueryToCheckForMigrationV1(Start start) {
-        return getQueryToCheckForMigrationV1(start);
-    }
-
-    private static String getQueryToCheckForMigrationV2(Start start) {
         return "SELECT COUNT(*) AS MIGRATION_EXISTS FROM information_schema.columns" +
                 " WHERE table_name = " + Config.getConfig(start).getSessionInfoTable() +
                 " AND column_name = 'use_static_key';";
     }
 
-    private static String getQueryToCheckForMigrationV3(Start start) {
+    private static String getQueryToCheckForMigrationV2(Start start) {
         return "SELECT COUNT(*) AS MIGRATION_EXISTS FROM information_schema.tables" +
                 " WHERE table_name =" +Config.getConfig(start).getTenantsTable();
     }
 
-    private static String getQueryToCheckForMigrationV4(Start start) {
+    private static String getQueryToCheckForMigrationV3(Start start) {
         return "SELECT COUNT(*) AS MIGRATION_EXISTS FROM information_schema.columns" +
                 " WHERE table_name =" + Config.getConfig(start).getPasswordResetTokensTable() +
                 " AND column_name = 'email';";
     }
+    private static String getQueryToCheckForMigrationV4(Start start) {
+        return "SELECT COUNT(*) AS MIGRATION_EXISTS FROM pg_indexes WHERE indexname = " +
+                "'app_id_to_user_id_primary_user_id_index'";
+    }
+
     private static String getQueryToCheckForMigrationV5(Start start) {
         return "SELECT COUNT(*) AS MIGRATION_EXISTS FROM pg_indexes WHERE indexname = " +
                 "'app_id_to_user_id_primary_user_id_index'";

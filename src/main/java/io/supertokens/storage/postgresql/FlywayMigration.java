@@ -16,16 +16,13 @@
 
 package io.supertokens.storage.postgresql;
 
-import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.output.Logging;
 import io.supertokens.storage.postgresql.queries.BaselineMigrationQueries;
 import org.flywaydb.core.Flyway;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.CookieHandler;
-import java.net.URL;
-import java.sql.SQLException;
-import java.util.Enumeration;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public final class FlywayMigration {
 
@@ -35,25 +32,48 @@ public final class FlywayMigration {
         Logging.info(start, "Setting up Flyway.", true);
 
         try {
-            /*TODO:
-               Only perform getBaselineVersion once and only if flyway migration history table does not contain all
-               the migration. After that, check how to store the baselineversion in database. Flyway might have
-               something.
-            */
             String baselineVersion = BaselineMigrationQueries.getBaselineMigrationVersion(start);
-            boolean access_token_signing_key_dynamic = true; //Add from Config.getBaseConfig(this);
-            String location = "classpath:/db/migration/access_token_signing_key_dynamic_" + access_token_signing_key_dynamic;
 
             Flyway flyway = Flyway.configure()
                     .dataSource(ConnectionPool.getHikariDataSource(start))
-                    .baselineOnMigrate(true)
-                    .baselineVersion(baselineVersion)
-                    .locations("classpath:/db/migration/common", location)
+ //                   .baselineOnMigrate(true)
+ //                   .baselineVersion(baselineVersion)
+                    .locations("classpath:/io/supertokens/storage/postgresql/migrations")
+                    .placeholders(getPlaceholders(start))
                     .load();
             flyway.migrate();
         } catch (Exception e) {
             Logging.error(start, "Error Setting up Flyway.", true);
+            Logging.error(start, e.toString(), true);
            // TODO: Find all possible exception
         }
+    }
+
+    private static Map<String, String> getPlaceholders(Start start) {
+        Map<String, String> ph = new HashMap<>();
+
+        ph.put("schema", Config.getConfig(start).getTableSchema());
+        ph.put("session_info_table", Config.getConfig(start).getSessionInfoTable());
+        ph.put("jwt_signing_keys_table", Config.getConfig(start).getJWTSigningKeysTable());
+        ph.put("session_access_token_signing_keys_table", Config.getConfig(start).getAccessTokenSigningKeysTable());
+        ph.put("access_token_signing_key_dynamic", "true");
+        ph.put("apps_table", Config.getConfig(start).getAppsTable());
+        ph.put("tenants_table", Config.getConfig(start).getTenantsTable());
+        ph.put("key_value_table", Config.getConfig(start).getKeyValueTable());
+        ph.put("app_id_to_user_id_table", Config.getConfig(start).getAppIdToUserIdTable());
+        ph.put("all_auth_recipe_users_table", Config.getConfig(start).getUsersTable());
+        ph.put("tenant_configs_table", Config.getConfig(start).getTenantConfigsTable());
+        ph.put("tenant_thirdparty_providers_table", Config.getConfig(start).getTenantThirdPartyProvidersTable());
+        ph.put("tenant_thirdparty_provider_clients_table", Config.getConfig(start).getTenantThirdPartyProviderClientsTable());
+        ph.put("emailverification_verified_emails_table", Config.getConfig(start).getEmailVerificationTable());
+        ph.put("emailverification_tokens_table", Config.getConfig(start).getEmailVerificationTokensTable());
+        ph.put("emailpassword_users_table", Config.getConfig(start).getEmailPasswordUsersTable());
+        ph.put("emailpassword_user_to_tenant_table", Config.getConfig(start).getEmailPasswordUserToTenantTable());
+        ph.put("emailpassword_pswd_reset_tokens_table", Config.getConfig(start).getPasswordResetTokensTable());
+        ph.put("passwordless_users_table", Config.getConfig(start).getPasswordlessUsersTable());
+        ph.put("passwordless_user_to_tenant_table", Config.getConfig(start).getPasswordlessUserToTenantTable());
+        ph.put("passwordless_devices_table", Config.getConfig(start).getPasswordlessDevicesTable());
+
+        return ph;
     }
 }
