@@ -229,7 +229,9 @@ public class Start
         try {
             ConnectionPool.initPool(this, shouldWait);
             GeneralQueries.createTablesIfNotExists(this);
-            FlywayMigration.startMigration(this);
+            if (!isTesting) {
+                FlywayMigration.startMigration(this);
+            }
         } catch (Exception e) {
             throw new DbInitException(e);
         }

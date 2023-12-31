@@ -67,7 +67,8 @@ public class V2__plugin_version_4_0_0 extends BaseJavaMigration {
                     " ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(64) DEFAULT 'public';");
 
             statement.execute("ALTER TABLE " + ph.get("key_value_table") +
-                    " DROP " + Utils.getConstraintName(ph.get("schema"), ph.get("key_value_table"), null, "pkey"));
+                    " DROP CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("key_value_table"), null,
+                    "pkey"));
 
             statement.execute("ALTER TABLE " + ph.get("key_value_table") +
                     " ADD CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("key_value_table"), null,
@@ -100,8 +101,8 @@ public class V2__plugin_version_4_0_0 extends BaseJavaMigration {
                     ");");
 
             statement.execute("INSERT INTO " + ph.get("app_id_to_user_id_table") +
-                    " (app_id, user_id, recipe_id) " +
-                    "SELECT user_id, recipe_id FROM all_auth_recipe_users ON CONFLICT DO NOTHING;");
+                    " (user_id, recipe_id) " +
+                    "SELECT user_id, recipe_id FROM " + ph.get("all_auth_recipe_users_table") + " ON CONFLICT DO NOTHING;");
 
             statement.execute("CREATE INDEX IF NOT EXISTS " + ph.get("app_id_to_user_id_table") +
                     "_app_id_index ON " + ph.get("app_id_to_user_id_table") + " (app_id);");
@@ -124,7 +125,7 @@ public class V2__plugin_version_4_0_0 extends BaseJavaMigration {
 
             statement.execute("ALTER TABLE " + ph.get("all_auth_recipe_users_table") +
                     " DROP CONSTRAINT IF EXISTS " + Utils.getConstraintName(ph.get("schema"), ph.get(
-                            "all_auth_recipe_users_table"), null, "fkey") + ";");
+                            "all_auth_recipe_users_table"), "tenant_id", "fkey") + ";");
 
             statement.execute("ALTER TABLE " + ph.get("all_auth_recipe_users_table") +
                     " ADD CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("all_auth_recipe_users_table"), "tenant_id", "fkey") +
@@ -139,7 +140,7 @@ public class V2__plugin_version_4_0_0 extends BaseJavaMigration {
                     " FOREIGN KEY (app_id, user_id) REFERENCES " + ph.get("app_id_to_user_id_table") +
                     " (app_id, user_id) ON DELETE CASCADE;");
 
-            statement.execute("DROP INDEX all_auth_recipe_users_pagination_index;");
+            statement.execute("DROP INDEX IF EXISTS all_auth_recipe_users_pagination_index;");
 
             statement.execute("CREATE INDEX all_auth_recipe_users_pagination_index ON " + ph.get("all_auth_recipe_users_table") +
                     " (time_joined DESC, user_id DESC, tenant_id DESC, app_id DESC);");
@@ -235,7 +236,8 @@ public class V2__plugin_version_4_0_0 extends BaseJavaMigration {
                     " ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(64) DEFAULT 'public';");
 
             statement.execute("ALTER TABLE " + ph.get("session_info_table") +
-                    " DROP CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("session_info_table"), "session_info", "pkey") + " CASCADE;");
+                    " DROP CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("session_info_table"), null,
+                    "pkey") + " CASCADE;");
 
             statement.execute("ALTER TABLE " + ph.get("session_info_table") +
                     " ADD CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("session_info_table"), null,
@@ -390,18 +392,18 @@ public class V2__plugin_version_4_0_0 extends BaseJavaMigration {
 
         // Migrate emailpassword_user_to_tenant table
         try (Statement statement = context.getConnection().createStatement()) {
-            statement.execute("CREATE TABLE IF NOT EXISTS emailpassword_user_to_tenant ( " +
+            statement.execute("CREATE TABLE IF NOT EXISTS " + ph.get("emailpassword_user_to_tenant_table") + " ( " +
                     "  app_id VARCHAR(64) DEFAULT 'public', " +
                     "  tenant_id VARCHAR(64) DEFAULT 'public', " +
                     "  user_id CHAR(36) NOT NULL, " +
                     "  email VARCHAR(256) NOT NULL, " +
-                    "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("emailpassword_user_to_tenant"),
+                    "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("emailpassword_user_to_tenant_table"),
                     "email", "key") +
                     "    UNIQUE (app_id, tenant_id, email), " +
                     "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"),
-                    ph.get("emailpassword_user_to_tenant"), null, "pkey") +
+                    ph.get("emailpassword_user_to_tenant_table"), null, "pkey") +
                     "    PRIMARY KEY (app_id, tenant_id, user_id), " +
-                    "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("emailpassword_user_to_tenant"), "user_id", "pkey") +
+                    "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("emailpassword_user_to_tenant_table"), "user_id", "pkey") +
                     "    FOREIGN KEY (app_id, tenant_id, user_id) " +
                     "    REFERENCES " + ph.get("all_auth_recipe_users_table") +
                     " (app_id, tenant_id, user_id) ON DELETE CASCADE " +
@@ -499,22 +501,22 @@ public class V2__plugin_version_4_0_0 extends BaseJavaMigration {
 
         // Migrate passwordless_user_to_tenant table
         try (Statement statement = context.getConnection().createStatement()) {
-            statement.execute("CREATE TABLE IF NOT EXISTS passwordless_user_to_tenant ( " +
+            statement.execute("CREATE TABLE IF NOT EXISTS " + ph.get("passwordless_user_to_tenant_table") + " ( " +
                     "  app_id VARCHAR(64) DEFAULT 'public', " +
                     "  tenant_id VARCHAR(64) DEFAULT 'public', " +
                     "  user_id CHAR(36) NOT NULL, " +
                     "  email VARCHAR(256), " +
                     "  phone_number VARCHAR(256), " +
-                    "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("passwordless_user_to_tenant"),
+                    "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("passwordless_user_to_tenant_table"),
                     "email", "key") +
                     "    UNIQUE (app_id, tenant_id, email), " +
-                    "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("passwordless_user_to_tenant"),
+                    "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("passwordless_user_to_tenant_table"),
                     "phone_number", "key") +
                     "    UNIQUE (app_id, tenant_id, phone_number), " +
-                    "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("passwordless_user_to_tenant"),
+                    "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("passwordless_user_to_tenant_table"),
                     null, "pkey") +
                     "    PRIMARY KEY (app_id, tenant_id, user_id), " +
-                    "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("passwordless_user_to_tenant"),
+                    "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get("passwordless_user_to_tenant_table"),
                     "user_id", "fkey") +
                     "    FOREIGN KEY (app_id, tenant_id, user_id) " +
                     "    REFERENCES " + ph.get("all_auth_recipe_users_table") +
@@ -675,29 +677,6 @@ public class V2__plugin_version_4_0_0 extends BaseJavaMigration {
                     "  third_party_user_id VARCHAR(256) NOT NULL, " +
                     "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get(
                             "thirdparty_user_to_tenant_table"),
-                    "party_user_id", "key") +
-                    "    UNIQUE (app_id, tenant_id, third_party_id, third_party_user_id), " +
-                    "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get(
-                            "thirdparty_user_to_tenant_table"),
-                    null, "pkey") +
-                    "    PRIMARY KEY (app_id, tenant_id, user_id), " +
-                    "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get(
-                            "thirdparty_user_to_tenant_table"),
-                    "user_id", "fkey") +
-                    "    FOREIGN KEY (app_id, tenant_id, user_id) " +
-                    "    REFERENCES " + ph.get("all_auth_recipe_users_table") +
-                    " (app_id, tenant_id, user_id) ON DELETE CASCADE " +
-                    ");");
-
-            statement.execute("CREATE TABLE IF NOT EXISTS " + ph.get("thirdparty_user_to_tenant_table") +
-                    " ( " +
-                    "  app_id VARCHAR(64) DEFAULT 'public', " +
-                    "  tenant_id VARCHAR(64) DEFAULT 'public', " +
-                    "  user_id CHAR(36) NOT NULL, " +
-                    "  third_party_id VARCHAR(28) NOT NULL, " +
-                    "  third_party_user_id VARCHAR(256) NOT NULL, " +
-                    "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get(
-                            "thirdparty_user_to_tenant_table"),
                     "user_id", "key") +
                     "    UNIQUE (app_id, tenant_id, third_party_id, third_party_user_id), " +
                     "  CONSTRAINT " + Utils.getConstraintName(ph.get("schema"), ph.get(
@@ -792,20 +771,20 @@ public class V2__plugin_version_4_0_0 extends BaseJavaMigration {
 
             statement.execute("ALTER TABLE " + ph.get("roles_table") +
                     " DROP CONSTRAINT " + Utils.getConstraintName(ph.get("schema"),
-                    ph.get("roles_table"), "roles", "pkey") + " CASCADE;");
+                    ph.get("roles_table"), null, "pkey") + " CASCADE;");
 
             statement.execute("ALTER TABLE " + ph.get("roles_table") +
                     " ADD CONSTRAINT " + Utils.getConstraintName(ph.get("schema"),
-                    ph.get("roles_table"), "roles", "pkey") +
+                    ph.get("roles_table"), null, "pkey") +
                     "   PRIMARY KEY (app_id, role);");
 
             statement.execute("ALTER TABLE " + ph.get("roles_table") +
                     " DROP CONSTRAINT IF EXISTS " + Utils.getConstraintName(ph.get("schema"),
-                    ph.get("roles_table"), "roles_app_id", "fkey") + ";");
+                    ph.get("roles_table"), "app_id", "fkey") + ";");
 
             statement.execute("ALTER TABLE " + ph.get("roles_table") +
                     " ADD CONSTRAINT " + Utils.getConstraintName(ph.get("schema"),
-                    ph.get("roles_table"), "roles_app_id", "fkey") +
+                    ph.get("roles_table"), "app_id", "fkey") +
                     "   FOREIGN KEY (app_id) " +
                     "   REFERENCES " + ph.get("apps_table") +
                     " (app_id) ON DELETE CASCADE;");
@@ -856,11 +835,7 @@ public class V2__plugin_version_4_0_0 extends BaseJavaMigration {
 
             statement.execute("ALTER TABLE " + ph.get("user_roles_table") +
                     " DROP CONSTRAINT IF EXISTS " + Utils.getConstraintName(ph.get("schema"),
-                    ph.get("user_roles_table"), "user_role", "pkey") + " CASCADE;");
-
-            statement.execute("ALTER TABLE " + ph.get("user_roles_table") +
-                    " DROP CONSTRAINT IF EXISTS " + Utils.getConstraintName(ph.get("schema"),
-                    ph.get("user_roles_table"), "user_roles", "pkey") + " CASCADE;");
+                    ph.get("user_roles_table"), null, "pkey") + " CASCADE;");
 
 
             statement.execute("ALTER TABLE " + ph.get("user_roles_table") +
@@ -1080,11 +1055,6 @@ public class V2__plugin_version_4_0_0 extends BaseJavaMigration {
             statement.execute("ALTER TABLE " + ph.get("totp_used_codes_table") +
                     " DROP CONSTRAINT IF EXISTS " + Utils.getConstraintName(ph.get("schema"),
                     ph.get("totp_used_codes_table"), null, "pkey") + " CASCADE;");
-
-            statement.execute("ALTER TABLE " + ph.get("totp_used_codes_table") +
-                    " ADD CONSTRAINT " + Utils.getConstraintName(ph.get("schema"),
-                    ph.get("totp_used_codes_table"), null, "pkey") +
-                    "   PRIMARY KEY (app_id, tenant_id, user_id, created_time_ms);");
 
             statement.execute("ALTER TABLE " + ph.get("totp_used_codes_table") +
                     " ADD CONSTRAINT " + Utils.getConstraintName(ph.get("schema"),

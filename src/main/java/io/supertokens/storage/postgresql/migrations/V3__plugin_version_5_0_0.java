@@ -30,13 +30,13 @@ public class V3__plugin_version_5_0_0 extends BaseJavaMigration {
         Map<String, String> ph = context.getConfiguration().getPlaceholders();
         try (Statement statement = context.getConnection().createStatement()) {
             statement.execute("ALTER TABLE " + ph.get("all_auth_recipe_users_table") +
-                    " ADD COLUMN primary_or_recipe_user_id CHAR(36) NOT NULL DEFAULT '0';");
+                    " ADD COLUMN IF NOT EXISTS primary_or_recipe_user_id CHAR(36) NOT NULL DEFAULT '0';");
 
             statement.execute("ALTER TABLE " + ph.get("all_auth_recipe_users_table") +
-                    " ADD COLUMN is_linked_or_is_a_primary_user BOOLEAN NOT NULL DEFAULT FALSE;");
+                    " ADD COLUMN IF NOT EXISTS is_linked_or_is_a_primary_user BOOLEAN NOT NULL DEFAULT FALSE;");
 
             statement.execute("ALTER TABLE " + ph.get("all_auth_recipe_users_table") +
-                    " ADD COLUMN primary_or_recipe_user_time_joined BIGINT NOT NULL DEFAULT 0;");
+                    " ADD COLUMN IF NOT EXISTS primary_or_recipe_user_time_joined BIGINT NOT NULL DEFAULT 0;");
 
             statement.execute("UPDATE " + ph.get("all_auth_recipe_users_table") +
                     " SET primary_or_recipe_user_id = user_id WHERE primary_or_recipe_user_id = '0';");
@@ -45,23 +45,35 @@ public class V3__plugin_version_5_0_0 extends BaseJavaMigration {
                     " SET primary_or_recipe_user_time_joined = time_joined WHERE primary_or_recipe_user_time_joined = 0;");
 
             statement.execute("ALTER TABLE " + ph.get("all_auth_recipe_users_table") +
-                    " ADD CONSTRAINT all_auth_recipe_users_primary_or_recipe_user_id_fkey FOREIGN KEY (app_id, primary_or_recipe_user_id) " +
+                    " DROP CONSTRAINT IF EXISTS " + Utils.getConstraintName(ph.get("schema"),
+                    ph.get("all_auth_recipe_users_table"), "primary_or_recipe_user_id", "fkey") + ";");
+
+            statement.execute("ALTER TABLE " + ph.get("all_auth_recipe_users_table") +
+                    " ADD CONSTRAINT " + Utils.getConstraintName(ph.get("schema"),
+                    ph.get("all_auth_recipe_users_table"), "primary_or_recipe_user_id", "fkey") + " FOREIGN KEY " +
+                            "(app_id,primary_or_recipe_user_id) " +
                     "REFERENCES " + ph.get("app_id_to_user_id_table") + " (app_id, user_id) ON DELETE CASCADE;");
 
             statement.execute("ALTER TABLE " + ph.get("all_auth_recipe_users_table") +
                     " ALTER primary_or_recipe_user_id DROP DEFAULT;");
 
             statement.execute("ALTER TABLE " + ph.get("app_id_to_user_id_table") +
-                    " ADD COLUMN primary_or_recipe_user_id CHAR(36) NOT NULL DEFAULT '0';");
+                    " ADD COLUMN IF NOT EXISTS primary_or_recipe_user_id CHAR(36) NOT NULL DEFAULT '0';");
 
             statement.execute("ALTER TABLE " + ph.get("app_id_to_user_id_table") +
-                    " ADD COLUMN is_linked_or_is_a_primary_user BOOLEAN NOT NULL DEFAULT FALSE;");
+                    " ADD COLUMN IF NOT EXISTS is_linked_or_is_a_primary_user BOOLEAN NOT NULL DEFAULT FALSE;");
 
             statement.execute("UPDATE " + ph.get("app_id_to_user_id_table") +
                     " SET primary_or_recipe_user_id = user_id WHERE primary_or_recipe_user_id = '0';");
 
             statement.execute("ALTER TABLE " + ph.get("app_id_to_user_id_table") +
-                    " ADD CONSTRAINT app_id_to_user_id_primary_or_recipe_user_id_fkey FOREIGN KEY (app_id, primary_or_recipe_user_id) " +
+                    " DROP CONSTRAINT IF EXISTS " + Utils.getConstraintName(ph.get("schema"),
+                    ph.get("app_id_to_user_id_table") , "primary_or_recipe_user_id", "fkey") + ";");
+
+            statement.execute("ALTER TABLE " + ph.get("app_id_to_user_id_table") +
+                    " ADD CONSTRAINT " + Utils.getConstraintName(ph.get("schema"),
+                            ph.get("app_id_to_user_id_table"), "primary_or_recipe_user_id", "fkey") + " FOREIGN KEY " +
+                            "(app_id,primary_or_recipe_user_id) " +
                     "REFERENCES " + ph.get("app_id_to_user_id_table") + " (app_id, user_id) ON DELETE CASCADE;");
 
             statement.execute("ALTER TABLE " + ph.get("app_id_to_user_id_table") +
@@ -70,23 +82,28 @@ public class V3__plugin_version_5_0_0 extends BaseJavaMigration {
             statement.execute("DROP INDEX IF EXISTS all_auth_recipe_users_pagination_index;");
 
             statement.execute(
-                    "CREATE INDEX all_auth_recipe_users_pagination_index1 ON " + ph.get("all_auth_recipe_users_table") +
+                    "CREATE INDEX IF NOT EXISTS all_auth_recipe_users_pagination_index1 ON " + ph.get(
+                            "all_auth_recipe_users_table") +
                             " (app_id, tenant_id, primary_or_recipe_user_time_joined DESC, primary_or_recipe_user_id DESC);");
 
-            statement.execute("CREATE INDEX all_auth_recipe_users_pagination_index2 ON " + ph.get(
+            statement.execute("CREATE INDEX IF NOT EXISTS all_auth_recipe_users_pagination_index2 ON " + ph.get(
                     "all_auth_recipe_users_table") +
                     " (app_id, tenant_id, primary_or_recipe_user_time_joined ASC, primary_or_recipe_user_id DESC);");
 
-            statement.execute("CREATE INDEX all_auth_recipe_users_pagination_index3 ON " + ph.get("all_auth_recipe_users_table") +
+            statement.execute("CREATE INDEX IF NOT EXISTS all_auth_recipe_users_pagination_index3 ON " + ph.get(
+                    "all_auth_recipe_users_table") +
                     " (recipe_id, app_id, tenant_id, primary_or_recipe_user_time_joined DESC, primary_or_recipe_user_id DESC);");
 
-            statement.execute("CREATE INDEX all_auth_recipe_users_pagination_index4 ON " + ph.get("all_auth_recipe_users_table") +
+            statement.execute("CREATE INDEX IF NOT EXISTS all_auth_recipe_users_pagination_index4 ON " + ph.get(
+                    "all_auth_recipe_users_table") +
                     " (recipe_id, app_id, tenant_id, primary_or_recipe_user_time_joined ASC, primary_or_recipe_user_id DESC);");
 
-            statement.execute("CREATE INDEX all_auth_recipe_users_primary_user_id_index ON " + ph.get("all_auth_recipe_users_table") +
+            statement.execute("CREATE INDEX IF NOT EXISTS all_auth_recipe_users_primary_user_id_index ON " + ph.get(
+                    "all_auth_recipe_users_table") +
                     " (primary_or_recipe_user_id, app_id);");
 
-            statement.execute("CREATE INDEX all_auth_recipe_users_recipe_id_index ON " + ph.get("all_auth_recipe_users_table") +
+            statement.execute("CREATE INDEX IF NOT EXISTS all_auth_recipe_users_recipe_id_index ON " + ph.get(
+                    "all_auth_recipe_users_table") +
                     " (app_id, recipe_id, tenant_id);");
 
             statement.execute("ALTER TABLE " + ph.get("emailpassword_pswd_reset_tokens_table") +
@@ -101,7 +118,7 @@ public class V3__plugin_version_5_0_0 extends BaseJavaMigration {
                     " (app_id, user_id) ON DELETE CASCADE;");
 
             statement.execute("ALTER TABLE " + ph.get("emailpassword_pswd_reset_tokens_table") +
-                    " ADD COLUMN email VARCHAR(256);");
+                    " ADD COLUMN IF NOT EXISTS email VARCHAR(256);");
         }
     }
 }

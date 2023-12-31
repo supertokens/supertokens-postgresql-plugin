@@ -20,6 +20,7 @@ import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.output.Logging;
 import io.supertokens.storage.postgresql.queries.BaselineMigrationQueries;
 import org.flywaydb.core.Flyway;
+import org.jetbrains.annotations.TestOnly;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -36,8 +37,8 @@ public final class FlywayMigration {
 
             Flyway flyway = Flyway.configure()
                     .dataSource(ConnectionPool.getHikariDataSource(start))
- //                   .baselineOnMigrate(true)
- //                   .baselineVersion(baselineVersion)
+                    .baselineOnMigrate(true)
+                    .baselineVersion(baselineVersion)
                     .locations("classpath:/io/supertokens/storage/postgresql/migrations")
                     .placeholders(getPlaceholders(start))
                     .load();
@@ -49,9 +50,26 @@ public final class FlywayMigration {
         }
     }
 
+    @TestOnly
+    public static void executeTargetedMigration(Start start, String migrationTarget) {
+        try {
+        Flyway flyway = Flyway.configure()
+                .dataSource(ConnectionPool.getHikariDataSource(start))
+                .target(migrationTarget)
+                .locations("classpath:/io/supertokens/storage/postgresql/migrations")
+                .baselineOnMigrate(true)
+                .placeholders(getPlaceholders(start))
+                .load();
+        flyway.migrate();
+        } catch (Exception e) {
+            Logging.error(start, "Error Setting up Flyway.", true);
+            Logging.error(start, e.toString(), true);
+            // TODO: Find all possible exception
+        }
+    }
+
     private static Map<String, String> getPlaceholders(Start start) {
         Map<String, String> ph = new HashMap<>();
-
         ph.put("schema", Config.getConfig(start).getTableSchema());
         ph.put("session_info_table", Config.getConfig(start).getSessionInfoTable());
         ph.put("jwt_signing_keys_table", Config.getConfig(start).getJWTSigningKeysTable());
@@ -73,6 +91,20 @@ public final class FlywayMigration {
         ph.put("passwordless_users_table", Config.getConfig(start).getPasswordlessUsersTable());
         ph.put("passwordless_user_to_tenant_table", Config.getConfig(start).getPasswordlessUserToTenantTable());
         ph.put("passwordless_devices_table", Config.getConfig(start).getPasswordlessDevicesTable());
+        ph.put("passwordless_codes_table", Config.getConfig(start).getPasswordlessCodesTable());
+        ph.put("thirdparty_users_table", Config.getConfig(start).getThirdPartyUsersTable());
+        ph.put("thirdparty_user_to_tenant_table", Config.getConfig(start).getThirdPartyUserToTenantTable());
+        ph.put("roles_table", Config.getConfig(start).getRolesTable());
+        ph.put("role_permissions_table", Config.getConfig(start).getUserRolesPermissionsTable());
+        ph.put("user_roles_table", Config.getConfig(start).getUserRolesTable());
+        ph.put("user_metadata_table", Config.getConfig(start).getUserMetadataTable());
+        ph.put("dashboard_users_table", Config.getConfig(start).getDashboardUsersTable());
+        ph.put("dashboard_user_sessions_table", Config.getConfig(start).getDashboardSessionsTable());
+        ph.put("totp_users_table", Config.getConfig(start).getTotpUsersTable());
+        ph.put("totp_user_devices_table", Config.getConfig(start).getTotpUserDevicesTable());
+        ph.put("totp_used_codes_table", Config.getConfig(start).getTotpUsedCodesTable());
+        ph.put("user_last_active_table", Config.getConfig(start).getUserLastActiveTable());
+        ph.put("userid_mapping_table", Config.getConfig(start).getUserIdMappingTable());
 
         return ph;
     }

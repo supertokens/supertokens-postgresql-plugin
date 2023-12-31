@@ -17,6 +17,8 @@
 package io.supertokens.storage.postgresql.test;
 
 import io.supertokens.ProcessState;
+import io.supertokens.pluginInterface.STORAGE_TYPE;
+import io.supertokens.storage.postgresql.FlywayMigration;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
@@ -30,6 +32,13 @@ import org.junit.rules.TestRule;
 import static org.junit.Assert.assertNotNull;
 
 public class FlywayMigrationTest {
+
+    private static final String V1__plugin_version_3_0_0 = "1";
+    private static final String V2__plugin_version_4_0_0 = "2";
+    private static final String V3__plugin_version_5_0_0 = "3";
+    private static final String V4__plugin_version_5_0_4 = "4";
+    private static final String V5__core_version_7_0_12 = "5";
+
 
     @Rule
     public TestRule watchman = Utils.getOnFailure();
@@ -50,6 +59,16 @@ public class FlywayMigrationTest {
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        if (StorageLayer.getStorage(process.getProcess()).getType() != STORAGE_TYPE.SQL) {
+            return;
+        }
+
+        if (StorageLayer.isInMemDb(process.getProcess())) {
+            return;
+        }
+
+        FlywayMigration.executeTargetedMigration((Start) StorageLayer.getStorage(process.getProcess()), V5__core_version_7_0_12);
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
