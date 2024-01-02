@@ -16,12 +16,14 @@
 
 package io.supertokens.storage.postgresql;
 
+import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.output.Logging;
 import io.supertokens.storage.postgresql.queries.BaselineMigrationQueries;
 import org.flywaydb.core.Flyway;
 import org.jetbrains.annotations.TestOnly;
 
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -29,52 +31,39 @@ public final class FlywayMigration {
 
     private FlywayMigration() {}
 
-    public static void startMigration(Start start) {
-        Logging.info(start, "Setting up Flyway.", true);
+    public static void startMigration(Start start) throws SQLException, StorageQueryException {
+        Logging.info(start, "Starting migration.", true);
+        MigrationContextManager.putContext(start.getProcessId(), start);
 
         try {
-            String baselineVersion = BaselineMigrationQueries.getBaselineMigrationVersion(start);
-
             Flyway flyway = Flyway.configure()
                     .dataSource(ConnectionPool.getHikariDataSource(start))
                     .baselineOnMigrate(true)
-                    .baselineVersion(baselineVersion)
+                    .baselineVersion(BaselineMigrationQueries.getBaselineMigrationVersion(start))
+                    .table(Config.getConfig(start).getFlywaySchemaHistory())
                     .locations("classpath:/io/supertokens/storage/postgresql/migrations")
                     .placeholders(getPlaceholders(start))
                     .load();
             flyway.migrate();
-        } catch (Exception e) {
-            Logging.error(start, "Error Setting up Flyway.", true);
-            Logging.error(start, e.toString(), true);
-           // TODO: Find all possible exception
         }
-    }
-
-    @TestOnly
-    public static void executeTargetedMigration(Start start, String migrationTarget) {
-        try {
-        Flyway flyway = Flyway.configure()
-                .dataSource(ConnectionPool.getHikariDataSource(start))
-                .target(migrationTarget)
-                .locations("classpath:/io/supertokens/storage/postgresql/migrations")
-                .baselineOnMigrate(true)
-                .placeholders(getPlaceholders(start))
-                .load();
-        flyway.migrate();
-        } catch (Exception e) {
-            Logging.error(start, "Error Setting up Flyway.", true);
-            Logging.error(start, e.toString(), true);
-            // TODO: Find all possible exception
+        catch (Exception e) {
+            throw e;
+        } finally {
+            MigrationContextManager.removeContext(start.getProcessId());
         }
     }
 
     private static Map<String, String> getPlaceholders(Start start) {
         Map<String, String> ph = new HashMap<>();
+        // TODO: Now that we have Start instance inside migration, be can use that instead of passing and maintaining
+        //  this placeholders map.
+
+        ph.put("process_id", start.getProcessId());
         ph.put("schema", Config.getConfig(start).getTableSchema());
         ph.put("session_info_table", Config.getConfig(start).getSessionInfoTable());
         ph.put("jwt_signing_keys_table", Config.getConfig(start).getJWTSigningKeysTable());
         ph.put("session_access_token_signing_keys_table", Config.getConfig(start).getAccessTokenSigningKeysTable());
-        ph.put("access_token_signing_key_dynamic", "true");
+        ph.put("access_token_signing_key_dynamic", String.valueOf( Config.getConfig(start).getAccessTokenSigningKeyDynamic()));
         ph.put("apps_table", Config.getConfig(start).getAppsTable());
         ph.put("tenants_table", Config.getConfig(start).getTenantsTable());
         ph.put("key_value_table", Config.getConfig(start).getKeyValueTable());

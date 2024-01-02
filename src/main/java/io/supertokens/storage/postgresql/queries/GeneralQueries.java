@@ -56,7 +56,7 @@ import static io.supertokens.storage.postgresql.queries.UserMetadataQueries.getQ
 
 public class GeneralQueries {
 
-    private static boolean doesTableExists(Start start, String tableName) {
+    public static boolean doesTableExists(Start start, String tableName) {
         try {
             String QUERY = "SELECT 1 FROM " + tableName + " LIMIT 1";
             execute(start, QUERY, NO_OP_SETTER, result -> null);
@@ -235,6 +235,7 @@ public class GeneralQueries {
         return "CREATE INDEX IF NOT EXISTS app_id_to_user_id_primary_user_id_index ON "
                 + Config.getConfig(start).getAppIdToUserIdTable() + "(primary_or_recipe_user_id, app_id);";
     }
+
 
     public static void createTablesIfNotExists(Start start) throws SQLException, StorageQueryException {
         int numberOfRetries = 0;
@@ -591,7 +592,8 @@ public class GeneralQueries {
                     + getConfig(start).getDashboardUsersTable() + ","
                     + getConfig(start).getDashboardSessionsTable() + ","
                     + getConfig(start).getTotpUsedCodesTable() + "," + getConfig(start).getTotpUserDevicesTable() + ","
-                    + getConfig(start).getTotpUsersTable();
+                    + getConfig(start).getTotpUsersTable() + ","
+                    + getConfig(start).getFlywaySchemaHistory();
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
     }
@@ -1640,6 +1642,19 @@ public class GeneralQueries {
         }
 
         return new HashMap<>();
+    }
+
+    @TestOnly
+    public static Set<String> getAllMigratedScripts(Start start) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT script FROM " + getConfig(start).getFlywaySchemaHistory() + ";";
+        return execute(start, QUERY, NO_OP_SETTER, result -> {
+            Set<String> scripts = new HashSet<>();
+
+            while (result.next()) {
+                scripts.add(result.getString("script"));
+            }
+            return scripts;
+        });
     }
 
     @TestOnly

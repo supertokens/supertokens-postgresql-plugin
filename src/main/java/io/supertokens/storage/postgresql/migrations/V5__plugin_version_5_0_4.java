@@ -16,17 +16,25 @@
 
 package io.supertokens.storage.postgresql.migrations;
 
+import io.supertokens.storage.postgresql.MigrationContextManager;
+import io.supertokens.storage.postgresql.Start;
 import org.flywaydb.core.api.migration.BaseJavaMigration;
 import org.flywaydb.core.api.migration.Context;
 
 import java.sql.Statement;
 import java.util.Map;
 
-public class V4__plugin_version_5_0_4 extends BaseJavaMigration {
+import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.STARTING_MIGRATION;
+import static io.supertokens.storage.postgresql.ProcessState.getInstance;
+
+public class V5__plugin_version_5_0_4 extends BaseJavaMigration {
 
     @Override
     public void migrate(Context context) throws Exception {
         Map<String, String> ph = context.getConfiguration().getPlaceholders();
+        Start start = MigrationContextManager.getContext(ph.get("process_id"));
+        getInstance(start).addState(STARTING_MIGRATION, null);
+
         try (Statement statement = context.getConnection().createStatement()) {
             statement.execute("CREATE INDEX IF NOT EXISTS app_id_to_user_id_primary_user_id_index ON " +
                     ph.get("app_id_to_user_id_table") +

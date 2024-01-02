@@ -115,6 +115,10 @@ public class PostgreSQLConfig {
     @IgnoreForAnnotationCheck
     boolean isValidAndNormalised = false;
 
+    @JsonProperty
+    @IgnoreForAnnotationCheck
+    private boolean access_token_signing_key_dynamic = true;
+
     public static Set<String> getValidFields() {
         PostgreSQLConfig config = new PostgreSQLConfig();
         JsonObject configObj = new GsonBuilder().serializeNulls().create().toJsonTree(config).getAsJsonObject();
@@ -234,6 +238,10 @@ public class PostgreSQLConfig {
         return postgresql_thirdparty_users_table_name;
     }
 
+    public boolean getAccessTokenSigningKeyDynamic() {
+        return access_token_signing_key_dynamic;
+    }
+
     public String getThirdPartyUserToTenantTable() {
         return addSchemaAndPrefixToTableName("thirdparty_user_to_tenant");
     }
@@ -300,6 +308,10 @@ public class PostgreSQLConfig {
 
     public String getTotpUsedCodesTable() {
         return addSchemaAndPrefixToTableName("totp_used_codes");
+    }
+
+    public String getFlywaySchemaHistory() {
+        return addSchemaAndPrefixToTableName("flyway_schema_history");
     }
 
     private String addSchemaAndPrefixToTableName(String tableName) {

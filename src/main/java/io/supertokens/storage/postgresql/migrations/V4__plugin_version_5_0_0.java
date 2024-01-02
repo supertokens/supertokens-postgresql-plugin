@@ -16,6 +16,8 @@
 
 package io.supertokens.storage.postgresql.migrations;
 
+import io.supertokens.storage.postgresql.MigrationContextManager;
+import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.utils.Utils;
 import org.flywaydb.core.api.migration.BaseJavaMigration;
 import org.flywaydb.core.api.migration.Context;
@@ -23,11 +25,17 @@ import org.flywaydb.core.api.migration.Context;
 import java.sql.Statement;
 import java.util.Map;
 
-public class V3__plugin_version_5_0_0 extends BaseJavaMigration {
+import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.STARTING_MIGRATION;
+import static io.supertokens.storage.postgresql.ProcessState.getInstance;
+
+public class V4__plugin_version_5_0_0 extends BaseJavaMigration {
 
     @Override
     public void migrate(Context context) throws Exception {
         Map<String, String> ph = context.getConfiguration().getPlaceholders();
+        Start start = MigrationContextManager.getContext(ph.get("process_id"));
+        getInstance(start).addState(STARTING_MIGRATION, null);
+
         try (Statement statement = context.getConnection().createStatement()) {
             statement.execute("ALTER TABLE " + ph.get("all_auth_recipe_users_table") +
                     " ADD COLUMN IF NOT EXISTS primary_or_recipe_user_id CHAR(36) NOT NULL DEFAULT '0';");

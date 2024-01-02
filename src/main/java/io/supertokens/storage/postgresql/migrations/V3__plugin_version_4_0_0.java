@@ -16,6 +16,8 @@
 
 package io.supertokens.storage.postgresql.migrations;
 
+import io.supertokens.storage.postgresql.MigrationContextManager;
+import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.utils.Utils;
 import org.flywaydb.core.api.migration.BaseJavaMigration;
 import org.flywaydb.core.api.migration.Context;
@@ -23,11 +25,17 @@ import org.flywaydb.core.api.migration.Context;
 import java.sql.Statement;
 import java.util.Map;
 
-public class V2__plugin_version_4_0_0 extends BaseJavaMigration {
+import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.STARTING_MIGRATION;
+import static io.supertokens.storage.postgresql.ProcessState.getInstance;
+
+public class V3__plugin_version_4_0_0 extends BaseJavaMigration {
+
 
     @Override
     public void migrate(Context context) throws Exception {
         Map<String, String> ph = context.getConfiguration().getPlaceholders();
+        Start start = MigrationContextManager.getContext(ph.get("process_id"));
+        getInstance(start).addState(STARTING_MIGRATION, null);
         try (Statement statement = context.getConnection().createStatement()) {
             statement.execute("CREATE TABLE IF NOT EXISTS " + ph.get("apps_table") + "  ( " +
                     "  app_id VARCHAR(64) NOT NULL DEFAULT 'public', " +
