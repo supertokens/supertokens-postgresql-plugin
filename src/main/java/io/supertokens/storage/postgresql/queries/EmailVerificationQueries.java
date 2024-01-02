@@ -40,56 +40,27 @@ import static java.lang.System.currentTimeMillis;
 public class EmailVerificationQueries {
 
     static String getQueryToCreateEmailVerificationTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String emailVerificationTable = Config.getConfig(start).getEmailVerificationTable();
+        String schema = getConfig(start).getTableSchema();
+        String emailVerificationTable = getConfig(start).getEmailVerificationTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + emailVerificationTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "user_id VARCHAR(128) NOT NULL,"
                 + "email VARCHAR(256) NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, emailVerificationTable, null, "pkey")
-                + " PRIMARY KEY (app_id, user_id, email),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, emailVerificationTable, "app_id", "fkey")
-                + " FOREIGN KEY(app_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppsTable() + " (app_id) ON DELETE CASCADE"
-                + ");";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, emailVerificationTable, null, "pkey") + " PRIMARY KEY (user_id, email));";
         // @formatter:on
-    }
-
-    public static String getQueryToCreateAppIdIndexForEmailVerificationTable(Start start) {
-        return "CREATE INDEX emailverification_verified_emails_app_id_index ON "
-                + Config.getConfig(start).getEmailVerificationTable() + "(app_id);";
     }
 
     static String getQueryToCreateEmailVerificationTokensTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String emailVerificationTokensTable = Config.getConfig(start).getEmailVerificationTokensTable();
+        String schema = getConfig(start).getTableSchema();
+        String emailVerificationTokensTable = getConfig(start).getEmailVerificationTokensTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + emailVerificationTokensTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
-                + "tenant_id VARCHAR(64) DEFAULT 'public',"
                 + "user_id VARCHAR(128) NOT NULL,"
                 + "email VARCHAR(256) NOT NULL,"
-                + "token VARCHAR(128) NOT NULL CONSTRAINT " +
-                Utils.getConstraintName(schema, emailVerificationTokensTable, "token", "key") + " UNIQUE,"
+                + "token VARCHAR(128) NOT NULL CONSTRAINT " + Utils.getConstraintName(schema, emailVerificationTokensTable, "token", "key") + " UNIQUE,"
                 + "token_expiry BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, emailVerificationTokensTable, null, "pkey")
-                + " PRIMARY KEY (app_id, tenant_id, user_id, email, token), "
-                + "CONSTRAINT " + Utils.getConstraintName(schema, emailVerificationTokensTable, "tenant_id", "fkey")
-                + " FOREIGN KEY(app_id, tenant_id)"
-                + " REFERENCES " + Config.getConfig(start).getTenantsTable() + " (app_id, tenant_id) ON DELETE CASCADE"
-                + ")";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, emailVerificationTokensTable, null, "pkey") + " PRIMARY KEY (user_id, email, token))";
         // @formatter:on
-    }
-
-    public static String getQueryToCreateTenantIdIndexForEmailVerificationTokensTable(Start start) {
-        return "CREATE INDEX emailverification_tokens_tenant_id_index ON "
-                + Config.getConfig(start).getEmailVerificationTokensTable() + "(app_id, tenant_id);";
-    }
-
-    static String getQueryToCreateEmailVerificationTokenExpiryIndex(Start start) {
-        return "CREATE INDEX emailverification_tokens_index ON "
-                + Config.getConfig(start).getEmailVerificationTokensTable() + "(token_expiry);";
     }
 
     public static void deleteExpiredEmailVerificationTokens(Start start) throws SQLException, StorageQueryException {

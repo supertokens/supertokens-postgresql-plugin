@@ -127,6 +127,12 @@ public class V4__plugin_version_5_0_0 extends BaseJavaMigration {
 
             statement.execute("ALTER TABLE " + ph.get("emailpassword_pswd_reset_tokens_table") +
                     " ADD COLUMN IF NOT EXISTS email VARCHAR(256);");
+
+
+            /*
+            todo: statement.execute("CREATE INDEX IF NOT EXISTS app_id_to_user_id_primary_user_id_index ON "
+                    + appIdToUserIdTable + "(primary_or_recipe_user_id, app_id);");
+             */
         }
     }
 }

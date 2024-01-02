@@ -34,50 +34,29 @@ import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class UserRolesQueries {
     public static String getQueryToCreateRolesTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
+        String schema = getConfig(start).getTableSchema();
         String tableName = getConfig(start).getRolesTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "role VARCHAR(255) NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
-                + " PRIMARY KEY(app_id, role),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "app_id", "fkey")
-                + " FOREIGN KEY(app_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppsTable() + " (app_id) ON DELETE CASCADE"
-                + ");";
-        // @formatter:on
-    }
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey") + " PRIMARY KEY(role)" + " );";
 
-    public static String getQueryToCreateAppIdIndexForRolesTable(Start start) {
-        return "CREATE INDEX roles_app_id_index ON " + getConfig(start).getRolesTable() + "(app_id);";
+        // @formatter:on
     }
 
     public static String getQueryToCreateRolePermissionsTable(Start start) {
         String tableName = getConfig(start).getUserRolesPermissionsTable();
-        String schema = Config.getConfig(start).getTableSchema();
+        String schema = getConfig(start).getTableSchema();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "role VARCHAR(255) NOT NULL,"
                 + "permission VARCHAR(255) NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
-                + " PRIMARY KEY(app_id, role, permission),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "role", "fkey")
-                + " FOREIGN KEY(app_id, role)"
-                + " REFERENCES " + getConfig(start).getRolesTable() + "(app_id, role) ON DELETE CASCADE"
-                + ");";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey") + " PRIMARY KEY(role, permission),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "role", "fkey") + " FOREIGN KEY(role)"
+                + " REFERENCES " + getConfig(start).getRolesTable()
+                +"(role) ON DELETE CASCADE );";
+
         // @formatter:on
-    }
-
-    public static String getQueryToCreateRoleIndexForRolePermissionsTable(Start start) {
-        return "CREATE INDEX role_permissions_role_index ON " + getConfig(start).getUserRolesPermissionsTable()
-                + "(app_id, role);";
-    }
-
-    static String getQueryToCreateRolePermissionsPermissionIndex(Start start) {
-        return "CREATE INDEX role_permissions_permission_index ON " + getConfig(start).getUserRolesPermissionsTable()
-                + "(app_id, permission);";
     }
 
     public static String getQueryToCreateUserRolesTable(Start start) {
@@ -85,35 +64,14 @@ public class UserRolesQueries {
         String tableName = getConfig(start).getUserRolesTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
-                + "tenant_id VARCHAR(64) DEFAULT 'public',"
                 + "user_id VARCHAR(128) NOT NULL,"
                 + "role VARCHAR(255) NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
-                + " PRIMARY KEY(app_id, tenant_id, user_id, role),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "role", "fkey")
-                + " FOREIGN KEY(app_id, role)"
-                + " REFERENCES " + getConfig(start).getRolesTable() + "(app_id, role) ON DELETE CASCADE,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "tenant_id", "fkey")
-                + " FOREIGN KEY (app_id, tenant_id)"
-                + " REFERENCES " + Config.getConfig(start).getTenantsTable() + "(app_id, tenant_id) ON DELETE CASCADE"
-                + ");";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey") + " PRIMARY KEY(user_id, role),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "role", "fkey") + " FOREIGN KEY(role)"
+                + " REFERENCES " + getConfig(start).getRolesTable()
+                +"(role) ON DELETE CASCADE );";
+
         // @formatter:on
-    }
-
-    public static String getQueryToCreateTenantIdIndexForUserRolesTable(Start start) {
-        return "CREATE INDEX IF NOT EXISTS user_roles_tenant_id_index ON " + getConfig(start).getUserRolesTable() +
-                "(app_id, tenant_id);";
-    }
-
-    public static String getQueryToCreateRoleIndexForUserRolesTable(Start start) {
-        return "CREATE INDEX IF NOT EXISTS user_roles_app_id_role_index ON " + getConfig(start).getUserRolesTable() +
-                "(app_id, role);";
-    }
-
-    public static String getQueryToCreateUserRolesRoleIndex(Start start) {
-        return "CREATE INDEX IF NOT EXISTS user_roles_role_index ON " + getConfig(start).getUserRolesTable()
-                + "(app_id, tenant_id, role);";
     }
 
     public static boolean createNewRoleOrDoNothingIfExists_Transaction(Start start, Connection con,

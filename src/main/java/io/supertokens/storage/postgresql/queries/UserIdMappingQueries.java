@@ -39,30 +39,22 @@ import static io.supertokens.storage.postgresql.config.Config.getConfig;
 public class UserIdMappingQueries {
 
     public static String getQueryToCreateUserIdMappingTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String userIdMappingTable = Config.getConfig(start).getUserIdMappingTable();
+        String schema = getConfig(start).getTableSchema();
+        String userIdMappingTable = getConfig(start).getUserIdMappingTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + userIdMappingTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
-                + "supertokens_user_id CHAR(36) NOT NULL,"
-                + "external_user_id VARCHAR(128) NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, userIdMappingTable, "supertokens_user_id", "key")
-                + " UNIQUE (app_id, supertokens_user_id),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, userIdMappingTable, "external_user_id", "key")
-                + " UNIQUE (app_id, external_user_id),"
+                + "supertokens_user_id CHAR(36) NOT NULL "
+                + "CONSTRAINT " + Utils.getConstraintName(schema, userIdMappingTable, "supertokens_user_id", "key") + " UNIQUE,"
+                + "external_user_id VARCHAR(128) NOT NULL"
+                + " CONSTRAINT " + Utils.getConstraintName(schema, userIdMappingTable, "external_user_id", "key") + " UNIQUE,"
                 + "external_user_id_info TEXT,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, userIdMappingTable, null, "pkey")
-                + " PRIMARY KEY(app_id, supertokens_user_id, external_user_id),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, userIdMappingTable, "supertokens_user_id", "fkey")
-                + " FOREIGN KEY (app_id, supertokens_user_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() + "(app_id, user_id)" + " ON DELETE CASCADE"
-                + ");";
+                + " CONSTRAINT " + Utils.getConstraintName(schema, userIdMappingTable, null, "pkey") +
+                " PRIMARY KEY(supertokens_user_id, external_user_id),"
+                + ("CONSTRAINT " + Utils.getConstraintName(schema, userIdMappingTable, "supertokens_user_id", "fkey") +
+                " FOREIGN KEY (supertokens_user_id)"
+                + " REFERENCES " + getConfig(start).getUsersTable() + "(user_id)"
+                + " ON DELETE CASCADE);");
         // @formatter:on
-    }
-
-    public static String getQueryToCreateSupertokensUserIdIndexForUserIdMappingTable(Start start) {
-        return "CREATE INDEX userid_mapping_supertokens_user_id_index ON "
-                + getConfig(start).getUserIdMappingTable() + "(app_id, supertokens_user_id);";
     }
 
     public static void createUserIdMapping(Start start, AppIdentifier appIdentifier, String superTokensUserId, String externalUserId,

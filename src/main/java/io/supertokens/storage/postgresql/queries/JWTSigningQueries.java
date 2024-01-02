@@ -46,27 +46,16 @@ public class JWTSigningQueries {
          * defined
          * keys in the future.
          */
-        String schema = Config.getConfig(start).getTableSchema();
-        String jwtSigningKeysTable = Config.getConfig(start).getJWTSigningKeysTable();
+        String schema = getConfig(start).getTableSchema();
+        String jwtSigningKeysTable = getConfig(start).getJWTSigningKeysTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + jwtSigningKeysTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "key_id VARCHAR(255) NOT NULL,"
-                + "key_string TEXT NOT NULL," 
+                + "key_string TEXT NOT NULL,"
                 + "algorithm VARCHAR(10) NOT NULL,"
-                + "created_at BIGINT," 
-                + "CONSTRAINT " + Utils.getConstraintName(schema, jwtSigningKeysTable, null, "pkey")
-                + " PRIMARY KEY(app_id, key_id),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, jwtSigningKeysTable, "app_id", "fkey")
-                + " FOREIGN KEY(app_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppsTable() +  " (app_id) ON DELETE CASCADE"
-                + ");";
+                + "created_at BIGINT,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, jwtSigningKeysTable, null, "pkey") + " PRIMARY KEY(key_id));";
         // @formatter:on
-    }
-
-    public static String getQueryToCreateAppIdIndexForJWTSigningTable(Start start) {
-        return "CREATE INDEX IF NOT EXISTS jwt_signing_keys_app_id_index ON "
-                + getConfig(start).getJWTSigningKeysTable() + " (app_id);";
     }
 
     public static List<JWTSigningKeyInfo> getJWTSigningKeys_Transaction(Start start, Connection con,
