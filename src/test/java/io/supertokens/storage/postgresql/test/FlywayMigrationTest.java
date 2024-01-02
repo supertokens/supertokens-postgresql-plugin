@@ -71,6 +71,7 @@ public class FlywayMigrationTest {
         checkDatabaseStatus((Start) StorageLayer.getStorage(process.getProcess()), true);
         Set<String> expectedScripts = getExpectedScripts();
         Set<String> scripts = getAllMigratedScripts((Start) StorageLayer.getStorage(process.getProcess()));
+        scripts.remove("<< Flyway Baseline >>");
         assertTrue(expectedScripts.equals(scripts));
 
         process.kill();
