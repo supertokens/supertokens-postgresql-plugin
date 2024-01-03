@@ -193,11 +193,16 @@ public class Start
              * nothing will be handling logging and hikari's logs would not be outputed
              * anywhere.
              */
-            final Logger infoLog = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
+            final Logger hikariLog = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
+            final Logger flywayLog = (Logger) LoggerFactory.getLogger("org.flywaydb.core");
             appender = new HikariLoggingAppender(this);
-            if (infoLog.getAppender(HikariLoggingAppender.NAME) == null) {
-                infoLog.setAdditive(false);
-                infoLog.addAppender(appender);
+            if (hikariLog.getAppender(HikariLoggingAppender.NAME) == null) {
+                hikariLog.setAdditive(false);
+                hikariLog.addAppender(appender);
+            }
+            if (flywayLog.getAppender(HikariLoggingAppender.NAME) == null) {
+                flywayLog.setAdditive(false);
+                flywayLog.addAppender(appender);
             }
         }
     }
@@ -208,9 +213,13 @@ public class Start
             synchronized (appenderLock) {
                 Logging.stopLogging(this);
 
-                final Logger infoLog = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
-                if (infoLog.getAppender(HikariLoggingAppender.NAME) != null) {
-                    infoLog.detachAppender(HikariLoggingAppender.NAME);
+                final Logger hikariLog = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
+                final Logger flywayLog = (Logger) LoggerFactory.getLogger("org.flywaydb.core");
+                if (hikariLog.getAppender(HikariLoggingAppender.NAME) != null) {
+                    hikariLog.detachAppender(HikariLoggingAppender.NAME);
+                }
+                if (flywayLog.getAppender(HikariLoggingAppender.NAME) != null) {
+                    flywayLog.detachAppender(HikariLoggingAppender.NAME);
                 }
             }
         }
@@ -228,7 +237,7 @@ public class Start
         }
         try {
             ConnectionPool.initPool(this, shouldWait);
-            GeneralQueries.createTablesIfNotExists(this);
+            FlywayMigration.startMigration(this);
         } catch (Exception e) {
             throw new DbInitException(e);
         }

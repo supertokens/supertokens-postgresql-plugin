@@ -45,76 +45,30 @@ import static java.lang.System.currentTimeMillis;
 
 public class EmailPasswordQueries {
     static String getQueryToCreateUsersTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String emailPasswordUsersTable = Config.getConfig(start).getEmailPasswordUsersTable();
+        String schema = getConfig(start).getTableSchema();
+        String emailPasswordUsersTable = getConfig(start).getEmailPasswordUsersTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + emailPasswordUsersTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "user_id CHAR(36) NOT NULL,"
-                + "email VARCHAR(256) NOT NULL,"
-                + "password_hash VARCHAR(256) NOT NULL,"
-                + "time_joined BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUsersTable, "user_id", "fkey")
-                + " FOREIGN KEY(app_id, user_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +
-                " (app_id, user_id) ON DELETE CASCADE,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUsersTable, null, "pkey")
-                + " PRIMARY KEY (app_id, user_id)"
-                + ");";
-        // @formatter:on
-    }
-
-    static String getQueryToCreateEmailPasswordUserToTenantTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String emailPasswordUserToTenantTable = Config.getConfig(start).getEmailPasswordUserToTenantTable();
-        // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + emailPasswordUserToTenantTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
-                + "tenant_id VARCHAR(64) DEFAULT 'public',"
-                + "user_id CHAR(36) NOT NULL,"
-                + "email VARCHAR(256) NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUserToTenantTable, "email", "key")
-                + " UNIQUE (app_id, tenant_id, email),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUserToTenantTable, null, "pkey")
-                + " PRIMARY KEY (app_id, tenant_id, user_id),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUserToTenantTable, "user_id", "fkey")
-                + " FOREIGN KEY (app_id, tenant_id, user_id)"
-                + " REFERENCES " + Config.getConfig(start).getUsersTable() +
-                "(app_id, tenant_id, user_id) ON DELETE CASCADE"
-                + ");";
+                + "email VARCHAR(256) NOT NULL CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUsersTable, "email", "key") + " UNIQUE,"
+                + "password_hash VARCHAR(128) NOT NULL," + "time_joined BIGINT NOT NULL,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUsersTable, null, "pkey") + " PRIMARY KEY (user_id));";
         // @formatter:on
     }
 
     static String getQueryToCreatePasswordResetTokensTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String passwordResetTokensTable = Config.getConfig(start).getPasswordResetTokensTable();
+        String schema = getConfig(start).getTableSchema();
+        String passwordResetTokensTable = getConfig(start).getPasswordResetTokensTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + passwordResetTokensTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "user_id CHAR(36) NOT NULL,"
-                + "token VARCHAR(128) NOT NULL"
-                + " CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, "token", "key") +
-                " UNIQUE,"
-                + "email VARCHAR(256)," // nullable cause of backwards compatibility.
+                + "token VARCHAR(128) NOT NULL CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, "token", "key") + " UNIQUE,"
                 + "token_expiry BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, null, "pkey")
-                + " PRIMARY KEY (app_id, user_id, token),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, "user_id", "fkey")
-                + " FOREIGN KEY (app_id, user_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() + "(app_id, user_id)"
-                + " ON DELETE CASCADE ON UPDATE CASCADE"
-                + ");";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, null, "pkey") + " PRIMARY KEY (user_id, token),"
+                + ("CONSTRAINT " + Utils.getConstraintName(schema, passwordResetTokensTable, "user_id", "fkey") + " FOREIGN KEY (user_id)"
+                + " REFERENCES " + getConfig(start).getEmailPasswordUsersTable() + "(user_id)"
+                + " ON DELETE CASCADE ON UPDATE CASCADE);");
         // @formatter:on
-    }
-
-    public static String getQueryToCreateUserIdIndexForPasswordResetTokensTable(Start start) {
-        return "CREATE INDEX emailpassword_pswd_reset_tokens_user_id_index ON "
-                + Config.getConfig(start).getPasswordResetTokensTable() + "(app_id, user_id);";
-    }
-
-    static String getQueryToCreatePasswordResetTokenExpiryIndex(Start start) {
-        return "CREATE INDEX emailpassword_password_reset_token_expiry_index ON "
-                + Config.getConfig(start).getPasswordResetTokensTable() + "(token_expiry);";
     }
 
     public static void deleteExpiredPasswordResetTokens(Start start) throws SQLException, StorageQueryException {

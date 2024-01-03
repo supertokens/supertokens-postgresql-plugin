@@ -19,6 +19,12 @@ dependencies {
     // https://mvnrepository.com/artifact/org.postgresql/postgresql
     implementation group: 'org.postgresql', name: 'postgresql', version: '42.2.10'
 
+    // https://mvnrepository.com/artifact/org.flywaydb/flyway-core
+    implementation group: 'org.flywaydb', name: 'flyway-core', version: '7.15.0'
+
+    // https://mvnrepository.com/artifact/com.googlecode.libphonenumber/libphonenumber
+    compileOnly group: 'com.googlecode.libphonenumber', name: 'libphonenumber', version: '8.13.25'
+
     // https://mvnrepository.com/artifact/com.fasterxml.jackson.dataformat/jackson-dataformat-yaml
     compileOnly group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-yaml', version: '2.14.0'
 

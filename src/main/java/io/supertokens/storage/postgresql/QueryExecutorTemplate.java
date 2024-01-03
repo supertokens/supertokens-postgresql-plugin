@@ -58,5 +58,4 @@ public interface QueryExecutorTemplate {
             return pst.executeUpdate();
         }
     }
-
 }
