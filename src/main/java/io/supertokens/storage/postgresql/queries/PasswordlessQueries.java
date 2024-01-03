@@ -47,115 +47,40 @@ import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class PasswordlessQueries {
     public static String getQueryToCreateUsersTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String usersTable = Config.getConfig(start).getPasswordlessUsersTable();
+        String schema = getConfig(start).getTableSchema();
+        String usersTable = getConfig(start).getPasswordlessUsersTable();
 
-        return "CREATE TABLE IF NOT EXISTS " + usersTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
-                + "user_id CHAR(36) NOT NULL,"
-                + "email VARCHAR(256),"
-                + "phone_number VARCHAR(256),"
-                + "time_joined BIGINT NOT NULL, "
-                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "user_id", "fkey")
-                + " FOREIGN KEY(app_id, user_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +
-                " (app_id, user_id) ON DELETE CASCADE,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, null, "pkey")
-                + " PRIMARY KEY (app_id, user_id)"
-                + ");";
-    }
-
-    static String getQueryToCreatePasswordlessUserToTenantTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String passwordlessUserToTenantTable = Config.getConfig(start).getPasswordlessUserToTenantTable();
-        // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + passwordlessUserToTenantTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
-                + "tenant_id VARCHAR(64) DEFAULT 'public',"
-                + "user_id CHAR(36) NOT NULL,"
-                + "email VARCHAR(256),"
-                + "phone_number VARCHAR(256),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, passwordlessUserToTenantTable, "email", "key")
-                + " UNIQUE (app_id, tenant_id, email),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, passwordlessUserToTenantTable, "phone_number", "key")
-                + " UNIQUE (app_id, tenant_id, phone_number),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, passwordlessUserToTenantTable, null, "pkey")
-                + " PRIMARY KEY (app_id, tenant_id, user_id),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, passwordlessUserToTenantTable, "user_id", "fkey")
-                + " FOREIGN KEY (app_id, tenant_id, user_id)"
-                + " REFERENCES " + Config.getConfig(start).getUsersTable() +
-                "(app_id, tenant_id, user_id) ON DELETE CASCADE"
-                + ");";
-        // @formatter:on
+        return "CREATE TABLE IF NOT EXISTS " + usersTable + " (" + "user_id CHAR(36) NOT NULL,"
+                + "email VARCHAR(256) CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "email", "key")
+                + " UNIQUE," + "phone_number VARCHAR(256) CONSTRAINT "
+                + Utils.getConstraintName(schema, usersTable, "phone_number", "key") + " UNIQUE,"
+                + "time_joined BIGINT NOT NULL, " + "CONSTRAINT "
+                + Utils.getConstraintName(schema, usersTable, null, "pkey") + " PRIMARY KEY (user_id)" + ");";
     }
 
     public static String getQueryToCreateDevicesTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String devicesTable = Config.getConfig(start).getPasswordlessDevicesTable();
+        String schema = getConfig(start).getTableSchema();
+        String devicesTable = getConfig(start).getPasswordlessDevicesTable();
 
-        return "CREATE TABLE IF NOT EXISTS " + devicesTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
-                + "tenant_id VARCHAR(64) DEFAULT 'public',"
-                + "device_id_hash CHAR(44) NOT NULL,"
-                + "email VARCHAR(256), "
-                + "phone_number VARCHAR(256),"
-                + "link_code_salt CHAR(44) NOT NULL,"
-                + "failed_attempts INT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, devicesTable, "tenant_id", "fkey")
-                + " FOREIGN KEY(app_id, tenant_id)"
-                + " REFERENCES " + Config.getConfig(start).getTenantsTable() + " (app_id, tenant_id) ON DELETE CASCADE,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, devicesTable, null, "pkey")
-                + " PRIMARY KEY (app_id, tenant_id, device_id_hash)"
-                + ");";
-    }
-
-    public static String getQueryToCreateTenantIdIndexForDevicesTable(Start start) {
-        return "CREATE INDEX passwordless_devices_tenant_id_index ON "
-                + Config.getConfig(start).getPasswordlessDevicesTable() + "(app_id, tenant_id);";
+        return "CREATE TABLE IF NOT EXISTS " + devicesTable + " (" + "device_id_hash CHAR(44) NOT NULL,"
+                + "email VARCHAR(256), " + "phone_number VARCHAR(256)," + "link_code_salt CHAR(44) NOT NULL,"
+                + "failed_attempts INT NOT NULL," + "CONSTRAINT "
+                + Utils.getConstraintName(schema, devicesTable, null, "pkey") + " PRIMARY KEY (device_id_hash));";
     }
 
     public static String getQueryToCreateCodesTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String codesTable = Config.getConfig(start).getPasswordlessCodesTable();
+        String schema = getConfig(start).getTableSchema();
+        String codesTable = getConfig(start).getPasswordlessCodesTable();
 
-        return "CREATE TABLE IF NOT EXISTS " + codesTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
-                + "tenant_id VARCHAR(64) DEFAULT 'public',"
-                + "code_id CHAR(36) NOT NULL,"
-                + "device_id_hash CHAR(44) NOT NULL,"
-                + "link_code_hash CHAR(44) NOT NULL,"
-                + "created_at BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, codesTable, "link_code_hash", "key")
-                + " UNIQUE (app_id, tenant_id, link_code_hash),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, codesTable, null, "pkey")
-                + " PRIMARY KEY (app_id, tenant_id, code_id),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, codesTable, "device_id_hash", "fkey")
-                + " FOREIGN KEY (app_id, tenant_id, device_id_hash)"
-                + " REFERENCES " + Config.getConfig(start).getPasswordlessDevicesTable() +
-                "(app_id, tenant_id, device_id_hash)"
-                + " ON DELETE CASCADE ON UPDATE CASCADE"
-                + ");";
-    }
-
-    public static String getQueryToCreateDeviceEmailIndex(Start start) {
-        return "CREATE INDEX passwordless_devices_email_index ON "
-                + Config.getConfig(start).getPasswordlessDevicesTable() + " (app_id, tenant_id, email);"; // USING hash
-    }
-
-    public static String getQueryToCreateDevicePhoneNumberIndex(Start start) {
-        return "CREATE INDEX passwordless_devices_phone_number_index ON "
-                + Config.getConfig(start).getPasswordlessDevicesTable() +
-                " (app_id, tenant_id, phone_number);"; // USING hash
-    }
-
-    public static String getQueryToCreateCodeDeviceIdHashIndex(Start start) {
-        return "CREATE INDEX IF NOT EXISTS passwordless_codes_device_id_hash_index ON "
-                + Config.getConfig(start).getPasswordlessCodesTable() + "(app_id, tenant_id, device_id_hash);";
-    }
-
-    public static String getQueryToCreateCodeCreatedAtIndex(Start start) {
-        return "CREATE INDEX passwordless_codes_created_at_index ON "
-                + Config.getConfig(start).getPasswordlessCodesTable() + "(app_id, tenant_id, created_at);";
+        return "CREATE TABLE IF NOT EXISTS " + codesTable + " (" + "code_id CHAR(36) NOT NULL,"
+                + "device_id_hash CHAR(44) NOT NULL," + "link_code_hash CHAR(44) NOT NULL CONSTRAINT "
+                + Utils.getConstraintName(schema, codesTable, "link_code_hash", "key") + " UNIQUE,"
+                + "created_at BIGINT NOT NULL," + "CONSTRAINT "
+                + Utils.getConstraintName(schema, codesTable, null, "pkey") + " PRIMARY KEY (code_id)," + "CONSTRAINT "
+                + Utils.getConstraintName(schema, codesTable, "device_id_hash", "fkey")
+                + " FOREIGN KEY (device_id_hash) " + "REFERENCES "
+                + getConfig(start).getPasswordlessDevicesTable()
+                + "(device_id_hash) ON DELETE CASCADE ON UPDATE CASCADE);";
     }
 
     public static void createDeviceWithCode(Start start, TenantIdentifier tenantIdentifier, String email,

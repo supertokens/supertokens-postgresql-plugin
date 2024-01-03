@@ -43,12 +43,10 @@ import static java.lang.System.currentTimeMillis;
 public class SessionQueries {
 
     public static String getQueryToCreateSessionInfoTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String sessionInfoTable = Config.getConfig(start).getSessionInfoTable();
+        String schema = getConfig(start).getTableSchema();
+        String sessionInfoTable = getConfig(start).getSessionInfoTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + sessionInfoTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
-                + "tenant_id VARCHAR(64) DEFAULT 'public',"
                 + "session_handle VARCHAR(255) NOT NULL,"
                 + "user_id VARCHAR(128) NOT NULL,"
                 + "refresh_token_hash_2 VARCHAR(128) NOT NULL,"
@@ -56,46 +54,19 @@ public class SessionQueries {
                 + "expires_at BIGINT NOT NULL,"
                 + "created_at_time BIGINT NOT NULL,"
                 + "jwt_user_payload TEXT,"
-                + "use_static_key BOOLEAN NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, sessionInfoTable, null, "pkey")
-                + " PRIMARY KEY(app_id, tenant_id, session_handle),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, sessionInfoTable, "tenant_id", "fkey")
-                + " FOREIGN KEY (app_id, tenant_id)"
-                + " REFERENCES " + Config.getConfig(start).getTenantsTable() + "(app_id, tenant_id) ON DELETE CASCADE"
-                + ");";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, sessionInfoTable, null, "pkey") + " PRIMARY KEY(session_handle)" + " );";
         // @formatter:on
-    }
-
-    public static String getQueryToCreateTenantIdIndexForSessionInfoTable(Start start) {
-        return "CREATE INDEX session_info_tenant_id_index ON "
-                + Config.getConfig(start).getSessionInfoTable() + "(app_id, tenant_id);";
     }
 
     static String getQueryToCreateAccessTokenSigningKeysTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String accessTokenSigningKeysTable = Config.getConfig(start).getAccessTokenSigningKeysTable();
+        String schema = getConfig(start).getTableSchema();
+        String accessTokenSigningKeysTable = getConfig(start).getAccessTokenSigningKeysTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + accessTokenSigningKeysTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "created_at_time BIGINT NOT NULL,"
                 + "value TEXT,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, accessTokenSigningKeysTable, null, "pkey")
-                + " PRIMARY KEY(app_id, created_at_time),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, accessTokenSigningKeysTable, "app_id", "fkey")
-                + " FOREIGN KEY (app_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppsTable() + "(app_id) ON DELETE CASCADE"
-                + ");";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, accessTokenSigningKeysTable, null, "pkey") + " PRIMARY KEY(created_at_time)" + " );";
         // @formatter:on
-    }
-
-    public static String getQueryToCreateAppIdIndexForAccessTokenSigningKeysTable(Start start) {
-        return "CREATE INDEX access_token_signing_keys_app_id_index ON "
-                + Config.getConfig(start).getAccessTokenSigningKeysTable() + "(app_id);";
-    }
-
-    static String getQueryToCreateSessionExpiryIndex(Start start) {
-        return "CREATE INDEX session_expiry_index ON "
-                + Config.getConfig(start).getSessionInfoTable() + "(expires_at);";
     }
 
     public static void createNewSession(Start start, TenantIdentifier tenantIdentifier, String sessionHandle,

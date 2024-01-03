@@ -40,25 +40,13 @@ public class DashboardQueries {
         String dashboardUsersTable = Config.getConfig(start).getDashboardUsersTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + dashboardUsersTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "user_id CHAR(36) NOT NULL,"
-                + "email VARCHAR(256) NOT NULL,"
-                + "password_hash VARCHAR(256) NOT NULL,"
-                + "time_joined BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, dashboardUsersTable, "email", "key")
-                + " UNIQUE (app_id, email),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, dashboardUsersTable, null, "pkey")
-                + " PRIMARY KEY (app_id, user_id),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, dashboardUsersTable, "app_id", "fkey")
-                + " FOREIGN KEY(app_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppsTable() +  " (app_id) ON DELETE CASCADE"
-                + ");";
+                + "email VARCHAR(256) NOT NULL CONSTRAINT " +
+                Utils.getConstraintName(schema, dashboardUsersTable, "email", "key") + " UNIQUE,"
+                + "password_hash VARCHAR(256) NOT NULL," + "time_joined BIGINT NOT NULL,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, dashboardUsersTable, null, "pkey") +
+                " PRIMARY KEY (user_id));";
         // @formatter:on
-    }
-
-    public static String getQueryToCreateAppIdIndexForDashboardUsersTable(Start start) {
-        return "CREATE INDEX dashboard_users_app_id_index ON "
-                + Config.getConfig(start).getDashboardUsersTable() + "(app_id);";
     }
 
     public static String getQueryToCreateDashboardUserSessionsTable(Start start) {
@@ -66,28 +54,15 @@ public class DashboardQueries {
         String tableName = Config.getConfig(start).getDashboardSessionsTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "session_id CHAR(36) NOT NULL,"
                 + "user_id CHAR(36) NOT NULL,"
                 + "time_created BIGINT NOT NULL,"
                 + "expiry BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
-                + " PRIMARY KEY(app_id, session_id),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "user_id", "fkey")
-                + " FOREIGN KEY (app_id, user_id)"
-                + " REFERENCES " + Config.getConfig(start).getDashboardUsersTable() + "(app_id, user_id)"
-                + " ON DELETE CASCADE ON UPDATE CASCADE);";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey") + " PRIMARY KEY(session_id),"
+                + ("CONSTRAINT " + Utils.getConstraintName(schema, tableName, "user_id", "fkey") + " FOREIGN KEY (user_id)"
+                + " REFERENCES " + Config.getConfig(start).getDashboardUsersTable() + "(user_id)"
+                + " ON DELETE CASCADE ON UPDATE CASCADE);");
         // @formatter:on
-    }
-
-    static String getQueryToCreateDashboardUserSessionsExpiryIndex(Start start) {
-        return "CREATE INDEX dashboard_user_sessions_expiry_index ON "
-                + Config.getConfig(start).getDashboardSessionsTable() + "(expiry);";
-    }
-
-    public static String getQueryToCreateUserIdIndexForDashboardUserSessionsTable(Start start) {
-        return "CREATE INDEX dashboard_user_sessions_user_id_index ON "
-                + Config.getConfig(start).getDashboardSessionsTable() + "(app_id, user_id);";
     }
 
     public static void createDashboardUser(Start start, AppIdentifier appIdentifier, String userId, String email,

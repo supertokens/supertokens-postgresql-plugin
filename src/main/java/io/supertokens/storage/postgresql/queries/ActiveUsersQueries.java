@@ -14,23 +14,9 @@ import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 
 public class ActiveUsersQueries {
     static String getQueryToCreateUserLastActiveTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-
         return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getUserLastActiveTable() + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "user_id VARCHAR(128),"
-                + "last_active_time BIGINT,"
-                + "PRIMARY KEY(app_id, user_id),"
-                + "CONSTRAINT " +
-                Utils.getConstraintName(schema, Config.getConfig(start).getUserLastActiveTable(), "app_id", "fkey")
-                + " FOREIGN KEY(app_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppsTable() + " (app_id) ON DELETE CASCADE"
-                + ");";
-    }
-
-    static String getQueryToCreateAppIdIndexForUserLastActiveTable(Start start) {
-        return "CREATE INDEX IF NOT EXISTS user_last_active_app_id_index ON "
-                + Config.getConfig(start).getUserLastActiveTable() + "(app_id);";
+                + "last_active_time BIGINT," + "PRIMARY KEY(user_id)" + " );";
     }
 
     public static int countUsersActiveSince(Start start, AppIdentifier appIdentifier, long sinceTime)

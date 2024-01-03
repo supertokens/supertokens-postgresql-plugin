@@ -38,21 +38,10 @@ public class UserMetadataQueries {
         String tableName = Config.getConfig(start).getUserMetadataTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "user_id VARCHAR(128) NOT NULL,"
                 + "user_metadata TEXT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
-                + " PRIMARY KEY(app_id, user_id),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "app_id", "fkey")
-                + " FOREIGN KEY(app_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppsTable() + " (app_id) ON DELETE CASCADE"
-                + ");";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey") + " PRIMARY KEY(user_id)" + " );";
         // @formatter:on
-    }
-
-    public static String getQueryToCreateAppIdIndexForUserMetadataTable(Start start) {
-        return "CREATE INDEX user_metadata_app_id_index ON "
-                + Config.getConfig(start).getUserMetadataTable() + "(app_id);";
     }
 
     public static int deleteUserMetadata(Start start, AppIdentifier appIdentifier, String userId)

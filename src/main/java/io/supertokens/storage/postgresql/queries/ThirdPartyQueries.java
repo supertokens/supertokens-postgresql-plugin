@@ -45,58 +45,19 @@ import static io.supertokens.storage.postgresql.config.Config.getConfig;
 public class ThirdPartyQueries {
 
     static String getQueryToCreateUsersTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String thirdPartyUsersTable = Config.getConfig(start).getThirdPartyUsersTable();
+        String schema = getConfig(start).getTableSchema();
+        String thirdPartyUsersTable = getConfig(start).getThirdPartyUsersTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + thirdPartyUsersTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "third_party_id VARCHAR(28) NOT NULL,"
-                + "third_party_user_id VARCHAR(256) NOT NULL,"
-                + "user_id CHAR(36) NOT NULL,"
+                + "third_party_user_id VARCHAR(128) NOT NULL,"
+                + "user_id CHAR(36) NOT NULL CONSTRAINT " + Utils.getConstraintName(schema, thirdPartyUsersTable, "user_id", "key") + " UNIQUE,"
                 + "email VARCHAR(256) NOT NULL,"
                 + "time_joined BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, thirdPartyUsersTable, "user_id", "fkey")
-                + " FOREIGN KEY(app_id, user_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +
-                " (app_id, user_id) ON DELETE CASCADE,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, thirdPartyUsersTable, null, "pkey")
-                + " PRIMARY KEY (app_id, user_id)"
-                + ");";
+                + "CONSTRAINT " + Utils.getConstraintName(schema, thirdPartyUsersTable, null, "pkey") + " PRIMARY KEY (third_party_id, third_party_user_id));";
         // @formatter:on
     }
 
-    public static String getQueryToThirdPartyUserEmailIndex(Start start) {
-        return "CREATE INDEX IF NOT EXISTS thirdparty_users_email_index ON "
-                + Config.getConfig(start).getThirdPartyUsersTable() + " (app_id, email);";
-    }
-
-    public static String getQueryToThirdPartyUserIdIndex(Start start) {
-        return "CREATE INDEX IF NOT EXISTS thirdparty_users_thirdparty_user_id_index ON "
-                + Config.getConfig(start).getThirdPartyUsersTable() + " (app_id, third_party_id, third_party_user_id);";
-    }
-
-    static String getQueryToCreateThirdPartyUserToTenantTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String thirdPartyUserToTenantTable = Config.getConfig(start).getThirdPartyUserToTenantTable();
-        // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + thirdPartyUserToTenantTable + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
-                + "tenant_id VARCHAR(64) DEFAULT 'public',"
-                + "user_id CHAR(36) NOT NULL,"
-                + "third_party_id VARCHAR(28) NOT NULL,"
-                + "third_party_user_id VARCHAR(256) NOT NULL,"
-                + "CONSTRAINT " +
-                Utils.getConstraintName(schema, thirdPartyUserToTenantTable, "third_party_user_id", "key")
-                + " UNIQUE (app_id, tenant_id, third_party_id, third_party_user_id),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, thirdPartyUserToTenantTable, null, "pkey")
-                + " PRIMARY KEY (app_id, tenant_id, user_id),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, thirdPartyUserToTenantTable, "user_id", "fkey")
-                + " FOREIGN KEY (app_id, tenant_id, user_id)"
-                + " REFERENCES " + Config.getConfig(start).getUsersTable() +
-                "(app_id, tenant_id, user_id) ON DELETE CASCADE"
-                + ");";
-        // @formatter:on
-    }
 
     public static AuthRecipeUserInfo signUp(Start start, TenantIdentifier tenantIdentifier, String id, String email,
                                             LoginMethod.ThirdParty thirdParty, long timeJoined)

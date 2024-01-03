@@ -22,88 +22,30 @@ import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 
 public class TOTPQueries {
     public static String getQueryToCreateUsersTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String tableName = Config.getConfig(start).getTotpUsersTable();
-        // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
+        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getTotpUsersTable() + " ("
                 + "user_id VARCHAR(128) NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
-                + " PRIMARY KEY (app_id, user_id),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "app_id", "fkey")
-                + " FOREIGN KEY(app_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppsTable() +  " (app_id) ON DELETE CASCADE"
-                + ");";
-        // @formatter:on
-    }
-
-    public static String getQueryToCreateAppIdIndexForUsersTable(Start start) {
-        return "CREATE INDEX totp_users_app_id_index ON "
-                + Config.getConfig(start).getTotpUsersTable() + "(app_id);";
+                + "PRIMARY KEY (user_id))";
     }
 
     public static String getQueryToCreateUserDevicesTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String tableName = Config.getConfig(start).getTotpUserDevicesTable();
-        // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
-                + "user_id VARCHAR(128) NOT NULL,"
-                + "device_name VARCHAR(256) NOT NULL,"
+        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getTotpUserDevicesTable() + " ("
+                + "user_id VARCHAR(128) NOT NULL," + "device_name VARCHAR(256) NOT NULL,"
                 + "secret_key VARCHAR(256) NOT NULL,"
-                + "period INTEGER NOT NULL,"
-                + "skew INTEGER NOT NULL,"
-                + "verified BOOLEAN NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
-                + " PRIMARY KEY (app_id, user_id, device_name),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "user_id", "fkey")
-                + " FOREIGN KEY (app_id, user_id)"
-                + " REFERENCES " + Config.getConfig(start).getTotpUsersTable() + "(app_id, user_id) ON DELETE CASCADE"
-                + ");";
-        // @formatter:on
-    }
-
-    public static String getQueryToCreateUserIdIndexForUserDevicesTable(Start start) {
-        return "CREATE INDEX totp_user_devices_user_id_index ON "
-                + Config.getConfig(start).getTotpUserDevicesTable() + "(app_id, user_id);";
+                + "period INTEGER NOT NULL," + "skew INTEGER NOT NULL," + "verified BOOLEAN NOT NULL,"
+                + "PRIMARY KEY (user_id, device_name),"
+                + "FOREIGN KEY (user_id) REFERENCES "
+                + Config.getConfig(start).getTotpUsersTable() + "(user_id) ON DELETE CASCADE);";
     }
 
     public static String getQueryToCreateUsedCodesTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String tableName = Config.getConfig(start).getTotpUsedCodesTable();
-        // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
-                + "app_id VARCHAR(64) DEFAULT 'public',"
-                + "tenant_id VARCHAR(64) DEFAULT 'public',"
+        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getTotpUsedCodesTable() + " ("
                 + "user_id VARCHAR(128) NOT NULL, "
                 + "code VARCHAR(8) NOT NULL," + "is_valid BOOLEAN NOT NULL,"
                 + "expiry_time_ms BIGINT NOT NULL,"
                 + "created_time_ms BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
-                + " PRIMARY KEY (app_id, tenant_id, user_id, created_time_ms),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "user_id", "fkey")
-                + " FOREIGN KEY (app_id, user_id)"
-                + " REFERENCES " + Config.getConfig(start).getTotpUsersTable() + "(app_id, user_id) ON DELETE CASCADE,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "tenant_id", "fkey")
-                + " FOREIGN KEY (app_id, tenant_id)"
-                + " REFERENCES " + Config.getConfig(start).getTenantsTable() + " (app_id, tenant_id) ON DELETE CASCADE"
-                + ");";
-        // @formatter:on
-    }
-
-    public static String getQueryToCreateUserIdIndexForUsedCodesTable(Start start) {
-        return "CREATE INDEX IF NOT EXISTS totp_used_codes_user_id_index ON "
-                + Config.getConfig(start).getTotpUsedCodesTable() + " (app_id, user_id)";
-    }
-
-    public static String getQueryToCreateTenantIdIndexForUsedCodesTable(Start start) {
-        return "CREATE INDEX IF NOT EXISTS totp_used_codes_tenant_id_index ON "
-                + Config.getConfig(start).getTotpUsedCodesTable() + " (app_id, tenant_id)";
-    }
-
-    public static String getQueryToCreateUsedCodesExpiryTimeIndex(Start start) {
-        return "CREATE INDEX IF NOT EXISTS totp_used_codes_expiry_time_ms_index ON "
-                + Config.getConfig(start).getTotpUsedCodesTable() + " (app_id, tenant_id, expiry_time_ms)";
+                + "PRIMARY KEY (user_id, created_time_ms),"
+                + "FOREIGN KEY (user_id) REFERENCES "
+                + Config.getConfig(start).getTotpUsersTable() + "(user_id) ON DELETE CASCADE);";
     }
 
     private static int insertUser_Transaction(Start start, Connection con, AppIdentifier appIdentifier, String userId)
