@@ -26,9 +26,6 @@ import org.flywaydb.core.api.migration.Context;
 import java.sql.Statement;
 import java.util.Map;
 
-import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.STARTING_MIGRATION;
-import static io.supertokens.storage.postgresql.ProcessState.getInstance;
-
 public class V4__plugin_version_5_0_0 extends BaseJavaMigration {
 
     @Override

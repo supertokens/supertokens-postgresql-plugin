@@ -94,124 +94,123 @@ public class GeneralQueries {
         while (retry) {
             retry = false;
             try {
-                if (!doesTableExists(start, Config.getConfig(start).getKeyValueTable())) {
+                 {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateKeyValueTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getUsersTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateUsersTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getUserLastActiveTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, ActiveUsersQueries.getQueryToCreateUserLastActiveTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateAccessTokenSigningKeysTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getSessionInfoTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateSessionInfoTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getEmailPasswordUsersTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, EmailPasswordQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
                 }
                 
 
-                if (!doesTableExists(start, Config.getConfig(start).getPasswordResetTokensTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreatePasswordResetTokensTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getEmailVerificationTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateEmailVerificationTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getEmailVerificationTokensTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateEmailVerificationTokensTable(start), NO_OP_SETTER);
                 }
                 
-                if (!doesTableExists(start, Config.getConfig(start).getThirdPartyUsersTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, ThirdPartyQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getJWTSigningKeysTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateJWTSigningTable(start), NO_OP_SETTER);
-
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getPasswordlessUsersTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, PasswordlessQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getPasswordlessDevicesTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateDevicesTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getPasswordlessCodesTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateCodesTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getUserMetadataTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, getQueryToCreateUserMetadataTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getRolesTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, UserRolesQueries.getQueryToCreateRolesTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getUserRolesPermissionsTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, UserRolesQueries.getQueryToCreateRolePermissionsTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getUserRolesTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, UserRolesQueries.getQueryToCreateUserRolesTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getUserIdMappingTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, UserIdMappingQueries.getQueryToCreateUserIdMappingTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getDashboardUsersTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, DashboardQueries.getQueryToCreateDashboardUsersTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getDashboardSessionsTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, DashboardQueries.getQueryToCreateDashboardUserSessionsTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getTotpUsersTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, TOTPQueries.getQueryToCreateUsersTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getTotpUserDevicesTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, TOTPQueries.getQueryToCreateUserDevicesTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, Config.getConfig(start).getTotpUsedCodesTable())) {
+                {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, TOTPQueries.getQueryToCreateUsedCodesTable(start), NO_OP_SETTER);
                 }

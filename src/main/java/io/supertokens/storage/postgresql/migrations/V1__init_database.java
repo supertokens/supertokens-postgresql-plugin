@@ -24,12 +24,6 @@ import org.flywaydb.core.api.migration.Context;
 
 import java.util.Map;
 
-import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
-import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.CREATING_NEW_TABLE;
-import static io.supertokens.storage.postgresql.ProcessState.getInstance;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
-import static io.supertokens.storage.postgresql.config.Config.getConfig;
-
 
 public class V1__init_database extends BaseJavaMigration {
 

@@ -27,22 +27,30 @@ import java.util.Map;
 
 public final class FlywayMigration {
 
+    private static final String LOCATION = "classpath:/io/supertokens/storage/postgresql/migrations";
     private FlywayMigration() {}
 
     public static void startMigration(Start start) throws SQLException, StorageQueryException {
+        String baseline = BaselineMigrationQueries.getBaselineMigrationVersion(start);
+        if (Integer.parseInt(baseline) >= BaselineMigrationQueries.LAST_MIGRATION) {
+            return;
+        }
+
         Logging.info(start, "Starting migration.", true);
         MigrationContextManager.putContext(start.getProcessId(), start);
+        int maxRetries = 5;
 
         try {
             Flyway flyway = Flyway.configure()
                     .dataSource(ConnectionPool.getHikariDataSource(start))
                     .baselineOnMigrate(true)
-                    .baselineVersion(BaselineMigrationQueries.getBaselineMigrationVersion(start))
+                    .baselineVersion(baseline)
                     .table(Config.getConfig(start).getFlywaySchemaHistory())
-                    .locations("classpath:/io/supertokens/storage/postgresql/migrations")
+                    .connectRetries(maxRetries)
+                    .lockRetryCount(maxRetries)
+                    .locations(LOCATION)
                     .placeholders(getPlaceholders(start))
                     .load();
-            flyway.clean();
             flyway.migrate();
         } finally {
             MigrationContextManager.removeContext(start.getProcessId());

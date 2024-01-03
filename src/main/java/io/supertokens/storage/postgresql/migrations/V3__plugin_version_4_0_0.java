@@ -27,9 +27,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Map;
 
-import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.STARTING_MIGRATION;
-import static io.supertokens.storage.postgresql.ProcessState.getInstance;
-
 public class V3__plugin_version_4_0_0 extends BaseJavaMigration {
 
 

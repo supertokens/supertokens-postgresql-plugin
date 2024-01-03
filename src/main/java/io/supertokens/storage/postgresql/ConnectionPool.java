@@ -200,7 +200,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
 
     public static HikariDataSource getHikariDataSource(Start start) throws SQLException {
         if (getInstance(start) == null || getInstance(start).hikariDataSource == null ) {
-            throw new RuntimeException("Please call initPool before getHikariDataSource");
+            throw new IllegalStateException("Please call initPool before getHikariDataSource");
         }
         if (!start.enabled) {
             throw new SQLException("Storage layer disabled");
