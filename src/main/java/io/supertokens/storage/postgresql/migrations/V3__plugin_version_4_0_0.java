@@ -583,6 +583,9 @@ public class V3__plugin_version_4_0_0 extends BaseJavaMigration {
 
             statement.execute("CREATE INDEX IF NOT EXISTS emailverification_tokens_tenant_id_index ON " +
                     emailVerificationTokensTable + " (app_id, tenant_id);");
+
+            statement.execute("CREATE INDEX IF NOT EXISTS emailverification_tokens_index ON " +
+                    emailVerificationTokensTable + " (token_expiry);");
         }
     }
 
@@ -603,7 +606,8 @@ public class V3__plugin_version_4_0_0 extends BaseJavaMigration {
                     " DROP CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUsersTable, null, "pkey") + " CASCADE;");
 
             statement.execute("ALTER TABLE " + emailPasswordUsersTable +
-                    " DROP CONSTRAINT IF EXISTS " + Utils.getConstraintName(schema, emailPasswordUsersTable, null, "key") + " CASCADE;");
+                    " DROP CONSTRAINT IF EXISTS " + Utils.getConstraintName(schema, emailPasswordUsersTable, "email",
+                    "key") + " CASCADE;");
 
             statement.execute("ALTER TABLE " + emailPasswordUsersTable +
                     " ADD CONSTRAINT " + Utils.getConstraintName(schema,
@@ -704,6 +708,9 @@ public class V3__plugin_version_4_0_0 extends BaseJavaMigration {
 
             statement.execute("CREATE INDEX IF NOT EXISTS emailpassword_pswd_reset_tokens_user_id_index ON " +
                     passwordResetTokensTable + " (app_id, user_id);");
+
+            statement.execute("CREATE INDEX IF NOT EXISTS emailpassword_password_reset_token_expiry_index ON " +
+                    passwordResetTokensTable + " (token_expiry);");
         }
     }
 
@@ -1324,6 +1331,9 @@ public class V3__plugin_version_4_0_0 extends BaseJavaMigration {
 
             statement.execute("CREATE INDEX IF NOT EXISTS dashboard_user_sessions_user_id_index ON " +
                     dashboardSessionsTable + " (app_id, user_id);");
+
+            statement.execute("CREATE INDEX IF NOT EXISTS dashboard_user_sessions_expiry_index ON " +
+                    dashboardSessionsTable + " (expiry);");
         }
     }
 
