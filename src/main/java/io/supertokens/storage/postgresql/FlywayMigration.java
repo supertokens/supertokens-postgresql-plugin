@@ -21,8 +21,6 @@ import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.output.Logging;
 import io.supertokens.storage.postgresql.queries.BaselineMigrationQueries;
 import org.flywaydb.core.Flyway;
-import org.jetbrains.annotations.TestOnly;
-
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
@@ -44,10 +42,8 @@ public final class FlywayMigration {
                     .locations("classpath:/io/supertokens/storage/postgresql/migrations")
                     .placeholders(getPlaceholders(start))
                     .load();
+            flyway.clean();
             flyway.migrate();
-        }
-        catch (Exception e) {
-            throw e;
         } finally {
             MigrationContextManager.removeContext(start.getProcessId());
         }
@@ -55,46 +51,8 @@ public final class FlywayMigration {
 
     private static Map<String, String> getPlaceholders(Start start) {
         Map<String, String> ph = new HashMap<>();
-        // TODO: Now that we have Start instance inside migration, be can use that instead of passing and maintaining
-        //  this placeholders map.
-
         ph.put("process_id", start.getProcessId());
-        ph.put("schema", Config.getConfig(start).getTableSchema());
-        ph.put("session_info_table", Config.getConfig(start).getSessionInfoTable());
-        ph.put("jwt_signing_keys_table", Config.getConfig(start).getJWTSigningKeysTable());
-        ph.put("session_access_token_signing_keys_table", Config.getConfig(start).getAccessTokenSigningKeysTable());
         ph.put("access_token_signing_key_dynamic", String.valueOf( Config.getConfig(start).getAccessTokenSigningKeyDynamic()));
-        ph.put("apps_table", Config.getConfig(start).getAppsTable());
-        ph.put("tenants_table", Config.getConfig(start).getTenantsTable());
-        ph.put("key_value_table", Config.getConfig(start).getKeyValueTable());
-        ph.put("app_id_to_user_id_table", Config.getConfig(start).getAppIdToUserIdTable());
-        ph.put("all_auth_recipe_users_table", Config.getConfig(start).getUsersTable());
-        ph.put("tenant_configs_table", Config.getConfig(start).getTenantConfigsTable());
-        ph.put("tenant_thirdparty_providers_table", Config.getConfig(start).getTenantThirdPartyProvidersTable());
-        ph.put("tenant_thirdparty_provider_clients_table", Config.getConfig(start).getTenantThirdPartyProviderClientsTable());
-        ph.put("emailverification_verified_emails_table", Config.getConfig(start).getEmailVerificationTable());
-        ph.put("emailverification_tokens_table", Config.getConfig(start).getEmailVerificationTokensTable());
-        ph.put("emailpassword_users_table", Config.getConfig(start).getEmailPasswordUsersTable());
-        ph.put("emailpassword_user_to_tenant_table", Config.getConfig(start).getEmailPasswordUserToTenantTable());
-        ph.put("emailpassword_pswd_reset_tokens_table", Config.getConfig(start).getPasswordResetTokensTable());
-        ph.put("passwordless_users_table", Config.getConfig(start).getPasswordlessUsersTable());
-        ph.put("passwordless_user_to_tenant_table", Config.getConfig(start).getPasswordlessUserToTenantTable());
-        ph.put("passwordless_devices_table", Config.getConfig(start).getPasswordlessDevicesTable());
-        ph.put("passwordless_codes_table", Config.getConfig(start).getPasswordlessCodesTable());
-        ph.put("thirdparty_users_table", Config.getConfig(start).getThirdPartyUsersTable());
-        ph.put("thirdparty_user_to_tenant_table", Config.getConfig(start).getThirdPartyUserToTenantTable());
-        ph.put("roles_table", Config.getConfig(start).getRolesTable());
-        ph.put("role_permissions_table", Config.getConfig(start).getUserRolesPermissionsTable());
-        ph.put("user_roles_table", Config.getConfig(start).getUserRolesTable());
-        ph.put("user_metadata_table", Config.getConfig(start).getUserMetadataTable());
-        ph.put("dashboard_users_table", Config.getConfig(start).getDashboardUsersTable());
-        ph.put("dashboard_user_sessions_table", Config.getConfig(start).getDashboardSessionsTable());
-        ph.put("totp_users_table", Config.getConfig(start).getTotpUsersTable());
-        ph.put("totp_user_devices_table", Config.getConfig(start).getTotpUserDevicesTable());
-        ph.put("totp_used_codes_table", Config.getConfig(start).getTotpUsedCodesTable());
-        ph.put("user_last_active_table", Config.getConfig(start).getUserLastActiveTable());
-        ph.put("userid_mapping_table", Config.getConfig(start).getUserIdMappingTable());
-
         return ph;
     }
 }

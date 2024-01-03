@@ -2,6 +2,7 @@ package io.supertokens.storage.postgresql.migrations;
 
 import io.supertokens.storage.postgresql.MigrationContextManager;
 import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
 import org.flywaydb.core.api.migration.BaseJavaMigration;
 import org.flywaydb.core.api.migration.Context;
 import java.sql.Connection;
@@ -14,9 +15,6 @@ import com.google.i18n.phonenumbers.NumberParseException;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import com.google.i18n.phonenumbers.Phonenumber;
 
-import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.STARTING_MIGRATION;
-import static io.supertokens.storage.postgresql.ProcessState.getInstance;
-
 public class V6__core_version_7_0_12 extends BaseJavaMigration {
 
     @Override
@@ -25,10 +23,11 @@ public class V6__core_version_7_0_12 extends BaseJavaMigration {
             Connection connection = context.getConnection();
             Map<String, String> ph = context.getConfiguration().getPlaceholders();
             Start start = MigrationContextManager.getContext(ph.get("process_id"));
-            getInstance(start).addState(STARTING_MIGRATION, null);
+            String passwordlessUsersTable = Config.getConfig(start).getPasswordlessUsersTable();
+            String passwordlessDevicesTable = Config.getConfig(start).getPasswordlessDevicesTable();
 
-            updatePhoneNumbers(connection, ph.get("passwordless_users_table"));
-            updatePhoneNumbers(connection, ph.get("passwordless_devices_table"));
+            updatePhoneNumbers(connection, passwordlessUsersTable);
+            updatePhoneNumbers(connection, passwordlessDevicesTable);
         } catch (SQLException e) {
             throw e;
         }

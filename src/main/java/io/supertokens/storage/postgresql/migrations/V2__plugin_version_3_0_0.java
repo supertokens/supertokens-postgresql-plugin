@@ -18,9 +18,11 @@ package io.supertokens.storage.postgresql.migrations;
 
 import io.supertokens.storage.postgresql.MigrationContextManager;
 import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
 import org.flywaydb.core.api.migration.BaseJavaMigration;
 import org.flywaydb.core.api.migration.Context;
 
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Map;
 
@@ -33,21 +35,23 @@ public class V2__plugin_version_3_0_0 extends BaseJavaMigration {
     public void migrate(Context context) throws Exception {
         Map<String, String> ph = context.getConfiguration().getPlaceholders();
         Start start = MigrationContextManager.getContext(ph.get("process_id"));
-        getInstance(start).addState(STARTING_MIGRATION, null);
+        String sessionInfoTable = Config.getConfig(start).getSessionInfoTable();
+        String JWTSigningKeysTable = Config.getConfig(start).getJWTSigningKeysTable();
+        String accessTokenSigningKeysTable = Config.getConfig(start).getAccessTokenSigningKeysTable();
 
         try (Statement statement = context.getConnection().createStatement()) {
             // Add a new column with a default value
-            statement.execute("ALTER TABLE " + ph.get("session_info_table") + " ADD COLUMN IF NOT EXISTS use_static_key BOOLEAN NOT NULL DEFAULT" +
+            statement.execute("ALTER TABLE " + sessionInfoTable + " ADD COLUMN IF NOT EXISTS use_static_key BOOLEAN NOT NULL DEFAULT" +
                     "(" + !Boolean.parseBoolean(ph.get("access_token_signing_key_dynamic")) + ")");
             // Alter the column to drop the default value
-            statement.execute("ALTER TABLE " + ph.get("session_info_table") + " ALTER COLUMN " +
+            statement.execute("ALTER TABLE " + sessionInfoTable + " ALTER COLUMN " +
                     "use_static_key DROP DEFAULT");
 
             // Insert data into jwt_signing_keys from session_access_token_signing_keys
-            statement.execute("INSERT INTO " + ph.get("jwt_signing_keys_table") + " (key_id, key_string, algorithm, " +
+            statement.execute("INSERT INTO " + JWTSigningKeysTable + " (key_id, key_string, algorithm, " +
                     "created_at) " +
                     "SELECT CONCAT('s-', created_at_time) as key_id, value as key_string, 'RS256' as algorithm, created_at_time as created_at " +
-                    "FROM " + ph.get("session_access_token_signing_keys_table"));
+                    "FROM " + accessTokenSigningKeysTable);
         }
     }
 }

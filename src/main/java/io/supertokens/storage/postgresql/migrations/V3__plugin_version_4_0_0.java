@@ -242,7 +242,7 @@ public class V3__plugin_version_4_0_0 extends BaseJavaMigration {
         String schema = Config.getConfig(start).getTableSchema();
         String tenantsTable = Config.getConfig(start).getTenantsTable();
         String appsTable = Config.getConfig(start).getAppsTable();
-        
+
         try (Statement statement = context.getConnection().createStatement()) {
             statement.execute("CREATE TABLE IF NOT EXISTS " + tenantsTable + " ( " +
                     "  app_id VARCHAR(64) NOT NULL DEFAULT 'public', " +
@@ -305,7 +305,7 @@ public class V3__plugin_version_4_0_0 extends BaseJavaMigration {
      */
     private void migrateAppIdToUserIdTable(Context context, Start start) throws SQLException {
         String schema = Config.getConfig(start).getTableSchema();
-        String tenantsTable = Config.getConfig(start).getTenantsTable();
+        String appsTable = Config.getConfig(start).getAppsTable();
         String appIdToUserIdTable = Config.getConfig(start).getAppIdToUserIdTable();
         String allUserTable = Config.getConfig(start).getUsersTable();
 
@@ -316,9 +316,9 @@ public class V3__plugin_version_4_0_0 extends BaseJavaMigration {
                     "  recipe_id VARCHAR(128) NOT NULL, " +
                     "  CONSTRAINT " + Utils.getConstraintName(schema, appIdToUserIdTable, null,
                     "pkey") + " PRIMARY KEY (app_id, user_id), " +
-                    "  CONSTRAINT " + Utils.getConstraintName(schema, appIdToUserIdTable, null,
+                    "  CONSTRAINT " + Utils.getConstraintName(schema, appIdToUserIdTable, "app_id",
                     "fkey") + " FOREIGN KEY(app_id) " +
-                    "    REFERENCES " + tenantsTable + " (app_id) ON DELETE CASCADE " +
+                    "    REFERENCES " + appsTable + " (app_id) ON DELETE CASCADE " +
                     ");");
 
             statement.execute("INSERT INTO " + appIdToUserIdTable +
@@ -965,7 +965,7 @@ public class V3__plugin_version_4_0_0 extends BaseJavaMigration {
                     "  third_party_id VARCHAR(28) NOT NULL, " +
                     "  third_party_user_id VARCHAR(256) NOT NULL, " +
                     "  CONSTRAINT " + Utils.getConstraintName(schema, thirdPartyUserToTenantTable,
-                    "user_id", "key") +
+                    "third_party_user_id", "key") +
                     "    UNIQUE (app_id, tenant_id, third_party_id, third_party_user_id), " +
                     "  CONSTRAINT " + Utils.getConstraintName(schema, thirdPartyUserToTenantTable,
                     null, "pkey") +
@@ -989,14 +989,6 @@ public class V3__plugin_version_4_0_0 extends BaseJavaMigration {
             statement.execute("ALTER TABLE " + thirdPartyUserToTenantTable +
                     " DROP CONSTRAINT IF EXISTS " + Utils.getConstraintName(schema,
                     thirdPartyUserToTenantTable, null, "fkey") + ";");
-
-            statement.execute("ALTER TABLE " + thirdPartyUserToTenantTable +
-                    " ADD CONSTRAINT " + Utils.getConstraintName(schema,
-                    thirdPartyUserToTenantTable, "user_id", "fkey") +
-                    "   FOREIGN KEY (app_id, tenant_id, user_id) " +
-                    "   REFERENCES " + allUserTable +
-                    " (app_id, tenant_id, user_id) ON DELETE CASCADE;");
-
 
             statement.execute("INSERT INTO " + thirdPartyUserToTenantTable +
                     " (user_id, third_party_id, third_party_user_id) " +
