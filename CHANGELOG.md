@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.0.7] - 2024-01-25
+
+- Fixes the issue where passwords were inadvertently logged in the logs.
+
 ## [5.0.6] - 2023-12-05
 
 - Validates db config types in `canBeUsed` function

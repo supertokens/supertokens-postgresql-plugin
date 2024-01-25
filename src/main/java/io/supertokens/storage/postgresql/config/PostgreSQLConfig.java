@@ -548,10 +548,11 @@ public class PostgreSQLConfig {
         StringBuilder connectionPoolId = new StringBuilder();
         for (Field field : PostgreSQLConfig.class.getDeclaredFields()) {
             if (field.isAnnotationPresent(ConnectionPoolProperty.class)) {
-                connectionPoolId.append("|");
                 try {
-                    if (field.get(this) != null) {
-                        connectionPoolId.append(field.get(this).toString());
+                    String fieldName = field.getName();
+                    String fieldValue = field.get(this) != null ? field.get(this).toString() : null;
+                    if (!fieldName.equals("postgresql_password") && fieldValue != null) {
+                        connectionPoolId.append("|" + fieldValue);
                     }
                 } catch (IllegalAccessException e) {
                     throw new RuntimeException(e);
