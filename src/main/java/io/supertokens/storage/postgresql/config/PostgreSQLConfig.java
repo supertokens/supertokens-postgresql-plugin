@@ -551,7 +551,14 @@ public class PostgreSQLConfig {
                 try {
                     String fieldName = field.getName();
                     String fieldValue = field.get(this) != null ? field.get(this).toString() : null;
-                    if (!fieldName.equals("postgresql_password") && fieldValue != null) {
+                    if(fieldValue == null) {
+                        continue;
+                    }
+                    // To ensure a unique connection pool ID, we include the database password in the connectionPoolId
+                    // and use the "|db_pass|" identifier. This facilitates easy removal of the password from logs when necessary.
+                    if (fieldName.equals("postgresql_password")) {
+                        connectionPoolId.append("|db_pass|" + fieldValue + "|db_pass");
+                    } else {
                         connectionPoolId.append("|" + fieldValue);
                     }
                 } catch (IllegalAccessException e) {
