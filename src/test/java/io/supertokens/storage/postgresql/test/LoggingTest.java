@@ -309,6 +309,49 @@ public class LoggingTest {
         assertFalse(hikariLogger.iteratorForAppenders().hasNext());
     }
 
+    @Test
+    public void testDBPasswordMasking() throws Exception {
+        StorageLayer.close();
+        String[] args = { "../" };
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        File infoLog = new File(Config.getConfig(process.getProcess()).getInfoLogPath(process.getProcess()));
+        File errorLog = new File(Config.getConfig(process.getProcess()).getErrorLogPath(process.getProcess()));
+
+        Logging.error((Start) StorageLayer.getStorage(process.getProcess()), "ERROR LOG: |db_pass|password|db_pass|", false);
+        Logging.info((Start) StorageLayer.getStorage(process.getProcess()), "INFO LOG: |db_pass|password|db_pass|", true);
+
+        boolean dbPasswordMaskedInInfoLog = false;
+        boolean dbPasswordMaskedInErrorLog = false;
+
+        try (Scanner scanner = new Scanner(infoLog, StandardCharsets.UTF_8)) {
+            while (scanner.hasNextLine()) {
+                String line = scanner.nextLine();
+                if(line.contains("INFO LOG") && line.contains("INFO LOG: |********|")) {
+                    dbPasswordMaskedInInfoLog = true;
+                    break;
+                }
+            }
+        }
+
+        try (Scanner errorScanner = new Scanner(errorLog, StandardCharsets.UTF_8)) {
+            while (errorScanner.hasNextLine()) {
+                String line = errorScanner.nextLine();
+                if(line.contains("ERROR LOG") && line.contains("ERROR LOG: |********|")) {
+                    dbPasswordMaskedInErrorLog = true;
+                    break;
+                }
+            }
+        }
+
+        assertTrue(dbPasswordMaskedInInfoLog && dbPasswordMaskedInErrorLog);
+        process.kill();
+
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+    
     private static int countAppenders(ch.qos.logback.classic.Logger logger) {
         int count = 0;
         Iterator<Appender<ILoggingEvent>> appenderIter = logger.iteratorForAppenders();

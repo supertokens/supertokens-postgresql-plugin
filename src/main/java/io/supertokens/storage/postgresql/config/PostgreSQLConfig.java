@@ -554,8 +554,8 @@ public class PostgreSQLConfig {
                     if(fieldValue == null) {
                         continue;
                     }
-                    // To ensure a unique connection pool ID, we include the database password in the connectionPoolId
-                    // and use the "|db_pass|" identifier. This facilitates easy removal of the password from logs when necessary.
+                    // To ensure a unique connectionPoolId we include the database password and use the "|db_pass|" identifier.
+                    // This facilitates easy removal of the password from logs when necessary.
                     if (fieldName.equals("postgresql_password")) {
                         connectionPoolId.append("|db_pass|" + fieldValue + "|db_pass");
                     } else {
