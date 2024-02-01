@@ -21,6 +21,8 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.Appender;
 import com.google.gson.JsonObject;
+
+import io.supertokens.Main;
 import io.supertokens.ProcessState;
 import io.supertokens.config.Config;
 import io.supertokens.featureflag.EE_FEATURES;
@@ -309,6 +311,145 @@ public class LoggingTest {
         assertFalse(hikariLogger.iteratorForAppenders().hasNext());
     }
 
+    @Test
+    public void testDBPasswordMaskingOnDBConnectionFailUsingConnectionUri() throws Exception {
+        StorageLayer.close();
+        String[] args = { "../" };
+
+        String dbUser = "db_user";
+        String dbPassword = "db_password";
+        String dbName = "db_does_not_exist";
+        String dbConnectionUri = "postgresql://" + dbUser + ":" + dbPassword + "@localhost:5432/" + dbName;
+
+        Utils.setValueInConfig("postgresql_connection_uri", dbConnectionUri);
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+
+        process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
+
+        File errorLog = new File(Config.getConfig(process.getProcess()).getErrorLogPath(process.getProcess()));
+
+        boolean dbPasswordMaskedInErrorLog = false;
+
+        try (Scanner errorScanner = new Scanner(errorLog, StandardCharsets.UTF_8)) {
+            while (errorScanner.hasNextLine()) {
+                String line = errorScanner.nextLine();
+                if(line.contains(dbName) && line.contains(dbUser) && !line.contains(dbPassword) && line.contains("********")){
+                    dbPasswordMaskedInErrorLog = true;
+                    break;
+                }
+            }
+        }
+
+        assertTrue(dbPasswordMaskedInErrorLog);
+        process.kill();
+
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
+    public void testDBPasswordMaskingOnDBConnectionFailUsingCredentials() throws Exception {
+        StorageLayer.close();
+        String[] args = { "../" };
+
+        String dbUser = "db_user";
+        String dbPassword = "db_password";
+        String dbName = "db_does_not_exist";
+
+        Utils.setValueInConfig("postgresql_user", dbUser);
+        Utils.setValueInConfig("postgresql_password", dbPassword);
+        Utils.setValueInConfig("postgresql_database_name", dbName);
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+
+        process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
+
+        File errorLog = new File(Config.getConfig(process.getProcess()).getErrorLogPath(process.getProcess()));
+
+        boolean dbPasswordMaskedInErrorLog = false;
+
+        try (Scanner errorScanner = new Scanner(errorLog, StandardCharsets.UTF_8)) {
+            while (errorScanner.hasNextLine()) {
+                String line = errorScanner.nextLine();
+                if(line.contains(dbName) && line.contains(dbUser) && !line.contains(dbPassword) && line.contains("********")){
+                    dbPasswordMaskedInErrorLog = true;
+                    break;
+                }
+            }
+        }
+
+        assertTrue(dbPasswordMaskedInErrorLog);
+        process.kill();
+
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
+    public void testDBPasswordMaskingOnDBConnectionFailWhenCreatingTenant() throws Exception {
+        StorageLayer.close();
+        String[] args = { "../" };
+
+        String dbUser = "db_user";
+        String dbPassword = "db_password";
+        String dbName = "db_does_not_exist";
+        String dbConnectionUri = "postgresql://" + dbUser + ":" + dbPassword + "@localhost:5432/" + dbName;
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        Main main = process.getProcess();
+
+        FeatureFlagTestContent.getInstance(main)
+        .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{
+                EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY});
+
+        process.startProcess();
+
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        JsonObject config = new JsonObject();
+        TenantIdentifier tenantIdentifier = new TenantIdentifier(null, "a1", null);
+
+        config.addProperty("postgresql_connection_uri", dbConnectionUri);
+        StorageLayer.getStorage(new TenantIdentifier(null, null, null), main)
+                .modifyConfigToAddANewUserPoolForTesting(config, 1);
+
+        try {
+            Multitenancy.addNewOrUpdateAppOrTenant(
+                    main,
+                    new TenantIdentifier(null, null, null),
+                    new TenantConfig(
+                            tenantIdentifier,
+                            new EmailPasswordConfig(true),
+                            new ThirdPartyConfig(true, null),
+                            new PasswordlessConfig(true),
+                            config
+                    )
+            );
+            
+        } catch (Exception e) {
+            
+        }
+
+        File errorLog = new File(Config.getConfig(main).getErrorLogPath(main));
+
+        boolean dbPasswordMaskedInErrorLog = false;
+
+        try (Scanner errorScanner = new Scanner(errorLog, StandardCharsets.UTF_8)) {
+            while (errorScanner.hasNextLine()) {
+                String line = errorScanner.nextLine();
+                System.out.println("line: " + line);
+                if(line.contains(dbName) && line.contains(dbUser) && !line.contains(dbPassword) && line.contains("********")){
+                    dbPasswordMaskedInErrorLog = true;
+                    break;
+                }
+            }
+        }
+
+        assertTrue(dbPasswordMaskedInErrorLog);
+        process.kill();
+
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+    
     @Test
     public void testDBPasswordMasking() throws Exception {
         StorageLayer.close();
