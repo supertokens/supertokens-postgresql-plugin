@@ -508,8 +508,9 @@ public class LoggingTest {
                         .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[] {
                                 EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY });
 
+                JsonObject config = new JsonObject();
                 TenantIdentifier tenantIdentifier = new TenantIdentifier(null, "a1", null);
-
+                StorageLayer.getBaseStorage(process.getProcess()).modifyConfigToAddANewUserPoolForTesting(config, 1);
                 Multitenancy.addNewOrUpdateAppOrTenant(
                         main,
                         new TenantIdentifier(null, null, null),
@@ -518,7 +519,8 @@ public class LoggingTest {
                                 new EmailPasswordConfig(true),
                                 new ThirdPartyConfig(true, null),
                                 new PasswordlessConfig(true),
-                                new JsonObject()));
+                                config
+                               ));
 
                 process.kill();
                 assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -552,7 +554,7 @@ public class LoggingTest {
                 TenantIdentifier tenantIdentifier = new TenantIdentifier(null, "a1", null);
                 JsonObject config = new JsonObject();
                 config.addProperty("postgresql_connection_uri", dbConnectionUri);
-
+                StorageLayer.getBaseStorage(process.getProcess()).modifyConfigToAddANewUserPoolForTesting(config, 1);
                 try {
                     Multitenancy.addNewOrUpdateAppOrTenant(
                             main,
