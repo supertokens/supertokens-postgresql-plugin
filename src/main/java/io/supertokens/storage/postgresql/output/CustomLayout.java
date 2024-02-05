@@ -20,13 +20,11 @@ package io.supertokens.storage.postgresql.output;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.CoreConstants;
 import ch.qos.logback.core.LayoutBase;
-import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 class CustomLayout extends LayoutBase<ILoggingEvent> {
 
@@ -35,21 +33,6 @@ class CustomLayout extends LayoutBase<ILoggingEvent> {
     CustomLayout(String processID) {
         super();
         this.processID = processID;
-    }
-
-    public static String maskDBPassword(String log) {
-        String regex = "(\\|db_pass\\|)(.*?)(\\|db_pass\\|)";
-
-        Matcher matcher = Pattern.compile(regex).matcher(log);
-        StringBuffer maskedLog = new StringBuffer();
-
-        while (matcher.find()) {
-            String maskedPassword = "*".repeat(8);
-            matcher.appendReplacement(maskedLog, "|" + maskedPassword + "|");
-        }
-
-        matcher.appendTail(maskedLog);
-        return maskedLog.toString();
     }
 
     @Override
@@ -75,7 +58,7 @@ class CustomLayout extends LayoutBase<ILoggingEvent> {
         sbuf.append(event.getCallerData()[1]);
         sbuf.append(" | ");
 
-        sbuf.append(maskDBPassword(event.getFormattedMessage()));
+        sbuf.append(Utils.maskDBPassword(event.getFormattedMessage()));
         sbuf.append(CoreConstants.LINE_SEPARATOR);
         sbuf.append(CoreConstants.LINE_SEPARATOR);
 
