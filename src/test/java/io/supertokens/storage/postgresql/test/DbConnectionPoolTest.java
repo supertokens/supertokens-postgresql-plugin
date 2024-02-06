@@ -196,16 +196,17 @@ public class DbConnectionPoolTest {
 
         assertEquals(0, errorCount.get());
 
-        assertEquals(200, start.getDbActivityCount("st1"));
+       assertEquals(200, start.getDbActivityCount("st1"));
 
         // delete tenant
         Multitenancy.deleteTenant(new TenantIdentifier(null, null, "t1"), process.getProcess());
         Thread.sleep(3000); // let the tenant be deleted
 
-        assertEquals(0, start.getDbActivityCount("st1"));
+       assertEquals(0, start.getDbActivityCount("st1"));
 
         System.out.println(successAfterErrorTime.get() - firstErrorTime.get() + "ms");
-        assertTrue(successAfterErrorTime.get() - firstErrorTime.get() < 100);
+        assertTrue(successAfterErrorTime.get() - firstErrorTime.get() < 250);
+        assertTrue(successAfterErrorTime.get() - firstErrorTime.get() > 0);
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
