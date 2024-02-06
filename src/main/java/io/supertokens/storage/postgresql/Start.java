@@ -106,6 +106,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
@@ -2989,5 +2991,18 @@ public class Start
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
+    }
+
+    @TestOnly
+    public int getDbActivityCount(String dbname) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT COUNT(*) as c FROM pg_stat_activity WHERE datname = ?;";
+        return execute(this, QUERY, pst -> {
+            pst.setString(1, dbname);
+        }, result -> {
+            if (result.next()) {
+                return result.getInt("c");
+            }
+            return -1;
+        });
     }
 }
