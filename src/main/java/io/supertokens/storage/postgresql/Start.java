@@ -100,6 +100,8 @@ import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
 import java.util.*;
 
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
@@ -2818,5 +2820,18 @@ public class Start
     @TestOnly
     public Thread getMainThread() {
         return mainThread;
+    }
+
+    @TestOnly
+    public int getDbActivityCount(String dbname) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT COUNT(*) as c FROM pg_stat_activity WHERE datname = ?;";
+        return execute(this, QUERY, pst -> {
+            pst.setString(1, dbname);
+        }, result -> {
+            if (result.next()) {
+                return result.getInt("c");
+            }
+            return -1;
+        });
     }
 }

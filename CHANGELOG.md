@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [4.0.3]
+
+- Adds tests to check connection pool behaviour.
+
 ## [4.0.2]
 
 - Fixes null pointer issue when user belongs to no tenant.
