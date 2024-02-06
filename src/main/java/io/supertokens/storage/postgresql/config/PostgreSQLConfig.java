@@ -548,10 +548,18 @@ public class PostgreSQLConfig {
         StringBuilder connectionPoolId = new StringBuilder();
         for (Field field : PostgreSQLConfig.class.getDeclaredFields()) {
             if (field.isAnnotationPresent(ConnectionPoolProperty.class)) {
-                connectionPoolId.append("|");
                 try {
-                    if (field.get(this) != null) {
-                        connectionPoolId.append(field.get(this).toString());
+                    String fieldName = field.getName();
+                    String fieldValue = field.get(this) != null ? field.get(this).toString() : null;
+                    if(fieldValue == null) {
+                        continue;
+                    }
+                    // To ensure a unique connectionPoolId we include the database password and use the "|db_pass|" identifier.
+                    // This facilitates easy removal of the password from logs when necessary.
+                    if (fieldName.equals("postgresql_password")) {
+                        connectionPoolId.append("|db_pass|" + fieldValue + "|db_pass");
+                    } else {
+                        connectionPoolId.append("|" + fieldValue);
                     }
                 } catch (IllegalAccessException e) {
                     throw new RuntimeException(e);

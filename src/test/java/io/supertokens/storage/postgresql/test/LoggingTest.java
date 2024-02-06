@@ -21,6 +21,8 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.Appender;
 import com.google.gson.JsonObject;
+
+import io.supertokens.Main;
 import io.supertokens.ProcessState;
 import io.supertokens.config.Config;
 import io.supertokens.featureflag.EE_FEATURES;
@@ -28,6 +30,7 @@ import io.supertokens.featureflag.FeatureFlagTestContent;
 import io.supertokens.multitenancy.Multitenancy;
 import io.supertokens.pluginInterface.multitenancy.*;
 import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storage.postgresql.output.Logging;
 import io.supertokens.storageLayer.StorageLayer;
 import org.apache.tomcat.util.http.fileupload.FileUtils;
@@ -307,6 +310,277 @@ public class LoggingTest {
         assertEquals(0, countAppenders(hikariLogger));
 
         assertFalse(hikariLogger.iteratorForAppenders().hasNext());
+    }
+
+    @Test
+    public void testDBPasswordMaskingOnDBConnectionFailUsingConnectionUri() throws Exception {
+        String[] args = { "../" };
+
+        String dbUser = "db_user";
+        String dbPassword = "db_password";
+        String dbName = "db_does_not_exist";
+        String dbConnectionUri = "postgresql://" + dbUser + ":" + dbPassword + "@localhost:5432/" + dbName;
+
+        Utils.setValueInConfig("postgresql_connection_uri", dbConnectionUri);
+        Utils.setValueInConfig("error_log_path", "null");
+
+        ByteArrayOutputStream errorOutput = new ByteArrayOutputStream();
+        System.setErr(new PrintStream(errorOutput));
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        try {
+            process.startProcess();
+            process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
+
+            assertTrue(fileContainsString(errorOutput, dbUser));
+            assertTrue(fileContainsString(errorOutput, dbName));
+            assertTrue(fileContainsString(errorOutput, "********"));
+            assertFalse(fileContainsString(errorOutput, dbPassword));
+
+        } finally {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+            System.setErr(new PrintStream(new FileOutputStream(FileDescriptor.err)));
+        }
+    }
+
+    @Test
+    public void testDBPasswordMaskingOnDBConnectionFailUsingCredentials() throws Exception {
+        String[] args = { "../" };
+
+        String dbUser = "db_user";
+        String dbPassword = "db_password";
+        String dbName = "db_does_not_exist";
+
+        Utils.commentConfigValue("postgresql_connection_uri");
+        Utils.setValueInConfig("postgresql_user", dbUser);
+        Utils.setValueInConfig("postgresql_password", dbPassword);
+        Utils.setValueInConfig("postgresql_database_name", dbName);
+        Utils.setValueInConfig("error_log_path", "null");
+
+        ByteArrayOutputStream errorOutput = new ByteArrayOutputStream();
+        System.setErr(new PrintStream(errorOutput));
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        try {
+            process.startProcess();
+            process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
+
+            assertTrue(fileContainsString(errorOutput, dbUser));
+            assertTrue(fileContainsString(errorOutput, dbName));
+            assertTrue(fileContainsString(errorOutput, "********"));
+            assertFalse(fileContainsString(errorOutput, dbPassword));
+
+        } finally {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+            System.setErr(new PrintStream(new FileOutputStream(FileDescriptor.err)));
+        }
+    }
+
+    @Test
+    public void testDBPasswordMasking() throws Exception {
+        String[] args = { "../" };
+
+        ByteArrayOutputStream stdOutput = new ByteArrayOutputStream();
+        ByteArrayOutputStream errorOutput = new ByteArrayOutputStream();
+
+        Utils.setValueInConfig("info_log_path", "null");
+        Utils.setValueInConfig("error_log_path", "null");
+        Utils.setValueInConfig("postgresql_password", "db_password");
+
+        System.setOut(new PrintStream(stdOutput));
+        System.setErr(new PrintStream(errorOutput));
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+
+        try {
+            process.startProcess();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+            Logging.info((Start) StorageLayer.getStorage(process.getProcess()), "INFO LOG: |db_pass|password|db_pass|",
+                    false);
+            Logging.error((Start) StorageLayer.getStorage(process.getProcess()),
+                    "ERROR LOG: |db_pass|password|db_pass|", false);
+
+            assertTrue(fileContainsString(stdOutput, "INFO LOG: |********|"));
+            assertTrue(fileContainsString(errorOutput, "ERROR LOG: |********|"));
+
+        } finally {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+            System.setOut(new PrintStream(new FileOutputStream(FileDescriptor.out)));
+            System.setErr(new PrintStream(new FileOutputStream(FileDescriptor.err)));
+        }
+    }
+
+    @Test
+    public void testDBPasswordIsNotLoggedWhenProcessStartsEnds() throws Exception {
+        String[] args = { "../" };
+
+        Utils.setValueInConfig("error_log_path", "null");
+        Utils.setValueInConfig("info_log_path", "null");
+
+        ByteArrayOutputStream stdOutput = new ByteArrayOutputStream();
+        ByteArrayOutputStream errorOutput = new ByteArrayOutputStream();
+
+        System.setOut(new PrintStream(stdOutput));
+        System.setErr(new PrintStream(errorOutput));
+
+        try {
+            // Case 1: DB Password shouldn't be logged after starting/stopping the process with correct credentials
+            {
+                TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+
+                process.startProcess();
+                assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+                Start start = (Start) StorageLayer.getStorage(process.getProcess());
+                PostgreSQLConfig userConfig = io.supertokens.storage.postgresql.config.Config.getConfig(start);
+                String dbPasswordFromConfig = userConfig.getPassword();
+
+                process.kill();
+                assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+                assertFalse(fileContainsString(stdOutput, dbPasswordFromConfig));
+                assertFalse(fileContainsString(errorOutput, dbPasswordFromConfig));
+            }
+
+            // Case 2: DB Password shouldn't be logged after starting/stopping the process with incorrect credentials
+            {
+                String dbUser = "db_user";
+                String dbPassword = "db_password";
+                String dbName = "db_does_not_exist";
+                String dbConnectionUri = "postgresql://" + dbUser + ":" + dbPassword + "@localhost:5432/" + dbName;
+
+                Utils.setValueInConfig("postgresql_connection_uri", dbConnectionUri);
+
+                TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+
+                process.startProcess();
+                assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE));
+
+                Start start = (Start) StorageLayer.getStorage(process.getProcess());
+                PostgreSQLConfig userConfig = io.supertokens.storage.postgresql.config.Config.getConfig(start);
+                String dbPasswordFromConfig = userConfig.getPassword();
+
+                process.kill();
+                assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+                assertFalse(fileContainsString(stdOutput, dbPasswordFromConfig));
+                assertFalse(fileContainsString(errorOutput, dbPasswordFromConfig));
+            }
+
+        } finally {
+            System.setOut(new PrintStream(new FileOutputStream(FileDescriptor.out)));
+            System.setErr(new PrintStream(new FileOutputStream(FileDescriptor.err)));
+        }
+    }
+
+    @Test
+    public void testDBPasswordIsNotLoggedWhenTenantIsCreated() throws Exception {
+        String[] args = { "../" };
+
+        Utils.setValueInConfig("error_log_path", "null");
+        Utils.setValueInConfig("info_log_path", "null");
+
+        ByteArrayOutputStream stdOutput = new ByteArrayOutputStream();
+        ByteArrayOutputStream errorOutput = new ByteArrayOutputStream();
+
+        System.setOut(new PrintStream(stdOutput));
+        System.setErr(new PrintStream(errorOutput));
+
+        try {
+            // Case 1: DB Password shouldn't be logged when tenant is created with valid credentials
+            {
+                TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+
+                process.startProcess();
+                assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+                Start start = (Start) StorageLayer.getStorage(process.getProcess());
+                PostgreSQLConfig userConfig = io.supertokens.storage.postgresql.config.Config.getConfig(start);
+                String dbPasswordFromConfig = userConfig.getPassword();
+
+                Main main = process.getProcess();
+
+                FeatureFlagTestContent.getInstance(main)
+                        .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[] {
+                                EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY });
+
+                JsonObject config = new JsonObject();
+                TenantIdentifier tenantIdentifier = new TenantIdentifier(null, "a1", null);
+                StorageLayer.getBaseStorage(process.getProcess()).modifyConfigToAddANewUserPoolForTesting(config, 1);
+                Multitenancy.addNewOrUpdateAppOrTenant(
+                        main,
+                        new TenantIdentifier(null, null, null),
+                        new TenantConfig(
+                                tenantIdentifier,
+                                new EmailPasswordConfig(true),
+                                new ThirdPartyConfig(true, null),
+                                new PasswordlessConfig(true),
+                                config
+                               ));
+
+                process.kill();
+                assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+                assertFalse(fileContainsString(stdOutput, dbPasswordFromConfig));
+                assertFalse(fileContainsString(errorOutput, dbPasswordFromConfig));
+            }
+
+            // Case 2: DB Password shouldn't be logged when tenant is created with invalid credentials
+            {
+                String dbUser = "db_user";
+                String dbPassword = "db_password";
+                String dbName = "db_does_not_exist";
+                String dbConnectionUri = "postgresql://" + dbUser + ":" + dbPassword + "@localhost:5432/" + dbName;
+
+                TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+
+                process.startProcess();
+                assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+                Start start = (Start) StorageLayer.getStorage(process.getProcess());
+                PostgreSQLConfig userConfig = io.supertokens.storage.postgresql.config.Config.getConfig(start);
+                String dbPasswordFromConfig = userConfig.getPassword();
+
+                Main main = process.getProcess();
+
+                FeatureFlagTestContent.getInstance(main)
+                        .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[] {
+                                EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY });
+
+                TenantIdentifier tenantIdentifier = new TenantIdentifier(null, "a1", null);
+                JsonObject config = new JsonObject();
+                config.addProperty("postgresql_connection_uri", dbConnectionUri);
+                StorageLayer.getBaseStorage(process.getProcess()).modifyConfigToAddANewUserPoolForTesting(config, 1);
+                try {
+                    Multitenancy.addNewOrUpdateAppOrTenant(
+                            main,
+                            new TenantIdentifier(null, null, null),
+                            new TenantConfig(
+                                    tenantIdentifier,
+                                    new EmailPasswordConfig(true),
+                                    new ThirdPartyConfig(true, null),
+                                    new PasswordlessConfig(true),
+                                    new JsonObject()));
+
+                } catch (Exception e) {
+
+                }
+
+                process.kill();
+                assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+                assertFalse(fileContainsString(stdOutput, dbPasswordFromConfig));
+                assertFalse(fileContainsString(errorOutput, dbPasswordFromConfig));
+            }
+
+        } finally {
+            System.setOut(new PrintStream(new FileOutputStream(FileDescriptor.out)));
+            System.setErr(new PrintStream(new FileOutputStream(FileDescriptor.err)));
+        }
     }
 
     private static int countAppenders(ch.qos.logback.classic.Logger logger) {
