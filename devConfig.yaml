@@ -69,3 +69,11 @@ postgresql_password: "root"
 # (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: "thirdparty_users") string value. Specify the name of the table
 # that will store the thirdparty recipe users.
 # postgresql_thirdparty_users_table_name
+
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: 60000) long value. Timeout in milliseconds for the idle connections
+# to be closed.
+# postgresql_idle_connection_timeout:
+
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: 1) integer value. Minimum number of idle connections to be kept
+# active.
+# postgresql_minimum_idle_connections:

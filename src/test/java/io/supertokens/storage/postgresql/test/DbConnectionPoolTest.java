@@ -64,6 +64,7 @@ public class DbConnectionPoolTest {
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
         FeatureFlagTestContent.getInstance(process.getProcess())
                 .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        Utils.setValueInConfig("postgresql_minimum_idle_connections", "10");
         process.startProcess();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -87,6 +88,7 @@ public class DbConnectionPoolTest {
 
         // change connection pool size
         config.addProperty("postgresql_connection_pool_size", 20);
+        config.addProperty("postgresql_minimum_idle_connections", 20);
 
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                 new TenantIdentifier(null, null, "t1"),
@@ -117,6 +119,7 @@ public class DbConnectionPoolTest {
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
         FeatureFlagTestContent.getInstance(process.getProcess())
                 .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        Utils.setValueInConfig("postgresql_minimum_idle_connections", "10");
         process.startProcess();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -126,6 +129,7 @@ public class DbConnectionPoolTest {
         JsonObject config = new JsonObject();
         start.modifyConfigToAddANewUserPoolForTesting(config, 1);
         config.addProperty("postgresql_connection_pool_size", 300);
+        config.addProperty("postgresql_minimum_idle_connections", 300);
         AtomicLong firstErrorTime = new AtomicLong(-1);
         AtomicLong successAfterErrorTime = new AtomicLong(-1);
         AtomicInteger errorCount = new AtomicInteger(0);
@@ -157,7 +161,7 @@ public class DbConnectionPoolTest {
                         successAfterErrorTime.set(System.currentTimeMillis());
                     }
                 } catch (StorageQueryException e) {
-                    if (e.getMessage().contains("Connection is closed")) {
+                    if (e.getMessage().contains("Connection is closed") || e.getMessage().contains("has been closed")) {
                         if (firstErrorTime.get() == -1) {
                             firstErrorTime.set(System.currentTimeMillis());
                         }
@@ -180,6 +184,7 @@ public class DbConnectionPoolTest {
 
         // change connection pool size
         config.addProperty("postgresql_connection_pool_size", 200);
+        config.addProperty("postgresql_minimum_idle_connections", 200);
 
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                 new TenantIdentifier(null, null, "t1"),
@@ -207,6 +212,166 @@ public class DbConnectionPoolTest {
         System.out.println(successAfterErrorTime.get() - firstErrorTime.get() + "ms");
         assertTrue(successAfterErrorTime.get() - firstErrorTime.get() < 250);
         assertTrue(successAfterErrorTime.get() - firstErrorTime.get() > 0);
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
+    public void testMinimumIdleConnections() throws Exception {
+        String[] args = {"../"};
+        {
+            TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+            FeatureFlagTestContent.getInstance(process.getProcess())
+                    .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+            Utils.setValueInConfig("postgresql_connection_pool_size", "20");
+            Utils.setValueInConfig("postgresql_minimum_idle_connections", "10");
+            Utils.setValueInConfig("postgresql_idle_connection_timeout", "30000");
+            process.startProcess();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+            Thread.sleep(65000); // let the idle connections time out
+
+            Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
+            assertEquals(10, start.getDbActivityCount("supertokens"));
+
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
+    @Test
+    public void testMinimumIdleConnectionForTenants() throws Exception {
+        String[] args = {"../"};
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        Utils.setValueInConfig("postgresql_minimum_idle_connections", "10");
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
+        assertEquals(10, start.getDbActivityCount("supertokens"));
+
+        JsonObject config = new JsonObject();
+        start.modifyConfigToAddANewUserPoolForTesting(config, 1);
+
+        Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
+                new TenantIdentifier(null, null, "t1"),
+                new EmailPasswordConfig(true),
+                new ThirdPartyConfig(true, null),
+                new PasswordlessConfig(true),
+                config
+        ), false);
+
+        Thread.sleep(1000); // let the new tenant be ready
+
+        assertEquals(10, start.getDbActivityCount("st1"));
+
+        // change connection pool size
+        config.addProperty("postgresql_connection_pool_size", 20);
+        config.addProperty("postgresql_minimum_idle_connections", 5);
+
+        Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
+                new TenantIdentifier(null, null, "t1"),
+                new EmailPasswordConfig(true),
+                new ThirdPartyConfig(true, null),
+                new PasswordlessConfig(true),
+                config
+        ), false);
+
+        Thread.sleep(2000); // let the new tenant be ready
+
+        assertEquals(5, start.getDbActivityCount("st1"));
+
+        // delete tenant
+        Multitenancy.deleteTenant(new TenantIdentifier(null, null, "t1"), process.getProcess());
+        Thread.sleep(2000); // let the tenant be deleted
+
+        assertEquals(0, start.getDbActivityCount("st1"));
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
+    public void testIdleConnectionTimeout() throws Exception {
+        String[] args = {"../"};
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        Utils.setValueInConfig("postgresql_minimum_idle_connections", "10");
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
+        assertEquals(10, start.getDbActivityCount("supertokens"));
+
+        JsonObject config = new JsonObject();
+        start.modifyConfigToAddANewUserPoolForTesting(config, 1);
+        config.addProperty("postgresql_connection_pool_size", 300);
+        config.addProperty("postgresql_minimum_idle_connections", 5);
+        config.addProperty("postgresql_idle_connection_timeout", 30000);
+
+        AtomicLong errorCount = new AtomicLong(0);
+
+        Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
+                new TenantIdentifier(null, null, "t1"),
+                new EmailPasswordConfig(true),
+                new ThirdPartyConfig(true, null),
+                new PasswordlessConfig(true),
+                config
+        ), false);
+
+        Thread.sleep(3000); // let the new tenant be ready
+
+        assertTrue(10 >= start.getDbActivityCount("st1"));
+
+        ExecutorService es = Executors.newFixedThreadPool(150);
+
+        for (int i = 0; i < 10000; i++) {
+            int finalI = i;
+            es.execute(() -> {
+                try {
+                    TenantIdentifier t1 = new TenantIdentifier(null, null, "t1");
+                    TenantIdentifierWithStorage t1WithStorage = t1.withStorage(StorageLayer.getStorage(t1, process.getProcess()));
+                    ThirdParty.signInUp(t1WithStorage, process.getProcess(), "google", "googleid"+ finalI, "user" +
+                            finalI + "@example.com");
+
+                } catch (StorageQueryException e) {
+                    errorCount.incrementAndGet();
+                    throw new RuntimeException(e);
+                } catch (EmailChangeNotAllowedException e) {
+                    errorCount.incrementAndGet();
+                    throw new RuntimeException(e);
+                } catch (TenantOrAppNotFoundException e) {
+                    errorCount.incrementAndGet();
+                    throw new RuntimeException(e);
+                } catch (BadPermissionException e) {
+                    errorCount.incrementAndGet();
+                    throw new RuntimeException(e);
+                }
+            });
+        }
+
+        es.shutdown();
+        es.awaitTermination(2, TimeUnit.MINUTES);
+
+        assertTrue(5 < start.getDbActivityCount("st1"));
+
+        assertEquals(0, errorCount.get());
+
+        Thread.sleep(65000); // let the idle connections time out
+
+        assertEquals(5, start.getDbActivityCount("st1"));
+
+        // delete tenant
+        Multitenancy.deleteTenant(new TenantIdentifier(null, null, "t1"), process.getProcess());
+        Thread.sleep(3000); // let the tenant be deleted
+
+        assertEquals(0, start.getDbActivityCount("st1"));
+
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
