@@ -170,6 +170,15 @@ public class DbConnectionPoolTest {
                 } catch (BadPermissionException e) {
                     errorCount.incrementAndGet();
                     throw new RuntimeException(e);
+                } catch (IllegalStateException e) {
+                    if (e.getMessage().contains("Please call initPool before getConnection")) {
+                        if (firstErrorTime.get() == -1) {
+                            firstErrorTime.set(System.currentTimeMillis());
+                        }
+                    } else {
+                        errorCount.incrementAndGet();
+                        throw e;
+                    }
                 }
             });
         }
