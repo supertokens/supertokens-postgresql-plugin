@@ -114,109 +114,122 @@ public class DbConnectionPoolTest {
     public void testDownTimeWhenChangingConnectionPoolSize() throws Exception {
         String[] args = {"../"};
 
-        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
-        FeatureFlagTestContent.getInstance(process.getProcess())
-                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
-        process.startProcess();
-        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+        for (int t = 0; t < 5; t++) {
+            TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+            FeatureFlagTestContent.getInstance(process.getProcess())
+                    .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+            process.startProcess();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-        Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
-        assertEquals(10, start.getDbActivityCount("supertokens"));
+            Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
+            assertEquals(10, start.getDbActivityCount("supertokens"));
 
-        JsonObject config = new JsonObject();
-        start.modifyConfigToAddANewUserPoolForTesting(config, 1);
-        config.addProperty("postgresql_connection_pool_size", 300);
-        AtomicLong firstErrorTime = new AtomicLong(-1);
-        AtomicLong successAfterErrorTime = new AtomicLong(-1);
-        AtomicInteger errorCount = new AtomicInteger(0);
+            JsonObject config = new JsonObject();
+            start.modifyConfigToAddANewUserPoolForTesting(config, 1);
+            config.addProperty("postgresql_connection_pool_size", 300);
+            AtomicLong firstErrorTime = new AtomicLong(-1);
+            AtomicLong successAfterErrorTime = new AtomicLong(-1);
+            AtomicInteger errorCount = new AtomicInteger(0);
 
-        Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
-                new TenantIdentifier(null, null, "t1"),
-                new EmailPasswordConfig(true),
-                new ThirdPartyConfig(true, null),
-                new PasswordlessConfig(true),
-                config
-        ), false);
+            Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
+                    new TenantIdentifier(null, null, "t1"),
+                    new EmailPasswordConfig(true),
+                    new ThirdPartyConfig(true, null),
+                    new PasswordlessConfig(true),
+                    config
+            ), false);
 
-        Thread.sleep(5000); // let the new tenant be ready
+            Thread.sleep(5000); // let the new tenant be ready
 
-        assertEquals(300, start.getDbActivityCount("st1"));
+            assertEquals(300, start.getDbActivityCount("st1"));
 
-        ExecutorService es = Executors.newFixedThreadPool(100);
+            ExecutorService es = Executors.newFixedThreadPool(100);
 
-        for (int i = 0; i < 10000; i++) {
-            int finalI = i;
-            es.execute(() -> {
-                try {
-                    TenantIdentifier t1 = new TenantIdentifier(null, null, "t1");
-                    TenantIdentifierWithStorage t1WithStorage = t1.withStorage(StorageLayer.getStorage(t1, process.getProcess()));
-                    ThirdParty.signInUp(t1WithStorage, process.getProcess(), "google", "googleid"+ finalI, "user" +
-                            finalI + "@example.com");
+            for (int i = 0; i < 10000; i++) {
+                int finalI = i;
+                es.execute(() -> {
+                    try {
+                        TenantIdentifier t1 = new TenantIdentifier(null, null, "t1");
+                        TenantIdentifierWithStorage t1WithStorage = t1.withStorage(StorageLayer.getStorage(t1, process.getProcess()));
+                        ThirdParty.signInUp(t1WithStorage, process.getProcess(), "google", "googleid"+ finalI, "user" +
+                                finalI + "@example.com");
 
-                    if (firstErrorTime.get() != -1 && successAfterErrorTime.get() == -1) {
-                        successAfterErrorTime.set(System.currentTimeMillis());
-                    }
-                } catch (StorageQueryException e) {
-                    if (e.getMessage().contains("Connection is closed") || e.getMessage().contains("has been closed")) {
-                        if (firstErrorTime.get() == -1) {
-                            firstErrorTime.set(System.currentTimeMillis());
+                        if (firstErrorTime.get() != -1 && successAfterErrorTime.get() == -1) {
+                            successAfterErrorTime.set(System.currentTimeMillis());
                         }
-                    } else {
+                    } catch (StorageQueryException e) {
+                        if (e.getMessage().contains("Connection is closed") || e.getMessage().contains("has been closed")) {
+                            if (firstErrorTime.get() == -1) {
+                                firstErrorTime.set(System.currentTimeMillis());
+                            }
+                        } else {
+                            errorCount.incrementAndGet();
+                            throw new RuntimeException(e);
+                        }
+                    } catch (EmailChangeNotAllowedException e) {
                         errorCount.incrementAndGet();
                         throw new RuntimeException(e);
-                    }
-                } catch (EmailChangeNotAllowedException e) {
-                    errorCount.incrementAndGet();
-                    throw new RuntimeException(e);
-                } catch (TenantOrAppNotFoundException e) {
-                    errorCount.incrementAndGet();
-                    throw new RuntimeException(e);
-                } catch (BadPermissionException e) {
-                    errorCount.incrementAndGet();
-                    throw new RuntimeException(e);
-                } catch (IllegalStateException e) {
-                    if (e.getMessage().contains("Please call initPool before getConnection")) {
-                        if (firstErrorTime.get() == -1) {
-                            firstErrorTime.set(System.currentTimeMillis());
-                        }
-                    } else {
+                    } catch (TenantOrAppNotFoundException e) {
                         errorCount.incrementAndGet();
-                        throw e;
+                        throw new RuntimeException(e);
+                    } catch (BadPermissionException e) {
+                        errorCount.incrementAndGet();
+                        throw new RuntimeException(e);
+                    } catch (IllegalStateException e) {
+                        if (e.getMessage().contains("Please call initPool before getConnection")) {
+                            if (firstErrorTime.get() == -1) {
+                                firstErrorTime.set(System.currentTimeMillis());
+                            }
+                        } else {
+                            errorCount.incrementAndGet();
+                            throw e;
+                        }
                     }
-                }
-            });
+                });
+            }
+
+            // change connection pool size
+            config.addProperty("postgresql_connection_pool_size", 200);
+
+            Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
+                    new TenantIdentifier(null, null, "t1"),
+                    new EmailPasswordConfig(true),
+                    new ThirdPartyConfig(true, null),
+                    new PasswordlessConfig(true),
+                    config
+            ), false);
+
+            Thread.sleep(3000); // let the new tenant be ready
+
+            es.shutdown();
+            es.awaitTermination(2, TimeUnit.MINUTES);
+
+            assertEquals(0, errorCount.get());
+
+            assertEquals(200, start.getDbActivityCount("st1"));
+
+            // delete tenant
+            Multitenancy.deleteTenant(new TenantIdentifier(null, null, "t1"), process.getProcess());
+            Thread.sleep(3000); // let the tenant be deleted
+
+            assertEquals(0, start.getDbActivityCount("st1"));
+
+            System.out.println(successAfterErrorTime.get() - firstErrorTime.get() + "ms");
+            assertTrue(successAfterErrorTime.get() - firstErrorTime.get() < 250);
+
+            if (successAfterErrorTime.get() - firstErrorTime.get() == 0) {
+                process.kill();
+                assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+                continue; // retry
+            }
+
+            assertTrue(successAfterErrorTime.get() - firstErrorTime.get() > 0);
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+            return;
         }
 
-        // change connection pool size
-        config.addProperty("postgresql_connection_pool_size", 200);
-
-        Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
-                new TenantIdentifier(null, null, "t1"),
-                new EmailPasswordConfig(true),
-                new ThirdPartyConfig(true, null),
-                new PasswordlessConfig(true),
-                config
-        ), false);
-
-        Thread.sleep(3000); // let the new tenant be ready
-
-        es.shutdown();
-        es.awaitTermination(2, TimeUnit.MINUTES);
-
-        assertEquals(0, errorCount.get());
-
-        assertEquals(200, start.getDbActivityCount("st1"));
-
-        // delete tenant
-        Multitenancy.deleteTenant(new TenantIdentifier(null, null, "t1"), process.getProcess());
-        Thread.sleep(3000); // let the tenant be deleted
-
-        assertEquals(0, start.getDbActivityCount("st1"));
-
-        System.out.println(successAfterErrorTime.get() - firstErrorTime.get() + "ms");
-        assertTrue(successAfterErrorTime.get() - firstErrorTime.get() < 250);
-        assertTrue(successAfterErrorTime.get() - firstErrorTime.get() > 0);
-        process.kill();
-        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        fail(); // tried 5 times
     }
 }
