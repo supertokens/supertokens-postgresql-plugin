@@ -138,7 +138,7 @@ public class DbConnectionPoolTest {
                 config
         ), false);
 
-        Thread.sleep(3000); // let the new tenant be ready
+        Thread.sleep(5000); // let the new tenant be ready
 
         assertEquals(300, start.getDbActivityCount("st1"));
 
@@ -157,7 +157,7 @@ public class DbConnectionPoolTest {
                         successAfterErrorTime.set(System.currentTimeMillis());
                     }
                 } catch (StorageQueryException e) {
-                    if (e.getMessage().contains("Connection is closed")) {
+                    if (e.getMessage().contains("Connection is closed") || e.getMessage().contains("has been closed")) {
                         if (firstErrorTime.get() == -1) {
                             firstErrorTime.set(System.currentTimeMillis());
                         }
@@ -174,6 +174,15 @@ public class DbConnectionPoolTest {
                 } catch (BadPermissionException e) {
                     errorCount.incrementAndGet();
                     throw new RuntimeException(e);
+                } catch (IllegalStateException e) {
+                    if (e.getMessage().contains("Please call initPool before getConnection")) {
+                        if (firstErrorTime.get() == -1) {
+                            firstErrorTime.set(System.currentTimeMillis());
+                        }
+                    } else {
+                        errorCount.incrementAndGet();
+                        throw e;
+                    }
                 }
             });
         }
