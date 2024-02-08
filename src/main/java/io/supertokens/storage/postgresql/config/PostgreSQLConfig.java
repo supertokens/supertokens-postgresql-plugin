@@ -20,12 +20,15 @@ package io.supertokens.storage.postgresql.config;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.storage.postgresql.annotations.ConnectionPoolProperty;
 import io.supertokens.storage.postgresql.annotations.IgnoreForAnnotationCheck;
 import io.supertokens.storage.postgresql.annotations.NotConflictingWithinUserPool;
+import io.supertokens.storage.postgresql.annotations.ConfigDescription;
 import io.supertokens.storage.postgresql.annotations.UserPoolProperty;
 
 import java.lang.reflect.Field;
@@ -40,76 +43,95 @@ public class PostgreSQLConfig {
 
     @JsonProperty
     @IgnoreForAnnotationCheck
+    @ConfigDescription("The version of the config.")
     private int postgresql_config_version = -1;
 
     @JsonProperty
     @ConnectionPoolProperty
+    @ConfigDescription("The maximum number of connections that can be created at a time. (Default 10)")
     private int postgresql_connection_pool_size = 10;
 
     @JsonProperty
     @UserPoolProperty
+    @ConfigDescription("The host of the PostgreSQL database.")
     private String postgresql_host = null;
 
     @JsonProperty
     @UserPoolProperty
+    @ConfigDescription("The port of the PostgreSQL database.")
     private int postgresql_port = -1;
 
     @JsonProperty
     @ConnectionPoolProperty
+    @ConfigDescription("The user of the PostgreSQL database.")
     private String postgresql_user = null;
 
     @JsonProperty
     @ConnectionPoolProperty
+    @ConfigDescription("The password of the PostgreSQL database.")
     private String postgresql_password = null;
 
     @JsonProperty
     @UserPoolProperty
+    @ConfigDescription("The name of the PostgreSQL database.")
     private String postgresql_database_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    @ConfigDescription("The prefix to be added to all table names.")
     private String postgresql_table_names_prefix = "";
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    @ConfigDescription("The name of the key value table.")
     private String postgresql_key_value_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    @ConfigDescription("The name of the session info table.")
     private String postgresql_session_info_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    @ConfigDescription("The name of the emailpassword users table.")
     private String postgresql_emailpassword_users_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    @ConfigDescription("The name of the emailpassword password reset tokens table.")
     private String postgresql_emailpassword_pswd_reset_tokens_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    @ConfigDescription("The name of the emailverification tokens table.")
     private String postgresql_emailverification_tokens_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    @ConfigDescription("The name of the emailverification verified emails table.")
     private String postgresql_emailverification_verified_emails_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    @ConfigDescription("The name of the thirdparty users table.")
     private String postgresql_thirdparty_users_table_name = null;
 
     @JsonProperty
     @UserPoolProperty
+    @ConfigDescription("The schema of the PostgreSQL database. (Default public)")
     private String postgresql_table_schema = "public";
 
     @JsonProperty
     @IgnoreForAnnotationCheck
+    @ConfigDescription("The connection URI of the PostgreSQL database.")
     private String postgresql_connection_uri = null;
 
     @ConnectionPoolProperty
+    @ConfigDescription("The connection attributes of the PostgreSQL database.")
     private String postgresql_connection_attributes = "allowPublicKeyRetrieval=true";
 
     @ConnectionPoolProperty
+    @ConfigDescription("The scheme of the PostgreSQL database.")
     private String postgresql_connection_scheme = "postgresql";
 
     @IgnoreForAnnotationCheck
@@ -124,6 +146,45 @@ public class PostgreSQLConfig {
             validFields.add(entry.getKey());
         }
         return validFields;
+    }
+
+    public static JsonArray getConfigFieldsJson() {
+        JsonArray result = new JsonArray();
+
+        for (String fieldId : PostgreSQLConfig.getValidFields()) {
+            try {
+                Field field = PostgreSQLConfig.class.getDeclaredField(fieldId);
+                if (!field.isAnnotationPresent(JsonProperty.class)) {
+                    continue;
+                }
+                JsonObject fieldJson = new JsonObject();
+                fieldJson.addProperty("name", field.getName());
+                fieldJson.addProperty("description", field.isAnnotationPresent(ConfigDescription.class)
+                        ? field.getAnnotation(ConfigDescription.class).value()
+                        : "");
+                fieldJson.addProperty("isDifferentAcrossTenants",
+                        true);
+
+                String type = "string";
+
+                Class<?> fieldType = field.getType();
+
+                if (fieldType == java.lang.String.class) {
+                    type = "string";
+                } else if (fieldType == boolean.class) {
+                    type = "boolean";
+                } else if (fieldType == int.class || fieldType == long.class || fieldType == double.class) {
+                    type = "number";
+                }
+
+                fieldJson.addProperty("type", type);
+                result.add(fieldJson);
+
+            } catch (NoSuchFieldException e) {
+                continue;
+            }
+        }
+        return result;
     }
 
     public String getTableSchema() {

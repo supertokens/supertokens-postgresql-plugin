@@ -18,6 +18,9 @@
 package io.supertokens.storage.postgresql;
 
 import ch.qos.logback.classic.Logger;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.zaxxer.hikari.pool.HikariPool;
@@ -98,10 +101,12 @@ import org.postgresql.util.ServerErrorMessage;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
@@ -2781,6 +2786,19 @@ public class Start
     @Override
     public Set<String> getValidFieldsInConfig() {
         return PostgreSQLConfig.getValidFields();
+    }
+
+    @Override
+    public JsonArray getConfigFieldsJson() {
+        JsonArray fieldsWithoutProtectedConfig = new JsonArray();
+        for (JsonElement field : PostgreSQLConfig.getConfigFieldsJson()) {
+            JsonObject fieldObj = field.getAsJsonObject();
+            if (Arrays.asList(PROTECTED_DB_CONFIG).contains(fieldObj.get("name").getAsString())) {
+                continue;
+            }
+            fieldsWithoutProtectedConfig.add(fieldObj);
+        }
+        return fieldsWithoutProtectedConfig;
     }
 
     @Override
