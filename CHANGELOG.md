@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.0.8] - 2024-02-08
+
+- Adds implementation for a new method `getConfigFieldsJson` to fetch the plugin config fields.
+
 ## [5.0.7] - 2024-01-25
 
 - Fixes the issue where passwords were inadvertently logged in the logs.
