@@ -98,113 +98,6 @@ public class OneMillionUsersTest {
     static int TOTAL_USERS = 1000000;
     static int NUM_THREADS = 16;
 
-//    private static class UserDataCreator implements Runnable {
-//        private final BlockingQueue<AuthRecipeUserInfo> sharedQueue;
-//        private Main main;
-//
-//        static AtomicLong usersUpdated = new AtomicLong(0);
-//
-//        public UserDataCreator(Main main, BlockingQueue<AuthRecipeUserInfo> sharedQueue) {
-//            this.main = main;
-//            this.sharedQueue = sharedQueue;
-//            lastMil = System.currentTimeMillis();
-//        }
-//
-//        @Override
-//        public void run() {
-//            while (true) {
-//                try {
-//                    AuthRecipeUserInfo user = sharedQueue.take();
-//                    if (user.getSupertokensUserId().equals("")) {
-//                        break;
-//                    }
-//
-//                    Random random = new Random();
-//
-//                    // UserId mapping
-//                    String userId = user.getSupertokensUserId();
-//                    if (random.nextBoolean()) {
-//                        userId = UUID.randomUUID().toString();
-//                        UserIdMapping.createUserIdMapping(main, userId, userId, null, false);
-//                    }
-//
-//                    // User Metadata
-//                    JsonObject metadata = new JsonObject();
-//                    metadata.addProperty("random", random.nextDouble());
-//
-//                    UserMetadata.updateUserMetadata(main, userId, metadata);
-//
-//                    // User Roles
-//                    if (random.nextBoolean()) {
-//                        UserRoles.addRoleToUser(main, userId, "admin");
-//                    } else {
-//                        UserRoles.addRoleToUser(main, userId, "user");
-//                    }
-//
-//                    long updatedCount = usersUpdated.incrementAndGet();
-//                    if (updatedCount % 10000 == 9999) {
-//                        System.out.println("Updated " + (updatedCount) + " users in " + ((System.currentTimeMillis() - lastMil) / 1000) + " sec");
-//                        lastMil = System.currentTimeMillis();
-//                    }
-//                } catch (Exception e) {
-//                    throw new RuntimeException(e);
-//                }
-//            }
-//        }
-//    }
-//
-//    private static class AccountLinkingConsumer implements Runnable {
-//        private final BlockingQueue<String[]> sharedQueue;
-//        private Main main;
-//
-//        private static AtomicLong accountsLinked = new AtomicLong(0);
-//
-//        public AccountLinkingConsumer(Main main, BlockingQueue<String[]> sharedQueue) {
-//            this.main = main;
-//            this.sharedQueue = sharedQueue;
-//            lastMil = System.currentTimeMillis();
-//        }
-//
-//        @Override
-//        public void run() {
-//            while (true) {
-//                try {
-//                    String[] userIds = sharedQueue.take();
-//                    if (userIds[0] == null) {
-//                        break;
-//                    }
-//
-//                    AuthRecipeSQLStorage storage = (AuthRecipeSQLStorage) StorageLayer.getBaseStorage(main);
-//
-//                    storage.startTransaction(con -> {
-//                        storage.makePrimaryUser_Transaction(new AppIdentifier(null, null), con, userIds[0]);
-//                        storage.commitTransaction(con);
-//                        return null;
-//                    });
-//
-//                    for (int i = 1; i < userIds.length; i++) {
-//                        int finalI = i;
-//                        storage.startTransaction(con -> {
-//                            storage.linkAccounts_Transaction(new AppIdentifier(null, null), con, userIds[finalI],
-//                                    userIds[0]);
-//                            storage.commitTransaction(con);
-//                            return null;
-//                        });
-//                    }
-//
-//                    long total = accountsLinked.addAndGet(userIds.length);
-//
-//                    if (total % 10000 > 9996) {
-//                        System.out.println("Linked " + (accountsLinked) + " users in " + ((System.currentTimeMillis() - lastMil) / 1000) + " sec");
-//                        lastMil = System.currentTimeMillis();
-//                    }
-//                } catch (Exception e) {
-//                    throw new RuntimeException(e);
-//                }
-//            }
-//        }
-//    }
-//
     private void createEmailPasswordUsers(Main main) throws Exception {
         System.out.println("Creating emailpassword users...");
 
@@ -381,52 +274,50 @@ public class OneMillionUsersTest {
     }
 
     private void createUserData(Main main) throws Exception {
-//        System.out.println("Creating user data...");
-//
-//        ExecutorService es = Executors.newFixedThreadPool(NUM_THREADS);
-//
-//        UserPaginationContainer usersResult = AuthRecipe.getUsers(main, 10000, "ASC", null,
-//                null, null);
-//
-//        while (true) {
-//            for (AuthRecipeUserInfo user : usersResult.users) {
-//                es.execute(() -> {
-//                    Random random = new Random();
-//
-//                    // UserId mapping
-//                    for (LoginMethod lm : user.loginMethods) {
-//                        if (random.nextBoolean()) {
-//                            String userId = user.getSupertokensUserId();
-//
-//                            userId = "ext" + UUID.randomUUID().toString();
-//                            try {
-//                                UserIdMapping.createUserIdMapping(main, lm.getSupertokensUserId(), userId, null, false);
-//                            } catch (Exception e) {
-//                                throw new RuntimeException(e);
-//                            }
-//                        }
-//                    }
-//
-//                    // User Metadata
-//                    JsonObject metadata = new JsonObject();
-//                    metadata.addProperty("random", random.nextDouble());
-//
-//                    UserMetadata.updateUserMetadata(main, userId, metadata);
-//
-//                    // User Roles
-//                    if (random.nextBoolean()) {
-//                        UserRoles.addRoleToUser(main, userId, "admin");
-//                    } else {
-//                        UserRoles.addRoleToUser(main, userId, "user");
-//                    }
-//                });
-//            }
-//            if (usersResult.nextPaginationToken == null) {
-//                break;
-//            }
-//            usersResult = AuthRecipe.getUsers(main, 10000, "ASC", usersResult.nextPaginationToken,
-//                    null, null);
-//        }
+        System.out.println("Creating user data...");
+
+        ExecutorService es = Executors.newFixedThreadPool(NUM_THREADS / 2);
+
+        UserPaginationContainer usersResult = AuthRecipe.getUsers(main, 500, "ASC", null,
+                null, null);
+
+        while (true) {
+            UserIdMapping.populateExternalUserIdForUsers(
+                    TenantIdentifier.BASE_TENANT.withStorage(StorageLayer.getBaseStorage(main)),
+                    usersResult.users);
+
+            for (AuthRecipeUserInfo user : usersResult.users) {
+                es.execute(() -> {
+                    Random random = new Random();
+
+                    // User Metadata
+                    JsonObject metadata = new JsonObject();
+                    metadata.addProperty("random", random.nextDouble());
+
+                    try {
+                        UserMetadata.updateUserMetadata(main, user.getSupertokensOrExternalUserId(), metadata);
+
+                        // User Roles
+                        if (random.nextBoolean()) {
+                            UserRoles.addRoleToUser(main, user.getSupertokensOrExternalUserId(), "admin");
+                        } else {
+                            UserRoles.addRoleToUser(main, user.getSupertokensOrExternalUserId(), "user");
+                        }
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+            }
+
+            if (usersResult.nextPaginationToken == null) {
+                break;
+            }
+            usersResult = AuthRecipe.getUsers(main, 500, "ASC", usersResult.nextPaginationToken,
+                    null, null);
+        }
+
+        es.shutdown();
+        es.awaitTermination(1, TimeUnit.MINUTES);
     }
 
     private void doAccountLinking(Main main) throws Exception {
