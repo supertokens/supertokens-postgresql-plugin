@@ -387,7 +387,6 @@ public class LoggingTest {
 
         Utils.setValueInConfig("info_log_path", "null");
         Utils.setValueInConfig("error_log_path", "null");
-        Utils.setValueInConfig("postgresql_password", "db_password");
 
         System.setOut(new PrintStream(stdOutput));
         System.setErr(new PrintStream(errorOutput));
