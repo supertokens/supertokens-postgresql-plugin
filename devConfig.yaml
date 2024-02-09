@@ -74,6 +74,6 @@ postgresql_password: "root"
 # to be closed.
 # postgresql_idle_connection_timeout:
 
-# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: 1) integer value. Minimum number of idle connections to be kept
-# active.
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: null) integer value. Minimum number of idle connections to be kept
+# active. If not set, minimum idle connections will be same as the connection pool size.
 # postgresql_minimum_idle_connections:
