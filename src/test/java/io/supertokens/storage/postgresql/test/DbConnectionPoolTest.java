@@ -65,7 +65,6 @@ public class DbConnectionPoolTest {
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
         FeatureFlagTestContent.getInstance(process.getProcess())
                 .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
-        Utils.setValueInConfig("postgresql_minimum_idle_connections", "10");
         process.startProcess();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -89,7 +88,6 @@ public class DbConnectionPoolTest {
 
         // change connection pool size
         config.addProperty("postgresql_connection_pool_size", 20);
-        config.addProperty("postgresql_minimum_idle_connections", 20);
 
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                 new TenantIdentifier(null, null, "t1"),
@@ -122,7 +120,6 @@ public class DbConnectionPoolTest {
             FeatureFlagTestContent.getInstance(process.getProcess())
                     .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
             process.startProcess();
-            Utils.setValueInConfig("postgresql_minimum_idle_connections", "10");
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
             Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
@@ -131,7 +128,6 @@ public class DbConnectionPoolTest {
             JsonObject config = new JsonObject();
             start.modifyConfigToAddANewUserPoolForTesting(config, 1);
             config.addProperty("postgresql_connection_pool_size", 300);
-            config.addProperty("postgresql_minimum_idle_connections", 300);
             AtomicLong firstErrorTime = new AtomicLong(-1);
             AtomicLong successAfterErrorTime = new AtomicLong(-1);
             AtomicInteger errorCount = new AtomicInteger(0);
@@ -192,7 +188,6 @@ public class DbConnectionPoolTest {
 
             // change connection pool size
             config.addProperty("postgresql_connection_pool_size", 200);
-            config.addProperty("postgresql_minimum_idle_connections", 200);
 
             Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                     new TenantIdentifier(null, null, "t1"),
@@ -267,7 +262,6 @@ public class DbConnectionPoolTest {
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
         FeatureFlagTestContent.getInstance(process.getProcess())
                 .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
-        Utils.setValueInConfig("postgresql_minimum_idle_connections", "10");
         process.startProcess();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
@@ -322,7 +316,6 @@ public class DbConnectionPoolTest {
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
         FeatureFlagTestContent.getInstance(process.getProcess())
                 .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
-        Utils.setValueInConfig("postgresql_minimum_idle_connections", "10");
         process.startProcess();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 

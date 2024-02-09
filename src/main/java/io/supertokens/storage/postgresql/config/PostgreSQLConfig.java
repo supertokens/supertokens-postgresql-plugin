@@ -118,7 +118,7 @@ public class PostgreSQLConfig {
 
     @JsonProperty
     @ConnectionPoolProperty
-    private int postgresql_minimum_idle_connections = 1;
+    private Integer postgresql_minimum_idle_connections = null;
 
     @IgnoreForAnnotationCheck
     boolean isValidAndNormalised = false;
@@ -246,7 +246,7 @@ public class PostgreSQLConfig {
         return postgresql_idle_connection_timeout;
     }
 
-    public int getMinimumIdleConnections() {
+    public Integer getMinimumIdleConnections() {
         return postgresql_minimum_idle_connections;
     }
 
@@ -356,16 +356,19 @@ public class PostgreSQLConfig {
                     "'postgresql_connection_pool_size' in the config.yaml file must be > 0");
         }
 
-        if (postgresql_minimum_idle_connections <= 0) {
-            throw new InvalidConfigException(
-                    "'postgresql_minimum_idle_connections' must be a positive value");
+        if (postgresql_minimum_idle_connections != null) {
+            if (postgresql_minimum_idle_connections < 0) {
+                throw new InvalidConfigException(
+                        "'postgresql_minimum_idle_connections' must be >= 0");
+            }
+
+            if (postgresql_minimum_idle_connections > postgresql_connection_pool_size) {
+                throw new InvalidConfigException(
+                        "'postgresql_minimum_idle_connections' must be less than or equal to "
+                                + "'postgresql_connection_pool_size'");
+            }
         }
 
-        if (postgresql_minimum_idle_connections > postgresql_connection_pool_size) {
-            throw new InvalidConfigException(
-                    "'postgresql_minimum_idle_connections' must be less than or equal to "
-                            + "'postgresql_connection_pool_size'");
-        }
 
         // Normalisation
         if (postgresql_connection_uri != null) {
