@@ -112,6 +112,14 @@ public class PostgreSQLConfig {
     @ConnectionPoolProperty
     private String postgresql_connection_scheme = "postgresql";
 
+    @JsonProperty
+    @ConnectionPoolProperty
+    private long postgresql_idle_connection_timeout = 60000;
+
+    @JsonProperty
+    @ConnectionPoolProperty
+    private int postgresql_minimum_idle_connections = 1;
+
     @IgnoreForAnnotationCheck
     boolean isValidAndNormalised = false;
 
@@ -234,6 +242,14 @@ public class PostgreSQLConfig {
         return postgresql_thirdparty_users_table_name;
     }
 
+    public long getIdleConnectionTimeout() {
+        return postgresql_idle_connection_timeout;
+    }
+
+    public int getMinimumIdleConnections() {
+        return postgresql_minimum_idle_connections;
+    }
+
     public String getThirdPartyUserToTenantTable() {
         return addSchemaAndPrefixToTableName("thirdparty_user_to_tenant");
     }
@@ -338,6 +354,17 @@ public class PostgreSQLConfig {
         if (postgresql_connection_pool_size <= 0) {
             throw new InvalidConfigException(
                     "'postgresql_connection_pool_size' in the config.yaml file must be > 0");
+        }
+
+        if (postgresql_minimum_idle_connections <= 0) {
+            throw new InvalidConfigException(
+                    "'postgresql_minimum_idle_connections' must be a positive value");
+        }
+
+        if (postgresql_minimum_idle_connections > postgresql_connection_pool_size) {
+            throw new InvalidConfigException(
+                    "'postgresql_minimum_idle_connections' must be less than or equal to "
+                            + "'postgresql_connection_pool_size'");
         }
 
         // Normalisation

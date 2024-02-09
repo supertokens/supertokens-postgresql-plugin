@@ -10,6 +10,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [4.0.3] - 2024-02-07
 
 - Adds tests to check connection pool behaviour.
+- Adds `postgresql_idle_connection_timeout` and `postgresql_minimum_idle_connections` configs to control active connections to the database.
 
 ## [4.0.2]
 
