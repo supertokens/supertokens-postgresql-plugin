@@ -81,6 +81,10 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         }
         config.setMaximumPoolSize(userConfig.getConnectionPoolSize());
         config.setConnectionTimeout(5000);
+        if (userConfig.getMinimumIdleConnections() != null) {
+            config.setMinimumIdle(userConfig.getMinimumIdleConnections());
+            config.setIdleTimeout(userConfig.getIdleConnectionTimeout());
+        }
         config.addDataSourceProperty("cachePrepStmts", "true");
         config.addDataSourceProperty("prepStmtCacheSize", "250");
         config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");

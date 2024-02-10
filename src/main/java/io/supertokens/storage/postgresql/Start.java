@@ -100,6 +100,8 @@ import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
 import java.util.*;
 
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
@@ -109,7 +111,8 @@ public class Start
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
     private static String[] PROTECTED_DB_CONFIG = new String[]{"postgresql_connection_pool_size",
             "postgresql_connection_uri", "postgresql_host", "postgresql_port", "postgresql_user", "postgresql_password",
-            "postgresql_database_name", "postgresql_table_schema"};
+            "postgresql_database_name", "postgresql_table_schema", "postgresql_idle_connection_timeout",
+            "postgresql_minimum_idle_connections"};
     private static final Object appenderLock = new Object();
     public static boolean silent = false;
     private ResourceDistributor resourceDistributor = new ResourceDistributor();
@@ -2818,5 +2821,18 @@ public class Start
     @TestOnly
     public Thread getMainThread() {
         return mainThread;
+    }
+
+    @TestOnly
+    public int getDbActivityCount(String dbname) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT COUNT(*) as c FROM pg_stat_activity WHERE datname = ?;";
+        return execute(this, QUERY, pst -> {
+            pst.setString(1, dbname);
+        }, result -> {
+            if (result.next()) {
+                return result.getInt("c");
+            }
+            return -1;
+        });
     }
 }
