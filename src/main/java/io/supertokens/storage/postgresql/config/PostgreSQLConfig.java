@@ -302,6 +302,10 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("totp_used_codes");
     }
 
+    public String getBulkImportUsersTable() {
+        return addSchemaAndPrefixToTableName("bulk_import_users");
+    }
+
     private String addSchemaAndPrefixToTableName(String tableName) {
         return addSchemaToTableName(postgresql_table_names_prefix + tableName);
     }
