@@ -564,7 +564,10 @@ public class GeneralQueries {
             String DROP_QUERY = "DROP INDEX IF EXISTS all_auth_recipe_users_pagination_index";
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
-
+        {
+            String DROP_QUERY = "DROP INDEX IF EXISTS bulk_import_users_status_updated_at_index";
+            update(start, DROP_QUERY, NO_OP_SETTER);
+        }
         {
             String DROP_QUERY = "DROP TABLE IF EXISTS "
                     + getConfig(start).getAppsTable() + ","
@@ -598,7 +601,8 @@ public class GeneralQueries {
                     + getConfig(start).getDashboardUsersTable() + ","
                     + getConfig(start).getDashboardSessionsTable() + ","
                     + getConfig(start).getTotpUsedCodesTable() + "," + getConfig(start).getTotpUserDevicesTable() + ","
-                    + getConfig(start).getTotpUsersTable();
+                    + getConfig(start).getTotpUsersTable() + ","
+                    + getConfig(start).getBulkImportUsersTable();
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
     }

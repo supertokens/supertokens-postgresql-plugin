@@ -17,10 +17,16 @@
 package io.supertokens.storage.postgresql.queries;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
-import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.List;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+
+import com.google.gson.JsonObject;
 
 import io.supertokens.pluginInterface.bulkimport.BulkImportUser;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
@@ -48,18 +54,68 @@ public class BulkImportQueries {
             throws SQLException, StorageQueryException {
         StringBuilder queryBuilder = new StringBuilder(
                 "INSERT INTO " + Config.getConfig(start).getBulkImportUsersTable() + " (id, raw_data) VALUES ");
-        for (BulkImportUser user : users) {
-            queryBuilder.append("('")
-                    .append(user.id)
-                    .append("', '")
-                    .append(user.toString())
-                    .append("')");
 
-            if (user != users.get(users.size() - 1)) {
+        int userCount = users.size();
+
+        for (int i = 0; i < userCount; i++) {
+            queryBuilder.append(" (?, ?)");
+
+            if (i < userCount - 1) {
                 queryBuilder.append(",");
             }
         }
-        queryBuilder.append(";");
-        update(start, queryBuilder.toString(), NO_OP_SETTER);
+
+        update(start, queryBuilder.toString(), pst -> {
+            int parameterIndex = 1;
+            for (BulkImportUser user : users) {
+                pst.setString(parameterIndex++, user.id);
+                pst.setString(parameterIndex++, user.toString());
+            }
+        });
+    }
+
+    public static JsonObject[] getBulkImportUsers(Start start, @Nonnull Integer limit, @Nullable String status,
+            @Nullable String bulkImportUserId)
+            throws SQLException, StorageQueryException {
+
+        ArrayList<JsonObject> bulkImportUsers = new ArrayList<>();
+        String baseQuery = "SELECT * FROM " + Config.getConfig(start).getBulkImportUsersTable();
+
+        StringBuilder queryBuilder = new StringBuilder(baseQuery);
+        List<Object> parameters = new ArrayList<>();
+
+        if (status != null) {
+            queryBuilder.append(" WHERE status = ?");
+            parameters.add(status);
+        }
+
+        if (bulkImportUserId != null) {
+            queryBuilder.append(status != null ? " AND" : " WHERE")
+                    .append(" id >= ?");
+            parameters.add(bulkImportUserId);
+        }
+
+        queryBuilder.append(" LIMIT ?");
+        parameters.add(limit);
+
+        String query = queryBuilder.toString();
+
+        return execute(start, query, pst -> {
+            for (int i = 0; i < parameters.size(); i++) {
+                pst.setObject(i + 1, parameters.get(i));
+            }
+        }, result -> {
+            while (result.next()) {
+                JsonObject user = new JsonObject();
+                user.addProperty("id", result.getString("id"));
+                user.addProperty("raw_data", result.getString("raw_data"));
+                user.addProperty("status", result.getString("status"));
+                user.addProperty("error_msg", result.getString("error_msg"));
+                user.addProperty("created_at", result.getLong("created_at"));
+                user.addProperty("updated_at", result.getLong("updated_at"));
+                bulkImportUsers.add(user);
+            }
+            return bulkImportUsers.toArray(new JsonObject[0]);
+        });
     }
 }

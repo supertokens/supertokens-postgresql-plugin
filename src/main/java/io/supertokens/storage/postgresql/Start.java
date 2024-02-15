@@ -2994,9 +2994,27 @@ public class Start
     }
 
     @Override
-    public void addBulkImportUsers(AppIdentifier appIdentifier, ArrayList<BulkImportUser> users) throws StorageQueryException {
+    public void addBulkImportUsers(AppIdentifier appIdentifier, ArrayList<BulkImportUser> users)
+            throws StorageQueryException,
+            io.supertokens.pluginInterface.bulkimport.exceptions.DuplicateUserIdException {
         try {
-             BulkImportQueries.insertBulkImportUsers(this, users);
+            BulkImportQueries.insertBulkImportUsers(this, users);
+        } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
+                if (isPrimaryKeyError(serverErrorMessage, Config.getConfig(this).getBulkImportUsersTable())) {
+                    throw new io.supertokens.pluginInterface.bulkimport.exceptions.DuplicateUserIdException();
+                }
+            }
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public JsonObject[] getBulkImportUsers(AppIdentifier appIdentifier, @Nonnull Integer limit, @Nullable String status,
+            @Nullable String bulkImportUserId) throws StorageQueryException {
+        try {
+            return BulkImportQueries.getBulkImportUsers(this, limit, status, bulkImportUserId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
