@@ -19,6 +19,7 @@ package io.supertokens.storage.postgresql.queries;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,20 +29,28 @@ import javax.annotation.Nullable;
 
 import com.google.gson.JsonObject;
 
+import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.bulkimport.BulkImportUser;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 public class BulkImportQueries {
     static String getQueryToCreateBulkImportUsersTable(Start start) {
-        return "CREATE TABLE IF NOT EXISTS " + Config.getConfig(start).getBulkImportUsersTable() + " ("
+        String schema = Config.getConfig(start).getTableSchema();
+        String tableName = Config.getConfig(start).getBulkImportUsersTable();
+        return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
                 + "id CHAR(36) PRIMARY KEY,"
+                + "app_id VARCHAR(64) NOT NULL DEFAULT 'public',"
                 + "raw_data TEXT NOT NULL,"
                 + "status VARCHAR(128) DEFAULT 'NEW',"
                 + "error_msg TEXT,"
                 + "created_at BIGINT DEFAULT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP),"
-                + "updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)"
+                + "updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "app_id", "fkey") + " "
+                + "FOREIGN KEY(app_id) "
+                + "REFERENCES " + Config.getConfig(start).getAppsTable() + " (app_id) ON DELETE CASCADE"
                 + " );";
     }
 
@@ -50,7 +59,12 @@ public class BulkImportQueries {
                 + Config.getConfig(start).getBulkImportUsersTable() + " (status, updated_at)";
     }
 
-    public static void insertBulkImportUsers(Start start, ArrayList<BulkImportUser> users)
+    public static String getQueryToCreateCreatedAtIndex(Start start) {
+        return "CREATE INDEX IF NOT EXISTS bulk_import_users_created_at_index ON "
+                + Config.getConfig(start).getBulkImportUsersTable() + " (created_at)";
+    }
+
+    public static void insertBulkImportUsers(Start start, List<BulkImportUser> users)
             throws SQLException, StorageQueryException {
         StringBuilder queryBuilder = new StringBuilder(
                 "INSERT INTO " + Config.getConfig(start).getBulkImportUsersTable() + " (id, raw_data) VALUES ");
@@ -74,11 +88,10 @@ public class BulkImportQueries {
         });
     }
 
-    public static JsonObject[] getBulkImportUsers(Start start, @Nonnull Integer limit, @Nullable String status,
+    public static List<JsonObject> getBulkImportUsers(Start start, @Nonnull Integer limit, @Nullable String status,
             @Nullable String bulkImportUserId)
             throws SQLException, StorageQueryException {
 
-        ArrayList<JsonObject> bulkImportUsers = new ArrayList<>();
         String baseQuery = "SELECT * FROM " + Config.getConfig(start).getBulkImportUsersTable();
 
         StringBuilder queryBuilder = new StringBuilder(baseQuery);
@@ -91,11 +104,11 @@ public class BulkImportQueries {
 
         if (bulkImportUserId != null) {
             queryBuilder.append(status != null ? " AND" : " WHERE")
-                    .append(" id >= ?");
+                    .append(" id <= ?");
             parameters.add(bulkImportUserId);
         }
 
-        queryBuilder.append(" LIMIT ?");
+        queryBuilder.append(" ORDER BY created_at DESC LIMIT ?");
         parameters.add(limit);
 
         String query = queryBuilder.toString();
@@ -105,17 +118,34 @@ public class BulkImportQueries {
                 pst.setObject(i + 1, parameters.get(i));
             }
         }, result -> {
+            List<JsonObject> bulkImportUsers = new ArrayList<>();
             while (result.next()) {
-                JsonObject user = new JsonObject();
-                user.addProperty("id", result.getString("id"));
-                user.addProperty("raw_data", result.getString("raw_data"));
-                user.addProperty("status", result.getString("status"));
-                user.addProperty("error_msg", result.getString("error_msg"));
-                user.addProperty("created_at", result.getLong("created_at"));
-                user.addProperty("updated_at", result.getLong("updated_at"));
-                bulkImportUsers.add(user);
+                bulkImportUsers.add(BulkImportUserJsonObjectRowMapper.getInstance().mapOrThrow(result));
             }
-            return bulkImportUsers.toArray(new JsonObject[0]);
+            return bulkImportUsers;
         });
+    }
+
+    private static class BulkImportUserJsonObjectRowMapper implements RowMapper<JsonObject, ResultSet> {
+        private static final BulkImportUserJsonObjectRowMapper INSTANCE = new BulkImportUserJsonObjectRowMapper();
+
+        private BulkImportUserJsonObjectRowMapper() {
+        }
+
+        private static BulkImportUserJsonObjectRowMapper getInstance() {
+            return INSTANCE;
+        }
+
+        @Override
+        public JsonObject map(ResultSet result) throws Exception {
+            JsonObject user = new JsonObject();
+            user.addProperty("id", result.getString("id"));
+            user.addProperty("raw_data", result.getString("raw_data"));
+            user.addProperty("status", result.getString("status"));
+            user.addProperty("error_msg", result.getString("error_msg"));
+            user.addProperty("created_at", result.getLong("created_at"));
+            user.addProperty("updated_at", result.getLong("updated_at"));
+            return user;
+        }
     }
 }

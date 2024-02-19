@@ -2994,7 +2994,7 @@ public class Start
     }
 
     @Override
-    public void addBulkImportUsers(AppIdentifier appIdentifier, ArrayList<BulkImportUser> users)
+    public void addBulkImportUsers(AppIdentifier appIdentifier, List<BulkImportUser> users)
             throws StorageQueryException,
             io.supertokens.pluginInterface.bulkimport.exceptions.DuplicateUserIdException {
         try {
@@ -3011,7 +3011,7 @@ public class Start
     }
 
     @Override
-    public JsonObject[] getBulkImportUsers(AppIdentifier appIdentifier, @Nonnull Integer limit, @Nullable String status,
+    public List<JsonObject> getBulkImportUsers(AppIdentifier appIdentifier, @Nonnull Integer limit, @Nullable String status,
             @Nullable String bulkImportUserId) throws StorageQueryException {
         try {
             return BulkImportQueries.getBulkImportUsers(this, limit, status, bulkImportUserId);
