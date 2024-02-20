@@ -101,16 +101,17 @@ public class BulkImportQueries {
         StringBuilder queryBuilder = new StringBuilder(baseQuery);
         List<Object> parameters = new ArrayList<>();
 
+        queryBuilder.append(" WHERE app_id = ?");
+        parameters.add(appIdentifier.getAppId());
+
         if (status != null) {
-            queryBuilder.append(" WHERE app_id = ? status = ?");
-            parameters.add(appIdentifier.getAppId());
-            parameters.add(status);
+            queryBuilder.append(" AND status = ?");
+            parameters.add(status.toString());
         }
 
         if (bulkImportUserId != null && createdAt != null) {
             queryBuilder
-                .append(status != null ? " AND" : " WHERE")
-                .append(" created_at < ? OR (created_at = ? AND id <= ?)");
+                .append(" AND created_at < ? OR (created_at = ? AND id <= ?)");
             parameters.add(createdAt);
             parameters.add(createdAt);
             parameters.add(bulkImportUserId);
