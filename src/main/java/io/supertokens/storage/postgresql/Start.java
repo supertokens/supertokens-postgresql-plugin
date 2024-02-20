@@ -3000,7 +3000,7 @@ public class Start
             TenantOrAppNotFoundException,
             io.supertokens.pluginInterface.bulkimport.exceptions.DuplicateUserIdException {
         try {
-            BulkImportQueries.insertBulkImportUsers(this, users);
+            BulkImportQueries.insertBulkImportUsers(this, appIdentifier, users);
         } catch (SQLException e) {
             if (e instanceof PSQLException) {
                 ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
@@ -3017,9 +3017,9 @@ public class Start
 
     @Override
     public List<BulkImportUserInfo> getBulkImportUsers(AppIdentifier appIdentifier, @Nonnull Integer limit, @Nullable BulkImportUserStatus status,
-            @Nullable String bulkImportUserId) throws StorageQueryException {
+            @Nullable String bulkImportUserId, @Nullable Long createdAt) throws StorageQueryException {
         try {
-            return BulkImportQueries.getBulkImportUsers(this, limit, status, bulkImportUserId);
+            return BulkImportQueries.getBulkImportUsers(this, appIdentifier, limit, status, bulkImportUserId, createdAt);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
