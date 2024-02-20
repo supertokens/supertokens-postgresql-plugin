@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [3.0.1] - 2024-02-20
+
+- Fixes vulnerabilities in dependencies
+
 ## [3.0.0] - 2023-04-05
 
 - Adds `use_static_key` `BOOLEAN` column into `session_info`
