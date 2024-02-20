@@ -27,10 +27,10 @@ import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-import com.google.gson.JsonObject;
-
 import io.supertokens.pluginInterface.RowMapper;
+import io.supertokens.pluginInterface.bulkimport.BulkImportStorage.BulkImportUserStatus;
 import io.supertokens.pluginInterface.bulkimport.BulkImportUser;
+import io.supertokens.pluginInterface.bulkimport.BulkImportUserInfo;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -88,7 +88,7 @@ public class BulkImportQueries {
         });
     }
 
-    public static List<JsonObject> getBulkImportUsers(Start start, @Nonnull Integer limit, @Nullable String status,
+    public static List<BulkImportUserInfo> getBulkImportUsers(Start start, @Nonnull Integer limit, @Nullable BulkImportUserStatus status,
             @Nullable String bulkImportUserId)
             throws SQLException, StorageQueryException {
 
@@ -118,34 +118,29 @@ public class BulkImportQueries {
                 pst.setObject(i + 1, parameters.get(i));
             }
         }, result -> {
-            List<JsonObject> bulkImportUsers = new ArrayList<>();
+            List<BulkImportUserInfo> bulkImportUsers = new ArrayList<>();
             while (result.next()) {
-                bulkImportUsers.add(BulkImportUserJsonObjectRowMapper.getInstance().mapOrThrow(result));
+                bulkImportUsers.add(BulkImportUserInfoRowMapper.getInstance().mapOrThrow(result));
             }
             return bulkImportUsers;
         });
     }
 
-    private static class BulkImportUserJsonObjectRowMapper implements RowMapper<JsonObject, ResultSet> {
-        private static final BulkImportUserJsonObjectRowMapper INSTANCE = new BulkImportUserJsonObjectRowMapper();
+    private static class BulkImportUserInfoRowMapper implements RowMapper<BulkImportUserInfo, ResultSet> {
+        private static final BulkImportUserInfoRowMapper INSTANCE = new BulkImportUserInfoRowMapper();
 
-        private BulkImportUserJsonObjectRowMapper() {
+        private BulkImportUserInfoRowMapper() {
         }
 
-        private static BulkImportUserJsonObjectRowMapper getInstance() {
+        private static BulkImportUserInfoRowMapper getInstance() {
             return INSTANCE;
         }
 
         @Override
-        public JsonObject map(ResultSet result) throws Exception {
-            JsonObject user = new JsonObject();
-            user.addProperty("id", result.getString("id"));
-            user.addProperty("raw_data", result.getString("raw_data"));
-            user.addProperty("status", result.getString("status"));
-            user.addProperty("error_msg", result.getString("error_msg"));
-            user.addProperty("created_at", result.getLong("created_at"));
-            user.addProperty("updated_at", result.getLong("updated_at"));
-            return user;
+        public BulkImportUserInfo map(ResultSet result) throws Exception {
+            return new BulkImportUserInfo(result.getString("id"), result.getString("raw_data"),
+                    BulkImportUserStatus.valueOf(result.getString("status")),
+                    result.getLong("created_at"), result.getLong("updated_at"));
         }
     }
 }

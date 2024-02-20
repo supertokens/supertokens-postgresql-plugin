@@ -27,6 +27,7 @@ import io.supertokens.pluginInterface.authRecipe.LoginMethod;
 import io.supertokens.pluginInterface.authRecipe.sqlStorage.AuthRecipeSQLStorage;
 import io.supertokens.pluginInterface.bulkimport.BulkImportStorage;
 import io.supertokens.pluginInterface.bulkimport.BulkImportUser;
+import io.supertokens.pluginInterface.bulkimport.BulkImportUserInfo;
 import io.supertokens.pluginInterface.dashboard.DashboardSearchTags;
 import io.supertokens.pluginInterface.dashboard.DashboardSessionInfo;
 import io.supertokens.pluginInterface.dashboard.DashboardUser;
@@ -2996,6 +2997,7 @@ public class Start
     @Override
     public void addBulkImportUsers(AppIdentifier appIdentifier, List<BulkImportUser> users)
             throws StorageQueryException,
+            TenantOrAppNotFoundException,
             io.supertokens.pluginInterface.bulkimport.exceptions.DuplicateUserIdException {
         try {
             BulkImportQueries.insertBulkImportUsers(this, users);
@@ -3005,13 +3007,16 @@ public class Start
                 if (isPrimaryKeyError(serverErrorMessage, Config.getConfig(this).getBulkImportUsersTable())) {
                     throw new io.supertokens.pluginInterface.bulkimport.exceptions.DuplicateUserIdException();
                 }
+                if (isForeignKeyConstraintError(serverErrorMessage, Config.getConfig(this).getBulkImportUsersTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
             }
             throw new StorageQueryException(e);
         }
     }
 
     @Override
-    public List<JsonObject> getBulkImportUsers(AppIdentifier appIdentifier, @Nonnull Integer limit, @Nullable String status,
+    public List<BulkImportUserInfo> getBulkImportUsers(AppIdentifier appIdentifier, @Nonnull Integer limit, @Nullable BulkImportUserStatus status,
             @Nullable String bulkImportUserId) throws StorageQueryException {
         try {
             return BulkImportQueries.getBulkImportUsers(this, limit, status, bulkImportUserId);
