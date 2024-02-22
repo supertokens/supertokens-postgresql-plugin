@@ -20,10 +20,10 @@ package io.supertokens.storage.postgresql.config;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import io.supertokens.pluginInterface.ConfigFieldInfo;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.storage.postgresql.annotations.ConnectionPoolProperty;
 import io.supertokens.storage.postgresql.annotations.IgnoreForAnnotationCheck;
@@ -33,6 +33,7 @@ import io.supertokens.storage.postgresql.annotations.UserPoolProperty;
 
 import java.lang.reflect.Field;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -48,7 +49,7 @@ public class PostgreSQLConfig {
 
     @JsonProperty
     @ConnectionPoolProperty
-    @ConfigDescription("Defines the connection pool size to PostgreSQL. (Default 10)")
+    @ConfigDescription("Defines the connection pool size to PostgreSQL. (Default: 10)")
     private int postgresql_connection_pool_size = 10;
 
     @JsonProperty
@@ -118,7 +119,7 @@ public class PostgreSQLConfig {
 
     @JsonProperty
     @UserPoolProperty
-    @ConfigDescription("The schema for tables. (Default public)")
+    @ConfigDescription("The schema for tables. (Default: public)")
     private String postgresql_table_schema = "public";
 
     @JsonProperty
@@ -148,8 +149,8 @@ public class PostgreSQLConfig {
         return validFields;
     }
 
-    public static JsonArray getConfigFieldsJson() {
-        JsonArray result = new JsonArray();
+    public static ArrayList<ConfigFieldInfo> getConfigFieldsInfo() {
+        ArrayList<ConfigFieldInfo> result = new ArrayList<ConfigFieldInfo>();
 
         for (String fieldId : PostgreSQLConfig.getValidFields()) {
             try {
@@ -157,28 +158,26 @@ public class PostgreSQLConfig {
                 if (!field.isAnnotationPresent(JsonProperty.class)) {
                     continue;
                 }
-                JsonObject fieldJson = new JsonObject();
-                fieldJson.addProperty("name", field.getName());
-                fieldJson.addProperty("description", field.isAnnotationPresent(ConfigDescription.class)
+
+                String name = field.getName();
+                String description = field.isAnnotationPresent(ConfigDescription.class)
                         ? field.getAnnotation(ConfigDescription.class).value()
-                        : "");
-                fieldJson.addProperty("isDifferentAcrossTenants",
-                        true);
+                        : "";
+                boolean isDifferentAcrossTenants = true;
 
                 String type = "string";
 
                 Class<?> fieldType = field.getType();
 
-                if (fieldType == java.lang.String.class) {
+                if (fieldType == java.lang.String.class || fieldType == char.class) {
                     type = "string";
                 } else if (fieldType == boolean.class) {
                     type = "boolean";
-                } else if (fieldType == int.class || fieldType == long.class || fieldType == double.class) {
+                } else if (fieldType == byte.class || fieldType == short.class || fieldType == int.class || fieldType == long.class || fieldType == float.class || fieldType == double.class) {
                     type = "number";
                 }
 
-                fieldJson.addProperty("type", type);
-                result.add(fieldJson);
+                result.add(new ConfigFieldInfo(name, description, isDifferentAcrossTenants, type));
 
             } catch (NoSuchFieldException e) {
                 continue;

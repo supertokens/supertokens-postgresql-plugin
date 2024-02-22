@@ -18,8 +18,8 @@
 package io.supertokens.storage.postgresql.test;
 
 import io.supertokens.ProcessState;
-import io.supertokens.storage.postgresql.Start;
-import io.supertokens.storageLayer.StorageLayer;
+import io.supertokens.storage.postgresql.annotations.ConfigDescription;
+import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -27,10 +27,17 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestRule;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import static org.junit.Assert.*;
+
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.lang.reflect.Field;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class PostgresSQLConfigTest {
 
@@ -48,26 +55,103 @@ public class PostgresSQLConfigTest {
     }
 
     @Test
-    public void testRetreivingConfigProperties() throws Exception {
-        String[] args = {"../"};
+    public void testMatchConfigPropertiesDescription() throws Exception {
+        String[] args = { "../" };
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-        JsonArray configArray = ((Start) StorageLayer.getStorage(process.getProcess())).getConfigFieldsJson();
+        // Skipping postgresql_config_version because it doesn't
+        // have a description in the config.yaml file
+        String[] ignoredProperties = { "postgresql_config_version" };
 
-        for (int i = 0; i < configArray.size(); i++) {
-            JsonObject config = configArray.get(i).getAsJsonObject();
-            assertTrue(config.get("name").getAsJsonPrimitive().isString());
-            assertTrue(config.get("description").getAsJsonPrimitive().isString());
-            assertTrue(config.get("isDifferentAcrossTenants").getAsJsonPrimitive().isBoolean());
-            assertTrue(config.get("type").getAsJsonPrimitive().isString());
-            String type = config.get("type").getAsString();
-            assertTrue(type.equals("number") || type.equals("boolean") || type.equals("string"));
-        }
+        // Match the descriptions in the config.yaml file with the descriptions in the
+        // CoreConfig class
+        matchYamlAndConfigDescriptions("./config.yaml", ignoredProperties);
+
+        // Match the descriptions in the devConfig.yaml file with the descriptions in
+        // the CoreConfig class
+        String[] devConfigIgnoredProperties = Arrays.copyOf(ignoredProperties, ignoredProperties.length + 2);
+        // We ignore these properties in devConfig.yaml because it has a different
+        // description
+        // in devConfig.yaml and has a default value
+        devConfigIgnoredProperties[ignoredProperties.length] = "postgresql_user";
+        devConfigIgnoredProperties[ignoredProperties.length + 1] = "postgresql_password";
+        matchYamlAndConfigDescriptions("./devConfig.yaml", devConfigIgnoredProperties);
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    private void matchYamlAndConfigDescriptions(String path, String[] ignoreProperties) throws Exception {
+        try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
+            // Get the content of the file as string
+            String content = reader.lines().collect(Collectors.joining(System.lineSeparator()));
+            // Find the line that contains 'postgresql_config_version', and then split
+            // the file after that line
+            String allProperties = content.split("postgresql_config_version:\\s*\\d+\n")[1];
+
+            // Split by all the other allProperties string by new line
+            String[] properties = allProperties.split("\n\n");
+            // This will contain the description of each property from the yaml file
+            Map<String, String> propertyDescriptions = new HashMap<String, String>();
+
+            System.out.println("Last property: " + properties[properties.length - 1] + "\n\n");
+
+            for (int i = 0; i < properties.length; i++) {
+                String possibleProperty = properties[i].trim();
+                String[] lines = possibleProperty.split("\n");
+                // This ensures that it is a property with a description as a comment
+                // at the top
+                if (lines[lines.length - 1].endsWith(":")) {
+                    String propertyKeyString = lines[lines.length - 1];
+                    // Remove the comment "# " from the start
+                    String propertyKey = propertyKeyString.substring(2, propertyKeyString.length() - 1);
+                    String propertyDescription = "";
+                    // Remove the comment "# " from the start and merge all the lines to form the
+                    // description
+                    for (int j = 0; j < lines.length - 1; j++) {
+                        propertyDescription = propertyDescription + " " + lines[j].substring(2);
+                    }
+                    propertyDescription = propertyDescription.trim();
+
+                    propertyDescriptions.put(propertyKey, propertyDescription);
+                }
+            }
+
+            for (String fieldId : PostgreSQLConfig.getValidFields()) {
+                if (Arrays.asList(ignoreProperties).contains(fieldId)) {
+                    continue;
+                }
+
+                Field field = PostgreSQLConfig.class.getDeclaredField(fieldId);
+
+                // Skip fields that are not annotated with JsonProperty
+                if (!field.isAnnotationPresent(JsonProperty.class)) {
+                    continue;
+                }
+
+                String descriptionInConfig = field.getAnnotation(ConfigDescription.class).value();
+                String descriptionInYaml = propertyDescriptions.get(fieldId);
+
+                if (descriptionInYaml == null) {
+                    fail("Unable to find description or property for " + fieldId + " in " + path + " file");
+                }
+
+                // Remove the default value from config, since we add default value at the end
+                // config description
+                descriptionInConfig = descriptionInConfig.replaceAll("\\s\\[Default:.*|\\s\\(Default:.*", "").trim();
+                // Remove period from end if present, since not all descriptions in
+                // config.yaml have that
+                descriptionInConfig = descriptionInConfig.replaceAll("\\.$", "").trim();
+
+                // Assert that description in yaml contains the description in config
+                if (!descriptionInYaml.contains(descriptionInConfig)) {
+                    fail("Description in config class for " + fieldId + " does not match description in " + path
+                            + " file");
+                }
+            }
+        }
     }
 
 }

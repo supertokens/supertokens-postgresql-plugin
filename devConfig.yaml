@@ -68,4 +68,4 @@ postgresql_password: "root"
 
 # (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: "thirdparty_users") string value. Specify the name of the table
 # that will store the thirdparty recipe users.
-# postgresql_thirdparty_users_table_name
+# postgresql_thirdparty_users_table_name:

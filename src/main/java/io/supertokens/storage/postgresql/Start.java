@@ -2787,8 +2787,8 @@ public class Start
     }
 
     @Override
-    public JsonArray getConfigFieldsJson() {
-        return PostgreSQLConfig.getConfigFieldsJson();
+    public ArrayList<ConfigFieldInfo> getConfigFieldsInfo() {
+        return PostgreSQLConfig.getConfigFieldsInfo();
     }
 
     @Override
