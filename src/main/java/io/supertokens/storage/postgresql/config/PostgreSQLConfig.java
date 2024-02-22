@@ -48,82 +48,82 @@ public class PostgreSQLConfig {
 
     @JsonProperty
     @ConnectionPoolProperty
-    @ConfigDescription("The maximum number of connections that can be created at a time. (Default 10)")
+    @ConfigDescription("Defines the connection pool size to PostgreSQL. (Default 10)")
     private int postgresql_connection_pool_size = 10;
 
     @JsonProperty
     @UserPoolProperty
-    @ConfigDescription("The host of the PostgreSQL database.")
+    @ConfigDescription("Specify the postgresql host url here. (Default: localhost)")
     private String postgresql_host = null;
 
     @JsonProperty
     @UserPoolProperty
-    @ConfigDescription("The port of the PostgreSQL database.")
+    @ConfigDescription("Specify the port to use when connecting to PostgreSQL instance. (Default: 5432)")
     private int postgresql_port = -1;
 
     @JsonProperty
     @ConnectionPoolProperty
-    @ConfigDescription("The user of the PostgreSQL database.")
+    @ConfigDescription("The PostgreSQL user to use to query the database. If the relevant tables are not already created by you, this user should have the ability to create new tables. To see the tables needed, visit: https://supertokens.io/docs/community/getting-started/database-setup/postgresql")
     private String postgresql_user = null;
 
     @JsonProperty
     @ConnectionPoolProperty
-    @ConfigDescription("The password of the PostgreSQL database.")
+    @ConfigDescription("Password for the PostgreSQL user. If you have not set a password make this an empty string.")
     private String postgresql_password = null;
 
     @JsonProperty
     @UserPoolProperty
-    @ConfigDescription("The name of the PostgreSQL database.")
+    @ConfigDescription("The database name to store SuperTokens related data. (Default: supertokens)")
     private String postgresql_database_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
-    @ConfigDescription("The prefix to be added to all table names.")
+    @ConfigDescription("A prefix to add to all table names managed by SuperTokens. An \"_\" will be added between this prefix and the actual table name if the prefix is defined. (Default: \"\")")
     private String postgresql_table_names_prefix = "";
 
     @JsonProperty
     @NotConflictingWithinUserPool
-    @ConfigDescription("The name of the key value table.")
+    @ConfigDescription("Specify the name of the table that will store secret keys and app info necessary for the functioning sessions. (Default: \"key_value\")")
     private String postgresql_key_value_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
-    @ConfigDescription("The name of the session info table.")
+    @ConfigDescription("Specify the name of the table that will store the session info for users. (Default: \"session_info\")")
     private String postgresql_session_info_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
-    @ConfigDescription("The name of the emailpassword users table.")
+    @ConfigDescription("Specify the name of the table that will store the user information, along with their email and hashed password. (Default: \"emailpassword_users\")")
     private String postgresql_emailpassword_users_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
-    @ConfigDescription("The name of the emailpassword password reset tokens table.")
+    @ConfigDescription("Specify the name of the table that will store the password reset tokens for users. (Default: \"emailpassword_pswd_reset_tokens\")")
     private String postgresql_emailpassword_pswd_reset_tokens_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
-    @ConfigDescription("The name of the emailverification tokens table.")
+    @ConfigDescription("Specify the name of the table that will store the email verification tokens for users. (Default: \"emailverification_tokens\")")
     private String postgresql_emailverification_tokens_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
-    @ConfigDescription("The name of the emailverification verified emails table.")
+    @ConfigDescription("Specify the name of the table that will store the verified email addresses. (Default: \"emailverification_verified_emails\")")
     private String postgresql_emailverification_verified_emails_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
-    @ConfigDescription("The name of the thirdparty users table.")
+    @ConfigDescription("Specify the name of the table that will store the thirdparty recipe users. (Default: \"thirdparty_users\")")
     private String postgresql_thirdparty_users_table_name = null;
 
     @JsonProperty
     @UserPoolProperty
-    @ConfigDescription("The schema of the PostgreSQL database. (Default public)")
+    @ConfigDescription("The schema for tables. (Default public)")
     private String postgresql_table_schema = "public";
 
     @JsonProperty
     @IgnoreForAnnotationCheck
-    @ConfigDescription("The connection URI of the PostgreSQL database.")
+    @ConfigDescription("Specify the PostgreSQL connection URI in the following format: postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2... Values provided via other configs will override values provided by this config. (Default: null)")
     private String postgresql_connection_uri = null;
 
     @ConnectionPoolProperty
