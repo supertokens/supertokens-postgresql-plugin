@@ -117,7 +117,7 @@ public class BulkImportQueries {
             parameters.add(bulkImportUserId);
         }
 
-        queryBuilder.append(" ORDER BY created_at DESC LIMIT ?");
+        queryBuilder.append(" ORDER BY created_at DESC, id DESC LIMIT ?");
         parameters.add(limit);
 
         String query = queryBuilder.toString();
