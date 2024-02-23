@@ -55,6 +55,11 @@ public class PostgresSQLConfigTest {
     }
 
     @Test
+    public void testAllConfigAreReturnedCorrectly() throws Exception {
+        PostgreSQLConfig.getConfigFieldsInfo();
+    }
+
+    @Test
     public void testMatchConfigPropertiesDescription() throws Exception {
         String[] args = { "../" };
 

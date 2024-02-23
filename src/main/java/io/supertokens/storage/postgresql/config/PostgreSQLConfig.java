@@ -159,7 +159,7 @@ public class PostgreSQLConfig {
         return validFields;
     }
 
-    public static ArrayList<ConfigFieldInfo> getConfigFieldsInfo() {
+    public static ArrayList<ConfigFieldInfo> getConfigFieldsInfo() throws InvalidConfigException {
         ArrayList<ConfigFieldInfo> result = new ArrayList<ConfigFieldInfo>();
 
         for (String fieldId : PostgreSQLConfig.getValidFields()) {
@@ -175,16 +175,20 @@ public class PostgreSQLConfig {
                         : "";
                 boolean isDifferentAcrossTenants = true;
 
-                String type = "string";
+                String type = null;
 
                 Class<?> fieldType = field.getType();
 
-                if (fieldType == java.lang.String.class || fieldType == char.class) {
+                if (fieldType == String.class) {
                     type = "string";
                 } else if (fieldType == boolean.class) {
                     type = "boolean";
-                } else if (fieldType == byte.class || fieldType == short.class || fieldType == int.class || fieldType == long.class || fieldType == float.class || fieldType == double.class) {
+                } else if (fieldType == int.class || fieldType == long.class || fieldType == Integer.class) {
                     type = "number";
+                }
+
+                if (type == null) {
+                    throw new InvalidConfigException("Unsupported field type: " + fieldType.getName());
                 }
 
                 result.add(new ConfigFieldInfo(name, description, isDifferentAcrossTenants, type));
