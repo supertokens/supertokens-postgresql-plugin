@@ -92,6 +92,17 @@ public class BulkImportQueries {
         });
     }
 
+    public static void updateBulkImportUserStatus(Start start, AppIdentifier appIdentifier,  @Nonnull String bulkImportUserId, @Nonnull BulkImportUserStatus status)
+            throws SQLException, StorageQueryException {
+        String query = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable() + " SET status = ?, updated_at = EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) WHERE id = ? AND app_id = ?";
+
+        update(start, query, pst -> {
+            pst.setString(1, status.toString());
+            pst.setString(2, bulkImportUserId);
+            pst.setString(3, appIdentifier.getAppId());
+        });
+    }
+
     public static List<BulkImportUserInfo> getBulkImportUsers(Start start, AppIdentifier appIdentifier, @Nonnull Integer limit, @Nullable BulkImportUserStatus status,
             @Nullable String bulkImportUserId, @Nullable Long createdAt)
             throws SQLException, StorageQueryException {
@@ -135,6 +146,37 @@ public class BulkImportQueries {
         });
     }
 
+    public static void deleteFailedBulkImportUsers(Start start, AppIdentifier appIdentifier, @Nonnull String[] bulkImportUserIds) throws SQLException, StorageQueryException {
+        if (bulkImportUserIds.length == 0) {
+            return;
+        }
+
+        String baseQuery =  "DELETE FROM " + Config.getConfig(start).getBulkImportUsersTable();
+        StringBuilder queryBuilder = new StringBuilder(baseQuery);
+
+        List<Object> parameters = new ArrayList<>();
+
+        queryBuilder.append(" WHERE app_id = ?");
+        parameters.add(appIdentifier.getAppId());
+
+        queryBuilder.append(" AND id IN (");
+        for (int i = 0; i < bulkImportUserIds.length; i++) {
+            if (i != 0) {
+                queryBuilder.append(", ");
+            }
+            queryBuilder.append("?");
+            parameters.add(bulkImportUserIds[i]);
+        }
+        queryBuilder.append(")");
+
+        String query = queryBuilder.toString();
+
+        update(start, query, pst -> {
+            for (int i = 0; i < parameters.size(); i++) {
+                pst.setObject(i + 1, parameters.get(i));
+            }
+        });
+    }
     private static class BulkImportUserInfoRowMapper implements RowMapper<BulkImportUserInfo, ResultSet> {
         private static final BulkImportUserInfoRowMapper INSTANCE = new BulkImportUserInfoRowMapper();
 

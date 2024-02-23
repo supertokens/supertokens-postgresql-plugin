@@ -3024,4 +3024,22 @@ public class Start
             throw new StorageQueryException(e);
         }
     }
+
+    @Override
+    public void updateBulkImportUserStatus(AppIdentifier appIdentifier, @Nonnull String bulkImportUserId, @Nonnull BulkImportUserStatus status) throws StorageQueryException {
+        try {
+            BulkImportQueries.updateBulkImportUserStatus(this, appIdentifier, bulkImportUserId, status);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void deleteBulkImportUsers(AppIdentifier appIdentifier, @Nonnull String[] bulkImportUserIds) throws StorageQueryException {
+        try {
+            BulkImportQueries.deleteFailedBulkImportUsers(this, appIdentifier, bulkImportUserIds);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
 }
