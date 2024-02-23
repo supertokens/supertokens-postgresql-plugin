@@ -159,7 +159,7 @@ public class PostgreSQLConfig {
         return validFields;
     }
 
-    public static ArrayList<ConfigFieldInfo> getConfigFieldsInfo() throws InvalidConfigException {
+    public static ArrayList<ConfigFieldInfo> getConfigFieldsInfo() {
         ArrayList<ConfigFieldInfo> result = new ArrayList<ConfigFieldInfo>();
 
         for (String fieldId : PostgreSQLConfig.getValidFields()) {
@@ -185,10 +185,8 @@ public class PostgreSQLConfig {
                     type = "boolean";
                 } else if (fieldType == int.class || fieldType == long.class || fieldType == Integer.class) {
                     type = "number";
-                }
-
-                if (type == null) {
-                    throw new InvalidConfigException("Unsupported field type: " + fieldType.getName());
+                } else {
+                    throw new RuntimeException("Unknown field type " + fieldType.getName());
                 }
 
                 result.add(new ConfigFieldInfo(name, description, isDifferentAcrossTenants, type));

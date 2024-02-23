@@ -2784,7 +2784,7 @@ public class Start
     }
 
     @Override
-    public ArrayList<ConfigFieldInfo> getConfigFieldsInfo() throws InvalidConfigException {
+    public ArrayList<ConfigFieldInfo> getConfigFieldsInfo() {
         return PostgreSQLConfig.getConfigFieldsInfo();
     }
 
