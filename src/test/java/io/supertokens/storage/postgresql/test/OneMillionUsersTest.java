@@ -30,44 +30,34 @@ package io.supertokens.storage.postgresql.test;/*
  *    under the License.
  */
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import io.supertokens.ActiveUsers;
 import io.supertokens.Main;
 import io.supertokens.ProcessState;
 import io.supertokens.authRecipe.AuthRecipe;
 import io.supertokens.authRecipe.UserPaginationContainer;
-import io.supertokens.authRecipe.exception.AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException;
-import io.supertokens.authRecipe.exception.InputUserIdIsNotAPrimaryUserException;
-import io.supertokens.authRecipe.exception.RecipeUserIdAlreadyLinkedWithAnotherPrimaryUserIdException;
-import io.supertokens.authRecipe.exception.RecipeUserIdAlreadyLinkedWithPrimaryUserIdException;
-import io.supertokens.emailpassword.EmailPassword;
 import io.supertokens.emailpassword.ParsedFirebaseSCryptResponse;
-import io.supertokens.emailpassword.exceptions.UnsupportedPasswordHashingFormatException;
 import io.supertokens.featureflag.EE_FEATURES;
 import io.supertokens.featureflag.FeatureFlagTestContent;
 import io.supertokens.passwordless.Passwordless;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
 import io.supertokens.pluginInterface.authRecipe.sqlStorage.AuthRecipeSQLStorage;
-import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
-import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateUserIdException;
-import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.emailpassword.sqlStorage.EmailPasswordSQLStorage;
-import io.supertokens.pluginInterface.exceptions.StorageQueryException;
-import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
-import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
-import io.supertokens.pluginInterface.passwordless.exception.DuplicatePhoneNumberException;
 import io.supertokens.pluginInterface.passwordless.sqlStorage.PasswordlessSQLStorage;
 import io.supertokens.pluginInterface.thirdparty.sqlStorage.ThirdPartySQLStorage;
-import io.supertokens.pluginInterface.useridmapping.exception.UnknownSuperTokensUserIdException;
-import io.supertokens.pluginInterface.useridmapping.exception.UserIdMappingAlreadyExistsException;
+import io.supertokens.session.Session;
+import io.supertokens.session.info.SessionInformationHolder;
+import io.supertokens.storage.postgresql.test.httpRequest.HttpRequestForTesting;
 import io.supertokens.storageLayer.StorageLayer;
-import io.supertokens.thirdparty.ThirdParty;
 import io.supertokens.useridmapping.UserIdMapping;
 import io.supertokens.usermetadata.UserMetadata;
 import io.supertokens.userroles.UserRoles;
-import jakarta.servlet.ServletException;
+import io.supertokens.utils.SemVer;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Rule;
@@ -78,8 +68,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.*;
 
 public class OneMillionUsersTest {
     @Rule
@@ -106,7 +95,8 @@ public class OneMillionUsersTest {
         String firebaseSaltSeparator = "Bw==";
 
         String salt = "/cj0jC1br5o4+w==";
-        String passwordHash = "qZM035es5AXYqavsKD6/rhtxg7t5PhcyRgv5blc3doYbChX8keMfQLq1ra96O2Pf2TP/eZrR5xtPCYN6mX3ESA==";
+        String passwordHash = "qZM035es5AXYqavsKD6/rhtxg7t5PhcyRgv5blc3doYbChX8keMfQLq1ra96O2Pf2TP/eZrR5xtPCYN6mX3ESA" +
+                "==";
         String combinedPasswordHash = "$" + ParsedFirebaseSCryptResponse.FIREBASE_SCRYPT_PREFIX + "$" + passwordHash
                 + "$" + salt + "$m=" + firebaseMemCost + "$r=" + firebaseRounds + "$s=" + firebaseSaltSeparator;
 
@@ -148,7 +138,7 @@ public class OneMillionUsersTest {
                 String userId = io.supertokens.utils.Utils.getUUID();
                 long timeJoined = System.currentTimeMillis();
                 try {
-                    storage.createUser(TenantIdentifier.BASE_TENANT, userId, "pltest" + finalI + "@example", null, timeJoined);
+                    storage.createUser(TenantIdentifier.BASE_TENANT, userId, "pltest" + finalI + "@example.com", null, timeJoined);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
@@ -396,14 +386,64 @@ public class OneMillionUsersTest {
         es.awaitTermination(10, TimeUnit.MINUTES);
     }
 
+    private static String accessToken;
+    private static String sessionUserId;
+
+    private void createSessions(Main main) throws Exception {
+        System.out.println("Creating sessions...");
+
+        ExecutorService es = Executors.newFixedThreadPool(NUM_THREADS);
+
+        UserPaginationContainer usersResult = AuthRecipe.getUsers(main, 500, "ASC", null,
+                null, null);
+
+        while (true) {
+            UserIdMapping.populateExternalUserIdForUsers(
+                    TenantIdentifier.BASE_TENANT.withStorage(StorageLayer.getBaseStorage(main)),
+                    usersResult.users);
+
+            for (AuthRecipeUserInfo user : usersResult.users) {
+                es.execute(() -> {
+                    try {
+                        for (LoginMethod lM : user.loginMethods) {
+                            String userId = lM.getSupertokensOrExternalUserId();
+                            SessionInformationHolder session = Session.createNewSession(main,
+                                    userId, new JsonObject(), new JsonObject());
+
+                            if (new Random().nextFloat() < 0.05) {
+                                accessToken = session.accessToken.token;
+                                sessionUserId = userId;
+                            }
+                        }
+
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+            }
+            if (usersResult.nextPaginationToken == null) {
+                break;
+            }
+            usersResult = AuthRecipe.getUsers(main, 500, "ASC", usersResult.nextPaginationToken,
+                    null, null);
+        }
+
+        es.shutdown();
+        es.awaitTermination(10, TimeUnit.MINUTES);
+    }
+
     @Test
     public void testCreatingOneMillionUsers() throws Exception {
+        if (System.getenv("ONE_MILLION_USERS_TEST") == null) {
+            return;
+        }
+
         String[] args = {"../"};
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
         Utils.setValueInConfig("firebase_password_hashing_signer_key",
                 "gRhC3eDeQOdyEn4bMd9c6kxguWVmcIVq/SKa0JDPFeM6TcEevkaW56sIWfx88OHbJKnCXdWscZx0l2WbCJ1wbg==");
         Utils.setValueInConfig("postgresql_connection_pool_size", "500");
 
-        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
         FeatureFlagTestContent.getInstance(process.getProcess())
                 .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{
                         EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY});
@@ -441,7 +481,175 @@ public class OneMillionUsersTest {
             System.out.println("Time taken to create user data: " + ((en - st) / 1000) + " sec");
         }
 
-        process.kill(false);
+        {
+            long st = System.currentTimeMillis();
+            createSessions(process.getProcess());
+            long en = System.currentTimeMillis();
+            System.out.println("Time taken to create sessions: " + ((en - st) / 1000) + " sec");
+        }
+
+        sanityCheckAPIs(process.getProcess());
+
+        process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    private void sanityCheckAPIs(Main main) throws Exception {
+        { // Email password sign in
+            JsonObject responseBody = new JsonObject();
+            responseBody.addProperty("email", "eptest10@example.com");
+            responseBody.addProperty("password", "testPass123");
+
+            Thread.sleep(1); // add a small delay to ensure a unique timestamp
+            long beforeSignIn = System.currentTimeMillis();
+
+            JsonObject signInResponse = HttpRequestForTesting.sendJsonPOSTRequest(main, "",
+                    "http://localhost:3567/recipe/signin", responseBody, 1000, 1000, null, SemVer.v4_0.get(),
+                    "emailpassword");
+
+            assertEquals(signInResponse.get("status").getAsString(), "OK");
+            assertEquals(signInResponse.entrySet().size(), 3);
+
+            JsonObject jsonUser = signInResponse.get("user").getAsJsonObject();
+            JsonArray emails = jsonUser.get("emails").getAsJsonArray();
+            boolean found = false;
+
+            for (JsonElement elem : emails) {
+                if (elem.getAsString().equals("eptest10@example.com")) {
+                    found = true;
+                    break;
+                }
+            }
+
+            assertTrue(found);
+
+            int activeUsers = ActiveUsers.countUsersActiveSince(main, beforeSignIn);
+            assert (activeUsers == 1);
+        }
+
+        { // passwordless sign in
+            long startTs = System.currentTimeMillis();
+
+            String email = "pltest10@example.com";
+            Passwordless.CreateCodeResponse createResp = Passwordless.createCode(main, email, null, null, null);
+
+            JsonObject consumeCodeRequestBody = new JsonObject();
+            consumeCodeRequestBody.addProperty("deviceId", createResp.deviceId);
+            consumeCodeRequestBody.addProperty("preAuthSessionId", createResp.deviceIdHash);
+            consumeCodeRequestBody.addProperty("userInputCode", createResp.userInputCode);
+
+            JsonObject response = HttpRequestForTesting.sendJsonPOSTRequest(main, "",
+                    "http://localhost:3567/recipe/signinup/code/consume", consumeCodeRequestBody, 1000, 1000, null,
+                    SemVer.v5_0.get(), "passwordless");
+
+            assertEquals("OK", response.get("status").getAsString());
+            assertEquals(false, response.get("createdNewUser").getAsBoolean());
+            assert (response.has("user"));
+
+            JsonObject jsonUser = response.get("user").getAsJsonObject();
+            JsonArray emails = jsonUser.get("emails").getAsJsonArray();
+            boolean found = false;
+
+            for (JsonElement elem : emails) {
+                if (elem.getAsString().equals("pltest10@example.com")) {
+                    found = true;
+                    break;
+                }
+            }
+
+            assertTrue(found);
+
+            int activeUsers = ActiveUsers.countUsersActiveSince(main, startTs);
+            assert (activeUsers == 1);
+        }
+
+        { // thirdparty sign in
+            long startTs = System.currentTimeMillis();
+            JsonObject emailObject = new JsonObject();
+            emailObject.addProperty("id", "tptest10@example.com");
+            emailObject.addProperty("isVerified", true);
+
+            JsonObject signUpRequestBody = new JsonObject();
+            signUpRequestBody.addProperty("thirdPartyId", "google");
+            signUpRequestBody.addProperty("thirdPartyUserId", "googleid10");
+            signUpRequestBody.add("email", emailObject);
+
+            JsonObject response = HttpRequestForTesting.sendJsonPOSTRequest(main, "",
+                    "http://localhost:3567/recipe/signinup", signUpRequestBody, 1000, 1000, null,
+                    SemVer.v4_0.get(), "thirdparty");
+
+            assertEquals("OK", response.get("status").getAsString());
+            assertEquals(false, response.get("createdNewUser").getAsBoolean());
+            assert (response.has("user"));
+
+            JsonObject jsonUser = response.get("user").getAsJsonObject();
+            JsonArray emails = jsonUser.get("emails").getAsJsonArray();
+            boolean found = false;
+
+            for (JsonElement elem : emails) {
+                if (elem.getAsString().equals("tptest10@example.com")) {
+                    found = true;
+                    break;
+                }
+            }
+
+            assertTrue(found);
+
+            int activeUsers = ActiveUsers.countUsersActiveSince(main, startTs);
+            assert (activeUsers == 1);
+        }
+
+        { // session for user
+            JsonObject request = new JsonObject();
+            request.addProperty("accessToken", accessToken);
+            request.addProperty("doAntiCsrfCheck", false);
+            request.addProperty("enableAntiCsrf", false);
+            request.addProperty("checkDatabase", false);
+            JsonObject response = HttpRequestForTesting.sendJsonPOSTRequest(main, "",
+                    "http://localhost:3567/recipe/session/verify", request, 1000, 1000, null,
+                    SemVer.v5_0.get(), "session");
+            assertEquals("OK", response.get("status").getAsString());
+            assertEquals(sessionUserId, response.get("session").getAsJsonObject().get("userId").getAsString());
+        }
+
+        { // check user roles
+            JsonObject responseBody = new JsonObject();
+            responseBody.addProperty("email", "eptest10@example.com");
+            responseBody.addProperty("password", "testPass123");
+
+            Thread.sleep(1); // add a small delay to ensure a unique timestamp
+            JsonObject signInResponse = HttpRequestForTesting.sendJsonPOSTRequest(main, "",
+                    "http://localhost:3567/recipe/signin", responseBody, 1000, 1000, null, SemVer.v4_0.get(),
+                    "emailpassword");
+
+            HashMap<String, String> QUERY_PARAMS = new HashMap<>();
+            QUERY_PARAMS.put("userId", signInResponse.get("user").getAsJsonObject().get("id").getAsString());
+            JsonObject response = HttpRequestForTesting.sendGETRequest(main, "",
+                    "http://localhost:3567/recipe/user/roles", QUERY_PARAMS, 1000, 1000, null,
+                    SemVer.v2_14.get(), "userroles");
+
+            assertEquals(2, response.entrySet().size());
+            assertEquals("OK", response.get("status").getAsString());
+
+            JsonArray userRolesArr = response.getAsJsonArray("roles");
+            assertEquals(1, userRolesArr.size());
+            assertTrue(
+                    userRolesArr.get(0).getAsString().equals("admin") || userRolesArr.get(0).getAsString().equals("user")
+            );
+        }
+
+        { // check user metadata
+            HashMap<String, String> QueryParams = new HashMap<String, String>();
+            QueryParams.put("userId", sessionUserId);
+            JsonObject resp = HttpRequestForTesting.sendGETRequest(main, "",
+                    "http://localhost:3567/recipe/user/metadata", QueryParams, 1000, 1000, null,
+                    SemVer.v2_13.get(), "usermetadata");
+
+            assertEquals(2, resp.entrySet().size());
+            assertEquals("OK", resp.get("status").getAsString());
+            assert (resp.has("metadata"));
+            JsonObject respMetadata = resp.getAsJsonObject("metadata");
+            assertEquals(1, respMetadata.entrySet().size());
+        }
     }
 }
