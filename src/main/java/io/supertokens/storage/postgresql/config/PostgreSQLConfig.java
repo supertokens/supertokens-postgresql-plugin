@@ -135,6 +135,16 @@ public class PostgreSQLConfig {
     @ConfigDescription("The scheme of the PostgreSQL database.")
     private String postgresql_connection_scheme = "postgresql";
 
+    @JsonProperty
+    @ConnectionPoolProperty
+    @ConfigDescription("Timeout in milliseconds for the idle connections to be closed. (Default: 60000)")
+    private long postgresql_idle_connection_timeout = 60000;
+
+    @JsonProperty
+    @ConnectionPoolProperty
+    @ConfigDescription("Minimum number of idle connections to be kept active. If not set, minimum idle connections will be same as the connection pool size. (Default: null)")
+    private Integer postgresql_minimum_idle_connections = null;
+
     @IgnoreForAnnotationCheck
     boolean isValidAndNormalised = false;
 
@@ -294,6 +304,14 @@ public class PostgreSQLConfig {
         return postgresql_thirdparty_users_table_name;
     }
 
+    public long getIdleConnectionTimeout() {
+        return postgresql_idle_connection_timeout;
+    }
+
+    public Integer getMinimumIdleConnections() {
+        return postgresql_minimum_idle_connections;
+    }
+
     public String getThirdPartyUserToTenantTable() {
         return addSchemaAndPrefixToTableName("thirdparty_user_to_tenant");
     }
@@ -398,6 +416,19 @@ public class PostgreSQLConfig {
         if (postgresql_connection_pool_size <= 0) {
             throw new InvalidConfigException(
                     "'postgresql_connection_pool_size' in the config.yaml file must be > 0");
+        }
+
+        if (postgresql_minimum_idle_connections != null) {
+            if (postgresql_minimum_idle_connections < 0) {
+                throw new InvalidConfigException(
+                        "'postgresql_minimum_idle_connections' must be >= 0");
+            }
+
+            if (postgresql_minimum_idle_connections > postgresql_connection_pool_size) {
+                throw new InvalidConfigException(
+                        "'postgresql_minimum_idle_connections' must be less than or equal to "
+                                + "'postgresql_connection_pool_size'");
+            }
         }
 
         // Normalisation

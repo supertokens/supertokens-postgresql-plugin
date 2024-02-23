@@ -7,12 +7,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- Adds implementation for a new method `getConfigFieldsJson` to fetch the plugin config fields.
+- Adds implementation for a new method `getConfigFieldsInfo` to fetch the plugin config fields.
+
+## [5.0.8] - 2024-02-19
+
+- Fixes vulnerabilities in dependencies
 
 ## [5.0.7] - 2024-01-25
 
 - Fixes the issue where passwords were inadvertently logged in the logs.
 - Adds tests to check connection pool behaviour.
+- Adds `postgresql_idle_connection_timeout` and `postgresql_minimum_idle_connections` configs to control active connections to the database.
 
 ## [5.0.6] - 2023-12-05
 

@@ -45,12 +45,12 @@ public class SuperTokensSaaSSecretTest {
 
     private final String[] PROTECTED_DB_CONFIG = new String[]{"postgresql_connection_pool_size",
             "postgresql_connection_uri", "postgresql_host", "postgresql_port", "postgresql_user",
-            "postgresql_password",
-            "postgresql_database_name", "postgresql_table_schema"};
+            "postgresql_password", "postgresql_database_name", "postgresql_table_schema",
+            "postgresql_minimum_idle_connections", "postgresql_idle_connection_timeout"};
 
     private final Object[] PROTECTED_DB_CONFIG_VALUES = new Object[]{11,
             "postgresql://root:root@localhost:5432/supertokens?currentSchema=myschema", "localhost", 5432, "root",
-            "root", "supertokens", "myschema"};
+            "root", "supertokens", "myschema", 5, 120000};
 
     @Rule
     public TestRule watchman = Utils.getOnFailure();
