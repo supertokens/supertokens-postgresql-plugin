@@ -117,8 +117,7 @@ public class Start
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
     private static String[] PROTECTED_DB_CONFIG = new String[]{"postgresql_connection_pool_size",
             "postgresql_connection_uri", "postgresql_host", "postgresql_port", "postgresql_user", "postgresql_password",
-            "postgresql_database_name", "postgresql_table_schema", "postgresql_idle_connection_timeout",
-            "postgresql_minimum_idle_connections"};
+            "postgresql_database_name", "postgresql_table_schema"};
     private static final Object appenderLock = new Object();
     public static boolean silent = false;
     private ResourceDistributor resourceDistributor = new ResourceDistributor();
@@ -2782,6 +2781,11 @@ public class Start
     @Override
     public Set<String> getValidFieldsInConfig() {
         return PostgreSQLConfig.getValidFields();
+    }
+
+    @Override
+    public ArrayList<ConfigFieldInfo> getConfigFieldsInfo() {
+        return PostgreSQLConfig.getConfigFieldsInfo();
     }
 
     @Override

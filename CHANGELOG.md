@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Adds implementation for a new method `getConfigFieldsInfo` to fetch the plugin config fields.
+
 ## [5.0.8] - 2024-02-19
 
 - Fixes vulnerabilities in dependencies
