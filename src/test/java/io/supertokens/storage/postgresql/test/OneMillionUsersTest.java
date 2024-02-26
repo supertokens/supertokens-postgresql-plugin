@@ -38,6 +38,7 @@ import io.supertokens.Main;
 import io.supertokens.ProcessState;
 import io.supertokens.authRecipe.AuthRecipe;
 import io.supertokens.authRecipe.UserPaginationContainer;
+import io.supertokens.emailpassword.EmailPassword;
 import io.supertokens.emailpassword.ParsedFirebaseSCryptResponse;
 import io.supertokens.featureflag.EE_FEATURES;
 import io.supertokens.featureflag.FeatureFlagTestContent;
@@ -54,6 +55,7 @@ import io.supertokens.session.Session;
 import io.supertokens.session.info.SessionInformationHolder;
 import io.supertokens.storage.postgresql.test.httpRequest.HttpRequestForTesting;
 import io.supertokens.storageLayer.StorageLayer;
+import io.supertokens.thirdparty.ThirdParty;
 import io.supertokens.useridmapping.UserIdMapping;
 import io.supertokens.usermetadata.UserMetadata;
 import io.supertokens.userroles.UserRoles;
@@ -67,6 +69,7 @@ import org.junit.rules.TestRule;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 
 import static org.junit.Assert.*;
 
@@ -434,9 +437,9 @@ public class OneMillionUsersTest {
 
     @Test
     public void testCreatingOneMillionUsers() throws Exception {
-        if (System.getenv("ONE_MILLION_USERS_TEST") == null) {
-            return;
-        }
+//        if (System.getenv("ONE_MILLION_USERS_TEST") == null) {
+//            return;
+//        }
 
         String[] args = {"../"};
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -489,6 +492,10 @@ public class OneMillionUsersTest {
         }
 
         sanityCheckAPIs(process.getProcess());
+
+        Thread.sleep(10000);
+
+        measureOperations(process.getProcess());
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -651,5 +658,209 @@ public class OneMillionUsersTest {
             JsonObject respMetadata = resp.getAsJsonObject("metadata");
             assertEquals(1, respMetadata.entrySet().size());
         }
+    }
+
+    private void measureOperations(Main main) throws Exception {
+        AtomicLong errorCount = new AtomicLong(0);
+        { // Emailpassword sign up
+            System.out.println("Measure email password sign-ups");
+            long time = measureTime(() -> {
+                ExecutorService es = Executors.newFixedThreadPool(100);
+
+                for (int i = 0; i < 500; i++) {
+                    int finalI = i;
+                    es.execute(() -> {
+                        try {
+                            EmailPassword.signUp(main, "ep" + finalI + "@example.com", "password" + finalI);
+                        } catch (Exception e) {
+                            errorCount.incrementAndGet();
+                            throw new RuntimeException(e);
+                        }
+                    });
+                }
+
+                es.shutdown();
+                try {
+                    es.awaitTermination(5, TimeUnit.MINUTES);
+                } catch (InterruptedException e) {
+                    errorCount.incrementAndGet();
+                    throw new RuntimeException(e);
+                }
+                return null;
+            });
+            assert time < 10000; // 10 sec
+        }
+        { // Emailpassword sign in
+            System.out.println("Measure email password sign-ins");
+            long time = measureTime(() -> {
+                ExecutorService es = Executors.newFixedThreadPool(100);
+
+                for (int i = 0; i < 500; i++) {
+                    int finalI = i;
+                    es.execute(() -> {
+                        try {
+                            EmailPassword.signIn(main, "ep" + finalI + "@example.com", "password" + finalI);
+                        } catch (Exception e) {
+                            errorCount.incrementAndGet();
+                            throw new RuntimeException(e);
+                        }
+                    });
+                }
+
+                es.shutdown();
+                try {
+                    es.awaitTermination(5, TimeUnit.MINUTES);
+                } catch (InterruptedException e) {
+                    errorCount.incrementAndGet();
+                    throw new RuntimeException(e);
+                }
+                return null;
+            });
+            assert time < 10000; // 10 sec
+        }
+        { // Passwordless sign-ups
+            System.out.println("Measure passwordless sign-ups");
+            long time = measureTime(() -> {
+                ExecutorService es = Executors.newFixedThreadPool(100);
+                for (int i = 0; i < 500; i++) {
+                    int finalI = i;
+                    es.execute(() -> {
+                        try {
+                            Passwordless.CreateCodeResponse code = Passwordless.createCode(main,
+                                    "pl" + finalI + "@example.com", null, null, null);
+                            Passwordless.consumeCode(main, code.deviceId, code.deviceIdHash, code.userInputCode, null);
+                        } catch (Exception e) {
+                            errorCount.incrementAndGet();
+                            throw new RuntimeException(e);
+                        }
+                    });
+                }
+                es.shutdown();
+                try {
+                    es.awaitTermination(5, TimeUnit.MINUTES);
+                } catch (InterruptedException e) {
+                    errorCount.incrementAndGet();
+                    throw new RuntimeException(e);
+                }
+                return null;
+            });
+            assert time < 3000; // 3 sec
+        }
+        { // Passwordless sign-ins
+            System.out.println("Measure passwordless sign-ins");
+            long time = measureTime(() -> {
+                ExecutorService es = Executors.newFixedThreadPool(100);
+                for (int i = 0; i < 500; i++) {
+                    int finalI = i;
+                    es.execute(() -> {
+                        try {
+                            Passwordless.CreateCodeResponse code = Passwordless.createCode(main,
+                                    "pl" + finalI + "@example.com", null, null, null);
+                            Passwordless.consumeCode(main, code.deviceId, code.deviceIdHash, code.userInputCode, null);
+                        } catch (Exception e) {
+                            errorCount.incrementAndGet();
+                            throw new RuntimeException(e);
+                        }
+                    });
+                }
+                es.shutdown();
+                try {
+                    es.awaitTermination(5, TimeUnit.MINUTES);
+                } catch (InterruptedException e) {
+                    errorCount.incrementAndGet();
+                    throw new RuntimeException(e);
+                }
+                return null;
+            });
+            assert time < 3000; // 3 sec
+        }
+        { // Thirdparty sign-ups
+            System.out.println("Measure thirdparty sign-ups");
+            long time = measureTime(() -> {
+                ExecutorService es = Executors.newFixedThreadPool(100);
+                for (int i = 0; i < 500; i++) {
+                    int finalI = i;
+                    es.execute(() -> {
+                        try {
+                            ThirdParty.signInUp(main, "twitter", "twitterid" + finalI, "twitter" + finalI + "@example.com");
+                        } catch (Exception e) {
+                            errorCount.incrementAndGet();
+                            throw new RuntimeException(e);
+                        }
+                    });
+                }
+                es.shutdown();
+                try {
+                    es.awaitTermination(5, TimeUnit.MINUTES);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                return null;
+            });
+            assert time < 3000; // 3 sec
+        }
+        { // Thirdparty sign-ins
+            System.out.println("Measure thirdparty sign-ins");
+            long time = measureTime(() -> {
+                ExecutorService es = Executors.newFixedThreadPool(100);
+                for (int i = 0; i < 500; i++) {
+                    int finalI = i;
+                    es.execute(() -> {
+                        try {
+                            ThirdParty.signInUp(main, "twitter", "twitterid" + finalI, "twitter" + finalI + "@example.com");
+                        } catch (Exception e) {
+                            errorCount.incrementAndGet();
+                            throw new RuntimeException(e);
+                        }
+                    });
+                }
+                es.shutdown();
+                try {
+                    es.awaitTermination(5, TimeUnit.MINUTES);
+                } catch (InterruptedException e) {
+                    errorCount.incrementAndGet();
+                    throw new RuntimeException(e);
+                }
+                return null;
+            });
+            assert time < 3000; // 3 sec
+        }
+        { // Measure user pagination
+            long time = measureTime(() -> {
+                try {
+                    long count = 0;
+                    UserPaginationContainer users = AuthRecipe.getUsers(main, 500, "ASC", null, null, null);
+                    while (true) {
+                        for (AuthRecipeUserInfo user : users.users) {
+                            count += user.loginMethods.length;
+                        }
+                        if (users.nextPaginationToken == null) {
+                            break;
+                        }
+                        users = AuthRecipe.getUsers(main, 500, "ASC", users.nextPaginationToken, null, null);
+                    }
+                    assertEquals(TOTAL_USERS + 1500, count);
+                } catch (Exception e) {
+                    errorCount.incrementAndGet();
+                    throw new RuntimeException(e);
+                }
+                return null;
+            });
+            assert time < 5000; // 5 sec
+        }
+
+        assertEquals(0, errorCount.get());
+    }
+
+    private static long measureTime(Supplier<Void> function) {
+        long startTime = System.nanoTime();
+
+        // Call the function
+        function.get();
+
+        long endTime = System.nanoTime();
+
+        // Calculate elapsed time in milliseconds
+        return (endTime - startTime) / 1000000; // Convert to milliseconds
     }
 }
