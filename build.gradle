@@ -17,7 +17,7 @@ dependencies {
     implementation group: 'com.zaxxer', name: 'HikariCP', version: '3.4.1'
 
     // https://mvnrepository.com/artifact/org.postgresql/postgresql
-    implementation group: 'org.postgresql', name: 'postgresql', version: '42.7.1'
+    implementation group: 'org.postgresql', name: 'postgresql', version: '42.7.2'
 
     // https://mvnrepository.com/artifact/com.fasterxml.jackson.dataformat/jackson-dataformat-yaml
     compileOnly group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-yaml', version: '2.16.1'
