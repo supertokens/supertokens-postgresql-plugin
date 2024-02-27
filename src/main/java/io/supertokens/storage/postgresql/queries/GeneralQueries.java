@@ -589,6 +589,10 @@ public class GeneralQueries {
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
         {
+            String DROP_QUERY = "DROP INDEX IF EXISTS bulk_import_users_created_at_index";
+            update(start, DROP_QUERY, NO_OP_SETTER);
+        }
+        {
             String DROP_QUERY = "DROP TABLE IF EXISTS "
                     + getConfig(start).getAppsTable() + ","
                     + getConfig(start).getUserLastActiveTable() + ","
