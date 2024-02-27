@@ -287,6 +287,7 @@ public class LoggingTest {
                 new EmailPasswordConfig(true),
                 new ThirdPartyConfig(true, null),
                 new PasswordlessConfig(true),
+                null, null,
                 config
         ), false);
 
@@ -387,7 +388,6 @@ public class LoggingTest {
 
         Utils.setValueInConfig("info_log_path", "null");
         Utils.setValueInConfig("error_log_path", "null");
-        Utils.setValueInConfig("postgresql_password", "db_password");
 
         System.setOut(new PrintStream(stdOutput));
         System.setErr(new PrintStream(errorOutput));
@@ -519,7 +519,7 @@ public class LoggingTest {
                                 new EmailPasswordConfig(true),
                                 new ThirdPartyConfig(true, null),
                                 new PasswordlessConfig(true),
-                                config
+                                null, null, config
                                ));
 
                 process.kill();
@@ -564,6 +564,7 @@ public class LoggingTest {
                                     new EmailPasswordConfig(true),
                                     new ThirdPartyConfig(true, null),
                                     new PasswordlessConfig(true),
+                                    null, null,
                                     new JsonObject()));
 
                 } catch (Exception e) {

@@ -19,6 +19,7 @@ package io.supertokens.storage.postgresql.queries;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 
+import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -92,14 +93,36 @@ public class BulkImportQueries {
         });
     }
 
-    public static void updateBulkImportUserStatus(Start start, AppIdentifier appIdentifier,  @Nonnull String bulkImportUserId, @Nonnull BulkImportUserStatus status)
+    public static void updateBulkImportUserStatus_Transaction(Start start, Connection con, AppIdentifier appIdentifier, @Nonnull String[] bulkImportUserIds, @Nonnull BulkImportUserStatus status)
             throws SQLException, StorageQueryException {
-        String query = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable() + " SET status = ?, updated_at = EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) WHERE id = ? AND app_id = ?";
+        if (bulkImportUserIds.length == 0) {
+            return;
+        }
 
-        update(start, query, pst -> {
-            pst.setString(1, status.toString());
-            pst.setString(2, bulkImportUserId);
-            pst.setString(3, appIdentifier.getAppId());
+        String baseQuery = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable() + " SET status = ?, updated_at = EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) WHERE app_id = ?";
+        StringBuilder queryBuilder = new StringBuilder(baseQuery);
+
+        List<Object> parameters = new ArrayList<>();
+
+        parameters.add(status.toString());
+        parameters.add(appIdentifier.getAppId());
+
+        queryBuilder.append(" AND id IN (");
+        for (int i = 0; i < bulkImportUserIds.length; i++) {
+            if (i != 0) {
+                queryBuilder.append(", ");
+            }
+            queryBuilder.append("?");
+            parameters.add(bulkImportUserIds[i]);
+        }
+        queryBuilder.append(")");
+
+        String query = queryBuilder.toString();
+
+        update(con, query, pst -> {
+            for (int i = 0; i < parameters.size(); i++) {
+                pst.setObject(i + 1, parameters.get(i));
+            }
         });
     }
 
