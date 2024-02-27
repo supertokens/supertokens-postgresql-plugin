@@ -21,6 +21,8 @@ import com.google.gson.Gson;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Utils {
     public static String exceptionStacktraceToString(Exception e) {
@@ -61,5 +63,20 @@ public class Utils {
             return null;
         }
         return new Gson().fromJson(input, String[].class);
+    }
+
+    public static String maskDBPassword(String log) {
+        String regex = "(\\|db_pass\\|)(.*?)(\\|db_pass\\|)";
+
+        Matcher matcher = Pattern.compile(regex).matcher(log);
+        StringBuffer maskedLog = new StringBuffer();
+
+        while (matcher.find()) {
+            String maskedPassword = "*".repeat(8);
+            matcher.appendReplacement(maskedLog, "|" + maskedPassword + "|");
+        }
+
+        matcher.appendTail(maskedLog);
+        return maskedLog.toString();
     }
 }
