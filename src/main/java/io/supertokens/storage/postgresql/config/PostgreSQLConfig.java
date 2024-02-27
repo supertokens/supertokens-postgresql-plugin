@@ -112,6 +112,14 @@ public class PostgreSQLConfig {
     @ConnectionPoolProperty
     private String postgresql_connection_scheme = "postgresql";
 
+    @JsonProperty
+    @ConnectionPoolProperty
+    private long postgresql_idle_connection_timeout = 60000;
+
+    @JsonProperty
+    @ConnectionPoolProperty
+    private Integer postgresql_minimum_idle_connections = null;
+
     @IgnoreForAnnotationCheck
     boolean isValidAndNormalised = false;
 
@@ -242,6 +250,14 @@ public class PostgreSQLConfig {
         return postgresql_thirdparty_users_table_name;
     }
 
+    public long getIdleConnectionTimeout() {
+        return postgresql_idle_connection_timeout;
+    }
+
+    public Integer getMinimumIdleConnections() {
+        return postgresql_minimum_idle_connections;
+    }
+
     public String getThirdPartyUserToTenantTable() {
         return addSchemaAndPrefixToTableName("thirdparty_user_to_tenant");
     }
@@ -346,6 +362,19 @@ public class PostgreSQLConfig {
         if (postgresql_connection_pool_size <= 0) {
             throw new InvalidConfigException(
                     "'postgresql_connection_pool_size' in the config.yaml file must be > 0");
+        }
+
+        if (postgresql_minimum_idle_connections != null) {
+            if (postgresql_minimum_idle_connections < 0) {
+                throw new InvalidConfigException(
+                        "'postgresql_minimum_idle_connections' must be >= 0");
+            }
+
+            if (postgresql_minimum_idle_connections > postgresql_connection_pool_size) {
+                throw new InvalidConfigException(
+                        "'postgresql_minimum_idle_connections' must be less than or equal to "
+                                + "'postgresql_connection_pool_size'");
+            }
         }
 
         // Normalisation
@@ -556,10 +585,18 @@ public class PostgreSQLConfig {
         StringBuilder connectionPoolId = new StringBuilder();
         for (Field field : PostgreSQLConfig.class.getDeclaredFields()) {
             if (field.isAnnotationPresent(ConnectionPoolProperty.class)) {
-                connectionPoolId.append("|");
                 try {
-                    if (field.get(this) != null) {
-                        connectionPoolId.append(field.get(this).toString());
+                    String fieldName = field.getName();
+                    String fieldValue = field.get(this) != null ? field.get(this).toString() : null;
+                    if(fieldValue == null) {
+                        continue;
+                    }
+                    // To ensure a unique connectionPoolId we include the database password and use the "|db_pass|" identifier.
+                    // This facilitates easy removal of the password from logs when necessary.
+                    if (fieldName.equals("postgresql_password")) {
+                        connectionPoolId.append("|db_pass|" + fieldValue + "|db_pass");
+                    } else {
+                        connectionPoolId.append("|" + fieldValue);
                     }
                 } catch (IllegalAccessException e) {
                     throw new RuntimeException(e);
