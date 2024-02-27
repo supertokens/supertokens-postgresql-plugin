@@ -169,9 +169,9 @@ public class BulkImportQueries {
         });
     }
 
-    public static void deleteFailedBulkImportUsers(Start start, AppIdentifier appIdentifier, @Nonnull String[] bulkImportUserIds) throws SQLException, StorageQueryException {
+    public static List<String> deleteBulkImportUsers(Start start, AppIdentifier appIdentifier, @Nonnull String[] bulkImportUserIds) throws SQLException, StorageQueryException {
         if (bulkImportUserIds.length == 0) {
-            return;
+            return new ArrayList<>();
         }
 
         String baseQuery =  "DELETE FROM " + Config.getConfig(start).getBulkImportUsersTable();
@@ -190,14 +190,20 @@ public class BulkImportQueries {
             queryBuilder.append("?");
             parameters.add(bulkImportUserIds[i]);
         }
-        queryBuilder.append(")");
+        queryBuilder.append(") RETURNING id");
 
         String query = queryBuilder.toString();
 
-        update(start, query, pst -> {
+        return update(start, query, pst -> {
             for (int i = 0; i < parameters.size(); i++) {
                 pst.setObject(i + 1, parameters.get(i));
             }
+        }, result -> {
+            List<String> deletedUserIds = new ArrayList<>();
+            while (result.next()) {
+                deletedUserIds.add(result.getString("id"));
+            }
+            return deletedUserIds;
         });
     }
     private static class BulkImportUserInfoRowMapper implements RowMapper<BulkImportUserInfo, ResultSet> {

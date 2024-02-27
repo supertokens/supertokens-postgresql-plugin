@@ -3086,9 +3086,9 @@ public class Start
     }
 
     @Override
-    public void deleteBulkImportUsers(AppIdentifier appIdentifier, @Nonnull String[] bulkImportUserIds) throws StorageQueryException {
+    public List<String> deleteBulkImportUsers(AppIdentifier appIdentifier, @Nonnull String[] bulkImportUserIds) throws StorageQueryException {
         try {
-            BulkImportQueries.deleteFailedBulkImportUsers(this, appIdentifier, bulkImportUserIds);
+            return BulkImportQueries.deleteBulkImportUsers(this, appIdentifier, bulkImportUserIds);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
