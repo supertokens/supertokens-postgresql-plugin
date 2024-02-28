@@ -28,11 +28,8 @@ import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-
 import io.supertokens.pluginInterface.RowMapper;
-import io.supertokens.pluginInterface.bulkimport.BulkImportStorage.BulkImportUserStatus;
+import io.supertokens.pluginInterface.bulkimport.BulkImportStorage.BULK_IMPORT_USER_STATUS;
 import io.supertokens.pluginInterface.bulkimport.BulkImportUser;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
@@ -90,12 +87,12 @@ public class BulkImportQueries {
             for (BulkImportUser user : users) {
                 pst.setString(parameterIndex++, user.id);
                 pst.setString(parameterIndex++, appIdentifier.getAppId());
-                pst.setString(parameterIndex++, user.toString());
+                pst.setString(parameterIndex++, user.toRawDataForDbStorage());
             }
         });
     }
 
-    public static void updateBulkImportUserStatus_Transaction(Start start, Connection con, AppIdentifier appIdentifier, @Nonnull String[] bulkImportUserIds, @Nonnull BulkImportUserStatus status)
+    public static void updateBulkImportUserStatus_Transaction(Start start, Connection con, AppIdentifier appIdentifier, @Nonnull String[] bulkImportUserIds, @Nonnull BULK_IMPORT_USER_STATUS status)
             throws SQLException, StorageQueryException {
         if (bulkImportUserIds.length == 0) {
             return;
@@ -128,7 +125,7 @@ public class BulkImportQueries {
         });
     }
 
-    public static List<BulkImportUser> getBulkImportUsers(Start start, AppIdentifier appIdentifier, @Nonnull Integer limit, @Nullable BulkImportUserStatus status,
+    public static List<BulkImportUser> getBulkImportUsers(Start start, AppIdentifier appIdentifier, @Nonnull Integer limit, @Nullable BULK_IMPORT_USER_STATUS status,
             @Nullable String bulkImportUserId, @Nullable Long createdAt)
             throws SQLException, StorageQueryException {
 
@@ -183,18 +180,9 @@ public class BulkImportQueries {
 
         @Override
         public BulkImportUser map(ResultSet result) throws Exception {
-            JsonObject flattenedJson = new JsonObject();
-            flattenedJson.addProperty("id", result.getString("id"));
-            flattenedJson.addProperty("status", result.getString("status"));
-            flattenedJson.addProperty("createdAt", result.getString("created_at"));
-            flattenedJson.addProperty("updatedAt", result.getString("updated_at"));
-
-            JsonObject rawData =  new Gson().fromJson(result.getString("raw_data"), JsonObject.class);
-            for (var entry : rawData.entrySet()) {
-                flattenedJson.add(entry.getKey(), entry.getValue());
-            }
-
-            return BulkImportUser.fromJson(flattenedJson);
+            return BulkImportUser.fromRawDataFromDbStorage(result.getString("id"), result.getString("raw_data"),
+                    BULK_IMPORT_USER_STATUS.valueOf(result.getString("status")),
+                    result.getLong("created_at"), result.getLong("updated_at"));
         }
     }
 }
