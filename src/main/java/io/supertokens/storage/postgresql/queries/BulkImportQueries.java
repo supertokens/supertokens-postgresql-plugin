@@ -198,11 +198,11 @@ public class BulkImportQueries {
                 pst.setObject(i + 1, parameters.get(i));
             }
         }, result -> {
-            List<String> deletedUserIds = new ArrayList<>();
+            List<String> deletedIds = new ArrayList<>();
             while (result.next()) {
-                deletedUserIds.add(result.getString("id"));
+                deletedIds.add(result.getString("id"));
             }
-            return deletedUserIds;
+            return deletedIds;
         });
     }
     private static class BulkImportUserRowMapper implements RowMapper<BulkImportUser, ResultSet> {
