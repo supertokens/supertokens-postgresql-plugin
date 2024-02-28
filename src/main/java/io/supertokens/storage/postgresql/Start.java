@@ -3064,7 +3064,7 @@ public class Start
     }
 
     @Override
-    public List<BulkImportUser> getBulkImportUsers(AppIdentifier appIdentifier, @Nonnull Integer limit, @Nullable BulkImportUserStatus status,
+    public List<BulkImportUser> getBulkImportUsers(AppIdentifier appIdentifier, @Nonnull Integer limit, @Nullable BULK_IMPORT_USER_STATUS status,
             @Nullable String bulkImportUserId, @Nullable Long createdAt) throws StorageQueryException {
         try {
             return BulkImportQueries.getBulkImportUsers(this, appIdentifier, limit, status, bulkImportUserId, createdAt);
@@ -3074,7 +3074,7 @@ public class Start
     }
 
     @Override
-    public void updateBulkImportUserStatus_Transaction(AppIdentifier appIdentifier, TransactionConnection con, @Nonnull String[] bulkImportUserIds, @Nonnull BulkImportUserStatus status)
+    public void updateBulkImportUserStatus_Transaction(AppIdentifier appIdentifier, TransactionConnection con, @Nonnull String[] bulkImportUserIds, @Nonnull BULK_IMPORT_USER_STATUS status)
             throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
