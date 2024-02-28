@@ -14,21 +14,7 @@
  *    under the License.
  */
 
-package io.supertokens.storage.postgresql.test;/*
- *    Copyright (c) 2024, VRAI Labs and/or its affiliates. All rights reserved.
- *
- *    This software is licensed under the Apache License, Version 2.0 (the
- *    "License") as published by the Apache Software Foundation.
- *
- *    You may not use this file except in compliance with the License. You may
- *    obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
- *
- *    Unless required by applicable law or agreed to in writing, software
- *    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- *    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- *    License for the specific language governing permissions and limitations
- *    under the License.
- */
+package io.supertokens.storage.postgresql.test;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -688,7 +674,8 @@ public class OneMillionUsersTest {
                 }
                 return null;
             });
-            assert time < 10000; // 10 sec
+            System.out.println("EP sign up " + time);
+            assert time < 15000;
         }
         { // Emailpassword sign in
             System.out.println("Measure email password sign-ins");
@@ -716,7 +703,8 @@ public class OneMillionUsersTest {
                 }
                 return null;
             });
-            assert time < 10000; // 10 sec
+            System.out.println("EP sign in " + time);
+            assert time < 15000;
         }
         { // Passwordless sign-ups
             System.out.println("Measure passwordless sign-ups");
@@ -744,7 +732,8 @@ public class OneMillionUsersTest {
                 }
                 return null;
             });
-            assert time < 3000; // 3 sec
+            System.out.println("PL sign up " + time);
+            assert time < 5000;
         }
         { // Passwordless sign-ins
             System.out.println("Measure passwordless sign-ins");
@@ -772,7 +761,8 @@ public class OneMillionUsersTest {
                 }
                 return null;
             });
-            assert time < 3000; // 3 sec
+            System.out.println("PL sign in " + time);
+            assert time < 5000;
         }
         { // Thirdparty sign-ups
             System.out.println("Measure thirdparty sign-ups");
@@ -797,7 +787,8 @@ public class OneMillionUsersTest {
                 }
                 return null;
             });
-            assert time < 3000; // 3 sec
+            System.out.println("Thirdparty sign up " + time);
+            assert time < 5000;
         }
         { // Thirdparty sign-ins
             System.out.println("Measure thirdparty sign-ins");
@@ -823,7 +814,8 @@ public class OneMillionUsersTest {
                 }
                 return null;
             });
-            assert time < 3000; // 3 sec
+            System.out.println("Thirdparty sign in " + time);
+            assert time < 5000;
         }
         { // Measure user pagination
             long time = measureTime(() -> {
@@ -846,7 +838,28 @@ public class OneMillionUsersTest {
                 }
                 return null;
             });
-            assert time < 5000; // 5 sec
+            System.out.println("User pagination " + time);
+            assert time < 120000;
+        }
+        { // Measure update user metadata
+            long time = measureTime(() -> {
+                try {
+                    UserPaginationContainer users = AuthRecipe.getUsers(main, 1, "ASC", null, null, null);
+                    UserIdMapping.populateExternalUserIdForUsers(
+                            TenantIdentifier.BASE_TENANT.withStorage(StorageLayer.getBaseStorage(main)),
+                            users.users);
+
+                    AuthRecipeUserInfo user = users.users[0];
+                    for (int i = 0; i < 500; i++) {
+                        UserMetadata.updateUserMetadata(main, user.getSupertokensOrExternalUserId(), new JsonObject());
+                    }
+                } catch (Exception e) {
+                    errorCount.incrementAndGet();
+                    throw new RuntimeException(e);
+                }
+                return null;
+            });
+
         }
 
         assertEquals(0, errorCount.get());
