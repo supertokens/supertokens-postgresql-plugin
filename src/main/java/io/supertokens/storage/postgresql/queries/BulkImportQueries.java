@@ -28,6 +28,9 @@ import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.bulkimport.BulkImportStorage.BulkImportUserStatus;
 import io.supertokens.pluginInterface.bulkimport.BulkImportUser;
@@ -180,9 +183,18 @@ public class BulkImportQueries {
 
         @Override
         public BulkImportUser map(ResultSet result) throws Exception {
-            return BulkImportUser.fromDBJson(result.getString("id"), result.getString("raw_data"),
-                    BulkImportUserStatus.valueOf(result.getString("status")),
-                    result.getLong("created_at"), result.getLong("updated_at"));
+            JsonObject flattenedJson = new JsonObject();
+            flattenedJson.addProperty("id", result.getString("id"));
+            flattenedJson.addProperty("status", result.getString("status"));
+            flattenedJson.addProperty("createdAt", result.getString("created_at"));
+            flattenedJson.addProperty("updatedAt", result.getString("updated_at"));
+
+            JsonObject rawData =  new Gson().fromJson(result.getString("raw_data"), JsonObject.class);
+            for (var entry : rawData.entrySet()) {
+                flattenedJson.add(entry.getKey(), entry.getValue());
+            }
+
+            return BulkImportUser.fromJson(flattenedJson);
         }
     }
 }
