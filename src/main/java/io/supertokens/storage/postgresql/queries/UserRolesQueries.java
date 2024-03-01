@@ -91,9 +91,6 @@ public class UserRolesQueries {
                 + "role VARCHAR(255) NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
                 + " PRIMARY KEY(app_id, tenant_id, user_id, role),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "role", "fkey")
-                + " FOREIGN KEY(app_id, role)"
-                + " REFERENCES " + getConfig(start).getRolesTable() + "(app_id, role) ON DELETE CASCADE,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "tenant_id", "fkey")
                 + " FOREIGN KEY (app_id, tenant_id)"
                 + " REFERENCES " + Config.getConfig(start).getTenantsTable() + "(app_id, tenant_id) ON DELETE CASCADE"
