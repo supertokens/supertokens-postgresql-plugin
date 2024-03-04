@@ -20,6 +20,7 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -140,43 +141,15 @@ public class UserRolesQueries {
         });
     }
 
-    public static boolean deleteRole(Start start, AppIdentifier appIdentifier, String role)
+    public static boolean deleteRole_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
+                                                 String role)
             throws SQLException, StorageQueryException {
-        try {
-            return start.startTransaction(con -> {
-                boolean deleted = false;
-                Connection sqlCon = (Connection) con.getConnection();
-                try {
-                    {
-                        String QUERY = "DELETE FROM " + getConfig(start).getUserRolesTable()
-                                + " WHERE app_id = ? AND role = ? ;";
-                        deleted = update(sqlCon, QUERY, pst -> {
-                            pst.setString(1, appIdentifier.getAppId());
-                            pst.setString(2, role);
-                        }) == 1;
-                    }
-                    {
-                        String QUERY = "DELETE FROM " + getConfig(start).getRolesTable()
-                                + " WHERE app_id = ? AND role = ? ;";
-                        return update(sqlCon, QUERY, pst -> {
-                            pst.setString(1, appIdentifier.getAppId());
-                            pst.setString(2, role);
-                        }) == 1 || deleted;
-                    }
-                } catch (StorageQueryException e) {
-                    throw new StorageTransactionLogicException(e);
-                } catch (SQLException e) {
-                    throw new StorageTransactionLogicException(e);
-                }
-            });
-        } catch (StorageTransactionLogicException e) {
-            if (e.actualException instanceof SQLException) {
-                throw (SQLException) e.actualException;
-            } else if (e.actualException instanceof StorageQueryException) {
-                throw (StorageQueryException) e.actualException;
-            }
-            throw new IllegalStateException(e.actualException);
-        }
+        String QUERY = "DELETE FROM " + getConfig(start).getRolesTable()
+                + " WHERE app_id = ? AND role = ? ;";
+        return update(sqlCon, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, role);
+        }) == 1;
     }
 
     public static boolean doesRoleExist(Start start, AppIdentifier appIdentifier, String role)
@@ -379,5 +352,15 @@ public class UserRolesQueries {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, userId);
         });
+    }
+
+    public static boolean deleteAllUserRoleAssociationsForRole_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier, String role)
+            throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + getConfig(start).getUserRolesTable()
+                + " WHERE app_id = ? AND role = ? ;";
+        return update(sqlCon, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, role);
+        }) >= 1;
     }
 }
