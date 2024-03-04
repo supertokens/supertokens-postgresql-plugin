@@ -153,8 +153,8 @@ public class DbConnectionPoolTest {
                 es.execute(() -> {
                     try {
                         TenantIdentifier t1 = new TenantIdentifier(null, null, "t1");
-                        Storage t1WithStorage = (StorageLayer.getStorage(t1, process.getProcess()));
-                        ThirdParty.signInUp(t1, t1WithStorage, process.getProcess(), "google", "googleid"+ finalI, "user" +
+                        Storage t1Storage = (StorageLayer.getStorage(t1, process.getProcess()));
+                        ThirdParty.signInUp(t1, t1Storage, process.getProcess(), "google", "googleid"+ finalI, "user" +
                                 finalI + "@example.com");
 
                         if (firstErrorTime.get() != -1 && successAfterErrorTime.get() == -1) {
@@ -354,8 +354,8 @@ public class DbConnectionPoolTest {
             es.execute(() -> {
                 try {
                     TenantIdentifier t1 = new TenantIdentifier(null, null, "t1");
-                    Storage t1WithStorage = (StorageLayer.getStorage(t1, process.getProcess()));
-                    ThirdParty.signInUp(t1, t1WithStorage, process.getProcess(), "google", "googleid"+ finalI, "user" +
+                    Storage t1Storage = (StorageLayer.getStorage(t1, process.getProcess()));
+                    ThirdParty.signInUp(t1, t1Storage, process.getProcess(), "google", "googleid"+ finalI, "user" +
                             finalI + "@example.com");
 
                 } catch (StorageQueryException e) {

@@ -87,13 +87,13 @@ public class TestUserPoolIdChangeBehaviour {
                 coreConfig
         ), false);
 
-        Storage tenantIdentifierWithStorage = (
+        Storage storage = (
                 StorageLayer.getStorage(tenantIdentifier, process.getProcess()));
 
-        String userPoolId = tenantIdentifierWithStorage.getUserPoolId();
+        String userPoolId = storage.getUserPoolId();
 
         AuthRecipeUserInfo userInfo = EmailPassword.signUp(
-                tenantIdentifier, tenantIdentifierWithStorage, process.getProcess(), "user@example.com", "password");
+                tenantIdentifier, storage, process.getProcess(), "user@example.com", "password");
 
         coreConfig.addProperty("postgresql_host", "127.0.0.1");
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
@@ -104,13 +104,13 @@ public class TestUserPoolIdChangeBehaviour {
                 coreConfig
         ), false);
 
-        tenantIdentifierWithStorage = (
+        storage = (
                 StorageLayer.getStorage(tenantIdentifier, process.getProcess()));
-        String userPoolId2 = tenantIdentifierWithStorage.getUserPoolId();
+        String userPoolId2 = storage.getUserPoolId();
         assertNotEquals(userPoolId, userPoolId2);
 
         AuthRecipeUserInfo user2 = EmailPassword.signIn(
-                tenantIdentifier, tenantIdentifierWithStorage, process.getProcess(),
+                tenantIdentifier, storage, process.getProcess(),
                 "user@example.com", "password");
 
         assertEquals(userInfo, user2);
@@ -132,13 +132,13 @@ public class TestUserPoolIdChangeBehaviour {
                 coreConfig
         ), false);
 
-        Storage tenantIdentifierWithStorage = (
+        Storage storage = (
                 StorageLayer.getStorage(tenantIdentifier, process.getProcess()));
 
-        String userPoolId = tenantIdentifierWithStorage.getUserPoolId();
+        String userPoolId = storage.getUserPoolId();
 
         AuthRecipeUserInfo userInfo = EmailPassword.signUp(
-                tenantIdentifier, tenantIdentifierWithStorage, process.getProcess(), "user@example.com", "password");
+                tenantIdentifier, storage, process.getProcess(), "user@example.com", "password");
 
         coreConfig.addProperty("postgresql_host", "127.0.0.1");
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
@@ -155,13 +155,13 @@ public class TestUserPoolIdChangeBehaviour {
         this.process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-        tenantIdentifierWithStorage = (
+        storage = (
                 StorageLayer.getStorage(tenantIdentifier, process.getProcess()));
-        String userPoolId2 = tenantIdentifierWithStorage.getUserPoolId();
+        String userPoolId2 = storage.getUserPoolId();
         assertNotEquals(userPoolId, userPoolId2);
 
         AuthRecipeUserInfo user2 = EmailPassword.signIn(
-                tenantIdentifier, tenantIdentifierWithStorage, process.getProcess(),
+                tenantIdentifier, storage, process.getProcess(),
                 "user@example.com",
                 "password");
 
