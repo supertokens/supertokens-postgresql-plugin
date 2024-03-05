@@ -98,7 +98,7 @@ public class AccountLinkingTests {
         AuthRecipe.createPrimaryUser(process.main, user1.getSupertokensUserId());
 
         AuthRecipeUserInfo user2 = EmailPassword.signUp(
-                tenantIdentifier.withStorage(StorageLayer.getStorage(tenantIdentifier, process.main)),
+                tenantIdentifier, (StorageLayer.getStorage(tenantIdentifier, process.main)),
                 process.getProcess(), "test2@example.com", "abcd1234");
 
         try {
@@ -137,7 +137,7 @@ public class AccountLinkingTests {
         );
 
         AuthRecipeUserInfo user3 = EmailPassword.signUp(
-                tenantIdentifier.withStorage(StorageLayer.getStorage(tenantIdentifier, process.main)),
+                tenantIdentifier, (StorageLayer.getStorage(tenantIdentifier, process.main)),
                 process.getProcess(), "test2@example.com", "abcd1234");
 
         Map<String, String> params = new HashMap<>();

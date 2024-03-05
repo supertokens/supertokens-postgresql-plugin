@@ -520,7 +520,7 @@ public class LoggingTest {
                                 new ThirdPartyConfig(true, null),
                                 new PasswordlessConfig(true),
                                 null, null, config
-                               ));
+                        ));
 
                 process.kill();
                 assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
