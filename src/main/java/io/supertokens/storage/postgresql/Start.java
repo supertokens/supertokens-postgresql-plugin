@@ -3003,14 +3003,16 @@ public class Start
 
     @TestOnly
     public int getDbActivityCount(String dbname) throws SQLException, StorageQueryException {
-        String QUERY = "SELECT COUNT(*) as c FROM pg_stat_activity WHERE datname = ?;";
+        String QUERY = "SELECT query FROM pg_stat_activity WHERE datname = ?;";
         return execute(this, QUERY, pst -> {
             pst.setString(1, dbname);
         }, result -> {
-            if (result.next()) {
-                return result.getInt("c");
+            int count = 0;
+            while (result.next()) {
+                System.out.println(result.getString("query"));
+                count++;
             }
-            return -1;
+            return count;
         });
     }
 }
