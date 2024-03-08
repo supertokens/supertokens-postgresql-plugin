@@ -65,17 +65,39 @@ public class UserIdMappingQueries {
                 + getConfig(start).getUserIdMappingTable() + "(app_id, supertokens_user_id);";
     }
 
-    public static void createUserIdMapping(Start start, AppIdentifier appIdentifier, String superTokensUserId, String externalUserId,
-                                           String externalUserIdInfo) throws SQLException, StorageQueryException {
+    public static void createUserIdMappingQuery(Start start, Connection sqlCon, AppIdentifier appIdentifier,
+            String superTokensUserId, String externalUserId,
+            String externalUserIdInfo) throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + Config.getConfig(start).getUserIdMappingTable()
                 + " (app_id, supertokens_user_id, external_user_id, external_user_id_info)" + " VALUES(?, ?, ?, ?)";
 
-        update(start, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, superTokensUserId);
-            pst.setString(3, externalUserId);
-            pst.setString(4, externalUserIdInfo);
-        });
+        if (sqlCon == null) {
+            update(start, QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, superTokensUserId);
+                pst.setString(3, externalUserId);
+                pst.setString(4, externalUserIdInfo);
+            });
+        } else {
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, superTokensUserId);
+                pst.setString(3, externalUserId);
+                pst.setString(4, externalUserIdInfo);
+            });
+        }
+    }
+
+    public static void createUserIdMapping(Start start, AppIdentifier appIdentifier, String superTokensUserId,
+            String externalUserId,
+            String externalUserIdInfo) throws SQLException, StorageQueryException {
+        createUserIdMappingQuery(start, null, appIdentifier, superTokensUserId, externalUserId, externalUserIdInfo);
+    }
+
+    public static void bulkImport_createUserIdMapping_Transaction(Start start, Connection sqlCon,
+            AppIdentifier appIdentifier, String superTokensUserId,
+            String externalUserId, String externalUserIdInfo) throws SQLException, StorageQueryException {
+        createUserIdMappingQuery(start, sqlCon, appIdentifier, superTokensUserId, externalUserId, externalUserIdInfo);
     }
 
     public static UserIdMapping getuseraIdMappingWithSuperTokensUserId(Start start, AppIdentifier appIdentifier, String userId)

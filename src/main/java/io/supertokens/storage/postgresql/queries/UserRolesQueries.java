@@ -190,16 +190,36 @@ public class UserRolesQueries {
         });
     }
 
-    public static int addRoleToUser(Start start, TenantIdentifier tenantIdentifier, String userId, String role)
+    public static int addRoleToUserQuery(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId, String role)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getUserRolesTable()
                 + "(app_id, tenant_id, user_id, role) VALUES(?, ?, ?, ?);";
-        return update(start, QUERY, pst -> {
-            pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, tenantIdentifier.getTenantId());
-            pst.setString(3, userId);
-            pst.setString(4, role);
-        });
+
+        if (sqlCon == null) {
+            return update(start, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, userId);
+                pst.setString(4, role);
+            });
+        } else {
+            return update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, userId);
+                pst.setString(4, role);
+            });
+        }
+    }
+
+    public static int addRoleToUser(Start start, TenantIdentifier tenantIdentifier, String userId, String role)
+            throws SQLException, StorageQueryException {
+        return addRoleToUserQuery(start, null, tenantIdentifier, userId, role);
+    }
+
+    public static int bulkImport_addRoleToUser_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId, String role)
+            throws SQLException, StorageQueryException {
+        return addRoleToUserQuery(start, sqlCon, tenantIdentifier, userId, role);
     }
 
     public static String[] getRolesForUser(Start start, TenantIdentifier tenantIdentifier, String userId)

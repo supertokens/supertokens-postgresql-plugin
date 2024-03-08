@@ -20,13 +20,11 @@ import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
-import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
-import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -266,72 +264,83 @@ public class EmailPasswordQueries {
         }
     }
 
+    private static AuthRecipeUserInfo signUpQuery(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId, String email,
+            String passwordHash, long timeJoined) throws StorageQueryException, StorageTransactionLogicException {
+        try {
+            { // app_id_to_user_id
+                String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
+                        + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
+                update(sqlCon, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, userId);
+                    pst.setString(3, userId);
+                    pst.setString(4, EMAIL_PASSWORD.toString());
+                });
+            }
+
+            { // all_auth_recipe_users
+                String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
+                        + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)" +
+                        " VALUES(?, ?, ?, ?, ?, ?, ?)";
+                update(sqlCon, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, tenantIdentifier.getTenantId());
+                    pst.setString(3, userId);
+                    pst.setString(4, userId);
+                    pst.setString(5, EMAIL_PASSWORD.toString());
+                    pst.setLong(6, timeJoined);
+                    pst.setLong(7, timeJoined);
+                });
+            }
+
+            { // emailpassword_users
+                String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUsersTable()
+                        + "(app_id, user_id, email, password_hash, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
+
+                update(sqlCon, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, userId);
+                    pst.setString(3, email);
+                    pst.setString(4, passwordHash);
+                    pst.setLong(5, timeJoined);
+                });
+            }
+
+            { // emailpassword_user_to_tenant
+                String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUserToTenantTable()
+                        + "(app_id, tenant_id, user_id, email)" + " VALUES(?, ?, ?, ?)";
+
+                update(sqlCon, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, tenantIdentifier.getTenantId());
+                    pst.setString(3, userId);
+                    pst.setString(4, email);
+                });
+            }
+
+            UserInfoPartial userInfo = new UserInfoPartial(userId, email, passwordHash, timeJoined);
+            fillUserInfoWithTenantIds_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
+            fillUserInfoWithVerified_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
+
+            return AuthRecipeUserInfo.create(userId, false, userInfo.toLoginMethod());
+        } catch (SQLException throwables) {
+            throw new StorageTransactionLogicException(throwables);
+        }
+    }
+
     public static AuthRecipeUserInfo signUp(Start start, TenantIdentifier tenantIdentifier, String userId, String email,
                                             String passwordHash, long timeJoined)
             throws StorageQueryException, StorageTransactionLogicException {
         return start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
-            try {
-                { // app_id_to_user_id
-                    String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                            + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, userId);
-                        pst.setString(3, userId);
-                        pst.setString(4, EMAIL_PASSWORD.toString());
-                    });
-                }
-
-                { // all_auth_recipe_users
-                    String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
-                            + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)" +
-                            " VALUES(?, ?, ?, ?, ?, ?, ?)";
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, tenantIdentifier.getTenantId());
-                        pst.setString(3, userId);
-                        pst.setString(4, userId);
-                        pst.setString(5, EMAIL_PASSWORD.toString());
-                        pst.setLong(6, timeJoined);
-                        pst.setLong(7, timeJoined);
-                    });
-                }
-
-                { // emailpassword_users
-                    String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUsersTable()
-                            + "(app_id, user_id, email, password_hash, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
-
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, userId);
-                        pst.setString(3, email);
-                        pst.setString(4, passwordHash);
-                        pst.setLong(5, timeJoined);
-                    });
-                }
-
-                { // emailpassword_user_to_tenant
-                    String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUserToTenantTable()
-                            + "(app_id, tenant_id, user_id, email)" + " VALUES(?, ?, ?, ?)";
-
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, tenantIdentifier.getTenantId());
-                        pst.setString(3, userId);
-                        pst.setString(4, email);
-                    });
-                }
-
-                UserInfoPartial userInfo = new UserInfoPartial(userId, email, passwordHash, timeJoined);
-                fillUserInfoWithTenantIds_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
-                fillUserInfoWithVerified_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
-                sqlCon.commit();
-                return AuthRecipeUserInfo.create(userId, false, userInfo.toLoginMethod());
-            } catch (SQLException throwables) {
-                throw new StorageTransactionLogicException(throwables);
-            }
+            return signUpQuery(start, sqlCon, tenantIdentifier, userId, email, passwordHash, timeJoined);
         });
+    }
+
+    public static AuthRecipeUserInfo bulkImport_signUp_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId, String email,
+                                            String passwordHash, long timeJoined)
+            throws StorageQueryException, StorageTransactionLogicException {
+            return signUpQuery(start, sqlCon, tenantIdentifier, userId, email, passwordHash, timeJoined);
     }
 
     public static void deleteUser_Transaction(Connection sqlCon, Start start, AppIdentifier appIdentifier,

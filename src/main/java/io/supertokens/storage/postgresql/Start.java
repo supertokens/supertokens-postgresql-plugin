@@ -875,37 +875,58 @@ public class Start
         return PROTECTED_DB_CONFIG;
     }
 
+    private AuthRecipeUserInfo handleEmailPasswordSignUpExceptions(TenantIdentifier tenantIdentifier,
+            StorageTransactionLogicException exception) throws StorageQueryException, DuplicateUserIdException,
+            DuplicateEmailException, TenantOrAppNotFoundException {
+        Exception e = exception.actualException;
+        if (e instanceof PSQLException) {
+            PostgreSQLConfig config = Config.getConfig(this);
+            ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+            if (isUniqueConstraintError(serverMessage, config.getEmailPasswordUserToTenantTable(), "email")) {
+                throw new DuplicateEmailException();
+            } else if (isPrimaryKeyError(serverMessage, config.getEmailPasswordUsersTable())
+                    || isPrimaryKeyError(serverMessage, config.getUsersTable())
+                    || isPrimaryKeyError(serverMessage, config.getEmailPasswordUserToTenantTable())
+                    || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
+                throw new DuplicateUserIdException();
+            } else if (isForeignKeyConstraintError(serverMessage, config.getEmailPasswordUsersTable(), "user_id")) {
+                // This should never happen because we add the user to app_id_to_user_id table first
+                throw new IllegalStateException("should never come here");
+            } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
+                throw new TenantOrAppNotFoundException(tenantIdentifier.toAppIdentifier());
+            } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
+                throw new TenantOrAppNotFoundException(tenantIdentifier);
+            }
+        }
+
+        throw new StorageQueryException(e);
+    }
+
     @Override
     public AuthRecipeUserInfo signUp(TenantIdentifier tenantIdentifier, String id, String email, String passwordHash,
-                           long timeJoined)
+            long timeJoined)
             throws StorageQueryException, DuplicateUserIdException, DuplicateEmailException,
             TenantOrAppNotFoundException {
         try {
             return EmailPasswordQueries.signUp(this, tenantIdentifier, id, email, passwordHash, timeJoined);
         } catch (StorageTransactionLogicException eTemp) {
-            Exception e = eTemp.actualException;
-            if (e instanceof PSQLException) {
-                PostgreSQLConfig config = Config.getConfig(this);
-                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+            return handleEmailPasswordSignUpExceptions(tenantIdentifier, eTemp);
+        }
+    }
 
-                if (isUniqueConstraintError(serverMessage, config.getEmailPasswordUserToTenantTable(), "email")) {
-                    throw new DuplicateEmailException();
-                } else if (isPrimaryKeyError(serverMessage, config.getEmailPasswordUsersTable())
-                        || isPrimaryKeyError(serverMessage, config.getUsersTable())
-                        || isPrimaryKeyError(serverMessage, config.getEmailPasswordUserToTenantTable())
-                        || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
-                    throw new DuplicateUserIdException();
-                } else if (isForeignKeyConstraintError(serverMessage, config.getEmailPasswordUsersTable(), "user_id")) {
-                    // This should never happen because we add the user to app_id_to_user_id table first
-                    throw new IllegalStateException("should never come here");
-                } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
-                    throw new TenantOrAppNotFoundException(tenantIdentifier.toAppIdentifier());
-                } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
-                    throw new TenantOrAppNotFoundException(tenantIdentifier);
-                }
-            }
-
-            throw new StorageQueryException(e);
+    @Override
+    public AuthRecipeUserInfo bulkImport_signUp_Transaction(TransactionConnection con,
+            TenantIdentifier tenantIdentifier, String id, String email, String passwordHash,
+            long timeJoined)
+            throws StorageQueryException, DuplicateUserIdException, DuplicateEmailException,
+            TenantOrAppNotFoundException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            return EmailPasswordQueries.bulkImport_signUp_Transaction(this, sqlCon, tenantIdentifier, id, email,
+                    passwordHash, timeJoined);
+        } catch (StorageTransactionLogicException eTemp) {
+            return handleEmailPasswordSignUpExceptions(tenantIdentifier, eTemp);
         }
     }
 
@@ -1192,6 +1213,16 @@ public class Start
     }
 
     @Override
+    public void bulkImport_updateIsEmailVerifiedToExternalUserId_Transaction(TransactionConnection con, AppIdentifier appIdentifier, String supertokensUserId, String externalUserId) throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            EmailVerificationQueries.bulkImport_updateIsEmailVerifiedToExternalUserId_Transaction(this, sqlCon, appIdentifier, supertokensUserId, externalUserId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public void deleteExpiredPasswordResetTokens() throws StorageQueryException {
         try {
             EmailPasswordQueries.deleteExpiredPasswordResetTokens(this);
@@ -1213,6 +1244,41 @@ public class Start
         }
     }
 
+
+    private AuthRecipeUserInfo handleThirdPartySignUpExceptions(TenantIdentifier tenantIdentifier,
+            StorageTransactionLogicException exception)
+            throws DuplicateThirdPartyUserException, TenantOrAppNotFoundException, StorageQueryException,
+            io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException {
+        Exception e = exception.actualException;
+        if (e instanceof PSQLException) {
+            PostgreSQLConfig config = Config.getConfig(this);
+            ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+            if (isUniqueConstraintError(serverMessage, config.getThirdPartyUserToTenantTable(),
+                    "third_party_user_id")) {
+                throw new DuplicateThirdPartyUserException();
+
+            } else if (isPrimaryKeyError(serverMessage, config.getThirdPartyUsersTable())
+                    || isPrimaryKeyError(serverMessage, config.getUsersTable())
+                    || isPrimaryKeyError(serverMessage, config.getThirdPartyUserToTenantTable())
+                    || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
+                throw new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException();
+
+            } else if (isForeignKeyConstraintError(serverMessage, config.getThirdPartyUsersTable(), "user_id")) {
+                // This should never happen because we add the user to app_id_to_user_id table first
+                throw new IllegalStateException("should never come here");
+
+            } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
+                throw new TenantOrAppNotFoundException(tenantIdentifier.toAppIdentifier());
+
+            } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
+                throw new TenantOrAppNotFoundException(tenantIdentifier);
+            }
+        }
+
+        throw new StorageQueryException(exception.actualException);
+    }
+
     @Override
     public AuthRecipeUserInfo signUp(
             TenantIdentifier tenantIdentifier, String id, String email,
@@ -1221,38 +1287,22 @@ public class Start
             DuplicateThirdPartyUserException, TenantOrAppNotFoundException {
         try {
             return ThirdPartyQueries.signUp(this, tenantIdentifier, id, email, thirdParty, timeJoined);
-        } catch (StorageTransactionLogicException eTemp) {
-            Exception e = eTemp.actualException;
-            if (e instanceof PSQLException) {
-                PostgreSQLConfig config = Config.getConfig(this);
-                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+        } catch (StorageTransactionLogicException e) {
+            return handleThirdPartySignUpExceptions(tenantIdentifier, e);
+        }
+    }
 
-                if (isUniqueConstraintError(serverMessage, config.getThirdPartyUserToTenantTable(),
-                        "third_party_user_id")) {
-                    throw new DuplicateThirdPartyUserException();
-
-                } else if (isPrimaryKeyError(serverMessage, config.getThirdPartyUsersTable())
-                        || isPrimaryKeyError(serverMessage, config.getUsersTable())
-                        || isPrimaryKeyError(serverMessage, config.getThirdPartyUserToTenantTable())
-                        || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
-                    throw new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException();
-
-                } else if (isForeignKeyConstraintError(serverMessage, config.getThirdPartyUsersTable(), "user_id")) {
-                    // This should never happen because we add the user to app_id_to_user_id table first
-                    throw new IllegalStateException("should never come here");
-
-                } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
-                    throw new TenantOrAppNotFoundException(tenantIdentifier.toAppIdentifier());
-
-                } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
-                    throw new TenantOrAppNotFoundException(tenantIdentifier);
-
-                }
-
-
-            }
-
-            throw new StorageQueryException(eTemp.actualException);
+    @Override
+    public AuthRecipeUserInfo bulkImport_signUp_Transaction(
+            TransactionConnection con, TenantIdentifier tenantIdentifier, String id, String email,
+            LoginMethod.ThirdParty thirdParty, long timeJoined)
+            throws StorageQueryException, io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException,
+            DuplicateThirdPartyUserException, TenantOrAppNotFoundException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            return ThirdPartyQueries.bulkInmport_signUp_Transaction(this, sqlCon, tenantIdentifier, id, email, thirdParty, timeJoined);
+        } catch (StorageTransactionLogicException e) {
+            return handleThirdPartySignUpExceptions(tenantIdentifier, e);
         }
     }
 
@@ -1707,15 +1757,57 @@ public class Start
         }
     }
 
+    private AuthRecipeUserInfo handleCreateUserExceptions(TenantIdentifier tenantIdentifier,
+            StorageTransactionLogicException exception) throws StorageQueryException, TenantOrAppNotFoundException,
+            DuplicateUserIdException, DuplicateEmailException, DuplicatePhoneNumberException {
+        Exception e = exception.actualException;
+
+        if (e instanceof PSQLException) {
+            PostgreSQLConfig config = Config.getConfig(this);
+            ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+            if (isPrimaryKeyError(serverMessage, config.getPasswordlessUsersTable())
+                    || isPrimaryKeyError(serverMessage, config.getUsersTable())
+                    || isPrimaryKeyError(serverMessage, config.getPasswordlessUserToTenantTable())
+                    || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
+                throw new DuplicateUserIdException();
+            }
+
+            if (isUniqueConstraintError(((PSQLException) e).getServerErrorMessage(),
+                    Config.getConfig(this).getPasswordlessUserToTenantTable(), "email")) {
+                throw new DuplicateEmailException();
+            }
+
+            if (isUniqueConstraintError(((PSQLException) e).getServerErrorMessage(),
+                    Config.getConfig(this).getPasswordlessUserToTenantTable(), "phone_number")) {
+                throw new DuplicatePhoneNumberException();
+            }
+
+            if (isForeignKeyConstraintError(serverMessage, config.getPasswordlessUsersTable(), "user_id")) {
+                // This should never happen because we add the user to app_id_to_user_id table first
+                throw new IllegalStateException("should never come here");
+            }
+
+            if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
+                throw new TenantOrAppNotFoundException(tenantIdentifier.toAppIdentifier());
+            }
+
+            if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
+                throw new TenantOrAppNotFoundException(tenantIdentifier);
+            }
+        }
+        throw new StorageQueryException(exception.actualException);
+    }
+
+
     @Override
     public AuthRecipeUserInfo createUser(TenantIdentifier tenantIdentifier,
                                                                            String id,
                                                                            @javax.annotation.Nullable String email,
                                                                            @javax.annotation.Nullable
                                                                            String phoneNumber, long timeJoined)
-            throws StorageQueryException,
-            DuplicateEmailException, DuplicatePhoneNumberException, DuplicateUserIdException,
-            TenantOrAppNotFoundException {
+            throws StorageQueryException, DuplicateEmailException, DuplicatePhoneNumberException,
+            DuplicateUserIdException, TenantOrAppNotFoundException {
         if (email == null && phoneNumber == null) {
             throw new IllegalArgumentException("Both email and phoneNumber cannot be null");
         }
@@ -1723,45 +1815,28 @@ public class Start
         try {
             return PasswordlessQueries.createUser(this, tenantIdentifier, id, email, phoneNumber, timeJoined);
         } catch (StorageTransactionLogicException e) {
+            return handleCreateUserExceptions(tenantIdentifier, e);
+        }
+    }
 
-            Exception actualException = e.actualException;
+    @Override
+    public AuthRecipeUserInfo bulkImport_createUser_Transaction(TransactionConnection con,
+                                                                           TenantIdentifier tenantIdentifier,
+                                                                           String id,
+                                                                           @javax.annotation.Nullable String email,
+                                                                           @javax.annotation.Nullable
+                                                                           String phoneNumber, long timeJoined)
+            throws StorageQueryException, DuplicateEmailException, DuplicatePhoneNumberException,
+            DuplicateUserIdException, TenantOrAppNotFoundException {
+        if (email == null && phoneNumber == null) {
+            throw new IllegalArgumentException("Both email and phoneNumber cannot be null");
+        }
 
-            if (actualException instanceof PSQLException) {
-                PostgreSQLConfig config = Config.getConfig(this);
-                ServerErrorMessage serverMessage = ((PSQLException) actualException).getServerErrorMessage();
-
-                if (isPrimaryKeyError(serverMessage, config.getPasswordlessUsersTable())
-                        || isPrimaryKeyError(serverMessage, config.getUsersTable())
-                        || isPrimaryKeyError(serverMessage, config.getPasswordlessUserToTenantTable())
-                        || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
-                    throw new DuplicateUserIdException();
-                }
-
-                if (isUniqueConstraintError(((PSQLException) actualException).getServerErrorMessage(),
-                        Config.getConfig(this).getPasswordlessUserToTenantTable(), "email")) {
-                    throw new DuplicateEmailException();
-                }
-
-                if (isUniqueConstraintError(((PSQLException) actualException).getServerErrorMessage(),
-                        Config.getConfig(this).getPasswordlessUserToTenantTable(), "phone_number")) {
-                    throw new DuplicatePhoneNumberException();
-                }
-
-                if (isForeignKeyConstraintError(serverMessage, config.getPasswordlessUsersTable(), "user_id")) {
-                    // This should never happen because we add the user to app_id_to_user_id table first
-                    throw new IllegalStateException("should never come here");
-                }
-
-                if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
-                    throw new TenantOrAppNotFoundException(tenantIdentifier.toAppIdentifier());
-                }
-
-                if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
-                    throw new TenantOrAppNotFoundException(tenantIdentifier);
-                }
-
-            }
-            throw new StorageQueryException(e.actualException);
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            return PasswordlessQueries.bulkImport_createUser_Transaction(this, sqlCon, tenantIdentifier, id, email, phoneNumber, timeJoined);
+        } catch (StorageTransactionLogicException e) {
+            return handleCreateUserExceptions(tenantIdentifier, e);
         }
     }
 
@@ -1910,6 +1985,26 @@ public class Start
         }
     }
 
+    private void handleAddRoleToUserException(TenantIdentifier tenantIdentifier, SQLException e)
+            throws StorageQueryException, UnknownRoleException, DuplicateUserRoleMappingException,
+            TenantOrAppNotFoundException {
+        if (e instanceof PSQLException) {
+            PostgreSQLConfig config = Config.getConfig(this);
+            ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
+            if (isForeignKeyConstraintError(serverErrorMessage, config.getUserRolesTable(), "role")) {
+                throw new UnknownRoleException();
+            }
+            if (isPrimaryKeyError(serverErrorMessage, config.getUserRolesTable())) {
+                throw new DuplicateUserRoleMappingException();
+            }
+            if (isForeignKeyConstraintError(serverErrorMessage, config.getUserRolesTable(),
+                    "tenant_id")) {
+                throw new TenantOrAppNotFoundException(tenantIdentifier);
+            }
+        }
+        throw new StorageQueryException(e);
+    }
+
     @Override
     public void addRoleToUser(TenantIdentifier tenantIdentifier, String userId, String role)
             throws StorageQueryException, UnknownRoleException, DuplicateUserRoleMappingException,
@@ -1917,23 +2012,20 @@ public class Start
         try {
             UserRolesQueries.addRoleToUser(this, tenantIdentifier, userId, role);
         } catch (SQLException e) {
-            if (e instanceof PSQLException) {
-                PostgreSQLConfig config = Config.getConfig(this);
-                ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
-                if (isForeignKeyConstraintError(serverErrorMessage, config.getUserRolesTable(), "role")) {
-                    throw new UnknownRoleException();
-                }
-                if (isPrimaryKeyError(serverErrorMessage, config.getUserRolesTable())) {
-                    throw new DuplicateUserRoleMappingException();
-                }
-                if (isForeignKeyConstraintError(serverErrorMessage, config.getUserRolesTable(),
-                        "tenant_id")) {
-                    throw new TenantOrAppNotFoundException(tenantIdentifier);
-                }
-            }
-            throw new StorageQueryException(e);
+            handleAddRoleToUserException(tenantIdentifier, e);
         }
+    } 
 
+    @Override
+    public void bulkImport_addRoleToUser_Transaction(TransactionConnection con, TenantIdentifier tenantIdentifier, String userId, String role)
+            throws StorageQueryException, UnknownRoleException, DuplicateUserRoleMappingException,
+            TenantOrAppNotFoundException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            UserRolesQueries.bulkImport_addRoleToUser_Transaction(this, sqlCon, tenantIdentifier, userId, role);
+        } catch (SQLException e) {
+            handleAddRoleToUserException(tenantIdentifier, e);
+        }
     }
 
     @Override
@@ -2130,6 +2222,32 @@ public class Start
         }
     }
 
+    private void handleCreateUserIdMappingExceptions(SQLException e) throws StorageQueryException, UnknownSuperTokensUserIdException, UserIdMappingAlreadyExistsException {
+        if (e instanceof PSQLException) {
+            PostgreSQLConfig config = Config.getConfig(this);
+            ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
+            if (isForeignKeyConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
+                    "supertokens_user_id")) {
+                throw new UnknownSuperTokensUserIdException();
+            }
+
+            if (isPrimaryKeyError(serverErrorMessage, config.getUserIdMappingTable())) {
+                throw new UserIdMappingAlreadyExistsException(true, true);
+            }
+
+            if (isUniqueConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
+                    "supertokens_user_id")) {
+                throw new UserIdMappingAlreadyExistsException(true, false);
+            }
+
+            if (isUniqueConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
+                    "external_user_id")) {
+                throw new UserIdMappingAlreadyExistsException(false, true);
+            }
+        }
+        throw new StorageQueryException(e);
+    }
+
     @Override
     public void createUserIdMapping(AppIdentifier appIdentifier, String superTokensUserId, String externalUserId,
                                     @org.jetbrains.annotations.Nullable String externalUserIdInfo)
@@ -2138,31 +2256,21 @@ public class Start
             UserIdMappingQueries.createUserIdMapping(this, appIdentifier, superTokensUserId, externalUserId,
                     externalUserIdInfo);
         } catch (SQLException e) {
-            if (e instanceof PSQLException) {
-                PostgreSQLConfig config = Config.getConfig(this);
-                ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
-                if (isForeignKeyConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
-                        "supertokens_user_id")) {
-                    throw new UnknownSuperTokensUserIdException();
-                }
-
-                if (isPrimaryKeyError(serverErrorMessage, config.getUserIdMappingTable())) {
-                    throw new UserIdMappingAlreadyExistsException(true, true);
-                }
-
-                if (isUniqueConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
-                        "supertokens_user_id")) {
-                    throw new UserIdMappingAlreadyExistsException(true, false);
-                }
-
-                if (isUniqueConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
-                        "external_user_id")) {
-                    throw new UserIdMappingAlreadyExistsException(false, true);
-                }
-            }
-            throw new StorageQueryException(e);
+            handleCreateUserIdMappingExceptions(e);
         }
+    }
 
+    @Override
+    public void bulkImport_createUserIdMapping_Transaction(TransactionConnection con, AppIdentifier appIdentifier, String superTokensUserId, String externalUserId,
+                                    @org.jetbrains.annotations.Nullable String externalUserIdInfo)
+            throws StorageQueryException, UnknownSuperTokensUserIdException, UserIdMappingAlreadyExistsException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            UserIdMappingQueries.bulkImport_createUserIdMapping_Transaction(this, sqlCon, appIdentifier, superTokensUserId, externalUserId,
+                    externalUserIdInfo);
+        } catch (SQLException e) {
+            handleCreateUserIdMappingExceptions(e);
+        }
     }
 
     @Override
@@ -2354,7 +2462,6 @@ public class Start
                 throw new IllegalStateException("Should never come here!");
             }
 
-            sqlCon.commit();
             return added;
         } catch (SQLException throwables) {
             PostgreSQLConfig config = Config.getConfig(this);
@@ -3074,11 +3181,11 @@ public class Start
     }
 
     @Override
-    public void updateBulkImportUserStatus_Transaction(AppIdentifier appIdentifier, TransactionConnection con, @Nonnull String[] bulkImportUserIds, @Nonnull BULK_IMPORT_USER_STATUS status)
+    public void updateBulkImportUserStatus_Transaction(AppIdentifier appIdentifier, TransactionConnection con, @Nonnull String[] bulkImportUserIds, @Nonnull BULK_IMPORT_USER_STATUS status, @Nullable String errorMessage)
             throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            BulkImportQueries.updateBulkImportUserStatus_Transaction(this, sqlCon, appIdentifier, bulkImportUserIds, status);
+            BulkImportQueries.updateBulkImportUserStatus_Transaction(this, sqlCon, appIdentifier, bulkImportUserIds, status, errorMessage);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -3088,6 +3195,25 @@ public class Start
     public List<String> deleteBulkImportUsers(AppIdentifier appIdentifier, @Nonnull String[] bulkImportUserIds) throws StorageQueryException {
         try {
             return BulkImportQueries.deleteBulkImportUsers(this, appIdentifier, bulkImportUserIds);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public List<BulkImportUser> getBulkImportUsersForProcessing(AppIdentifier appIdentifier, @Nonnull Integer limit) throws StorageQueryException {
+        try {
+            return BulkImportQueries.getBulkImportUsersForProcessing(this, appIdentifier, limit);
+        } catch (StorageTransactionLogicException e) {
+            throw new StorageQueryException(e.actualException);
+        }
+    }
+
+    @Override
+    public void deleteBulkImportUser_Transaction(AppIdentifier appIdentifier, TransactionConnection con, @Nonnull String bulkImportUserId) throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            BulkImportQueries.deleteBulkImportUser_Transaction(this, sqlCon, appIdentifier, bulkImportUserId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

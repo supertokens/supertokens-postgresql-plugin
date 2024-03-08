@@ -98,75 +98,87 @@ public class ThirdPartyQueries {
         // @formatter:on
     }
 
+    public static AuthRecipeUserInfo signUpQuery(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String id, String email,
+                                            LoginMethod.ThirdParty thirdParty, long timeJoined)
+            throws StorageQueryException, StorageTransactionLogicException {
+        try {
+            { // app_id_to_user_id
+                String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
+                        + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
+                update(sqlCon, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, id);
+                    pst.setString(3, id);
+                    pst.setString(4, THIRD_PARTY.toString());
+                });
+            }
+
+            { // all_auth_recipe_users
+                String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
+                        + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)" +
+                        " VALUES(?, ?, ?, ?, ?, ?, ?)";
+                update(sqlCon, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, tenantIdentifier.getTenantId());
+                    pst.setString(3, id);
+                    pst.setString(4, id);
+                    pst.setString(5, THIRD_PARTY.toString());
+                    pst.setLong(6, timeJoined);
+                    pst.setLong(7, timeJoined);
+                });
+            }
+
+            { // thirdparty_users
+                String QUERY = "INSERT INTO " + getConfig(start).getThirdPartyUsersTable()
+                        + "(app_id, third_party_id, third_party_user_id, user_id, email, time_joined)"
+                        + " VALUES(?, ?, ?, ?, ?, ?)";
+                update(sqlCon, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, thirdParty.id);
+                    pst.setString(3, thirdParty.userId);
+                    pst.setString(4, id);
+                    pst.setString(5, email);
+                    pst.setLong(6, timeJoined);
+                });
+            }
+
+            { // thirdparty_user_to_tenant
+                String QUERY = "INSERT INTO " + getConfig(start).getThirdPartyUserToTenantTable()
+                        + "(app_id, tenant_id, user_id, third_party_id, third_party_user_id)"
+                        + " VALUES(?, ?, ?, ?, ?)";
+                update(sqlCon, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, tenantIdentifier.getTenantId());
+                    pst.setString(3, id);
+                    pst.setString(4, thirdParty.id);
+                    pst.setString(5, thirdParty.userId);
+                });
+            }
+
+            UserInfoPartial userInfo = new UserInfoPartial(id, email, thirdParty, timeJoined);
+            fillUserInfoWithTenantIds_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
+            fillUserInfoWithVerified_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
+
+            return AuthRecipeUserInfo.create(id, false, userInfo.toLoginMethod());
+
+        } catch (SQLException throwables) {
+            throw new StorageTransactionLogicException(throwables);
+        }
+    }
+
     public static AuthRecipeUserInfo signUp(Start start, TenantIdentifier tenantIdentifier, String id, String email,
                                             LoginMethod.ThirdParty thirdParty, long timeJoined)
             throws StorageQueryException, StorageTransactionLogicException {
         return start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
-            try {
-                { // app_id_to_user_id
-                    String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                            + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, id);
-                        pst.setString(3, id);
-                        pst.setString(4, THIRD_PARTY.toString());
-                    });
-                }
-
-                { // all_auth_recipe_users
-                    String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
-                            + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)" +
-                            " VALUES(?, ?, ?, ?, ?, ?, ?)";
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, tenantIdentifier.getTenantId());
-                        pst.setString(3, id);
-                        pst.setString(4, id);
-                        pst.setString(5, THIRD_PARTY.toString());
-                        pst.setLong(6, timeJoined);
-                        pst.setLong(7, timeJoined);
-                    });
-                }
-
-                { // thirdparty_users
-                    String QUERY = "INSERT INTO " + getConfig(start).getThirdPartyUsersTable()
-                            + "(app_id, third_party_id, third_party_user_id, user_id, email, time_joined)"
-                            + " VALUES(?, ?, ?, ?, ?, ?)";
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, thirdParty.id);
-                        pst.setString(3, thirdParty.userId);
-                        pst.setString(4, id);
-                        pst.setString(5, email);
-                        pst.setLong(6, timeJoined);
-                    });
-                }
-
-                { // thirdparty_user_to_tenant
-                    String QUERY = "INSERT INTO " + getConfig(start).getThirdPartyUserToTenantTable()
-                            + "(app_id, tenant_id, user_id, third_party_id, third_party_user_id)"
-                            + " VALUES(?, ?, ?, ?, ?)";
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, tenantIdentifier.getTenantId());
-                        pst.setString(3, id);
-                        pst.setString(4, thirdParty.id);
-                        pst.setString(5, thirdParty.userId);
-                    });
-                }
-
-                UserInfoPartial userInfo = new UserInfoPartial(id, email, thirdParty, timeJoined);
-                fillUserInfoWithTenantIds_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
-                fillUserInfoWithVerified_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
-                sqlCon.commit();
-                return AuthRecipeUserInfo.create(id, false, userInfo.toLoginMethod());
-
-            } catch (SQLException throwables) {
-                throw new StorageTransactionLogicException(throwables);
-            }
+            return signUpQuery(start, sqlCon, tenantIdentifier, id, email, thirdParty, timeJoined);
         });
+    }
+
+    public static AuthRecipeUserInfo bulkInmport_signUp_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String id, String email,
+                                            LoginMethod.ThirdParty thirdParty, long timeJoined)
+            throws StorageQueryException, StorageTransactionLogicException {
+        return signUpQuery(start, sqlCon, tenantIdentifier, id, email, thirdParty, timeJoined);
     }
 
     public static void deleteUser_Transaction(Connection sqlCon, Start start, AppIdentifier appIdentifier,

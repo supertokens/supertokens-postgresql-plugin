@@ -388,72 +388,87 @@ public class PasswordlessQueries {
         });
     }
 
-    public static AuthRecipeUserInfo createUser(Start start, TenantIdentifier tenantIdentifier, String id, @Nullable String email,
-                                                @Nullable String phoneNumber, long timeJoined)
+    public static AuthRecipeUserInfo createUserQuery(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier,
+            String id, @Nullable String email,
+            @Nullable String phoneNumber, long timeJoined)
+            throws StorageTransactionLogicException, StorageQueryException {
+        try {
+            { // app_id_to_user_id
+                String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
+                        + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
+                update(sqlCon, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, id);
+                    pst.setString(3, id);
+                    pst.setString(4, PASSWORDLESS.toString());
+                });
+            }
+
+            { // all_auth_recipe_users
+                String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
+                        + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)" +
+                        " VALUES(?, ?, ?, ?, ?, ?, ?)";
+                update(sqlCon, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, tenantIdentifier.getTenantId());
+                    pst.setString(3, id);
+                    pst.setString(4, id);
+                    pst.setString(5, PASSWORDLESS.toString());
+                    pst.setLong(6, timeJoined);
+                    pst.setLong(7, timeJoined);
+                });
+            }
+
+            { // passwordless_users
+                String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUsersTable()
+                        + "(app_id, user_id, email, phone_number, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
+                update(sqlCon, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, id);
+                    pst.setString(3, email);
+                    pst.setString(4, phoneNumber);
+                    pst.setLong(5, timeJoined);
+                });
+            }
+
+            { // passwordless_user_to_tenant
+                String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUserToTenantTable()
+                        + "(app_id, tenant_id, user_id, email, phone_number)" + " VALUES(?, ?, ?, ?, ?)";
+
+                update(sqlCon, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, tenantIdentifier.getTenantId());
+                    pst.setString(3, id);
+                    pst.setString(4, email);
+                    pst.setString(5, phoneNumber);
+                });
+            }
+            UserInfoPartial userInfo = new UserInfoPartial(id, email, phoneNumber, timeJoined);
+            fillUserInfoWithTenantIds_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
+            fillUserInfoWithVerified_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
+
+            return AuthRecipeUserInfo.create(id, false,
+                    userInfo.toLoginMethod());
+        } catch (SQLException throwables) {
+            throw new StorageTransactionLogicException(throwables);
+        }
+    }
+
+    public static AuthRecipeUserInfo createUser(Start start, TenantIdentifier tenantIdentifier, String id,
+            @Nullable String email,
+            @Nullable String phoneNumber, long timeJoined)
             throws StorageTransactionLogicException, StorageQueryException {
         return start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
-            try {
-                { // app_id_to_user_id
-                    String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                            + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, id);
-                        pst.setString(3, id);
-                        pst.setString(4, PASSWORDLESS.toString());
-                    });
-                }
-
-                { // all_auth_recipe_users
-                    String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
-                            + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)" +
-                            " VALUES(?, ?, ?, ?, ?, ?, ?)";
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, tenantIdentifier.getTenantId());
-                        pst.setString(3, id);
-                        pst.setString(4, id);
-                        pst.setString(5, PASSWORDLESS.toString());
-                        pst.setLong(6, timeJoined);
-                        pst.setLong(7, timeJoined);
-                    });
-                }
-
-                { // passwordless_users
-                    String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUsersTable()
-                            + "(app_id, user_id, email, phone_number, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, id);
-                        pst.setString(3, email);
-                        pst.setString(4, phoneNumber);
-                        pst.setLong(5, timeJoined);
-                    });
-                }
-
-                { // passwordless_user_to_tenant
-                    String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUserToTenantTable()
-                            + "(app_id, tenant_id, user_id, email, phone_number)" + " VALUES(?, ?, ?, ?, ?)";
-
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, tenantIdentifier.getTenantId());
-                        pst.setString(3, id);
-                        pst.setString(4, email);
-                        pst.setString(5, phoneNumber);
-                    });
-                }
-                UserInfoPartial userInfo = new UserInfoPartial(id, email, phoneNumber, timeJoined);
-                fillUserInfoWithTenantIds_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
-                fillUserInfoWithVerified_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
-                sqlCon.commit();
-                return AuthRecipeUserInfo.create(id, false,
-                        userInfo.toLoginMethod());
-            } catch (SQLException throwables) {
-                throw new StorageTransactionLogicException(throwables);
-            }
+            return createUserQuery(start, sqlCon, tenantIdentifier, id, email, phoneNumber, timeJoined);
         });
+    }
+
+    public static AuthRecipeUserInfo bulkImport_createUser_Transaction(Start start, Connection sqlCon,
+            TenantIdentifier tenantIdentifier, String id, @Nullable String email, @Nullable String phoneNumber,
+            long timeJoined)
+            throws StorageTransactionLogicException, StorageQueryException {
+        return createUserQuery(start, sqlCon, tenantIdentifier, id, email, phoneNumber, timeJoined);
     }
 
     private static UserInfoWithTenantId[] getUserInfosWithTenant_Transaction(Start start, Connection con,
