@@ -54,6 +54,7 @@ import org.junit.rules.TestRule;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
@@ -423,9 +424,9 @@ public class OneMillionUsersTest {
 
     @Test
     public void testCreatingOneMillionUsers() throws Exception {
-//        if (System.getenv("ONE_MILLION_USERS_TEST") == null) {
-//            return;
-//        }
+        if (System.getenv("ONE_MILLION_USERS_TEST") == null) {
+            return;
+        }
 
         String[] args = {"../"};
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -438,6 +439,9 @@ public class OneMillionUsersTest {
                         EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY});
         process.startProcess();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        AtomicBoolean memoryCheckRunning = new AtomicBoolean(true);
+        AtomicLong maxMemory = new AtomicLong(0);
 
         {
             long st = System.currentTimeMillis();
@@ -479,9 +483,36 @@ public class OneMillionUsersTest {
 
         sanityCheckAPIs(process.getProcess());
 
+        Runtime.getRuntime().gc();
         Thread.sleep(10000);
 
+        Thread memoryChecker = new Thread(() -> {
+            while (memoryCheckRunning.get()) {
+                Runtime rt = Runtime.getRuntime();
+                long total_mem = rt.totalMemory();
+                long free_mem = rt.freeMemory();
+                long used_mem = total_mem - free_mem;
+
+                if (used_mem > maxMemory.get()) {
+                    maxMemory.set(used_mem);
+                }
+
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+        memoryChecker.start();
+
         measureOperations(process.getProcess());
+
+        memoryCheckRunning.set(false);
+        memoryChecker.join();
+
+        System.out.println("Max memory used: " + (maxMemory.get() / (1024 * 1024)) + " MB");
+        assert maxMemory.get() < 300L * 1024 * 1024; // must be less than 512 mb
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
