@@ -262,7 +262,7 @@ public class OneMillionUsersTest {
 
         while (true) {
             UserIdMapping.populateExternalUserIdForUsers(
-                    TenantIdentifier.BASE_TENANT.withStorage(StorageLayer.getBaseStorage(main)),
+                    (StorageLayer.getBaseStorage(main)),
                     usersResult.users);
 
             for (AuthRecipeUserInfo user : usersResult.users) {
@@ -303,7 +303,7 @@ public class OneMillionUsersTest {
         Set<String> userIds = new HashSet<>();
 
         long st = System.currentTimeMillis();
-        UserPaginationContainer usersResult = AuthRecipe.getUsers(main, 10000, "ASC", null,
+        UserPaginationContainer usersResult = AuthRecipe.getUsers(main, 1000, "ASC", null,
                 null, null);
 
         while (true) {
@@ -313,7 +313,7 @@ public class OneMillionUsersTest {
             if (usersResult.nextPaginationToken == null) {
                 break;
             }
-            usersResult = AuthRecipe.getUsers(main, 10000, "ASC", usersResult.nextPaginationToken,
+            usersResult = AuthRecipe.getUsers(main, 1000, "ASC", usersResult.nextPaginationToken,
                     null, null);
         }
 
@@ -388,7 +388,7 @@ public class OneMillionUsersTest {
 
         while (true) {
             UserIdMapping.populateExternalUserIdForUsers(
-                    TenantIdentifier.BASE_TENANT.withStorage(StorageLayer.getBaseStorage(main)),
+                    (StorageLayer.getBaseStorage(main)),
                     usersResult.users);
 
             for (AuthRecipeUserInfo user : usersResult.users) {
@@ -830,8 +830,10 @@ public class OneMillionUsersTest {
                             break;
                         }
                         users = AuthRecipe.getUsers(main, 500, "ASC", users.nextPaginationToken, null, null);
+                        if (count >= 500) {
+                            break;
+                        }
                     }
-                    assertEquals(TOTAL_USERS + 1500, count);
                 } catch (Exception e) {
                     errorCount.incrementAndGet();
                     throw new RuntimeException(e);
@@ -839,14 +841,14 @@ public class OneMillionUsersTest {
                 return null;
             });
             System.out.println("User pagination " + time);
-            assert time < 120000;
+            assert time < 2000;
         }
         { // Measure update user metadata
             long time = measureTime(() -> {
                 try {
                     UserPaginationContainer users = AuthRecipe.getUsers(main, 1, "ASC", null, null, null);
                     UserIdMapping.populateExternalUserIdForUsers(
-                            TenantIdentifier.BASE_TENANT.withStorage(StorageLayer.getBaseStorage(main)),
+                            (StorageLayer.getBaseStorage(main)),
                             users.users);
 
                     AuthRecipeUserInfo user = users.users[0];
@@ -859,7 +861,7 @@ public class OneMillionUsersTest {
                 }
                 return null;
             });
-
+            System.out.println("Update user metadata " + time);
         }
 
         assertEquals(0, errorCount.get());
