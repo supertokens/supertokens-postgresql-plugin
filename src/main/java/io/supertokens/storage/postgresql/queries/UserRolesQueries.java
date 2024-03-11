@@ -17,8 +17,10 @@
 package io.supertokens.storage.postgresql.queries;
 
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -91,9 +93,6 @@ public class UserRolesQueries {
                 + "role VARCHAR(255) NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
                 + " PRIMARY KEY(app_id, tenant_id, user_id, role),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "role", "fkey")
-                + " FOREIGN KEY(app_id, role)"
-                + " REFERENCES " + getConfig(start).getRolesTable() + "(app_id, role) ON DELETE CASCADE,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "tenant_id", "fkey")
                 + " FOREIGN KEY (app_id, tenant_id)"
                 + " REFERENCES " + Config.getConfig(start).getTenantsTable() + "(app_id, tenant_id) ON DELETE CASCADE"
@@ -142,7 +141,8 @@ public class UserRolesQueries {
         });
     }
 
-    public static boolean deleteRole(Start start, AppIdentifier appIdentifier, String role)
+    public static boolean deleteRole(Start start, AppIdentifier appIdentifier,
+                                                 String role)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getRolesTable()
                 + " WHERE app_id = ? AND role = ? ;";
@@ -352,5 +352,15 @@ public class UserRolesQueries {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, userId);
         });
+    }
+
+    public static boolean deleteAllUserRoleAssociationsForRole(Start start, AppIdentifier appIdentifier, String role)
+            throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + getConfig(start).getUserRolesTable()
+                + " WHERE app_id = ? AND role = ? ;";
+        return update(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, role);
+        }) >= 1;
     }
 }

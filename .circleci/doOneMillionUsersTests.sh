@@ -109,7 +109,9 @@ do
     git checkout dev-v$pluginVersion
     cd ../
     echo $SUPERTOKENS_API_KEY > apiPassword
-    ./startTestingEnv --cicd
+    export ONE_MILLION_USERS_TEST=1
+    ./utils/setupTestEnv --cicd
+    ./gradlew :supertokens-postgresql-plugin:test --tests io.supertokens.storage.postgresql.test.OneMillionUsersTest
 
     if [[ $? -ne 0 ]]
     then

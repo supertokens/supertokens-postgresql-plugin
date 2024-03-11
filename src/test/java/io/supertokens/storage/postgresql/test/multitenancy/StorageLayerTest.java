@@ -808,7 +808,7 @@ public class StorageLayerTest {
             MultitenancyHelper.getInstance(process.getProcess()).refreshTenantsInCoreBasedOnChangesInCoreConfigOrIfTenantListChanged(true);
 
             try {
-                EmailPassword.signIn(tid.withStorage(StorageLayer.getStorage(tid, process.getProcess())),
+                EmailPassword.signIn(tid, (StorageLayer.getStorage(tid, process.getProcess())),
                         process.getProcess(), "", "");
                 fail();
             } catch (StorageQueryException e) {
@@ -821,7 +821,7 @@ public class StorageLayerTest {
             // we do this again just to check that if this function is called again, it fails again and there is no
             // side effect of calling the above function
             try {
-                EmailPassword.signIn(tid.withStorage(StorageLayer.getStorage(tid, process.getProcess())),
+                EmailPassword.signIn(tid, (StorageLayer.getStorage(tid, process.getProcess())),
                         process.getProcess(), "", "");
                 fail();
             } catch (StorageQueryException e) {
@@ -850,7 +850,7 @@ public class StorageLayerTest {
 
             TenantIdentifier tid = new TenantIdentifier("abc", null, null);
             try {
-                EmailPassword.signIn(tid.withStorage(StorageLayer.getStorage(tid, process.getProcess())),
+                EmailPassword.signIn(tid, (StorageLayer.getStorage(tid, process.getProcess())),
                         process.getProcess(), "", "");
                 fail();
             } catch (StorageQueryException e) {
