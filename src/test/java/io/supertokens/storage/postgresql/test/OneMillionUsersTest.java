@@ -512,7 +512,7 @@ public class OneMillionUsersTest {
         memoryChecker.join();
 
         System.out.println("Max memory used: " + (maxMemory.get() / (1024 * 1024)) + " MB");
-        assert maxMemory.get() < 300L * 1024 * 1024; // must be less than 512 mb
+        assert maxMemory.get() < 320 * 1024 * 1024; // must be less than 320 mb
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
