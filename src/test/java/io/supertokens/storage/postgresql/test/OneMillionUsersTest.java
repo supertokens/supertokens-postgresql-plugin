@@ -443,11 +443,28 @@ public class OneMillionUsersTest {
         }
 
         sanityCheckAPIs(process.getProcess());
+        allUserIds.clear();
+        allPrimaryUserIds.clear();
+        userIdMappings.clear();
+        primaryUserIdMappings.clear();
+
+        process.kill(false);
 
         Runtime.getRuntime().gc();
         System.gc();
         System.runFinalization();
         Thread.sleep(10000);
+        
+        process = TestingProcessManager.start(args, false);
+        Utils.setValueInConfig("firebase_password_hashing_signer_key",
+                "gRhC3eDeQOdyEn4bMd9c6kxguWVmcIVq/SKa0JDPFeM6TcEevkaW56sIWfx88OHbJKnCXdWscZx0l2WbCJ1wbg==");
+        Utils.setValueInConfig("postgresql_connection_pool_size", "500");
+
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{
+                        EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY});
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
         process.kill(false);
         process = TestingProcessManager.start(args, false);
@@ -487,7 +504,7 @@ public class OneMillionUsersTest {
         memoryChecker.join();
 
         System.out.println("Max memory used: " + (maxMemory.get() / (1024 * 1024)) + " MB");
-        assert maxMemory.get() < 256 * 1024 * 1024; // must be less than 320 mb
+        assert maxMemory.get() < 256 * 1024 * 1024; // must be less than 256 mb
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
