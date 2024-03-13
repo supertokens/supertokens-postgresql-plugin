@@ -263,6 +263,7 @@ public class OneMillionUsersTest {
 
         while (true) {
             UserIdMapping.populateExternalUserIdForUsers(
+                    new AppIdentifier(null, null),
                     (StorageLayer.getBaseStorage(main)),
                     usersResult.users);
 
@@ -389,6 +390,7 @@ public class OneMillionUsersTest {
 
         while (true) {
             UserIdMapping.populateExternalUserIdForUsers(
+                    new AppIdentifier(null, null),
                     (StorageLayer.getBaseStorage(main)),
                     usersResult.users);
 
@@ -879,6 +881,7 @@ public class OneMillionUsersTest {
                 try {
                     UserPaginationContainer users = AuthRecipe.getUsers(main, 1, "ASC", null, null, null);
                     UserIdMapping.populateExternalUserIdForUsers(
+                            new AppIdentifier(null, null),
                             (StorageLayer.getBaseStorage(main)),
                             users.users);
 
