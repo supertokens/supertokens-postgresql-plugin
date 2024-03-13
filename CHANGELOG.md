@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [7.0.0]
+
 - Replace `TotpNotEnabledError` with `UnknownUserIdTotpError`.
 - Support for MFA recipe
 - Adds a new `useStaticKey` param to `updateSessionInfo_Transaction`
