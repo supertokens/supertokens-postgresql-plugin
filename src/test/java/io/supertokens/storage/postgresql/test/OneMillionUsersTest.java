@@ -77,6 +77,12 @@ public class OneMillionUsersTest {
     static int TOTAL_USERS = 1000000;
     static int NUM_THREADS = 16;
 
+    Object lock = new Object();
+    Set<String> allUserIds = new HashSet<>();
+    Set<String> allPrimaryUserIds = new HashSet<>();
+    Map<String, String> userIdMappings = new HashMap<>();
+    Map<String, String> primaryUserIdMappings = new HashMap<>();
+
     private void createEmailPasswordUsers(Main main) throws Exception {
         System.out.println("Creating emailpassword users...");
 
@@ -103,6 +109,9 @@ public class OneMillionUsersTest {
 
                     storage.signUp(TenantIdentifier.BASE_TENANT, userId, "eptest" + finalI + "@example.com", combinedPasswordHash,
                             timeJoined);
+                    synchronized (lock) {
+                        allUserIds.add(userId);
+                    }
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
@@ -129,6 +138,9 @@ public class OneMillionUsersTest {
                 long timeJoined = System.currentTimeMillis();
                 try {
                     storage.createUser(TenantIdentifier.BASE_TENANT, userId, "pltest" + finalI + "@example.com", null, timeJoined);
+                    synchronized (lock) {
+                        allUserIds.add(userId);
+                    }
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
@@ -156,6 +168,9 @@ public class OneMillionUsersTest {
                 long timeJoined = System.currentTimeMillis();
                 try {
                     storage.createUser(TenantIdentifier.BASE_TENANT, userId, null, "+91987654" + finalI, timeJoined);
+                    synchronized (lock) {
+                        allUserIds.add(userId);
+                    }
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
@@ -184,6 +199,9 @@ public class OneMillionUsersTest {
 
                 try {
                     storage.signUp(TenantIdentifier.BASE_TENANT, userId, "tptest" + finalI + "@example.com", new LoginMethod.ThirdParty("google", "googleid" + finalI), timeJoined );
+                    synchronized (lock) {
+                        allUserIds.add(userId);
+                    }
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
@@ -211,42 +229,25 @@ public class OneMillionUsersTest {
         System.out.println("Creating user id mappings...");
 
         ExecutorService es = Executors.newFixedThreadPool(NUM_THREADS);
-
-        UserPaginationContainer usersResult = AuthRecipe.getUsers(main, 10000, "ASC", null,
-                null, null);
-
         AtomicLong usersUpdated = new AtomicLong(0);
 
-        while (true) {
-            for (AuthRecipeUserInfo user : usersResult.users) {
-                es.execute(() -> {
-                    Random random = new Random();
-
-                    // UserId mapping
-                    for (LoginMethod lm : user.loginMethods) {
-                        String userId = user.getSupertokensUserId();
-
-                        if (random.nextBoolean()) {
-                            userId = "ext" + UUID.randomUUID().toString();
-                            try {
-                                UserIdMapping.createUserIdMapping(main, lm.getSupertokensUserId(), userId, null, false);
-                            } catch (Exception e) {
-                                throw new RuntimeException(e);
-                            }
-                        }
-
-                        long count = usersUpdated.incrementAndGet();
-                        if (count % 10000 == 9999) {
-                            System.out.println("Updated " + (count) + " users");
-                        }
+        for (String userId : allUserIds) {
+            es.execute(() -> {
+                String extUserId = "ext" + UUID.randomUUID().toString();
+                try {
+                    UserIdMapping.createUserIdMapping(main, userId, extUserId, null, false);
+                    synchronized (lock) {
+                        userIdMappings.put(userId, extUserId);
                     }
-                });
-            }
-            if (usersResult.nextPaginationToken == null) {
-                break;
-            }
-            usersResult = AuthRecipe.getUsers(main, 10000, "ASC", usersResult.nextPaginationToken,
-                    null, null);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+
+                long count = usersUpdated.incrementAndGet();
+                if (count % 10000 == 9999) {
+                    System.out.println("Updated " + (count) + " users");
+                }
+            });
         }
 
         es.shutdown();
@@ -258,43 +259,27 @@ public class OneMillionUsersTest {
 
         ExecutorService es = Executors.newFixedThreadPool(NUM_THREADS / 2);
 
-        UserPaginationContainer usersResult = AuthRecipe.getUsers(main, 500, "ASC", null,
-                null, null);
+        for (String userId : allPrimaryUserIds) {
+            es.execute(() -> {
+                Random random = new Random();
 
-        while (true) {
-            UserIdMapping.populateExternalUserIdForUsers(
-                    new AppIdentifier(null, null),
-                    (StorageLayer.getBaseStorage(main)),
-                    usersResult.users);
+                // User Metadata
+                JsonObject metadata = new JsonObject();
+                metadata.addProperty("random", random.nextDouble());
 
-            for (AuthRecipeUserInfo user : usersResult.users) {
-                es.execute(() -> {
-                    Random random = new Random();
+                try {
+                    UserMetadata.updateUserMetadata(main, userIdMappings.get(userId), metadata);
 
-                    // User Metadata
-                    JsonObject metadata = new JsonObject();
-                    metadata.addProperty("random", random.nextDouble());
-
-                    try {
-                        UserMetadata.updateUserMetadata(main, user.getSupertokensOrExternalUserId(), metadata);
-
-                        // User Roles
-                        if (random.nextBoolean()) {
-                            UserRoles.addRoleToUser(main, user.getSupertokensOrExternalUserId(), "admin");
-                        } else {
-                            UserRoles.addRoleToUser(main, user.getSupertokensOrExternalUserId(), "user");
-                        }
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
+                    // User Roles
+                    if (random.nextBoolean()) {
+                        UserRoles.addRoleToUser(main, userIdMappings.get(userId), "admin");
+                    } else {
+                        UserRoles.addRoleToUser(main, userIdMappings.get(userId), "user");
                     }
-                });
-            }
-
-            if (usersResult.nextPaginationToken == null) {
-                break;
-            }
-            usersResult = AuthRecipe.getUsers(main, 500, "ASC", usersResult.nextPaginationToken,
-                    null, null);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
         }
 
         es.shutdown();
@@ -303,25 +288,7 @@ public class OneMillionUsersTest {
 
     private void doAccountLinking(Main main) throws Exception {
         Set<String> userIds = new HashSet<>();
-
-        long st = System.currentTimeMillis();
-        UserPaginationContainer usersResult = AuthRecipe.getUsers(main, 1000, "ASC", null,
-                null, null);
-
-        while (true) {
-            for (AuthRecipeUserInfo user : usersResult.users) {
-                userIds.add(user.getSupertokensUserId());
-            }
-            if (usersResult.nextPaginationToken == null) {
-                break;
-            }
-            usersResult = AuthRecipe.getUsers(main, 1000, "ASC", usersResult.nextPaginationToken,
-                    null, null);
-        }
-
-        long en = System.currentTimeMillis();
-
-        System.out.println("Time taken to get " + TOTAL_USERS + " users (before account linking): " + ((en - st) / 1000) + " sec");
+        userIds.addAll(allUserIds);
 
         assertEquals(TOTAL_USERS, userIds.size());
 
@@ -366,6 +333,13 @@ public class OneMillionUsersTest {
                     throw new RuntimeException(e);
                 }
 
+                synchronized (lock) {
+                    allPrimaryUserIds.add(userIdsArray[0]);
+                    for (String userId : userIdsArray) {
+                        primaryUserIdMappings.put(userId, userIdsArray[0]);
+                    }
+                }
+
                 long total = accountsLinked.addAndGet(userIdsArray.length);
                 if (total % 10000 > 9996) {
                     System.out.println("Linked " + (accountsLinked) + " users");
@@ -385,39 +359,24 @@ public class OneMillionUsersTest {
 
         ExecutorService es = Executors.newFixedThreadPool(NUM_THREADS);
 
-        UserPaginationContainer usersResult = AuthRecipe.getUsers(main, 500, "ASC", null,
-                null, null);
+        for (String userId : allUserIds) {
+            String finalUserId = userId;
+            es.execute(() -> {
+                try {
+                    SessionInformationHolder session = Session.createNewSession(main,
+                            userIdMappings.get(finalUserId), new JsonObject(), new JsonObject());
 
-        while (true) {
-            UserIdMapping.populateExternalUserIdForUsers(
-                    new AppIdentifier(null, null),
-                    (StorageLayer.getBaseStorage(main)),
-                    usersResult.users);
-
-            for (AuthRecipeUserInfo user : usersResult.users) {
-                es.execute(() -> {
-                    try {
-                        for (LoginMethod lM : user.loginMethods) {
-                            String userId = lM.getSupertokensOrExternalUserId();
-                            SessionInformationHolder session = Session.createNewSession(main,
-                                    userId, new JsonObject(), new JsonObject());
-
-                            if (new Random().nextFloat() < 0.05) {
-                                accessToken = session.accessToken.token;
-                                sessionUserId = userId;
-                            }
+                    if (new Random().nextFloat() < 0.05) {
+                        synchronized (lock) {
+                            accessToken = session.accessToken.token;
+                            sessionUserId = userIdMappings.get(primaryUserIdMappings.get(finalUserId));
                         }
-
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
                     }
-                });
-            }
-            if (usersResult.nextPaginationToken == null) {
-                break;
-            }
-            usersResult = AuthRecipe.getUsers(main, 500, "ASC", usersResult.nextPaginationToken,
-                    null, null);
+
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
         }
 
         es.shutdown();
@@ -426,9 +385,9 @@ public class OneMillionUsersTest {
 
     @Test
     public void testCreatingOneMillionUsers() throws Exception {
-        if (System.getenv("ONE_MILLION_USERS_TEST") == null) {
-            return;
-        }
+//        if (System.getenv("ONE_MILLION_USERS_TEST") == null) {
+//            return;
+//        }
 
         String[] args = {"../"};
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -486,7 +445,21 @@ public class OneMillionUsersTest {
         sanityCheckAPIs(process.getProcess());
 
         Runtime.getRuntime().gc();
+        System.gc();
+        System.runFinalization();
         Thread.sleep(10000);
+
+        process.kill(false);
+        process = TestingProcessManager.start(args, false);
+        Utils.setValueInConfig("firebase_password_hashing_signer_key",
+                "gRhC3eDeQOdyEn4bMd9c6kxguWVmcIVq/SKa0JDPFeM6TcEevkaW56sIWfx88OHbJKnCXdWscZx0l2WbCJ1wbg==");
+        Utils.setValueInConfig("postgresql_connection_pool_size", "500");
+
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{
+                        EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY});
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
         Thread memoryChecker = new Thread(() -> {
             while (memoryCheckRunning.get()) {
@@ -514,7 +487,7 @@ public class OneMillionUsersTest {
         memoryChecker.join();
 
         System.out.println("Max memory used: " + (maxMemory.get() / (1024 * 1024)) + " MB");
-        assert maxMemory.get() < 320 * 1024 * 1024; // must be less than 320 mb
+        assert maxMemory.get() < 256 * 1024 * 1024; // must be less than 320 mb
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
