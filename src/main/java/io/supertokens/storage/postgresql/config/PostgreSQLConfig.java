@@ -190,6 +190,14 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("tenant_configs");
     }
 
+    public String getTenantFirstFactorsTable() {
+        return addSchemaAndPrefixToTableName("tenant_first_factors");
+    }
+
+    public String getTenantRequiredSecondaryFactorsTable() {
+        return addSchemaAndPrefixToTableName("tenant_required_secondary_factors");
+    }
+
     public String getTenantThirdPartyProvidersTable() {
         return addSchemaAndPrefixToTableName("tenant_thirdparty_providers");
     }

@@ -17,6 +17,8 @@
 
 package io.supertokens.storage.postgresql.utils;
 
+import com.google.gson.Gson;
+
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.regex.Matcher;
@@ -54,6 +56,13 @@ public class Utils {
             }
         }
         return builder.toString();
+    }
+
+    public static String[] getStringArrayFromJsonString(String input) {
+        if (input == null) {
+            return null;
+        }
+        return new Gson().fromJson(input, String[].class);
     }
 
     public static String maskDBPassword(String log) {

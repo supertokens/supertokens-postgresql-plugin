@@ -54,6 +54,7 @@ public class TOTPQueries {
                 + "period INTEGER NOT NULL,"
                 + "skew INTEGER NOT NULL,"
                 + "verified BOOLEAN NOT NULL,"
+                + "created_at BIGINT,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
                 + " PRIMARY KEY (app_id, user_id, device_name),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "user_id", "fkey")
@@ -121,7 +122,7 @@ public class TOTPQueries {
     private static int insertDevice_Transaction(Start start, Connection con, AppIdentifier appIdentifier, TOTPDevice device)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + Config.getConfig(start).getTotpUserDevicesTable()
-                + " (app_id, user_id, device_name, secret_key, period, skew, verified) VALUES (?, ?, ?, ?, ?, ?, ?)";
+                + " (app_id, user_id, device_name, secret_key, period, skew, verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
         return update(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
@@ -131,25 +132,31 @@ public class TOTPQueries {
             pst.setInt(5, device.period);
             pst.setInt(6, device.skew);
             pst.setBoolean(7, device.verified);
+            pst.setLong(8, device.createdAt);
         });
     }
 
-    public static void createDevice(Start start, AppIdentifier appIdentifier, TOTPDevice device)
-            throws StorageQueryException, StorageTransactionLogicException {
-        start.startTransaction(con -> {
-            Connection sqlCon = (Connection) con.getConnection();
+    public static void createDevice_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier, TOTPDevice device)
+            throws SQLException, StorageQueryException {
+        insertUser_Transaction(start, sqlCon, appIdentifier, device.userId);
+        insertDevice_Transaction(start, sqlCon, appIdentifier, device);
+    }
 
-            try {
-                insertUser_Transaction(start, sqlCon, appIdentifier, device.userId);
-                insertDevice_Transaction(start, sqlCon, appIdentifier, device);
-                sqlCon.commit();
-            } catch (SQLException e) {
-                throw new StorageTransactionLogicException(e);
+    public static TOTPDevice getDeviceByName_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier, String userId, String deviceName)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT * FROM " + Config.getConfig(start).getTotpUserDevicesTable()
+                + " WHERE app_id = ? AND user_id = ? AND device_name = ? FOR UPDATE;";
+
+        return execute(sqlCon, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+            pst.setString(3, deviceName);
+        }, result -> {
+            if (result.next()) {
+                return TOTPDeviceRowMapper.getInstance().map(result);
             }
-
             return null;
         });
-        return;
     }
 
     public static int markDeviceAsVerified(Start start, AppIdentifier appIdentifier, String userId, String deviceName)
@@ -321,7 +328,8 @@ public class TOTPQueries {
                     result.getString("secret_key"),
                     result.getInt("period"),
                     result.getInt("skew"),
-                    result.getBoolean("verified"));
+                    result.getBoolean("verified"),
+                    result.getLong("created_at"));
         }
     }
 
