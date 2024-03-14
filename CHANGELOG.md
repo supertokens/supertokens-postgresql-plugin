@@ -49,8 +49,9 @@ CREATE TABLE IF NOT EXISTS tenant_required_secondary_factors (
 CREATE INDEX IF NOT EXISTS tenant_default_required_factor_ids_tenant_id_index ON 
   tenant_required_secondary_factors (connection_uri_domain, app_id, tenant_id);
 
-ALTER TABLE totp_devices ADD COLUMN IF NOT EXISTS created_at BIGINT default = 0;
-ALTER TABLE totp_devices DROP DEFAULT created_at;
+ALTER TABLE totp_user_devices ADD COLUMN IF NOT EXISTS created_at BIGINT default 0;
+ALTER TABLE totp_user_devices 
+  ALTER COLUMN created_at DROP DEFAULT;
 ```
 
 ## [6.0.0] - 2024-03-05
