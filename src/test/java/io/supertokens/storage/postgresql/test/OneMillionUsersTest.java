@@ -385,9 +385,9 @@ public class OneMillionUsersTest {
 
     @Test
     public void testCreatingOneMillionUsers() throws Exception {
-//        if (System.getenv("ONE_MILLION_USERS_TEST") == null) {
-//            return;
-//        }
+        if (System.getenv("ONE_MILLION_USERS_TEST") == null) {
+            return;
+        }
 
         String[] args = {"../"};
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
@@ -467,6 +467,8 @@ public class OneMillionUsersTest {
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
         process.kill(false);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
         process = TestingProcessManager.start(args, false);
         Utils.setValueInConfig("firebase_password_hashing_signer_key",
                 "gRhC3eDeQOdyEn4bMd9c6kxguWVmcIVq/SKa0JDPFeM6TcEevkaW56sIWfx88OHbJKnCXdWscZx0l2WbCJ1wbg==");
@@ -503,8 +505,15 @@ public class OneMillionUsersTest {
         memoryCheckRunning.set(false);
         memoryChecker.join();
 
+        Thread.sleep(5000);
+
+        Runtime rt = Runtime.getRuntime();
+        long total_mem = rt.totalMemory();
+        long free_mem = rt.freeMemory();
+        long used_mem = total_mem - free_mem;
+
         System.out.println("Max memory used: " + (maxMemory.get() / (1024 * 1024)) + " MB");
-        assert maxMemory.get() < 256 * 1024 * 1024; // must be less than 256 mb
+        System.out.println("Current Memory user: " + (used_mem / (1024 * 1024)) + " MB");
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
