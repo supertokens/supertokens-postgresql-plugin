@@ -11,9 +11,47 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Replace `TotpNotEnabledError` with `UnknownUserIdTotpError`.
 - Support for MFA recipe
+- Adds `firstFactors` and `requiredSecondaryFactors` for tenant config.
 - Adds a new `useStaticKey` param to `updateSessionInfo_Transaction`
   - This enables smooth switching between `useDynamicAccessTokenSigningKey` settings by allowing refresh calls to
     change the signing key type of a session
+
+### Migration
+
+```sql
+CREATE TABLE IF NOT EXISTS tenant_first_factors (
+  connection_uri_domain VARCHAR(256) DEFAULT '',
+  app_id VARCHAR(64) DEFAULT 'public',
+  tenant_id VARCHAR(64) DEFAULT 'public',
+  factor_id VARCHAR(128),
+  CONSTRAINT tenant_first_factors_pkey
+    PRIMARY KEY (connection_uri_domain, app_id, tenant_id, factor_id),
+  CONSTRAINT tenant_first_factors_tenant_id_fkey
+    FOREIGN KEY (connection_uri_domain, app_id, tenant_id)
+    REFERENCES tenant_configs (connection_uri_domain, app_id, tenant_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS tenant_first_factors_tenant_id_index ON
+  tenant_first_factors (connection_uri_domain, app_id, tenant_id);
+
+CREATE TABLE IF NOT EXISTS tenant_required_secondary_factors (
+  connection_uri_domain VARCHAR(256) DEFAULT '',
+  app_id VARCHAR(64) DEFAULT 'public',
+  tenant_id VARCHAR(64) DEFAULT 'public',
+  factor_id VARCHAR(128),
+  CONSTRAINT tenant_required_secondary_factors_pkey
+    PRIMARY KEY (connection_uri_domain, app_id, tenant_id, factor_id),
+  CONSTRAINT tenant_required_secondary_factors_tenant_id_fkey
+    FOREIGN KEY (connection_uri_domain, app_id, tenant_id)
+    REFERENCES tenant_configs (connection_uri_domain, app_id, tenant_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS tenant_default_required_factor_ids_tenant_id_index ON 
+  tenant_required_secondary_factors (connection_uri_domain, app_id, tenant_id);
+
+ALTER TABLE totp_devices ADD COLUMN IF NOT EXISTS created_at BIGINT default = 0;
+ALTER TABLE totp_devices DROP DEFAULT created_at;
+```
 
 ## [6.0.0] - 2024-03-05
 
