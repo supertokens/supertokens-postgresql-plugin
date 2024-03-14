@@ -18,6 +18,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Migration
 
+Make sure the core is already upgraded to version 8.0.0 before migrating
+
 ```sql
 CREATE TABLE IF NOT EXISTS tenant_first_factors (
   connection_uri_domain VARCHAR(256) DEFAULT '',
