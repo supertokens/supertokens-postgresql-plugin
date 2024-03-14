@@ -84,6 +84,8 @@ build.dependsOn generateMetaInf
 
 test {
     jvmArgs '-Djava.security.egd=file:/dev/urandom'
+    minHeapSize = "128m" // initial heap size
+    maxHeapSize = "1024m" // maximum heap size
     testLogging {
         outputs.upToDateWhen { false }
         showStandardStreams = true
