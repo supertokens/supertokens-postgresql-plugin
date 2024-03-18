@@ -22,14 +22,18 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+
+import io.supertokens.pluginInterface.ConfigFieldInfo;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.storage.postgresql.annotations.ConnectionPoolProperty;
 import io.supertokens.storage.postgresql.annotations.IgnoreForAnnotationCheck;
 import io.supertokens.storage.postgresql.annotations.NotConflictingWithinUserPool;
+import io.supertokens.storage.postgresql.annotations.ConfigDescription;
 import io.supertokens.storage.postgresql.annotations.UserPoolProperty;
 
 import java.lang.reflect.Field;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -40,84 +44,105 @@ public class PostgreSQLConfig {
 
     @JsonProperty
     @IgnoreForAnnotationCheck
+    @ConfigDescription("The version of the config.")
     private int postgresql_config_version = -1;
 
     @JsonProperty
     @ConnectionPoolProperty
+    @ConfigDescription("Defines the connection pool size to PostgreSQL. (Default: 10)")
     private int postgresql_connection_pool_size = 10;
 
     @JsonProperty
     @UserPoolProperty
+    @ConfigDescription("Specify the postgresql host url here. (Default: localhost)")
     private String postgresql_host = null;
 
     @JsonProperty
     @UserPoolProperty
+    @ConfigDescription("Specify the port to use when connecting to PostgreSQL instance. (Default: 5432)")
     private int postgresql_port = -1;
 
     @JsonProperty
     @ConnectionPoolProperty
+    @ConfigDescription("The PostgreSQL user to use to query the database. If the relevant tables are not already created by you, this user should have the ability to create new tables. To see the tables needed, visit: https://supertokens.io/docs/community/getting-started/database-setup/postgresql")
     private String postgresql_user = null;
 
     @JsonProperty
     @ConnectionPoolProperty
+    @ConfigDescription("Password for the PostgreSQL user. If you have not set a password make this an empty string.")
     private String postgresql_password = null;
 
     @JsonProperty
     @UserPoolProperty
+    @ConfigDescription("The database name to store SuperTokens related data. (Default: supertokens)")
     private String postgresql_database_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    @ConfigDescription("A prefix to add to all table names managed by SuperTokens. An \"_\" will be added between this prefix and the actual table name if the prefix is defined. (Default: \"\")")
     private String postgresql_table_names_prefix = "";
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    @ConfigDescription("Specify the name of the table that will store secret keys and app info necessary for the functioning sessions. (Default: \"key_value\")")
     private String postgresql_key_value_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    @ConfigDescription("Specify the name of the table that will store the session info for users. (Default: \"session_info\")")
     private String postgresql_session_info_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    @ConfigDescription("Specify the name of the table that will store the user information, along with their email and hashed password. (Default: \"emailpassword_users\")")
     private String postgresql_emailpassword_users_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    @ConfigDescription("Specify the name of the table that will store the password reset tokens for users. (Default: \"emailpassword_pswd_reset_tokens\")")
     private String postgresql_emailpassword_pswd_reset_tokens_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    @ConfigDescription("Specify the name of the table that will store the email verification tokens for users. (Default: \"emailverification_tokens\")")
     private String postgresql_emailverification_tokens_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    @ConfigDescription("Specify the name of the table that will store the verified email addresses. (Default: \"emailverification_verified_emails\")")
     private String postgresql_emailverification_verified_emails_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
+    @ConfigDescription("Specify the name of the table that will store the thirdparty recipe users. (Default: \"thirdparty_users\")")
     private String postgresql_thirdparty_users_table_name = null;
 
     @JsonProperty
     @UserPoolProperty
+    @ConfigDescription("The schema for tables. (Default: public)")
     private String postgresql_table_schema = "public";
 
     @JsonProperty
     @IgnoreForAnnotationCheck
+    @ConfigDescription("Specify the PostgreSQL connection URI in the following format: postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2... Values provided via other configs will override values provided by this config. (Default: null)")
     private String postgresql_connection_uri = null;
 
     @ConnectionPoolProperty
+    @ConfigDescription("The connection attributes of the PostgreSQL database.")
     private String postgresql_connection_attributes = "allowPublicKeyRetrieval=true";
 
     @ConnectionPoolProperty
+    @ConfigDescription("The scheme of the PostgreSQL database.")
     private String postgresql_connection_scheme = "postgresql";
 
     @JsonProperty
     @ConnectionPoolProperty
+    @ConfigDescription("Timeout in milliseconds for the idle connections to be closed. (Default: 60000)")
     private long postgresql_idle_connection_timeout = 60000;
 
     @JsonProperty
     @ConnectionPoolProperty
+    @ConfigDescription("Minimum number of idle connections to be kept active. If not set, minimum idle connections will be same as the connection pool size. (Default: null)")
     private Integer postgresql_minimum_idle_connections = null;
 
     @IgnoreForAnnotationCheck
@@ -132,6 +157,45 @@ public class PostgreSQLConfig {
             validFields.add(entry.getKey());
         }
         return validFields;
+    }
+
+    public static ArrayList<ConfigFieldInfo> getConfigFieldsInfo() {
+        ArrayList<ConfigFieldInfo> result = new ArrayList<ConfigFieldInfo>();
+
+        for (String fieldId : PostgreSQLConfig.getValidFields()) {
+            try {
+                Field field = PostgreSQLConfig.class.getDeclaredField(fieldId);
+                if (!field.isAnnotationPresent(JsonProperty.class)) {
+                    continue;
+                }
+
+                String name = field.getName();
+                String description = field.isAnnotationPresent(ConfigDescription.class)
+                        ? field.getAnnotation(ConfigDescription.class).value()
+                        : "";
+                boolean isDifferentAcrossTenants = true;
+
+                String type = null;
+
+                Class<?> fieldType = field.getType();
+
+                if (fieldType == String.class) {
+                    type = "string";
+                } else if (fieldType == boolean.class) {
+                    type = "boolean";
+                } else if (fieldType == int.class || fieldType == long.class || fieldType == Integer.class) {
+                    type = "number";
+                } else {
+                    throw new RuntimeException("Unknown field type " + fieldType.getName());
+                }
+
+                result.add(new ConfigFieldInfo(name, description, isDifferentAcrossTenants, type));
+
+            } catch (NoSuchFieldException e) {
+                continue;
+            }
+        }
+        return result;
     }
 
     public String getTableSchema() {
