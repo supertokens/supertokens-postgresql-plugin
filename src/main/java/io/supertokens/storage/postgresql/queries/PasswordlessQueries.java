@@ -447,7 +447,7 @@ public class PasswordlessQueries {
                 UserInfoPartial userInfo = new UserInfoPartial(id, email, phoneNumber, timeJoined);
                 fillUserInfoWithTenantIds_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
                 fillUserInfoWithVerified_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
-                sqlCon.commit();
+                start.commitTransaction(con);
                 return AuthRecipeUserInfo.create(id, false,
                         userInfo.toLoginMethod());
             } catch (SQLException throwables) {
