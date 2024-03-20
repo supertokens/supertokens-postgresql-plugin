@@ -19,13 +19,11 @@ package io.supertokens.storage.postgresql.queries;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
-import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
-import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -160,7 +158,7 @@ public class ThirdPartyQueries {
                 UserInfoPartial userInfo = new UserInfoPartial(id, email, thirdParty, timeJoined);
                 fillUserInfoWithTenantIds_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
                 fillUserInfoWithVerified_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
-                sqlCon.commit();
+                start.commitTransaction(con);
                 return AuthRecipeUserInfo.create(id, false, userInfo.toLoginMethod());
 
             } catch (SQLException throwables) {
@@ -263,11 +261,15 @@ public class ThirdPartyQueries {
                 }
                 return finalResult;
             });
-
-            try (Connection con = ConnectionPool.getConnection(start)) {
+            
+            Connection con = ConnectionPool.getConnection(start);
+            try {
                 fillUserInfoWithTenantIds_transaction(start, con, appIdentifier, userInfos);
                 fillUserInfoWithVerified_transaction(start, con, appIdentifier, userInfos);
+            } finally {
+                ConnectionPool.closeConnection(start, con);
             }
+
             return userInfos.stream().map(UserInfoPartial::toLoginMethod).collect(Collectors.toList());
         }
         return Collections.emptyList();

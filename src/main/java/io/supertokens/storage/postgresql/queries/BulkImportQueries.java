@@ -32,6 +32,7 @@ import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.bulkimport.BulkImportStorage.BULK_IMPORT_USER_STATUS;
 import io.supertokens.pluginInterface.bulkimport.BulkImportUser;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -47,8 +48,8 @@ public class BulkImportQueries {
                 + "raw_data TEXT NOT NULL,"
                 + "status VARCHAR(128) DEFAULT 'NEW',"
                 + "error_msg TEXT,"
-                + "created_at BIGINT DEFAULT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP),"
-                + "updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP),"
+                + "created_at BIGINT DEFAULT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000,"
+                + "updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
                 + " PRIMARY KEY(app_id, id),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "app_id", "fkey") + " "
@@ -92,18 +93,20 @@ public class BulkImportQueries {
         });
     }
 
-    public static void updateBulkImportUserStatus_Transaction(Start start, Connection con, AppIdentifier appIdentifier, @Nonnull String[] bulkImportUserIds, @Nonnull BULK_IMPORT_USER_STATUS status)
+    public static void updateBulkImportUserStatus_Transaction(Start start, Connection con, AppIdentifier appIdentifier, @Nonnull String[] bulkImportUserIds, @Nonnull BULK_IMPORT_USER_STATUS status, @Nullable String errorMessage)
             throws SQLException, StorageQueryException {
         if (bulkImportUserIds.length == 0) {
             return;
         }
 
-        String baseQuery = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable() + " SET status = ?, updated_at = EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) WHERE app_id = ?";
+        String baseQuery = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable() + " SET status = ?, error_msg = ?, updated_at = ? WHERE app_id = ?";
         StringBuilder queryBuilder = new StringBuilder(baseQuery);
 
         List<Object> parameters = new ArrayList<>();
 
         parameters.add(status.toString());
+        parameters.add(errorMessage);
+        parameters.add(System.currentTimeMillis());
         parameters.add(appIdentifier.getAppId());
 
         queryBuilder.append(" AND id IN (");
@@ -121,6 +124,39 @@ public class BulkImportQueries {
         update(con, query, pst -> {
             for (int i = 0; i < parameters.size(); i++) {
                 pst.setObject(i + 1, parameters.get(i));
+            }
+        });
+    }
+
+    public static List<BulkImportUser> getBulkImportUsersForProcessing(Start start, AppIdentifier appIdentifier, @Nonnull Integer limit)
+            throws StorageQueryException, StorageTransactionLogicException {
+
+        return start.startTransaction(con -> {
+            Connection sqlCon = (Connection) con.getConnection();
+            try {
+                String selectQuery = "SELECT * FROM " + Config.getConfig(start).getBulkImportUsersTable()
+                        + " WHERE status = 'NEW' AND app_id = ? "
+                        + " OR (status = 'PROCESSING' AND updated_at < EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000 - 60 * 1000) " 
+                        + " LIMIT ? FOR UPDATE SKIP LOCKED";
+
+                List<BulkImportUser> bulkImportUsers = new ArrayList<>();
+
+                execute(sqlCon, selectQuery, pst -> {
+                    pst.setString(1, appIdentifier.getAppId());
+                    pst.setInt(2, limit);
+                }, result -> {
+                    while (result.next()) {
+                        bulkImportUsers.add(BulkImportUserRowMapper.getInstance().mapOrThrow(result));
+                    }
+                    return null;
+                });
+
+                String[] bulkImportUserIds = bulkImportUsers.stream().map(user -> user.id).toArray(String[]::new);
+
+                updateBulkImportUserStatus_Transaction(start, sqlCon, appIdentifier, bulkImportUserIds, BULK_IMPORT_USER_STATUS.PROCESSING, null);
+                return bulkImportUsers;
+            } catch (SQLException throwables) {
+                throw new StorageTransactionLogicException(throwables);
             }
         });
     }
@@ -205,6 +241,16 @@ public class BulkImportQueries {
             return deletedIds;
         });
     }
+
+    public static void deleteBulkImportUser_Transaction(Start start, Connection con, AppIdentifier appIdentifier, @Nonnull String bulkImportUserId) throws SQLException, StorageQueryException {
+        String query = "DELETE FROM " + Config.getConfig(start).getBulkImportUsersTable() + " WHERE app_id = ? AND id = ?";
+
+        update(con, query, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, bulkImportUserId);
+        });
+    }
+
     private static class BulkImportUserRowMapper implements RowMapper<BulkImportUser, ResultSet> {
         private static final BulkImportUserRowMapper INSTANCE = new BulkImportUserRowMapper();
 
@@ -219,7 +265,7 @@ public class BulkImportQueries {
         public BulkImportUser map(ResultSet result) throws Exception {
             return BulkImportUser.fromRawDataFromDbStorage(result.getString("id"), result.getString("raw_data"),
                     BULK_IMPORT_USER_STATUS.valueOf(result.getString("status")),
-                    result.getLong("created_at"), result.getLong("updated_at"));
+                    result.getString("error_msg"), result.getLong("created_at"), result.getLong("updated_at"));
         }
     }
 }
