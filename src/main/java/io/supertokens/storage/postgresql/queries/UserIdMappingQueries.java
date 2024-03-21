@@ -137,7 +137,6 @@ public class UserIdMappingQueries {
             return new HashMap<>();
         }
 
-        // No need to filter based on tenantId because the id list is already filtered for a tenant
         StringBuilder QUERY = new StringBuilder(
                 "SELECT * FROM " + Config.getConfig(start).getUserIdMappingTable() + " WHERE app_id = ? AND " +
                         "supertokens_user_id IN (");
@@ -174,7 +173,6 @@ public class UserIdMappingQueries {
             return new HashMap<>();
         }
 
-        // No need to filter based on tenantId because the id list is already filtered for a tenant
         StringBuilder QUERY = new StringBuilder(
                 "SELECT * FROM " + Config.getConfig(start).getUserIdMappingTable() + " WHERE app_id = ? AND " +
                         "supertokens_user_id IN (");
