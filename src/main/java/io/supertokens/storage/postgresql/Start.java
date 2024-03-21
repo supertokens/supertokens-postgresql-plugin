@@ -25,6 +25,9 @@ import io.supertokens.pluginInterface.*;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
 import io.supertokens.pluginInterface.authRecipe.sqlStorage.AuthRecipeSQLStorage;
+import io.supertokens.pluginInterface.bulkimport.BulkImportStorage.BULK_IMPORT_USER_STATUS;
+import io.supertokens.pluginInterface.bulkimport.sqlStorage.BulkImportSQLStorage;
+import io.supertokens.pluginInterface.bulkimport.BulkImportUser;
 import io.supertokens.pluginInterface.dashboard.DashboardSearchTags;
 import io.supertokens.pluginInterface.dashboard.DashboardSessionInfo;
 import io.supertokens.pluginInterface.dashboard.DashboardUser;
@@ -109,7 +112,7 @@ public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
         UserIdMappingSQLStorage, MultitenancyStorage, MultitenancySQLStorage, DashboardSQLStorage, TOTPSQLStorage,
-        ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage {
+        ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage, BulkImportSQLStorage {
 
     // these configs are protected from being modified / viewed by the dev using the SuperTokens
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
@@ -150,6 +153,29 @@ public class Start
     @Override
     public STORAGE_TYPE getType() {
         return STORAGE_TYPE.SQL;
+    }
+
+    @Override
+    public Storage createBulkImportProxyStorageInstance() {
+        return new BulkImportProxyStorage();
+    }
+
+    @Override
+    public void closeConnectionForBulkImportProxyStorage() throws StorageQueryException {
+        throw new UnsupportedOperationException(
+                "closeConnectionForBulkImportProxyStorage should only be called from BulkImportProxyStorage");
+    }
+
+    @Override
+    public void commitTransactionForBulkImportProxyStorage() throws StorageQueryException {
+        throw new UnsupportedOperationException(
+                "commitTransactionForBulkImportProxyStorage should only be called from BulkImportProxyStorage");
+    }
+
+    @Override
+    public void rollbackTransactionForBulkImportProxyStorage() throws StorageQueryException {
+        throw new UnsupportedOperationException(
+                "rollbackTransactionForBulkImportProxyStorage should only be called from BulkImportProxyStorage");
     }
 
     @Override
@@ -309,7 +335,7 @@ public class Start
         }
     }
 
-    private <T> T startTransactionHelper(TransactionLogic<T> logic, TransactionIsolationLevel isolationLevel)
+    protected <T> T startTransactionHelper(TransactionLogic<T> logic, TransactionIsolationLevel isolationLevel)
             throws StorageQueryException, StorageTransactionLogicException, SQLException {
         Connection con = null;
         Integer defaultTransactionIsolation = null;
@@ -3045,5 +3071,75 @@ public class Start
             }
             return -1;
         });
+    }
+
+    @Override
+    public void addBulkImportUsers(AppIdentifier appIdentifier, List<BulkImportUser> users)
+            throws StorageQueryException,
+            TenantOrAppNotFoundException,
+            io.supertokens.pluginInterface.bulkimport.exceptions.DuplicateUserIdException {
+        try {
+            BulkImportQueries.insertBulkImportUsers(this, appIdentifier, users);
+        } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
+                if (isPrimaryKeyError(serverErrorMessage, Config.getConfig(this).getBulkImportUsersTable())) {
+                    throw new io.supertokens.pluginInterface.bulkimport.exceptions.DuplicateUserIdException();
+                }
+                if (isForeignKeyConstraintError(serverErrorMessage, Config.getConfig(this).getBulkImportUsersTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
+            }
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public List<BulkImportUser> getBulkImportUsers(AppIdentifier appIdentifier, @Nonnull Integer limit, @Nullable BULK_IMPORT_USER_STATUS status,
+            @Nullable String bulkImportUserId, @Nullable Long createdAt) throws StorageQueryException {
+        try {
+            return BulkImportQueries.getBulkImportUsers(this, appIdentifier, limit, status, bulkImportUserId, createdAt);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void updateBulkImportUserStatus_Transaction(AppIdentifier appIdentifier, TransactionConnection con, @Nonnull String bulkImportUserId, @Nonnull BULK_IMPORT_USER_STATUS status, @Nullable String errorMessage)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            BulkImportQueries.updateBulkImportUserStatus_Transaction(this, sqlCon, appIdentifier, bulkImportUserId, status, errorMessage);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public List<String> deleteBulkImportUsers(AppIdentifier appIdentifier, @Nonnull String[] bulkImportUserIds) throws StorageQueryException {
+        try {
+            return BulkImportQueries.deleteBulkImportUsers(this, appIdentifier, bulkImportUserIds);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public List<BulkImportUser> getBulkImportUsersAndChangeStatusToProcessing(AppIdentifier appIdentifier, @Nonnull Integer limit) throws StorageQueryException {
+        try {
+            return BulkImportQueries.getBulkImportUsersAndChangeStatusToProcessing(this, appIdentifier, limit);
+        } catch (StorageTransactionLogicException e) {
+            throw new StorageQueryException(e.actualException);
+        }
+    }
+
+    @Override
+    public void deleteBulkImportUser_Transaction(AppIdentifier appIdentifier, TransactionConnection con, @Nonnull String bulkImportUserId) throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            BulkImportQueries.deleteBulkImportUser_Transaction(this, sqlCon, appIdentifier, bulkImportUserId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 }

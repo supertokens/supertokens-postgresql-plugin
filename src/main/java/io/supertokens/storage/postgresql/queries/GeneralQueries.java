@@ -541,6 +541,14 @@ public class GeneralQueries {
                     update(start, TOTPQueries.getQueryToCreateTenantIdIndexForUsedCodesTable(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, Config.getConfig(start).getBulkImportUsersTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, BulkImportQueries.getQueryToCreateBulkImportUsersTable(start), NO_OP_SETTER);
+                    // index:
+                    update(start, BulkImportQueries.getQueryToCreateStatusUpdatedAtIndex(start), NO_OP_SETTER);
+                    update(start, BulkImportQueries.getQueryToCreateCreatedAtIndex(start), NO_OP_SETTER);
+                }
+
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
@@ -576,7 +584,14 @@ public class GeneralQueries {
             String DROP_QUERY = "DROP INDEX IF EXISTS all_auth_recipe_users_pagination_index";
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
-
+        {
+            String DROP_QUERY = "DROP INDEX IF EXISTS bulk_import_users_status_updated_at_index";
+            update(start, DROP_QUERY, NO_OP_SETTER);
+        }
+        {
+            String DROP_QUERY = "DROP INDEX IF EXISTS bulk_import_users_created_at_index";
+            update(start, DROP_QUERY, NO_OP_SETTER);
+        }
         {
             String DROP_QUERY = "DROP TABLE IF EXISTS "
                     + getConfig(start).getAppsTable() + ","
@@ -613,7 +628,8 @@ public class GeneralQueries {
                     + getConfig(start).getDashboardSessionsTable() + ","
                     + getConfig(start).getTotpUsedCodesTable() + "," 
                     + getConfig(start).getTotpUserDevicesTable() + ","
-                    + getConfig(start).getTotpUsersTable();
+                    + getConfig(start).getTotpUsersTable() + ","
+                    + getConfig(start).getBulkImportUsersTable();
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
     }
