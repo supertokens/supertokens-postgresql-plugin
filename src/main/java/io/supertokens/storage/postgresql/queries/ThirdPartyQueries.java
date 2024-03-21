@@ -160,7 +160,7 @@ public class ThirdPartyQueries {
                 UserInfoPartial userInfo = new UserInfoPartial(id, email, thirdParty, timeJoined);
                 fillUserInfoWithTenantIds_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
                 fillUserInfoWithVerified_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
-                start.commitTransaction(con);
+                sqlCon.commit();
                 return AuthRecipeUserInfo.create(id, false, userInfo.toLoginMethod());
 
             } catch (SQLException throwables) {
@@ -264,14 +264,9 @@ public class ThirdPartyQueries {
                 return finalResult;
             });
 
-            // This query is a part of the BulkImport. To ensure we don't close the connection for 
-            // bulkimport, we are using ConnectionPool.closeConnection instead of auto closing the connection
-            Connection con = ConnectionPool.getConnection(start);
-            try {
+            try (Connection con = ConnectionPool.getConnection(start)) {
                 fillUserInfoWithTenantIds_transaction(start, con, appIdentifier, userInfos);
                 fillUserInfoWithVerified_transaction(start, con, appIdentifier, userInfos);
-            } finally {
-                ConnectionPool.closeConnection(start, con);
             }
             return userInfos.stream().map(UserInfoPartial::toLoginMethod).collect(Collectors.toList());
         }

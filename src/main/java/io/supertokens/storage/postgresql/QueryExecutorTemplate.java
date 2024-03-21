@@ -27,12 +27,8 @@ public interface QueryExecutorTemplate {
 
     static <T> T execute(Start start, String QUERY, PreparedStatementValueSetter setter,
             ResultSetValueExtractor<T> mapper) throws SQLException, StorageQueryException {
-
-        Connection con = ConnectionPool.getConnection(start);
-        try {
+        try (Connection con = ConnectionPool.getConnection(start)) {
             return execute(con, QUERY, setter, mapper);
-        } finally {
-        ConnectionPool.closeConnection(start, con);
         }
     }
 
@@ -48,27 +44,10 @@ public interface QueryExecutorTemplate {
         }
     }
 
-    static int update(Start start, String QUERY, PreparedStatementValueSetter setter) throws SQLException {
-        Connection con = ConnectionPool.getConnection(start);
-        try {
+    static int update(Start start, String QUERY, PreparedStatementValueSetter setter)
+            throws SQLException {
+        try (Connection con = ConnectionPool.getConnection(start)) {
             return update(con, QUERY, setter);
-        } finally {
-        ConnectionPool.closeConnection(start, con);
-        }
-    }
-
-    static <T> T update(Start start, String QUERY, PreparedStatementValueSetter setter, ResultSetValueExtractor<T> mapper)
-            throws SQLException, StorageQueryException {
-        Connection con = ConnectionPool.getConnection(start);
-        try {
-            try (PreparedStatement pst = con.prepareStatement(QUERY)) {
-                setter.setValues(pst);
-                try (ResultSet result = pst.executeQuery()) {
-                    return mapper.extract(result);
-                }
-            }
-        } finally {
-            ConnectionPool.closeConnection(start, con);
         }
     }
 
@@ -79,4 +58,15 @@ public interface QueryExecutorTemplate {
         }
     }
 
+    static <T> T update(Start start, String QUERY, PreparedStatementValueSetter setter, ResultSetValueExtractor<T> mapper)
+            throws SQLException, StorageQueryException {
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            try (PreparedStatement pst = con.prepareStatement(QUERY)) {
+                setter.setValues(pst);
+                try (ResultSet result = pst.executeQuery()) {
+                    return mapper.extract(result);
+                }
+            }
+        }
+    }
 }

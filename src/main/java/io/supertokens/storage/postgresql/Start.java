@@ -161,6 +161,24 @@ public class Start
     }
 
     @Override
+    public void closeConnectionForBulkImportProxyStorage() throws StorageQueryException {
+        throw new UnsupportedOperationException(
+                "closeConnectionForBulkImportProxyStorage should only be called from BulkImportProxyStorage");
+    }
+
+    @Override
+    public void commitTransactionForBulkImportProxyStorage() throws StorageQueryException {
+        throw new UnsupportedOperationException(
+                "commitTransactionForBulkImportProxyStorage should only be called from BulkImportProxyStorage");
+    }
+
+    @Override
+    public void rollbackTransactionForBulkImportProxyStorage() throws StorageQueryException {
+        throw new UnsupportedOperationException(
+                "rollbackTransactionForBulkImportProxyStorage should only be called from BulkImportProxyStorage");
+    }
+
+    @Override
     public void loadConfig(JsonObject configJson, Set<LOG_LEVEL> logLevels, TenantIdentifier tenantIdentifier)
             throws InvalidConfigException {
         Config.loadConfig(this, configJson, logLevels, tenantIdentifier);
@@ -317,7 +335,7 @@ public class Start
         }
     }
 
-    private <T> T startTransactionHelper(TransactionLogic<T> logic, TransactionIsolationLevel isolationLevel)
+    protected <T> T startTransactionHelper(TransactionLogic<T> logic, TransactionIsolationLevel isolationLevel)
             throws StorageQueryException, StorageTransactionLogicException, SQLException {
         Connection con = null;
         Integer defaultTransactionIsolation = null;
@@ -2367,7 +2385,7 @@ public class Start
                 throw new IllegalStateException("Should never come here!");
             }
 
-            this.commitTransaction(con);
+            sqlCon.commit();
             return added;
         } catch (SQLException throwables) {
             PostgreSQLConfig config = Config.getConfig(this);
@@ -3087,11 +3105,11 @@ public class Start
     }
 
     @Override
-    public void updateBulkImportUserStatus_Transaction(AppIdentifier appIdentifier, TransactionConnection con, @Nonnull String[] bulkImportUserIds, @Nonnull BULK_IMPORT_USER_STATUS status, @Nullable String errorMessage)
+    public void updateBulkImportUserStatus_Transaction(AppIdentifier appIdentifier, TransactionConnection con, @Nonnull String bulkImportUserId, @Nonnull BULK_IMPORT_USER_STATUS status, @Nullable String errorMessage)
             throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
-            BulkImportQueries.updateBulkImportUserStatus_Transaction(this, sqlCon, appIdentifier, bulkImportUserIds, status, errorMessage);
+            BulkImportQueries.updateBulkImportUserStatus_Transaction(this, sqlCon, appIdentifier, bulkImportUserId, status, errorMessage);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -3107,9 +3125,9 @@ public class Start
     }
 
     @Override
-    public List<BulkImportUser> getBulkImportUsersForProcessing(AppIdentifier appIdentifier, @Nonnull Integer limit) throws StorageQueryException {
+    public List<BulkImportUser> getBulkImportUsersAndChangeStatusToProcessing(AppIdentifier appIdentifier, @Nonnull Integer limit) throws StorageQueryException {
         try {
-            return BulkImportQueries.getBulkImportUsersForProcessing(this, appIdentifier, limit);
+            return BulkImportQueries.getBulkImportUsersAndChangeStatusToProcessing(this, appIdentifier, limit);
         } catch (StorageTransactionLogicException e) {
             throw new StorageQueryException(e.actualException);
         }

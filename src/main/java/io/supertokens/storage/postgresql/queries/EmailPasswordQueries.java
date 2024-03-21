@@ -326,7 +326,7 @@ public class EmailPasswordQueries {
                 UserInfoPartial userInfo = new UserInfoPartial(userId, email, passwordHash, timeJoined);
                 fillUserInfoWithTenantIds_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
                 fillUserInfoWithVerified_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
-                start.commitTransaction(con);
+                sqlCon.commit();
                 return AuthRecipeUserInfo.create(userId, false, userInfo.toLoginMethod());
             } catch (SQLException throwables) {
                 throw new StorageTransactionLogicException(throwables);

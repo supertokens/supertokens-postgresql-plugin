@@ -227,12 +227,4 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
             }
         }
     }
-
-    public static void closeConnection(Start start, Connection con) throws SQLException {
-        if (start instanceof BulkImportProxyStorage) {
-            // Keep the connection open for future queries
-        } else {
-            con.close();
-        }
-    }
 }
