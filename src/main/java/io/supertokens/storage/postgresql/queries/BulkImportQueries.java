@@ -140,31 +140,17 @@ public class BulkImportQueries {
                     return null;
                 });
 
-                String baseQuery = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable()
-                        + " SET status = ?, updated_at = ? WHERE app_id = ?";
-                StringBuilder queryBuilder = new StringBuilder(baseQuery);
-
-                List<Object> parameters = new ArrayList<>();
-
-                parameters.add(BULK_IMPORT_USER_STATUS.PROCESSING.toString());
-                parameters.add(System.currentTimeMillis());
-                parameters.add(appIdentifier.getAppId());
-
-                queryBuilder.append(" AND id IN (");
-                for (int i = 0; i < bulkImportUsers.size(); i++) {
-                    if (i != 0) {
-                        queryBuilder.append(", ");
-                    }
-                    queryBuilder.append("?");
-                    parameters.add(bulkImportUsers.get(i).id);
-                }
-                queryBuilder.append(")");
-
-                String updateQuery = queryBuilder.toString();
+                String updateQuery = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable()
+                        + " SET status = ?, updated_at = ? WHERE app_id = ? AND id IN (" + Utils
+                                .generateCommaSeperatedQuestionMarks(bulkImportUsers.size()) + ")";
 
                 update(sqlCon, updateQuery, pst -> {
-                    for (int i = 0; i < parameters.size(); i++) {
-                        pst.setObject(i + 1, parameters.get(i));
+                    int index = 1;
+                    pst.setString(index++, BULK_IMPORT_USER_STATUS.PROCESSING.toString());
+                    pst.setLong(index++, System.currentTimeMillis());
+                    pst.setString(index++, appIdentifier.getAppId());
+                    for (BulkImportUser user : bulkImportUsers) {
+                        pst.setObject(index++, user.id);
                     }
                 });
                 return bulkImportUsers;
