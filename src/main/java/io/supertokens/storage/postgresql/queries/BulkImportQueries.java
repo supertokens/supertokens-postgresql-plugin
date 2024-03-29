@@ -45,6 +45,7 @@ public class BulkImportQueries {
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
                 + "id CHAR(36),"
                 + "app_id VARCHAR(64) NOT NULL DEFAULT 'public',"
+                + "primary_user_id VARCHAR(64),"
                 + "raw_data TEXT NOT NULL,"
                 + "status VARCHAR(128) DEFAULT 'NEW',"
                 + "error_msg TEXT,"
@@ -96,7 +97,8 @@ public class BulkImportQueries {
     public static void updateBulkImportUserStatus_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
             @Nonnull String bulkImportUserId, @Nonnull BULK_IMPORT_USER_STATUS status, @Nullable String errorMessage)
             throws SQLException {
-        String query = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable() + " SET status = ?, error_msg = ?, updated_at = ? WHERE app_id = ? and id = ?";
+        String query = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable()
+                + " SET status = ?, error_msg = ?, updated_at = ? WHERE app_id = ? and id = ?";
 
         List<Object> parameters = new ArrayList<>();
 
@@ -113,7 +115,8 @@ public class BulkImportQueries {
         });
     }
 
-    public static List<BulkImportUser> getBulkImportUsersAndChangeStatusToProcessing(Start start, AppIdentifier appIdentifier,
+    public static List<BulkImportUser> getBulkImportUsersAndChangeStatusToProcessing(Start start,
+            AppIdentifier appIdentifier,
             @Nonnull Integer limit)
             throws StorageQueryException, StorageTransactionLogicException {
 
@@ -137,15 +140,16 @@ public class BulkImportQueries {
                     return null;
                 });
 
-                String baseQuery = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable() + " SET status = ?, updated_at = ? WHERE app_id = ?";
+                String baseQuery = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable()
+                        + " SET status = ?, updated_at = ? WHERE app_id = ?";
                 StringBuilder queryBuilder = new StringBuilder(baseQuery);
-        
+
                 List<Object> parameters = new ArrayList<>();
-        
+
                 parameters.add(BULK_IMPORT_USER_STATUS.PROCESSING.toString());
                 parameters.add(System.currentTimeMillis());
                 parameters.add(appIdentifier.getAppId());
-        
+
                 queryBuilder.append(" AND id IN (");
                 for (int i = 0; i < bulkImportUsers.size(); i++) {
                     if (i != 0) {
@@ -155,9 +159,9 @@ public class BulkImportQueries {
                     parameters.add(bulkImportUsers.get(i).id);
                 }
                 queryBuilder.append(")");
-        
+
                 String updateQuery = queryBuilder.toString();
-        
+
                 update(sqlCon, updateQuery, pst -> {
                     for (int i = 0; i < parameters.size(); i++) {
                         pst.setObject(i + 1, parameters.get(i));
@@ -264,6 +268,20 @@ public class BulkImportQueries {
         });
     }
 
+    public static void updateBulkImportUserPrimaryUserId(Start start, AppIdentifier appIdentifier,
+            @Nonnull String bulkImportUserId,
+            @Nonnull String primaryUserId) throws SQLException {
+        String query = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable()
+                + " SET primary_user_id = ?, updated_at = ? WHERE app_id = ? and id = ?";
+
+        update(start, query, pst -> {
+            pst.setString(1, primaryUserId);
+            pst.setLong(2, System.currentTimeMillis());
+            pst.setString(3, appIdentifier.getAppId());
+            pst.setString(4, bulkImportUserId);
+        });
+    }
+
     private static class BulkImportUserRowMapper implements RowMapper<BulkImportUser, ResultSet> {
         private static final BulkImportUserRowMapper INSTANCE = new BulkImportUserRowMapper();
 
@@ -278,7 +296,8 @@ public class BulkImportQueries {
         public BulkImportUser map(ResultSet result) throws Exception {
             return BulkImportUser.fromRawDataFromDbStorage(result.getString("id"), result.getString("raw_data"),
                     BULK_IMPORT_USER_STATUS.valueOf(result.getString("status")),
-                    result.getString("error_msg"), result.getLong("created_at"), result.getLong("updated_at"));
+                    result.getString("primary_user_id"), result.getString("error_msg"), result.getLong("created_at"),
+                    result.getLong("updated_at"));
         }
     }
 }

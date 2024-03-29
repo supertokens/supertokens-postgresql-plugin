@@ -3142,4 +3142,13 @@ public class Start
             throw new StorageQueryException(e);
         }
     }
+
+    @Override
+    public void updateBulkImportUserPrimaryUserId(AppIdentifier appIdentifier, @Nonnull String bulkImportUserId, @Nonnull String primaryUserId) throws StorageQueryException {
+        try {
+            BulkImportQueries.updateBulkImportUserPrimaryUserId(this, appIdentifier, bulkImportUserId, primaryUserId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
 }
