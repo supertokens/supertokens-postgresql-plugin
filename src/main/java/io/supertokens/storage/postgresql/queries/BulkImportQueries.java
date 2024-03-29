@@ -64,9 +64,14 @@ public class BulkImportQueries {
                 + Config.getConfig(start).getBulkImportUsersTable() + " (app_id, status, updated_at)";
     }
 
-    public static String getQueryToCreateCreatedAtIndex(Start start) {
-        return "CREATE INDEX IF NOT EXISTS bulk_import_users_created_at_index ON "
-                + Config.getConfig(start).getBulkImportUsersTable() + " (app_id, created_at)";
+    public static String getQueryToCreatePaginationIndex1(Start start) {
+        return "CREATE INDEX IF NOT EXISTS bulk_import_users_pagination_index1 ON "
+                + Config.getConfig(start).getBulkImportUsersTable() + " (app_id, status, created_at DESC, id DESC)";
+    }
+
+    public static String getQueryToCreatePaginationIndex2(Start start) {
+        return "CREATE INDEX IF NOT EXISTS bulk_import_users_pagination_index2 ON "
+                + Config.getConfig(start).getBulkImportUsersTable() + " (app_id, created_at DESC, id DESC)";
     }
 
     public static void insertBulkImportUsers(Start start, AppIdentifier appIdentifier, List<BulkImportUser> users)
@@ -124,8 +129,8 @@ public class BulkImportQueries {
             Connection sqlCon = (Connection) con.getConnection();
             try {
                 String selectQuery = "SELECT * FROM " + Config.getConfig(start).getBulkImportUsersTable()
-                        + " WHERE status = 'NEW' AND app_id = ? "
-                        + " OR (status = 'PROCESSING' AND updated_at < EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000 - 60 * 1000) "
+                        + " WHERE app_id = ?"
+                        + " AND (status = 'NEW' OR (status = 'PROCESSING' AND updated_at < EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000 - 60 * 1000))"
                         + " LIMIT ? FOR UPDATE SKIP LOCKED";
 
                 List<BulkImportUser> bulkImportUsers = new ArrayList<>();
@@ -180,7 +185,7 @@ public class BulkImportQueries {
 
         if (bulkImportUserId != null && createdAt != null) {
             queryBuilder
-                    .append(" AND created_at < ? OR (created_at = ? AND id <= ?)");
+                    .append(" AND (created_at < ? OR (created_at = ? AND id <= ?))");
             parameters.add(createdAt);
             parameters.add(createdAt);
             parameters.add(bulkImportUserId);
