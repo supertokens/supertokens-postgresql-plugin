@@ -146,6 +146,10 @@ public class BulkImportQueries {
                     return null;
                 });
 
+                if (bulkImportUsers.isEmpty()) {
+                    return new ArrayList<>();
+                }
+
                 String updateQuery = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable()
                         + " SET status = ?, updated_at = ? WHERE app_id = ? AND id IN (" + Utils
                                 .generateCommaSeperatedQuestionMarks(bulkImportUsers.size()) + ")";
