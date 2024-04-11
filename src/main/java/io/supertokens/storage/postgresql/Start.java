@@ -2806,7 +2806,7 @@ public class Start
 
     @Override
     public ArrayList<ConfigFieldInfo> getConfigFieldsInfo() {
-        return PostgreSQLConfig.getConfigFieldsInfo();
+        return PostgreSQLConfig.getConfigFieldsInfo(this);
     }
 
     @Override

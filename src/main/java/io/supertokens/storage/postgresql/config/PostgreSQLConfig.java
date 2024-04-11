@@ -19,12 +19,14 @@ package io.supertokens.storage.postgresql.config;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import io.supertokens.pluginInterface.ConfigFieldInfo;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
+import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.annotations.ConnectionPoolProperty;
 import io.supertokens.storage.postgresql.annotations.IgnoreForAnnotationCheck;
 import io.supertokens.storage.postgresql.annotations.NotConflictingWithinUserPool;
@@ -159,8 +161,12 @@ public class PostgreSQLConfig {
         return validFields;
     }
 
-    public static ArrayList<ConfigFieldInfo> getConfigFieldsInfo() {
+    public static ArrayList<ConfigFieldInfo> getConfigFieldsInfo(Start start) {
         ArrayList<ConfigFieldInfo> result = new ArrayList<ConfigFieldInfo>();
+
+        JsonObject tenantConfig = new Gson().toJsonTree(Config.getConfig(start)).getAsJsonObject();
+
+        JsonObject defaultConfig = new Gson().toJsonTree(new PostgreSQLConfig()).getAsJsonObject();
 
         for (String fieldId : PostgreSQLConfig.getValidFields()) {
             try {
@@ -169,27 +175,40 @@ public class PostgreSQLConfig {
                     continue;
                 }
 
-                String name = field.getName();
+                String key = field.getName();
                 String description = field.isAnnotationPresent(ConfigDescription.class)
                         ? field.getAnnotation(ConfigDescription.class).value()
                         : "";
                 boolean isDifferentAcrossTenants = true;
 
-                String type = null;
+                String valueType = null;
 
                 Class<?> fieldType = field.getType();
 
                 if (fieldType == String.class) {
-                    type = "string";
+                    valueType = "string";
                 } else if (fieldType == boolean.class) {
-                    type = "boolean";
+                    valueType = "boolean";
                 } else if (fieldType == int.class || fieldType == long.class || fieldType == Integer.class) {
-                    type = "number";
+                    valueType = "number";
                 } else {
                     throw new RuntimeException("Unknown field type " + fieldType.getName());
                 }
 
-                result.add(new ConfigFieldInfo(name, description, isDifferentAcrossTenants, type));
+                JsonElement value = tenantConfig.get(field.getName());
+
+                String[] possibleValues = null; // TODO later, since none of them are enums right now
+                boolean isConfigYamlOnly = false; // TODO later, since there are no such fields right now
+                boolean isSaasProtected = false; // TODO
+
+                JsonElement defaultValue = defaultConfig.get(field.getName());
+                boolean isNullable = defaultValue == null;
+
+                boolean isEditable = field.isAnnotationPresent(ConnectionPoolProperty.class);
+
+                result.add(new ConfigFieldInfo(
+                        key, valueType, value, description, isSaasProtected, isDifferentAcrossTenants,
+                        isConfigYamlOnly, possibleValues, isNullable, defaultValue, true, isEditable));
 
             } catch (NoSuchFieldException e) {
                 continue;
