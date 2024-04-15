@@ -35,9 +35,11 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
     private static final String RESOURCE_KEY = "io.supertokens.storage.postgresql.ConnectionPool";
     private HikariDataSource hikariDataSource;
     private final Start start;
+    private Runnable postConnectCallback;
 
-    private ConnectionPool(Start start) {
+    private ConnectionPool(Start start, Runnable postConnectCallback) {
         this.start = start;
+        this.postConnectCallback = postConnectCallback;
     }
 
     private synchronized void initialiseHikariDataSource() throws SQLException {
@@ -96,6 +98,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         config.setPoolName(start.getUserPoolId() + "~" + start.getConnectionPoolId());
         try {
             hikariDataSource = new HikariDataSource(config);
+            this.postConnectCallback.run();
         } catch (Exception e) {
             throw new SQLException(e);
         }
@@ -133,7 +136,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         return getInstance(start) != null && getInstance(start).hikariDataSource != null;
     }
 
-    static void initPool(Start start, boolean shouldWait) throws DbInitException {
+    static void initPool(Start start, boolean shouldWait, Runnable postConnectCallback) throws DbInitException {
         if (isAlreadyInitialised(start)) {
             return;
         }
@@ -146,7 +149,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
                         " specified the correct values for ('postgresql_host' and 'postgresql_port') or for "
                         + "'postgresql_connection_uri'";
         try {
-            ConnectionPool con = new ConnectionPool(start);
+            ConnectionPool con = new ConnectionPool(start, postConnectCallback);
             start.getResourceDistributor().setResource(RESOURCE_KEY, con);
             while (true) {
                 try {

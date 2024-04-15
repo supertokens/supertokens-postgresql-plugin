@@ -98,10 +98,7 @@ import javax.annotation.Nonnull;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 
@@ -129,6 +126,7 @@ public class Start
     boolean enabled = true;
     static Thread mainThread = Thread.currentThread();
     private Thread shutdownHook;
+    private Set<TenantIdentifier> tenantIdentifiers = new HashSet<>();
 
     private boolean isBaseTenant = false;
 
@@ -228,11 +226,30 @@ public class Start
             mainThread = Thread.currentThread();
         }
         try {
-            ConnectionPool.initPool(this, shouldWait);
-            GeneralQueries.createTablesIfNotExists(this);
+            ConnectionPool.initPool(this, shouldWait, () -> {
+                try {
+                    GeneralQueries.createTablesIfNotExists(this);
+                } catch (Exception e2) {
+                    throw new IllegalStateException(e2);
+                }
+                for (TenantIdentifier tenantIdentifier : this.tenantIdentifiers) {
+                    try {
+                        this.addTenantIdInTargetStorage(tenantIdentifier);
+                    } catch (DuplicateTenantException e) {
+                        // ignore
+                    } catch (StorageQueryException e) {
+                        throw new IllegalStateException(e);
+                    }
+                }
+            });
         } catch (Exception e) {
             throw new DbInitException(e);
         }
+    }
+
+    @Override
+    public synchronized void addTenantIdentifier(TenantIdentifier tenantIdentifier) {
+        this.tenantIdentifiers.add(tenantIdentifier);
     }
 
     @Override
