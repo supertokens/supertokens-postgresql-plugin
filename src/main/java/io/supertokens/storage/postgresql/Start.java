@@ -230,7 +230,7 @@ public class Start
                 try {
                     GeneralQueries.createTablesIfNotExists(this);
                 } catch (Exception e2) {
-                    throw new IllegalStateException(e2);
+                    throw new RuntimeException(e2);
                 }
                 for (TenantIdentifier tenantIdentifier : this.tenantIdentifiers) {
                     try {
@@ -238,7 +238,7 @@ public class Start
                     } catch (DuplicateTenantException e) {
                         // ignore
                     } catch (StorageQueryException e) {
-                        throw new IllegalStateException(e);
+                        throw new RuntimeException(e);
                     }
                 }
             });
