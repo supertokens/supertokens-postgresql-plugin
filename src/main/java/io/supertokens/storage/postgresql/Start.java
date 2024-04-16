@@ -229,16 +229,14 @@ public class Start
             ConnectionPool.initPool(this, shouldWait, () -> {
                 try {
                     GeneralQueries.createTablesIfNotExists(this);
-                } catch (Exception e2) {
-                    throw new RuntimeException(e2);
+                } catch (SQLException e) {
+                    throw new StorageQueryException(e);
                 }
                 for (TenantIdentifier tenantIdentifier : this.tenantIdentifiers) {
                     try {
                         this.addTenantIdInTargetStorage(tenantIdentifier);
                     } catch (DuplicateTenantException e) {
                         // ignore
-                    } catch (StorageQueryException e) {
-                        throw new RuntimeException(e);
                     }
                 }
             });
