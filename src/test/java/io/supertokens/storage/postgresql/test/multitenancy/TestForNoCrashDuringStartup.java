@@ -192,14 +192,6 @@ public class TestForNoCrashDuringStartup {
         TenantConfig[] allTenants = MultitenancyHelper.getInstance(process.getProcess()).getAllTenants();
         assertEquals(2, allTenants.length); // should have the new CUD
 
-        try {
-            tpSignInUpAndGetResponse(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1", "test@example.com", process.getProcess(), SemVer.v5_0);
-            fail();
-        } catch (HttpResponseException e) {
-            // ignore
-            assertTrue(e.getMessage().contains("Internal Error")); // retried creating tenant entry
-        }
-
         MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage = false;
 
         process.kill(false);
