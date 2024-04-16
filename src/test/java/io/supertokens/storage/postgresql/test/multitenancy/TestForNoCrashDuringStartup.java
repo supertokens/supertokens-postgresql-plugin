@@ -19,6 +19,7 @@ package io.supertokens.storage.postgresql.test.multitenancy;
 import com.google.gson.JsonObject;
 import io.supertokens.Main;
 import io.supertokens.ProcessState;
+import io.supertokens.config.Config;
 import io.supertokens.featureflag.EE_FEATURES;
 import io.supertokens.featureflag.FeatureFlagTestContent;
 import io.supertokens.featureflag.exceptions.FeatureNotEnabledException;
@@ -44,7 +45,10 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Scanner;
 
 import static org.junit.Assert.*;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
@@ -204,6 +208,23 @@ public class TestForNoCrashDuringStartup {
 
         allTenants = MultitenancyHelper.getInstance(process.getProcess()).getAllTenants();
         assertEquals(2, allTenants.length); // should have the new CUD
+
+        File errorLog = new File(Config.getConfig(process.getProcess()).getErrorLogPath(process.getProcess()));
+
+        boolean foundSimulatedError = false;
+
+        try (Scanner scanner = new Scanner(errorLog, StandardCharsets.UTF_8)) {
+            while (scanner.hasNextLine()) {
+                String line = scanner.nextLine();
+                System.out.println(line);
+                if (line.contains("Simulated error")) {
+                    foundSimulatedError = true;
+                    break;
+                }
+            }
+        }
+
+        assertTrue(foundSimulatedError);
 
         MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage = false;
 
