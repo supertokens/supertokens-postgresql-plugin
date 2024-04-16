@@ -192,8 +192,6 @@ public class TestForNoCrashDuringStartup {
         TenantConfig[] allTenants = MultitenancyHelper.getInstance(process.getProcess()).getAllTenants();
         assertEquals(2, allTenants.length); // should have the new CUD
 
-        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage = false;
-
         process.kill(false);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
 
@@ -203,6 +201,11 @@ public class TestForNoCrashDuringStartup {
         FeatureFlagTestContent.getInstance(process.getProcess())
                 .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        allTenants = MultitenancyHelper.getInstance(process.getProcess()).getAllTenants();
+        assertEquals(2, allTenants.length); // should have the new CUD
+
+        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage = false;
 
         // this should succeed now
         tpSignInUpAndGetResponse(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1", "test@example.com", process.getProcess(), SemVer.v5_0);
