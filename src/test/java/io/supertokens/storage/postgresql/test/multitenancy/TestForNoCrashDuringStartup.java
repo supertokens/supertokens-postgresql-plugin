@@ -89,7 +89,7 @@ public class TestForNoCrashDuringStartup {
 
         TenantIdentifier tenantIdentifier = new TenantIdentifier("127.0.0.1", null, null);
 
-        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage = true;
+        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage_forTesting = true;
         try {
             Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                     tenantIdentifier,
@@ -116,7 +116,7 @@ public class TestForNoCrashDuringStartup {
             assertTrue(e.getMessage().contains("Internal Error")); // retried creating tenant entry
         }
 
-        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage = false;
+        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage_forTesting = false;
 
         // this should succeed now
         tpSignInUpAndGetResponse(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1", "test@example.com", process.getProcess(), SemVer.v5_0);
@@ -177,7 +177,7 @@ public class TestForNoCrashDuringStartup {
 
         TenantIdentifier tenantIdentifier = new TenantIdentifier("127.0.0.1", null, null);
 
-        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage = true;
+        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage_forTesting = true;
         try {
             Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                     tenantIdentifier,
@@ -226,7 +226,7 @@ public class TestForNoCrashDuringStartup {
 
         assertTrue(foundSimulatedError);
 
-        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage = false;
+        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage_forTesting = false;
 
         // this should succeed now
         tpSignInUpAndGetResponse(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1", "test@example.com", process.getProcess(), SemVer.v5_0);

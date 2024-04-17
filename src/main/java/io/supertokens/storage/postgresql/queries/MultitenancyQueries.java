@@ -37,7 +37,7 @@ import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class MultitenancyQueries {
-    public static boolean simulateErrorInAddingTenantIdInTargetStorage = false;
+    public static boolean simulateErrorInAddingTenantIdInTargetStorage_forTesting = false;
 
     static String getQueryToCreateTenantConfigsTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
@@ -276,7 +276,7 @@ public class MultitenancyQueries {
     public static void addTenantIdInTargetStorage(Start start, TenantIdentifier tenantIdentifier) throws
             StorageTransactionLogicException, StorageQueryException {
         {
-            if (Start.isTesting && simulateErrorInAddingTenantIdInTargetStorage) {
+            if (Start.isTesting && simulateErrorInAddingTenantIdInTargetStorage_forTesting) {
                 throw new StorageTransactionLogicException(new SQLException("Simulated error in addTenantIdInTargetStorage"));
             }
 

@@ -79,7 +79,7 @@ public abstract class Utils extends Mockito {
         PluginInterfaceTesting.isTesting = true;
         Start.isTesting = true;
         Main.makeConsolePrintSilent = true;
-        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage = false;
+        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage_forTesting = false;
 
         String installDir = "../";
         try {
