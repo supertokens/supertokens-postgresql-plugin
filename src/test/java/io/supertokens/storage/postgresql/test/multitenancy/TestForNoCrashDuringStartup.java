@@ -321,18 +321,9 @@ public class TestForNoCrashDuringStartup {
         this.process = TestingProcessManager.start(args);
         FeatureFlagTestContent.getInstance(process.getProcess())
                 .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
-        ProcessState.EventAndException initFailure = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
-
-        assertTrue(initFailure.exception.getMessage().contains("Simulated error"));
-
-        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage_forTesting = false;
-
-        this.process = TestingProcessManager.start(args);
-        FeatureFlagTestContent.getInstance(process.getProcess())
-                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-        File errorLog = new File(Config.getConfig(process.getProcess()).getErrorLogPath(process.getProcess()));
+        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage_forTesting = false;
 
         // this should succeed now
         tpSignInUpAndGetResponse(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1", "test@example.com", process.getProcess(), SemVer.v5_0);
