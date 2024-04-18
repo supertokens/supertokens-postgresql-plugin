@@ -226,15 +226,15 @@ public class Start
             mainThread = Thread.currentThread();
         }
         try {
-            ConnectionPool.initPool(this, shouldWait, () -> {
+            ConnectionPool.initPool(this, shouldWait, (con) -> {
                 try {
-                    GeneralQueries.createTablesIfNotExists(this);
+                    GeneralQueries.createTablesIfNotExists(this, con);
                 } catch (SQLException e) {
                     throw new StorageQueryException(e);
                 }
                 for (TenantIdentifier tenantIdentifier : this.tenantIdentifiers) {
                     try {
-                        this.addTenantIdInTargetStorage(tenantIdentifier);
+                        this.addTenantIdInTargetStorage_Transaction(con, tenantIdentifier);
                     } catch (DuplicateTenantException e) {
                         // ignore
                     }
@@ -2295,6 +2295,22 @@ public class Start
                 }
             }
             throw new StorageQueryException(e.actualException);
+        }
+    }
+
+    public void addTenantIdInTargetStorage_Transaction(Connection con, TenantIdentifier tenantIdentifier)
+            throws DuplicateTenantException, StorageQueryException {
+        try {
+            MultitenancyQueries.addTenantIdInTargetStorage_Transaction(this, con, tenantIdentifier);
+        } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                if (isPrimaryKeyError(((PSQLException) e).getServerErrorMessage(),
+                        config.getTenantsTable())) {
+                    throw new DuplicateTenantException();
+                }
+            }
+            throw new StorageQueryException(e);
         }
     }
 

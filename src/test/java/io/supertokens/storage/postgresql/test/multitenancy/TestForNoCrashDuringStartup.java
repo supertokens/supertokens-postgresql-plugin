@@ -31,6 +31,7 @@ import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.*;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
+import io.supertokens.session.Session;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.queries.MultitenancyQueries;
 import io.supertokens.storage.postgresql.test.TestingProcessManager;
@@ -230,6 +231,63 @@ public class TestForNoCrashDuringStartup {
 
         // this should succeed now
         tpSignInUpAndGetResponse(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1", "test@example.com", process.getProcess(), SemVer.v5_0);
+    }
+
+    @Test
+    public void testThatCoreDoesNotStartWithThereIsAnErrorDuringTenantCreationForRootCUD() throws Exception {
+        JsonObject coreConfig = new JsonObject();
+        StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess())
+                .modifyConfigToAddANewUserPoolForTesting(coreConfig, 1);
+
+        TenantIdentifier tenantIdentifier = new TenantIdentifier("127.0.0.1", null, null);
+
+        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage_forTesting = true;
+        try {
+            Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
+                    tenantIdentifier,
+                    new EmailPasswordConfig(true),
+                    new ThirdPartyConfig(true, null),
+                    new PasswordlessConfig(true),
+                    null, null,
+                    coreConfig
+            ), false);
+            fail();
+        } catch (StorageQueryException e) {
+            // ignore
+            assertTrue(e.getMessage().contains("Simulated error"));
+        }
+
+        TenantConfig[] allTenants = MultitenancyHelper.getInstance(process.getProcess()).getAllTenants();
+        assertEquals(2, allTenants.length); // should have the new CUD
+
+        Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
+        update(start, "DELETE FROM apps;", pst -> {});
+
+        process.kill(false);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+        String[] args = {"../"};
+
+        this.process = TestingProcessManager.start(args);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        ProcessState.EventAndException initFailure = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
+
+        assertTrue(initFailure.exception.getMessage().contains("Simulated error"));
+
+        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage_forTesting = false;
+
+        this.process = TestingProcessManager.start(args);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        File errorLog = new File(Config.getConfig(process.getProcess()).getErrorLogPath(process.getProcess()));
+
+        // this should succeed now
+        tpSignInUpAndGetResponse(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1", "test@example.com", process.getProcess(), SemVer.v5_0);
+
+        Session.createNewSession(process.getProcess(), "userid", new JsonObject(), new JsonObject());
     }
 
     @Test

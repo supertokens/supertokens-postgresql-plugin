@@ -19,7 +19,6 @@ package io.supertokens.storage.postgresql;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.exceptions.DbInitException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.storage.postgresql.config.Config;
@@ -105,7 +104,9 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         }
 
         try {
-            this.postConnectCallback.apply();
+            try (Connection con = hikariDataSource.getConnection()) {
+                this.postConnectCallback.apply(con);
+            }
         } catch (StorageQueryException e) {
             // if an exception happens here, we want to set the hikariDataSource to null once again so that
             // whenever the getConnection is called again, we want to re-attempt creation of tables and tenant
@@ -234,6 +235,6 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
 
     @FunctionalInterface
     public static interface PostConnectCallback {
-        void apply() throws StorageQueryException;
+        void apply(Connection connection) throws StorageQueryException;
     }
 }
