@@ -126,7 +126,6 @@ public class Start
     boolean enabled = true;
     static Thread mainThread = Thread.currentThread();
     private Thread shutdownHook;
-    private Set<TenantIdentifier> tenantIdentifiers = new HashSet<>();
 
     private boolean isBaseTenant = false;
 
@@ -216,7 +215,7 @@ public class Start
     }
 
     @Override
-    public void initStorage(boolean shouldWait) throws DbInitException {
+    public void initStorage(boolean shouldWait, List<TenantIdentifier> tenantIdentifiers) throws DbInitException {
         if (ConnectionPool.isAlreadyInitialised(this)) {
             return;
         }
@@ -232,7 +231,7 @@ public class Start
                 } catch (SQLException e) {
                     throw new StorageQueryException(e);
                 }
-                for (TenantIdentifier tenantIdentifier : this.tenantIdentifiers) {
+                for (TenantIdentifier tenantIdentifier : tenantIdentifiers) {
                     try {
                         this.addTenantIdInTargetStorage_Transaction(con, tenantIdentifier);
                     } catch (DuplicateTenantException e) {
@@ -243,11 +242,6 @@ public class Start
         } catch (Exception e) {
             throw new DbInitException(e);
         }
-    }
-
-    @Override
-    public synchronized void addTenantIdentifier(TenantIdentifier tenantIdentifier) {
-        this.tenantIdentifiers.add(tenantIdentifier);
     }
 
     @Override
@@ -480,7 +474,7 @@ public class Start
         }
         ProcessState.getInstance(this).clear();
         try {
-            initStorage(false);
+            initStorage(false, new ArrayList<>());
             enabled = true; // Allow get connection to work, to delete the data
             GeneralQueries.deleteAllTables(this);
 

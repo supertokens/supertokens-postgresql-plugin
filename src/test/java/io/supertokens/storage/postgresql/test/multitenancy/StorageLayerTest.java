@@ -49,6 +49,7 @@ import org.junit.rules.TestRule;
 
 import java.io.IOException;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -117,7 +118,7 @@ public class StorageLayerTest {
 
         Config.loadAllTenantConfig(process.getProcess(), tenants);
 
-        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants, List.of());
 
         assertNotSame(StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()),
                 StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()));
@@ -168,7 +169,7 @@ public class StorageLayerTest {
 
         Config.loadAllTenantConfig(process.getProcess(), tenants);
 
-        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants, List.of());
 
         assertSame(StorageLayer.getStorage(new TenantIdentifier(null, "abc", null), process.getProcess()),
                 StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()));
@@ -226,7 +227,7 @@ public class StorageLayerTest {
 
         Config.loadAllTenantConfig(process.getProcess(), tenants);
 
-        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants, List.of());
 
         assertSame(StorageLayer.getStorage(new TenantIdentifier(null, "abc", null), process.getProcess()),
                 StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()));
@@ -290,7 +291,7 @@ public class StorageLayerTest {
                             tenantConfig)};
             Config.loadAllTenantConfig(process.getProcess(), tenants);
 
-            StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+            StorageLayer.loadAllTenantStorage(process.getProcess(), tenants, List.of());
             fail();
         } catch (InvalidConfigException e) {
             assert (e.getMessage()
@@ -324,7 +325,7 @@ public class StorageLayerTest {
                             tenantConfig)};
             Config.loadAllTenantConfig(process.getProcess(), tenants);
 
-            StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+            StorageLayer.loadAllTenantStorage(process.getProcess(), tenants, List.of());
             fail();
         } catch (InvalidConfigException e) {
             assertEquals(e.getMessage(),
@@ -359,7 +360,7 @@ public class StorageLayerTest {
                             tenantConfig)};
             Config.loadAllTenantConfig(process.getProcess(), tenants);
 
-            StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+            StorageLayer.loadAllTenantStorage(process.getProcess(), tenants, List.of());
             fail();
         } catch (InvalidConfigException e) {
             assertEquals(e.getMessage(),
@@ -395,7 +396,7 @@ public class StorageLayerTest {
                         tenantConfig)};
         Config.loadAllTenantConfig(process.getProcess(), tenants);
 
-        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants, List.of());
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
                         (Start) StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()))
@@ -447,7 +448,7 @@ public class StorageLayerTest {
 
         Config.loadAllTenantConfig(process.getProcess(), tenants);
 
-        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants, List.of());
 
         assertSame(StorageLayer.getStorage(new TenantIdentifier(null, "abc", null), process.getProcess()),
                 existingStorage);
@@ -528,7 +529,7 @@ public class StorageLayerTest {
 
         Config.loadAllTenantConfig(process.getProcess(), tenants);
 
-        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants, List.of());
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
                         (Start) StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()))
@@ -590,7 +591,7 @@ public class StorageLayerTest {
                         tenantConfig)};
         Config.loadAllTenantConfig(process.getProcess(), tenants);
 
-        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants, List.of());
 
         Assert.assertEquals(io.supertokens.storage.postgresql.config.Config.getConfig(
                         (Start) StorageLayer.getStorage(new TenantIdentifier("abc", null, null), process.getProcess()))
@@ -633,7 +634,7 @@ public class StorageLayerTest {
                         tenantConfig)};
         Config.loadAllTenantConfig(process.getProcess(), tenants);
 
-        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants, List.of());
 
         assertSame(StorageLayer.getStorage(new TenantIdentifier(null, "abc", null), process.getProcess()),
                 StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()));
@@ -669,7 +670,7 @@ public class StorageLayerTest {
                         tenantConfig)};
         Config.loadAllTenantConfig(process.getProcess(), tenants);
 
-        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants);
+        StorageLayer.loadAllTenantStorage(process.getProcess(), tenants, List.of());
 
         assertNotSame(StorageLayer.getStorage(new TenantIdentifier(null, "abc", null), process.getProcess()),
                 StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()));
