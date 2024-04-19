@@ -19,7 +19,6 @@ package io.supertokens.storage.postgresql.test.multitenancy;
 import com.google.gson.JsonObject;
 import io.supertokens.Main;
 import io.supertokens.ProcessState;
-import io.supertokens.config.Config;
 import io.supertokens.featureflag.EE_FEATURES;
 import io.supertokens.featureflag.FeatureFlagTestContent;
 import io.supertokens.featureflag.exceptions.FeatureNotEnabledException;
@@ -32,6 +31,7 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.*;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.session.Session;
+import io.supertokens.session.accessToken.AccessToken;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.queries.MultitenancyQueries;
 import io.supertokens.storage.postgresql.test.TestingProcessManager;
@@ -46,10 +46,7 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.Scanner;
 
 import static org.junit.Assert.*;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
@@ -83,7 +80,7 @@ public class TestForNoCrashDuringStartup {
     }
 
     @Test
-    public void testFailureInCUDCreation() throws Exception {
+    public void testThatCUDRecoversWhenItFailsToAddEntryDuringCreation() throws Exception {
         JsonObject coreConfig = new JsonObject();
         StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess())
                 .modifyConfigToAddANewUserPoolForTesting(coreConfig, 1);
@@ -124,7 +121,7 @@ public class TestForNoCrashDuringStartup {
     }
 
     @Test
-    public void testThatTenantComesToLifeOnceTheTargetDbIsUp() throws Exception {
+    public void testThatCUDRecoversWhenTheDbIsDownDuringCreationButDbComesUpLater() throws Exception {
         Start start = ((Start) StorageLayer.getBaseStorage(process.getProcess()));
         try {
             update(start, "DROP DATABASE st5000;", pst -> {});
@@ -171,7 +168,7 @@ public class TestForNoCrashDuringStartup {
     }
 
     @Test
-    public void testFailureInAppCreation() throws Exception {
+    public void testThatAppRecoversAfterAppCreationFailedToAddEntry() throws Exception {
         JsonObject coreConfig = new JsonObject();
 
         TenantIdentifier tenantIdentifier = new TenantIdentifier(null, "a1", null);
@@ -221,7 +218,7 @@ public class TestForNoCrashDuringStartup {
     }
 
     @Test
-    public void testThatCoreDoesNotStartWithThereIsAnErrorDuringTenantCreation() throws Exception {
+    public void testThatCoreDoesNotCrashDuringStartupWhenCUDCreationFailedToAddEntryInTargetStorage() throws Exception {
         JsonObject coreConfig = new JsonObject();
         StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess())
                 .modifyConfigToAddANewUserPoolForTesting(coreConfig, 1);
@@ -260,23 +257,6 @@ public class TestForNoCrashDuringStartup {
         allTenants = MultitenancyHelper.getInstance(process.getProcess()).getAllTenants();
         assertEquals(2, allTenants.length); // should have the new CUD
 
-        File errorLog = new File(Config.getConfig(process.getProcess()).getErrorLogPath(process.getProcess()));
-
-        boolean foundSimulatedError = false;
-
-        try (Scanner scanner = new Scanner(errorLog, StandardCharsets.UTF_8)) {
-            while (scanner.hasNextLine()) {
-                String line = scanner.nextLine();
-                System.out.println(line);
-                if (line.contains("Simulated error")) {
-                    foundSimulatedError = true;
-                    break;
-                }
-            }
-        }
-
-        assertTrue(foundSimulatedError);
-
         MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage_forTesting = false;
 
         // this should succeed now
@@ -284,7 +264,7 @@ public class TestForNoCrashDuringStartup {
     }
 
     @Test
-    public void testThatCoreDoesNotStartWithThereIsAnErrorDuringTenantCreationForRootCUD() throws Exception {
+    public void testThatCoreDoesNotCrashDuringStartupWhenTenantEntryIsInconsistentInTheBaseTenant() throws Exception {
         JsonObject coreConfig = new JsonObject();
         StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess())
                 .modifyConfigToAddANewUserPoolForTesting(coreConfig, 1);
@@ -332,7 +312,7 @@ public class TestForNoCrashDuringStartup {
     }
 
     @Test
-    public void testThatCoreDoesNotStartWithThereIsAnErrorDuringAppCreationOnBaseTenantStorage() throws Exception {
+    public void testThatCoreDoesNotCrashDuringStartupWhenAppCreationFailedToAddEntryInTheBaseTenantStorage() throws Exception {
         JsonObject coreConfig = new JsonObject();
 
         TenantIdentifier tenantIdentifier = new TenantIdentifier(null, "a1", null);
@@ -376,7 +356,132 @@ public class TestForNoCrashDuringStartup {
         // this should succeed now
         tpSignInUpAndGetResponse(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1", "test@example.com", process.getProcess(), SemVer.v5_0);
 
-        Session.createNewSession(process.getProcess(), "userid", new JsonObject(), new JsonObject());
+        Session.createNewSession(
+                new TenantIdentifier(null, "a1", null),
+                StorageLayer.getBaseStorage(process.getProcess()),
+                process.getProcess(), "userid", new JsonObject(), new JsonObject(), true,
+                AccessToken.getLatestVersion(), false);
+    }
+
+    @Test
+    public void testThatCoreDoesNotCrashDuringStartupWhenCUDCreationFailedToAddTenantEntryInTargetStorageWithLoadOnlyCUDConfig() throws Exception {
+        JsonObject coreConfig = new JsonObject();
+
+        TenantIdentifier tenantIdentifier = new TenantIdentifier("127.0.0.1", null, null);
+
+        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage_forTesting = true;
+        try {
+            StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess())
+                    .modifyConfigToAddANewUserPoolForTesting(coreConfig, 1);
+            Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
+                    tenantIdentifier,
+                    new EmailPasswordConfig(true),
+                    new ThirdPartyConfig(true, null),
+                    new PasswordlessConfig(true),
+                    null, null,
+                    coreConfig
+            ), false);
+            fail();
+        } catch (StorageQueryException e) {
+            // ignore
+            assertTrue(e.getMessage().contains("Simulated error"));
+        }
+
+        try {
+            StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess())
+                    .modifyConfigToAddANewUserPoolForTesting(coreConfig, 2);
+            Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
+                    new TenantIdentifier("localhost", null, null),
+                    new EmailPasswordConfig(true),
+                    new ThirdPartyConfig(true, null),
+                    new PasswordlessConfig(true),
+                    null, null,
+                    coreConfig
+            ), false);
+            fail();
+        } catch (StorageQueryException e) {
+            // ignore
+            assertTrue(e.getMessage().contains("Simulated error"));
+        }
+
+        try {
+            StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess())
+                    .modifyConfigToAddANewUserPoolForTesting(coreConfig, 3);
+            Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
+                    new TenantIdentifier("cud2", null, null),
+                    new EmailPasswordConfig(true),
+                    new ThirdPartyConfig(true, null),
+                    new PasswordlessConfig(true),
+                    null, null,
+                    coreConfig
+            ), false);
+            fail();
+        } catch (StorageQueryException e) {
+            // ignore
+            assertTrue(e.getMessage().contains("Simulated error"));
+        }
+
+        TenantConfig[] allTenants = MultitenancyHelper.getInstance(process.getProcess()).getAllTenants();
+        assertEquals(4, allTenants.length); // should have the new CUD
+
+        process.kill(false);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage_forTesting = false;
+
+        String[] args = {"../"};
+
+        this.process = TestingProcessManager.start(args, false);
+        Utils.setValueInConfig("supertokens_saas_load_only_cud", "127.0.0.1:3567");
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        this.process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        allTenants = MultitenancyHelper.getInstance(process.getProcess()).getAllTenants();
+        assertEquals(2, allTenants.length); // should have the new CUD
+
+        // this should succeed now
+        tpSignInUpAndGetResponse(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1", "test@example.com", process.getProcess(), SemVer.v5_0);
+
+        try {
+            tpSignInUpAndGetResponse(new TenantIdentifier("localhost", null, null), "google", "googleid1", "test@example.com", process.getProcess(), SemVer.v5_0);
+            fail();
+        } catch (HttpResponseException e) {
+            // ignore
+        }
+
+        process.kill(false);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+        this.process = TestingProcessManager.start(args, false);
+        Utils.setValueInConfig("supertokens_saas_load_only_cud", "localhost:3567");
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        this.process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        allTenants = MultitenancyHelper.getInstance(process.getProcess()).getAllTenants();
+        assertEquals(2, allTenants.length); // should have the new CUD
+
+        // this should succeed now
+        tpSignInUpAndGetResponse(new TenantIdentifier("localhost", null, null), "google", "googleid1", "test@example.com", process.getProcess(), SemVer.v5_0);
+        try {
+            tpSignInUpAndGetResponse(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1", "test@example.com", process.getProcess(), SemVer.v5_0);
+            fail();
+        } catch (HttpResponseException e) {
+            // ignore
+        }
+
+        process.kill(false);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+        this.process = TestingProcessManager.start(args, false);
+        Utils.setValueInConfig("supertokens_saas_load_only_cud", null);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+        this.process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
     }
 
     @Test
