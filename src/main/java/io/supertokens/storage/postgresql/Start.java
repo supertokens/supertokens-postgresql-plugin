@@ -98,10 +98,7 @@ import javax.annotation.Nonnull;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 
@@ -218,7 +215,7 @@ public class Start
     }
 
     @Override
-    public void initStorage(boolean shouldWait) throws DbInitException {
+    public void initStorage(boolean shouldWait, List<TenantIdentifier> tenantIdentifiers) throws DbInitException {
         if (ConnectionPool.isAlreadyInitialised(this)) {
             return;
         }
@@ -228,8 +225,20 @@ public class Start
             mainThread = Thread.currentThread();
         }
         try {
-            ConnectionPool.initPool(this, shouldWait);
-            GeneralQueries.createTablesIfNotExists(this);
+            ConnectionPool.initPool(this, shouldWait, (con) -> {
+                try {
+                    GeneralQueries.createTablesIfNotExists(this, con);
+                } catch (SQLException e) {
+                    throw new StorageQueryException(e);
+                }
+                for (TenantIdentifier tenantIdentifier : tenantIdentifiers) {
+                    try {
+                        this.addTenantIdInTargetStorage_Transaction(con, tenantIdentifier);
+                    } catch (DuplicateTenantException e) {
+                        // ignore
+                    }
+                }
+            });
         } catch (Exception e) {
             throw new DbInitException(e);
         }
@@ -465,7 +474,7 @@ public class Start
         }
         ProcessState.getInstance(this).clear();
         try {
-            initStorage(false);
+            initStorage(false, new ArrayList<>());
             enabled = true; // Allow get connection to work, to delete the data
             GeneralQueries.deleteAllTables(this);
 
@@ -2280,6 +2289,22 @@ public class Start
                 }
             }
             throw new StorageQueryException(e.actualException);
+        }
+    }
+
+    public void addTenantIdInTargetStorage_Transaction(Connection con, TenantIdentifier tenantIdentifier)
+            throws DuplicateTenantException, StorageQueryException {
+        try {
+            MultitenancyQueries.addTenantIdInTargetStorage_Transaction(this, con, tenantIdentifier);
+        } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                if (isPrimaryKeyError(((PSQLException) e).getServerErrorMessage(),
+                        config.getTenantsTable())) {
+                    throw new DuplicateTenantException();
+                }
+            }
+            throw new StorageQueryException(e);
         }
     }
 
