@@ -205,6 +205,16 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         }
     }
 
+    static void resetPool(Start start) {
+        if (!isAlreadyInitialised(start)) {
+            return;
+        }
+
+        ConnectionPool currentPool = (ConnectionPool) start.getResourceDistributor().getResource(RESOURCE_KEY);
+        start.getResourceDistributor().removeResource(RESOURCE_KEY);
+        currentPool.hikariDataSource.close();
+    }
+
     public static Connection getConnection(Start start) throws SQLException, StorageQueryException {
         if (getInstance(start) == null) {
             throw new IllegalStateException("Please call initPool before getConnection");

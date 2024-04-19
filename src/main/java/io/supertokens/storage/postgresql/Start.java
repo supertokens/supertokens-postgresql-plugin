@@ -245,6 +245,11 @@ public class Start
     }
 
     @Override
+    public void resetConnectionPoolForReinitWithAllTenantsForBaseStorage() {
+        ConnectionPool.resetPool(this);
+    }
+
+    @Override
     public <T> T startTransaction(TransactionLogic<T> logic)
             throws StorageTransactionLogicException, StorageQueryException {
         return startTransaction(logic, TransactionIsolationLevel.SERIALIZABLE);
