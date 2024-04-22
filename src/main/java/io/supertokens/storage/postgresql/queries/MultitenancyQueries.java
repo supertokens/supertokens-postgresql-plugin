@@ -16,7 +16,6 @@
 
 package io.supertokens.storage.postgresql.queries;
 
-import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.*;
@@ -37,6 +36,8 @@ import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class MultitenancyQueries {
+    public static boolean simulateErrorInAddingTenantIdInTargetStorage_forTesting = false;
+
     static String getQueryToCreateTenantConfigsTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String tenantConfigsTable = Config.getConfig(start).getTenantConfigsTable();
@@ -222,32 +223,55 @@ public class MultitenancyQueries {
                 Connection sqlCon = (Connection) con.getConnection();
                 long currentTime = System.currentTimeMillis();
                 try {
-                    {
-                        String QUERY = "INSERT INTO " + getConfig(start).getAppsTable()
-                                + "(app_id, created_at_time)" + " VALUES(?, ?) ON CONFLICT DO NOTHING";
-                        update(sqlCon, QUERY, pst -> {
-                            pst.setString(1, tenantIdentifier.getAppId());
-                            pst.setLong(2,  currentTime);
-                        });
-                    }
-
-                    {
-                        String QUERY = "INSERT INTO " + getConfig(start).getTenantsTable()
-                                + "(app_id, tenant_id, created_at_time)" + " VALUES(?, ?, ?)";
-
-                        update(sqlCon, QUERY, pst -> {
-                            pst.setString(1, tenantIdentifier.getAppId());
-                            pst.setString(2, tenantIdentifier.getTenantId());
-                            pst.setLong(3,  currentTime);
-                        });
-                    }
-
+                    addTenantIdInTargetStorage_Transaction(start, sqlCon, tenantIdentifier);
                     sqlCon.commit();
                 } catch (SQLException throwables) {
                     throw new StorageTransactionLogicException(throwables);
                 }
                 return null;
             });
+        }
+    }
+
+    public static void addTenantIdInTargetStorage_Transaction(Start start,
+                                                             Connection con, TenantIdentifier tenantIdentifier) throws
+            SQLException, StorageQueryException {
+        {
+            if (Start.isTesting && simulateErrorInAddingTenantIdInTargetStorage_forTesting) {
+                String QUERY = "SELECT 1 FROM " + getConfig(start).getAppsTable() + " WHERE app_id = ?";
+                int val = execute(con, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                }, rs -> {
+                    if (rs.next()) {
+                        return rs.getInt(1);
+                    }
+                    return -1;
+                });
+                if (val == -1) {
+                    throw new SQLException("Simulated error in addTenantIdInTargetStorage");
+                }
+            }
+
+            long currentTime = System.currentTimeMillis();
+            {
+                String QUERY = "INSERT INTO " + getConfig(start).getAppsTable()
+                        + "(app_id, created_at_time)" + " VALUES(?, ?) ON CONFLICT DO NOTHING";
+                update(con, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setLong(2,  currentTime);
+                });
+            }
+
+            {
+                String QUERY = "INSERT INTO " + getConfig(start).getTenantsTable()
+                        + "(app_id, tenant_id, created_at_time)" + " VALUES(?, ?, ?)";
+
+                update(con, QUERY, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, tenantIdentifier.getTenantId());
+                    pst.setLong(3,  currentTime);
+                });
+            }
         }
     }
 
