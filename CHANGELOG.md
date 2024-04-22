@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [6.0.2] - 2024-04-22
+
+- Fixes issues with partial failures during tenant creation
+
 ## [6.0.1] - 2024-03-21
 
 - Fixes user id mapping queries
