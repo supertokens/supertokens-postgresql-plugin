@@ -9,13 +9,28 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Adds implementation for a new method `getConfigFieldsInfo` to fetch the plugin config fields.
 
+## [7.0.1] - 2024-04-17
+
+- Fixes issues with partial failures during tenant creation
+
 ## [7.0.0] - 2024-03-13
 
 - Replace `TotpNotEnabledError` with `UnknownUserIdTotpError`.
 - Support for MFA recipe
+- Adds `firstFactors` and `requiredSecondaryFactors` for tenant config.
 - Adds a new `useStaticKey` param to `updateSessionInfo_Transaction`
   - This enables smooth switching between `useDynamicAccessTokenSigningKey` settings by allowing refresh calls to
     change the signing key type of a session
+
+### Migration
+
+Make sure the core is already upgraded to version 8.0.0 before migrating
+
+```sql
+ALTER TABLE totp_user_devices ADD COLUMN IF NOT EXISTS created_at BIGINT default 0;
+ALTER TABLE totp_user_devices 
+  ALTER COLUMN created_at DROP DEFAULT;
+```
 
 ## [6.0.0] - 2024-03-05
 
