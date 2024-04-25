@@ -75,7 +75,7 @@ public class BulkImportQueries {
     }
 
     public static void insertBulkImportUsers(Start start, AppIdentifier appIdentifier, List<BulkImportUser> users)
-            throws SQLException {
+            throws SQLException, StorageQueryException {
         StringBuilder queryBuilder = new StringBuilder(
                 "INSERT INTO " + Config.getConfig(start).getBulkImportUsersTable() + " (id, app_id, raw_data) VALUES ");
 
@@ -266,7 +266,7 @@ public class BulkImportQueries {
 
     public static void updateBulkImportUserPrimaryUserId(Start start, AppIdentifier appIdentifier,
             @Nonnull String bulkImportUserId,
-            @Nonnull String primaryUserId) throws SQLException {
+            @Nonnull String primaryUserId) throws SQLException, StorageQueryException {
         String query = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable()
                 + " SET primary_user_id = ?, updated_at = ? WHERE app_id = ? and id = ?";
 

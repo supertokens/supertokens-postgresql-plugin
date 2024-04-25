@@ -43,7 +43,7 @@ import io.supertokens.storage.postgresql.config.Config;
 public class BulkImportProxyStorage extends Start {
     private BulkImportProxyConnection connection;
 
-    public synchronized Connection getTransactionConnection() throws SQLException {
+    public synchronized Connection getTransactionConnection() throws SQLException, StorageQueryException {
         if (this.connection == null) {
             Connection con = ConnectionPool.getConnectionForProxyStorage(this);
             this.connection = new BulkImportProxyConnection(con);

@@ -45,7 +45,7 @@ public interface QueryExecutorTemplate {
     }
 
     static int update(Start start, String QUERY, PreparedStatementValueSetter setter)
-            throws SQLException {
+            throws SQLException, StorageQueryException {
         try (Connection con = ConnectionPool.getConnection(start)) {
             return update(con, QUERY, setter);
         }

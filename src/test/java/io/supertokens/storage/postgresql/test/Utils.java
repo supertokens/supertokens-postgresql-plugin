@@ -20,6 +20,7 @@ package io.supertokens.storage.postgresql.test;
 import io.supertokens.Main;
 import io.supertokens.pluginInterface.PluginInterfaceTesting;
 import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.queries.MultitenancyQueries;
 import io.supertokens.storageLayer.StorageLayer;
 import org.apache.tomcat.util.http.fileupload.FileUtils;
 import org.junit.rules.TestRule;
@@ -78,6 +79,8 @@ public abstract class Utils extends Mockito {
         PluginInterfaceTesting.isTesting = true;
         Start.isTesting = true;
         Main.makeConsolePrintSilent = true;
+        MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage_forTesting = false;
+
         String installDir = "../";
         try {
             // if the default config is not the same as the current config, we must reset
