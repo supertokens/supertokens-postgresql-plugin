@@ -87,7 +87,9 @@ public class BulkImportProxyStorage extends Start {
     @Override
     public void commitTransactionForBulkImportProxyStorage() throws StorageQueryException {
         try {
-            this.connection.commitForBulkImportProxyStorage();
+            if (this.connection != null) {
+                this.connection.commitForBulkImportProxyStorage();
+            }
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
