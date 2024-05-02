@@ -197,10 +197,6 @@ public class PostgreSQLConfig {
 
                 JsonElement value = tenantConfig.get(field.getName());
 
-                String[] possibleValues = null; // TODO later, since none of them are enums right now
-                boolean isConfigYamlOnly = false; // TODO later, since there are no such fields right now
-                boolean isSaasProtected = false; // TODO
-
                 JsonElement defaultValue = defaultConfig.get(field.getName());
                 boolean isNullable = defaultValue == null;
 
@@ -208,7 +204,7 @@ public class PostgreSQLConfig {
 
                 result.add(new ConfigFieldInfo(
                         key, valueType, value, description, isDifferentAcrossTenants,
-                        possibleValues, isNullable, defaultValue, true, isEditable));
+                        null, isNullable, defaultValue, true, isEditable));
 
             } catch (NoSuchFieldException e) {
                 continue;
