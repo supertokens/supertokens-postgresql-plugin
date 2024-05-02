@@ -18,7 +18,7 @@
 package io.supertokens.storage.postgresql.test;
 
 import io.supertokens.ProcessState;
-import io.supertokens.storage.postgresql.annotations.ConfigDescription;
+import io.supertokens.pluginInterface.annotations.ConfigDescription;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 
 import org.junit.AfterClass;

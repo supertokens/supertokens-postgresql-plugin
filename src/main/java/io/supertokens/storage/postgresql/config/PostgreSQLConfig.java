@@ -25,6 +25,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import io.supertokens.pluginInterface.ConfigFieldInfo;
+import io.supertokens.pluginInterface.annotations.ConfigDescription;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.annotations.*;
