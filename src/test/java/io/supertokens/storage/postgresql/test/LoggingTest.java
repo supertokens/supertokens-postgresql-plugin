@@ -44,7 +44,6 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Scanner;
 
 import static org.junit.Assert.*;
@@ -285,9 +284,9 @@ public class LoggingTest {
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                 tenant,
                 new EmailPasswordConfig(true),
-                new ThirdPartyConfig(true, null),
+                new ThirdPartyConfig(true, true, null),
                 new PasswordlessConfig(true),
-                null, null,
+                null, true, null,
                 config
         ), false);
 
@@ -517,9 +516,9 @@ public class LoggingTest {
                         new TenantConfig(
                                 tenantIdentifier,
                                 new EmailPasswordConfig(true),
-                                new ThirdPartyConfig(true, null),
+                                new ThirdPartyConfig(true, true, null),
                                 new PasswordlessConfig(true),
-                                null, null, config
+                                null, true, null, config
                         ));
 
                 process.kill();
@@ -562,9 +561,9 @@ public class LoggingTest {
                             new TenantConfig(
                                     tenantIdentifier,
                                     new EmailPasswordConfig(true),
-                                    new ThirdPartyConfig(true, null),
+                                    new ThirdPartyConfig(true, true, null),
                                     new PasswordlessConfig(true),
-                                    null, null,
+                                    null, true, null,
                                     new JsonObject()));
 
                 } catch (Exception e) {

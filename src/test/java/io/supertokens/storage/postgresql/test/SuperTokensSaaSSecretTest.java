@@ -87,9 +87,9 @@ public class SuperTokensSaaSSecretTest {
                 JsonObject j = new JsonObject();
                 j.addProperty(PROTECTED_DB_CONFIG[i], "");
                 Multitenancy.addNewOrUpdateAppOrTenant(process.main, new TenantConfig(new TenantIdentifier(null, null, "t1"), new EmailPasswordConfig(false),
-                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
-                        null, null,
+                        null, true, null,
                         j), true);
                 fail();
             } catch (BadPermissionException e) {
@@ -164,9 +164,9 @@ public class SuperTokensSaaSSecretTest {
             }
             Multitenancy.addNewOrUpdateAppOrTenant(process.main, new TenantConfig(new TenantIdentifier(null, null, "t1"),
                     new EmailPasswordConfig(false),
-                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                    new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                     new PasswordlessConfig(false),
-                    null, null,
+                    null, true, null,
                     j), false);
         }
 
@@ -217,9 +217,9 @@ public class SuperTokensSaaSSecretTest {
             }
             Multitenancy.addNewOrUpdateAppOrTenant(process.main, new TenantIdentifier(null, null, null),
                     new TenantConfig(new TenantIdentifier(null, null, "t" + i), new EmailPasswordConfig(false),
-                            new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                            new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                             new PasswordlessConfig(false),
-                            null, null,
+                            null, true, null,
                             j));
 
             {

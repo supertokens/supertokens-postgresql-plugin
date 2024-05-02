@@ -27,11 +27,7 @@ import com.google.gson.JsonObject;
 import io.supertokens.pluginInterface.ConfigFieldInfo;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.storage.postgresql.Start;
-import io.supertokens.storage.postgresql.annotations.ConnectionPoolProperty;
-import io.supertokens.storage.postgresql.annotations.IgnoreForAnnotationCheck;
-import io.supertokens.storage.postgresql.annotations.NotConflictingWithinUserPool;
-import io.supertokens.storage.postgresql.annotations.ConfigDescription;
-import io.supertokens.storage.postgresql.annotations.UserPoolProperty;
+import io.supertokens.storage.postgresql.annotations.*;
 
 import java.lang.reflect.Field;
 import java.net.URI;
@@ -52,6 +48,7 @@ public class PostgreSQLConfig {
     @JsonProperty
     @ConnectionPoolProperty
     @ConfigDescription("Defines the connection pool size to PostgreSQL. (Default: 10)")
+    @EditableInDashboard
     private int postgresql_connection_pool_size = 10;
 
     @JsonProperty
@@ -62,6 +59,7 @@ public class PostgreSQLConfig {
     @JsonProperty
     @UserPoolProperty
     @ConfigDescription("Specify the port to use when connecting to PostgreSQL instance. (Default: 5432)")
+    @EditableInDashboard
     private int postgresql_port = -1;
 
     @JsonProperty
@@ -140,11 +138,13 @@ public class PostgreSQLConfig {
     @JsonProperty
     @ConnectionPoolProperty
     @ConfigDescription("Timeout in milliseconds for the idle connections to be closed. (Default: 60000)")
+    @EditableInDashboard
     private long postgresql_idle_connection_timeout = 60000;
 
     @JsonProperty
     @ConnectionPoolProperty
     @ConfigDescription("Minimum number of idle connections to be kept active. If not set, minimum idle connections will be same as the connection pool size. (Default: null)")
+    @EditableInDashboard
     private Integer postgresql_minimum_idle_connections = null;
 
     @IgnoreForAnnotationCheck
@@ -204,11 +204,11 @@ public class PostgreSQLConfig {
                 JsonElement defaultValue = defaultConfig.get(field.getName());
                 boolean isNullable = defaultValue == null;
 
-                boolean isEditable = field.isAnnotationPresent(ConnectionPoolProperty.class);
+                boolean isEditable = field.isAnnotationPresent(EditableInDashboard.class);
 
                 result.add(new ConfigFieldInfo(
-                        key, valueType, value, description, isSaasProtected, isDifferentAcrossTenants,
-                        isConfigYamlOnly, possibleValues, isNullable, defaultValue, true, isEditable));
+                        key, valueType, value, description, isDifferentAcrossTenants,
+                        possibleValues, isNullable, defaultValue, true, isEditable));
 
             } catch (NoSuchFieldException e) {
                 continue;

@@ -49,7 +49,6 @@ import org.junit.rules.TestRule;
 
 import java.io.IOException;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -111,9 +110,9 @@ public class StorageLayerTest {
 
         TenantConfig[] tenants = new TenantConfig[]{
                 new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
-                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
-                        null, null,
+                        null, true, null,
                         tenantConfig)};
 
         Config.loadAllTenantConfig(process.getProcess(), tenants);
@@ -162,9 +161,9 @@ public class StorageLayerTest {
 
         TenantConfig[] tenants = new TenantConfig[]{
                 new TenantConfig(new TenantIdentifier(null, "abc", null), new EmailPasswordConfig(false),
-                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
-                        null, null,
+                        null, true, null,
                         tenantConfig)};
 
         Config.loadAllTenantConfig(process.getProcess(), tenants);
@@ -210,19 +209,19 @@ public class StorageLayerTest {
 
         TenantConfig[] tenants = new TenantConfig[]{
                 new TenantConfig(new TenantIdentifier(null, "abc", null), new EmailPasswordConfig(false),
-                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
-                        null, null,
+                        null, true, null,
                         tenantConfig),
                 new TenantConfig(new TenantIdentifier(null, "abc", "t1"), new EmailPasswordConfig(false),
-                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
-                        null, null,
+                        null, true, null,
                         tenantConfig1),
                 new TenantConfig(new TenantIdentifier(null, null, "t2"), new EmailPasswordConfig(false),
-                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
-                        null, null,
+                        null, true, null,
                         tenantConfig1)};
 
         Config.loadAllTenantConfig(process.getProcess(), tenants);
@@ -285,9 +284,9 @@ public class StorageLayerTest {
         try {
             TenantConfig[] tenants = new TenantConfig[]{
                     new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
-                            new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                            new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                             new PasswordlessConfig(false),
-                            null, null,
+                            null, true, null,
                             tenantConfig)};
             Config.loadAllTenantConfig(process.getProcess(), tenants);
 
@@ -319,9 +318,9 @@ public class StorageLayerTest {
         try {
             TenantConfig[] tenants = new TenantConfig[]{
                     new TenantConfig(new TenantIdentifier(null, "abc", null), new EmailPasswordConfig(false),
-                            new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                            new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                             new PasswordlessConfig(false),
-                            null, null,
+                            null, true, null,
                             tenantConfig)};
             Config.loadAllTenantConfig(process.getProcess(), tenants);
 
@@ -354,9 +353,9 @@ public class StorageLayerTest {
         try {
             TenantConfig[] tenants = new TenantConfig[]{
                     new TenantConfig(new TenantIdentifier(null, "abc", null), new EmailPasswordConfig(false),
-                            new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                            new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                             new PasswordlessConfig(false),
-                            null, null,
+                            null, true, null,
                             tenantConfig)};
             Config.loadAllTenantConfig(process.getProcess(), tenants);
 
@@ -390,9 +389,9 @@ public class StorageLayerTest {
 
         TenantConfig[] tenants = new TenantConfig[]{
                 new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
-                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
-                        null, null,
+                        null, true, null,
                         tenantConfig)};
         Config.loadAllTenantConfig(process.getProcess(), tenants);
 
@@ -441,9 +440,9 @@ public class StorageLayerTest {
 
         TenantConfig[] tenants = new TenantConfig[]{
                 new TenantConfig(new TenantIdentifier(null, "abc", null), new EmailPasswordConfig(false),
-                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
-                        null, null,
+                        null, true, null,
                         tenantConfig)};
 
         Config.loadAllTenantConfig(process.getProcess(), tenants);
@@ -489,9 +488,9 @@ public class StorageLayerTest {
                     .modifyConfigToAddANewUserPoolForTesting(tenantConfig, 2);
             tenantConfig.add("postgresql_connection_pool_size", new JsonPrimitive(12));
             tenants[0] = new TenantConfig(new TenantIdentifier("c1", null, null), new EmailPasswordConfig(false),
-                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                    new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                     new PasswordlessConfig(false),
-                    null, null,
+                    null, true, null,
                     tenantConfig);
         }
 
@@ -501,9 +500,9 @@ public class StorageLayerTest {
                     .modifyConfigToAddANewUserPoolForTesting(tenantConfig, 2);
             tenantConfig.add("postgresql_connection_pool_size", new JsonPrimitive(13));
             tenants[1] = new TenantConfig(new TenantIdentifier("c1", null, "t1"), new EmailPasswordConfig(false),
-                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                    new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                     new PasswordlessConfig(false),
-                    null, null,
+                    null, true, null,
                     tenantConfig);
         }
 
@@ -511,9 +510,9 @@ public class StorageLayerTest {
             JsonObject tenantConfig = new JsonObject();
             tenantConfig.add("postgresql_connection_pool_size", new JsonPrimitive(14));
             tenants[2] = new TenantConfig(new TenantIdentifier(null, null, "t2"), new EmailPasswordConfig(false),
-                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                    new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                     new PasswordlessConfig(false),
-                    null, null,
+                    null, true, null,
                     tenantConfig);
         }
 
@@ -521,9 +520,9 @@ public class StorageLayerTest {
             JsonObject tenantConfig = new JsonObject();
             tenantConfig.add("postgresql_connection_pool_size", new JsonPrimitive(15));
             tenants[3] = new TenantConfig(new TenantIdentifier(null, null, "t1"), new EmailPasswordConfig(false),
-                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                    new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                     new PasswordlessConfig(false),
-                    null, null,
+                    null, true, null,
                     tenantConfig);
         }
 
@@ -585,9 +584,9 @@ public class StorageLayerTest {
 
         TenantConfig[] tenants = new TenantConfig[]{
                 new TenantConfig(new TenantIdentifier("abc", null, null), new EmailPasswordConfig(false),
-                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
-                        null, null,
+                        null, true, null,
                         tenantConfig)};
         Config.loadAllTenantConfig(process.getProcess(), tenants);
 
@@ -628,9 +627,9 @@ public class StorageLayerTest {
 
         TenantConfig[] tenants = new TenantConfig[]{
                 new TenantConfig(new TenantIdentifier(null, "abc", null), new EmailPasswordConfig(false),
-                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
-                        null, null,
+                        null, true, null,
                         tenantConfig)};
         Config.loadAllTenantConfig(process.getProcess(), tenants);
 
@@ -664,9 +663,9 @@ public class StorageLayerTest {
 
         TenantConfig[] tenants = new TenantConfig[]{
                 new TenantConfig(new TenantIdentifier(null, "abc", null), new EmailPasswordConfig(false),
-                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
-                        null, null,
+                        null, true, null,
                         tenantConfig)};
         Config.loadAllTenantConfig(process.getProcess(), tenants);
 
@@ -704,9 +703,9 @@ public class StorageLayerTest {
                 config.addProperty("postgresql_database_name", "st" + insideLoop);
                 tenants[insideLoop] = new TenantConfig(new TenantIdentifier(null, "a" + insideLoop, null),
                         new EmailPasswordConfig(false),
-                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                        new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                         new PasswordlessConfig(false),
-                        null, null,
+                        null, true, null,
                         config);
                 try {
                     Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantIdentifier(null, null, null),
@@ -758,9 +757,9 @@ public class StorageLayerTest {
 
         TenantConfig tenantConfig = new TenantConfig(new TenantIdentifier("abc", null, null),
                 new EmailPasswordConfig(false),
-                new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                 new PasswordlessConfig(false),
-                null, null,
+                null, true, null,
                 tenantConfigJson);
 
         try {
@@ -800,9 +799,9 @@ public class StorageLayerTest {
 
             TenantConfig tenantConfig = new TenantConfig(tid,
                     new EmailPasswordConfig(true),
-                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                    new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                     new PasswordlessConfig(false),
-                    null, null,
+                    null, true, null,
                     tenantConfigJson);
 
             StorageLayer.getMultitenancyStorage(process.getProcess()).createTenant(tenantConfig);
@@ -881,9 +880,9 @@ public class StorageLayerTest {
 
         TenantConfig tenantConfig = new TenantConfig(new TenantIdentifier("abc", null, null),
                 new EmailPasswordConfig(false),
-                new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                new ThirdPartyConfig(false, true, new ThirdPartyConfig.Provider[0]),
                 new PasswordlessConfig(false),
-                null, null,
+                null, true, null,
                 tenantConfigJson);
 
         try {

@@ -82,9 +82,9 @@ public class TestUserPoolIdChangeBehaviour {
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                 tenantIdentifier,
                 new EmailPasswordConfig(true),
-                new ThirdPartyConfig(true, null),
+                new ThirdPartyConfig(true, true, null),
                 new PasswordlessConfig(true),
-                null, null,
+                null, true, null,
                 coreConfig
         ), false);
 
@@ -100,9 +100,9 @@ public class TestUserPoolIdChangeBehaviour {
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                 tenantIdentifier,
                 new EmailPasswordConfig(true),
-                new ThirdPartyConfig(true, null),
+                new ThirdPartyConfig(true, true, null),
                 new PasswordlessConfig(true),
-                null, null,
+                null, true, null,
                 coreConfig
         ), false);
 
@@ -129,9 +129,9 @@ public class TestUserPoolIdChangeBehaviour {
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                 tenantIdentifier,
                 new EmailPasswordConfig(true),
-                new ThirdPartyConfig(true, null),
+                new ThirdPartyConfig(true, true, null),
                 new PasswordlessConfig(true),
-                null, null,
+                null, true, null,
                 coreConfig
         ), false);
 
@@ -147,9 +147,9 @@ public class TestUserPoolIdChangeBehaviour {
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                 tenantIdentifier,
                 new EmailPasswordConfig(true),
-                new ThirdPartyConfig(true, null),
+                new ThirdPartyConfig(true, true, null),
                 new PasswordlessConfig(true),
-                null, null,
+                null, true, null,
                 coreConfig
         ), false);
 
