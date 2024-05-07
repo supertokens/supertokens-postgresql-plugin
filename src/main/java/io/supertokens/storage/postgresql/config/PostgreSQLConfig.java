@@ -65,12 +65,12 @@ public class PostgreSQLConfig {
 
     @JsonProperty
     @ConnectionPoolProperty
-    @ConfigDescription("The PostgreSQL user to use to query the database. If the relevant tables are not already created by you, this user should have the ability to create new tables. To see the tables needed, visit: https://supertokens.io/docs/community/getting-started/database-setup/postgresql")
+    @ConfigDescription("The PostgreSQL user to use to query the database. If the relevant tables are not already created by you, this user should have the ability to create new tables. To see the tables needed, visit: https://supertokens.com/docs/thirdpartyemailpassword/pre-built-ui/setup/database-setup/postgresql. (Default: null)")
     private String postgresql_user = null;
 
     @JsonProperty
     @ConnectionPoolProperty
-    @ConfigDescription("Password for the PostgreSQL user. If you have not set a password make this an empty string.")
+    @ConfigDescription("Password for the PostgreSQL user. If you have not set a password make this an empty string. (Default: null)")
     private String postgresql_password = null;
 
     @JsonProperty
@@ -167,7 +167,14 @@ public class PostgreSQLConfig {
 
         JsonObject tenantConfig = new Gson().toJsonTree(Config.getConfig(start)).getAsJsonObject();
 
-        JsonObject defaultConfig = new Gson().toJsonTree(new PostgreSQLConfig()).getAsJsonObject();
+        PostgreSQLConfig defaultConfigObj = new PostgreSQLConfig();
+        try {
+            defaultConfigObj.validateAndNormalise(true); // skip validation and just populate defaults
+        } catch (InvalidConfigException e) {
+            throw new IllegalStateException(e); // should never happen
+        }
+
+        JsonObject defaultConfig = new Gson().toJsonTree(defaultConfigObj).getAsJsonObject();
 
         for (String fieldId : PostgreSQLConfig.getValidFields()) {
             try {
@@ -419,41 +426,47 @@ public class PostgreSQLConfig {
     }
 
     public void validateAndNormalise() throws InvalidConfigException {
+        validateAndNormalise(false);
+    }
+
+    private void validateAndNormalise(boolean skipValidation) throws InvalidConfigException {
         if (isValidAndNormalised) {
             return;
         }
 
-        if (postgresql_connection_uri != null) {
-            try {
-                URI ignored = URI.create(postgresql_connection_uri);
-            } catch (Exception e) {
-                throw new InvalidConfigException(
-                        "The provided postgresql connection URI has an incorrect format. Please use a format like "
-                                + "postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2...");
-            }
-        } else {
-            if (this.getUser() == null) {
-                throw new InvalidConfigException(
-                        "'postgresql_user' and 'postgresql_connection_uri' are not set. Please set at least one of "
-                                + "these values");
-            }
-        }
-
-        if (postgresql_connection_pool_size <= 0) {
-            throw new InvalidConfigException(
-                    "'postgresql_connection_pool_size' in the config.yaml file must be > 0");
-        }
-
-        if (postgresql_minimum_idle_connections != null) {
-            if (postgresql_minimum_idle_connections < 0) {
-                throw new InvalidConfigException(
-                        "'postgresql_minimum_idle_connections' must be >= 0");
+        if (!skipValidation) {
+            if (postgresql_connection_uri != null) {
+                try {
+                    URI ignored = URI.create(postgresql_connection_uri);
+                } catch (Exception e) {
+                    throw new InvalidConfigException(
+                            "The provided postgresql connection URI has an incorrect format. Please use a format like "
+                                    + "postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2...");
+                }
+            } else {
+                if (this.getUser() == null) {
+                    throw new InvalidConfigException(
+                            "'postgresql_user' and 'postgresql_connection_uri' are not set. Please set at least one of "
+                                    + "these values");
+                }
             }
 
-            if (postgresql_minimum_idle_connections > postgresql_connection_pool_size) {
+            if (postgresql_connection_pool_size <= 0) {
                 throw new InvalidConfigException(
-                        "'postgresql_minimum_idle_connections' must be less than or equal to "
-                                + "'postgresql_connection_pool_size'");
+                        "'postgresql_connection_pool_size' in the config.yaml file must be > 0");
+            }
+
+            if (postgresql_minimum_idle_connections != null) {
+                if (postgresql_minimum_idle_connections < 0) {
+                    throw new InvalidConfigException(
+                            "'postgresql_minimum_idle_connections' must be >= 0");
+                }
+
+                if (postgresql_minimum_idle_connections > postgresql_connection_pool_size) {
+                    throw new InvalidConfigException(
+                            "'postgresql_minimum_idle_connections' must be less than or equal to "
+                                    + "'postgresql_connection_pool_size'");
+                }
             }
         }
 

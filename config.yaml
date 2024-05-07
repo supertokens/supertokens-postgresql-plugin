@@ -22,7 +22,7 @@ postgresql_config_version: 0
 
 # (DIFFERENT_ACROSS_TENANTS | COMPULSORY) string value. The PostgreSQL user to use to query the database.
 # If the relevant tables are not already created by you, this user should have the
-# ability to create new tables. To see the tables needed, visit: https://supertokens.io/docs/community/getting-started/database-setup/postgresql
+# ability to create new tables. To see the tables needed, visit: https://supertokens.com/docs/thirdpartyemailpassword/pre-built-ui/setup/database-setup/postgresql
 # postgresql_user:
 
 # (DIFFERENT_ACROSS_TENANTS | COMPULSORY) string value. Password for the PostgreSQL user. If you have not set a password
