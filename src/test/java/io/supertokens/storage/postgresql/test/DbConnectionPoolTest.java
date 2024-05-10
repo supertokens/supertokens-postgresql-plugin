@@ -79,9 +79,9 @@ public class DbConnectionPoolTest {
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                 new TenantIdentifier(null, null, "t1"),
                 new EmailPasswordConfig(true),
-                new ThirdPartyConfig(true, true, null),
+                new ThirdPartyConfig(true, null),
                 new PasswordlessConfig(true),
-                null, true, null, config
+                null, null, config
         ), false);
 
         Thread.sleep(1000); // let the new tenant be ready
@@ -94,9 +94,9 @@ public class DbConnectionPoolTest {
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                 new TenantIdentifier(null, null, "t1"),
                 new EmailPasswordConfig(true),
-                new ThirdPartyConfig(true, true, null),
+                new ThirdPartyConfig(true, null),
                 new PasswordlessConfig(true),
-                null, true, null, config
+                null, null, config
         ), false);
 
         Thread.sleep(2000); // let the new tenant be ready
@@ -137,9 +137,9 @@ public class DbConnectionPoolTest {
             Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                     new TenantIdentifier(null, null, "t1"),
                     new EmailPasswordConfig(true),
-                    new ThirdPartyConfig(true, true, null),
+                    new ThirdPartyConfig(true, null),
                     new PasswordlessConfig(true),
-                    null, true, null, config
+                    null, null, config
             ), false);
 
             Thread.sleep(5000); // let the new tenant be ready
@@ -197,9 +197,9 @@ public class DbConnectionPoolTest {
             Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                     new TenantIdentifier(null, null, "t1"),
                     new EmailPasswordConfig(true),
-                    new ThirdPartyConfig(true, true, null),
+                    new ThirdPartyConfig(true, null),
                     new PasswordlessConfig(true),
-                    null, true, null, config
+                    null, null, config
             ), false);
 
             Thread.sleep(3000); // let the new tenant be ready
@@ -279,9 +279,9 @@ public class DbConnectionPoolTest {
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                 new TenantIdentifier(null, null, "t1"),
                 new EmailPasswordConfig(true),
-                new ThirdPartyConfig(true, true, null),
+                new ThirdPartyConfig(true, null),
                 new PasswordlessConfig(true),
-                null, true, null, config
+                null, null, config
         ), false);
 
         Thread.sleep(1000); // let the new tenant be ready
@@ -295,9 +295,9 @@ public class DbConnectionPoolTest {
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                 new TenantIdentifier(null, null, "t1"),
                 new EmailPasswordConfig(true),
-                new ThirdPartyConfig(true, true, null),
+                new ThirdPartyConfig(true, null),
                 new PasswordlessConfig(true),
-                null, true, null, config
+                null, null, config
         ), false);
 
         Thread.sleep(2000); // let the new tenant be ready
@@ -338,9 +338,9 @@ public class DbConnectionPoolTest {
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                 new TenantIdentifier(null, null, "t1"),
                 new EmailPasswordConfig(true),
-                new ThirdPartyConfig(true, true, null),
+                new ThirdPartyConfig(true, null),
                 new PasswordlessConfig(true),
-                null, true, null, config
+                null, null, config
         ), false);
 
         Thread.sleep(3000); // let the new tenant be ready

@@ -86,9 +86,9 @@ public class AccountLinkingTests {
                 new TenantConfig(
                         tenantIdentifier,
                         new EmailPasswordConfig(true),
-                        new ThirdPartyConfig(true, true, null),
+                        new ThirdPartyConfig(true, null),
                         new PasswordlessConfig(true),
-                        null, true, null,
+                        null, null,
                         coreConfig
                 )
         );
@@ -129,9 +129,9 @@ public class AccountLinkingTests {
                 new TenantConfig(
                         tenantIdentifier,
                         new EmailPasswordConfig(true),
-                        new ThirdPartyConfig(true, true, null),
+                        new ThirdPartyConfig(true, null),
                         new PasswordlessConfig(true),
-                        null, true, null,
+                        null, null,
                         coreConfig
                 )
         );

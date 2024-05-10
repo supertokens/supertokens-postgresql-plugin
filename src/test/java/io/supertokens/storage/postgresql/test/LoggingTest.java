@@ -284,9 +284,9 @@ public class LoggingTest {
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                 tenant,
                 new EmailPasswordConfig(true),
-                new ThirdPartyConfig(true, true, null),
+                new ThirdPartyConfig(true, null),
                 new PasswordlessConfig(true),
-                null, true, null,
+                null, null,
                 config
         ), false);
 
@@ -516,9 +516,9 @@ public class LoggingTest {
                         new TenantConfig(
                                 tenantIdentifier,
                                 new EmailPasswordConfig(true),
-                                new ThirdPartyConfig(true, true, null),
+                                new ThirdPartyConfig(true, null),
                                 new PasswordlessConfig(true),
-                                null, true, null, config
+                                null, null, config
                         ));
 
                 process.kill();
@@ -561,9 +561,9 @@ public class LoggingTest {
                             new TenantConfig(
                                     tenantIdentifier,
                                     new EmailPasswordConfig(true),
-                                    new ThirdPartyConfig(true, true, null),
+                                    new ThirdPartyConfig(true, null),
                                     new PasswordlessConfig(true),
-                                    null, true, null,
+                                    null, null,
                                     new JsonObject()));
 
                 } catch (Exception e) {
