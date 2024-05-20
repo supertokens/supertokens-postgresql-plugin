@@ -59,7 +59,6 @@ public class PostgreSQLConfig {
     @JsonProperty
     @UserPoolProperty
     @ConfigDescription("Specify the port to use when connecting to PostgreSQL instance. (Default: 5432)")
-    @EditableInDashboard
     private int postgresql_port = -1;
 
     @JsonProperty
@@ -179,6 +178,14 @@ public class PostgreSQLConfig {
             try {
                 Field field = PostgreSQLConfig.class.getDeclaredField(fieldId);
                 if (!field.isAnnotationPresent(JsonProperty.class)) {
+                    continue;
+                }
+
+                if (field.getName().endsWith("_table_name")) {
+                    continue; // do not show
+                }
+
+                if (field.getName().equals("postgresql_config_version")) {
                     continue;
                 }
 
