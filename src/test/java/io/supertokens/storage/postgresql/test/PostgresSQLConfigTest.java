@@ -18,7 +18,7 @@
 package io.supertokens.storage.postgresql.test;
 
 import io.supertokens.ProcessState;
-import io.supertokens.storage.postgresql.annotations.ConfigDescription;
+import io.supertokens.storage.postgresql.annotations.DashboardInfo;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 
 import org.junit.AfterClass;
@@ -52,12 +52,6 @@ public class PostgresSQLConfigTest {
     @Before
     public void beforeEach() {
         Utils.reset();
-    }
-
-    @Test
-    public void testAllConfigAreReturnedCorrectly() throws Exception {
-        // PostgreSQLConfig.getConfigFieldsInfo();
-        // TODO test
     }
 
     @Test
@@ -137,25 +131,32 @@ public class PostgresSQLConfigTest {
                     continue;
                 }
 
-                String descriptionInConfig = field.getAnnotation(ConfigDescription.class).value();
+
+                String valueInfo = "";
+                if (field.getType() == String.class) {
+                    valueInfo = "string value.";
+                } else if (field.getType() == int.class || field.getType() == Integer.class) {
+                    valueInfo = "integer value.";
+                } else if (field.getType() == long.class) {
+                    valueInfo = "long value.";
+                } else if (field.getType() == boolean.class || field.getType() == Boolean.class) {
+                    valueInfo = "boolean value.";
+                }
+
+                String descriptionInConfig = field.getAnnotation(DashboardInfo.class).description();
+                descriptionInConfig = "(DIFFERENT_ACROSS_TENANTS" + (field.getAnnotation(DashboardInfo.class).isOptional() ? " | OPTIONAL" : " | COMPULSORY")
+                        + (field.getAnnotation(DashboardInfo.class).isOptional() ? " | Default: " + field.getAnnotation(DashboardInfo.class).defaultValue() : "")
+                        + ") "
+                        + valueInfo + " "
+                        + descriptionInConfig;
                 String descriptionInYaml = propertyDescriptions.get(fieldId);
 
                 if (descriptionInYaml == null) {
                     fail("Unable to find description or property for " + fieldId + " in " + path + " file");
                 }
 
-                // Remove the default value from config, since we add default value at the end
-                // config description
-                descriptionInConfig = descriptionInConfig.replaceAll("\\s\\[Default:.*|\\s\\(Default:.*", "").trim();
-                // Remove period from end if present, since not all descriptions in
-                // config.yaml have that
-                descriptionInConfig = descriptionInConfig.replaceAll("\\.$", "").trim();
-
                 // Assert that description in yaml contains the description in config
-                if (!descriptionInYaml.contains(descriptionInConfig)) {
-                    fail("Description in config class for " + fieldId + " does not match description in " + path
-                            + " file");
-                }
+                assertEquals("For " + fieldId, descriptionInYaml.trim(), descriptionInConfig.trim());
             }
         }
     }

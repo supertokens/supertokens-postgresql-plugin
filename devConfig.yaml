@@ -39,7 +39,7 @@ postgresql_password: "root"
 # postgresql_table_schema:
 
 # (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: "") string value. A prefix to add to all table names managed by
-# SuperTokens. An "_" will be added between this prefix and the actual table name if the prefix is defined
+# SuperTokens. An "_" will be added between this prefix and the actual table name if the prefix is defined.
 # postgresql_table_names_prefix:
 
 # (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: "key_value") string value. Specify the name of the table that will

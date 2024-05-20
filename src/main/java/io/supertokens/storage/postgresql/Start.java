@@ -2832,7 +2832,7 @@ public class Start
 
     @Override
     public List<ConfigFieldInfo> getConfigFieldsInfoForDashboard() {
-        return PostgreSQLConfig.getConfigFieldsInfo(this);
+        return PostgreSQLConfig.getConfigFieldsInfoForDashboard(this);
     }
 
     @Override

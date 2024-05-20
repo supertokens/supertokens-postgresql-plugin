@@ -27,6 +27,9 @@ import java.lang.annotation.Target;
  */
 @Retention(RetentionPolicy.RUNTIME) // Make annotation accessible at runtime so that config descriptions can be read from API
 @Target(ElementType.FIELD) // Annotation can only be applied to fields
-public @interface ConfigDescription {
-   String value(); // String value that provides a description for the configuration field
+public @interface DashboardInfo {
+    String description() default "";
+    boolean isOptional() default false;
+    String defaultValue() default "";
+    boolean isEditable() default false;
 }

@@ -42,108 +42,104 @@ public class PostgreSQLConfig {
 
     @JsonProperty
     @IgnoreForAnnotationCheck
-    @ConfigDescription("The version of the config.")
     private int postgresql_config_version = -1;
 
     @JsonProperty
     @ConnectionPoolProperty
-    @ConfigDescription("Defines the connection pool size to PostgreSQL. (Default: 10)")
-    @EditableInDashboard
+    @DashboardInfo(description = "Defines the connection pool size to PostgreSQL. Please see https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing", defaultValue = "10", isOptional = true, isEditable = true)
     private int postgresql_connection_pool_size = 10;
 
     @JsonProperty
     @UserPoolProperty
-    @ConfigDescription("Specify the postgresql host url here. (Default: localhost)")
+    @DashboardInfo(description = "Specify the postgresql host url here. For example: - \"localhost\" - \"192.168.0.1\" - \"<IP to cloud instance>\" - \"example.com\"", defaultValue = "\"localhost\"", isOptional = true)
     private String postgresql_host = null;
 
     @JsonProperty
     @UserPoolProperty
-    @ConfigDescription("Specify the port to use when connecting to PostgreSQL instance. (Default: 5432)")
+    @DashboardInfo(description = "Specify the port to use when connecting to PostgreSQL instance.", defaultValue = "5432", isOptional = true)
     private int postgresql_port = -1;
 
     @JsonProperty
     @ConnectionPoolProperty
-    @ConfigDescription("The PostgreSQL user to use to query the database. If the relevant tables are not already created by you, this user should have the ability to create new tables. To see the tables needed, visit: https://supertokens.com/docs/thirdpartyemailpassword/pre-built-ui/setup/database-setup/postgresql. (Default: null)")
+    @DashboardInfo(description = "The PostgreSQL user to use to query the database. If the relevant tables are not already created by you, this user should have the ability to create new tables. To see the tables needed, visit: https://supertokens.com/docs/thirdpartyemailpassword/pre-built-ui/setup/database-setup/postgresql", defaultValue = "null")
     private String postgresql_user = null;
 
     @JsonProperty
     @ConnectionPoolProperty
-    @ConfigDescription("Password for the PostgreSQL user. If you have not set a password make this an empty string. (Default: null)")
+    @DashboardInfo(description = "Password for the PostgreSQL user. If you have not set a password make this an empty string.", defaultValue = "null")
     private String postgresql_password = null;
 
     @JsonProperty
     @UserPoolProperty
-    @ConfigDescription("The database name to store SuperTokens related data. (Default: supertokens)")
+    @DashboardInfo(description = "The database name to store SuperTokens related data.", defaultValue = "\"supertokens\"", isOptional = true)
     private String postgresql_database_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
-    @ConfigDescription("A prefix to add to all table names managed by SuperTokens. An \"_\" will be added between this prefix and the actual table name if the prefix is defined. (Default: \"\")")
+    @DashboardInfo(description = "A prefix to add to all table names managed by SuperTokens. An \"_\" will be added between this prefix and the actual table name if the prefix is defined.", defaultValue = "\"\"", isOptional = true)
     private String postgresql_table_names_prefix = "";
 
     @JsonProperty
     @NotConflictingWithinUserPool
-    @ConfigDescription("Specify the name of the table that will store secret keys and app info necessary for the functioning sessions. (Default: \"key_value\")")
+    @DashboardInfo(description = "Specify the name of the table that will store secret keys and app info necessary for the functioning sessions.", defaultValue = "\"key_value\"", isOptional = true)
     private String postgresql_key_value_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
-    @ConfigDescription("Specify the name of the table that will store the session info for users. (Default: \"session_info\")")
+    @DashboardInfo(description = "Specify the name of the table that will store the session info for users.", defaultValue = "\"session_info\"", isOptional = true)
     private String postgresql_session_info_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
-    @ConfigDescription("Specify the name of the table that will store the user information, along with their email and hashed password. (Default: \"emailpassword_users\")")
+    @DashboardInfo(description = "Specify the name of the table that will store the user information, along with their email and hashed password.", defaultValue = "\"emailpassword_users\"", isOptional = true)
     private String postgresql_emailpassword_users_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
-    @ConfigDescription("Specify the name of the table that will store the password reset tokens for users. (Default: \"emailpassword_pswd_reset_tokens\")")
+    @DashboardInfo(description = "Specify the name of the table that will store the password reset tokens for users.", defaultValue = "\"emailpassword_pswd_reset_tokens\"", isOptional = true)
     private String postgresql_emailpassword_pswd_reset_tokens_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
-    @ConfigDescription("Specify the name of the table that will store the email verification tokens for users. (Default: \"emailverification_tokens\")")
+    @DashboardInfo(description = "Specify the name of the table that will store the email verification tokens for users.", defaultValue = "\"emailverification_tokens\"", isOptional = true)
     private String postgresql_emailverification_tokens_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
-    @ConfigDescription("Specify the name of the table that will store the verified email addresses. (Default: \"emailverification_verified_emails\")")
+    @DashboardInfo(description = "Specify the name of the table that will store the verified email addresses.", defaultValue = "\"emailverification_verified_emails\"", isOptional = true)
     private String postgresql_emailverification_verified_emails_table_name = null;
 
     @JsonProperty
     @NotConflictingWithinUserPool
-    @ConfigDescription("Specify the name of the table that will store the thirdparty recipe users. (Default: \"thirdparty_users\")")
+    @DashboardInfo(description = "Specify the name of the table that will store the thirdparty recipe users.", defaultValue = "\"thirdparty_users\"", isOptional = true)
     private String postgresql_thirdparty_users_table_name = null;
 
     @JsonProperty
     @UserPoolProperty
-    @ConfigDescription("The schema for tables. (Default: public)")
+    @DashboardInfo(description = "The schema for tables.", defaultValue = "\"public\"", isOptional = true)
     private String postgresql_table_schema = "public";
 
     @JsonProperty
     @IgnoreForAnnotationCheck
-    @ConfigDescription("Specify the PostgreSQL connection URI in the following format: postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2... Values provided via other configs will override values provided by this config. (Default: null)")
+    @DashboardInfo(description = "Specify the PostgreSQL connection URI in the following format: postgresql://[user[:[password]]@]host[:port][/dbname][?attr1=val1&attr2=val2... Values provided via other configs will override values provided by this config.", defaultValue = "null", isOptional = true)
     private String postgresql_connection_uri = null;
 
     @ConnectionPoolProperty
-    @ConfigDescription("The connection attributes of the PostgreSQL database.")
+    @DashboardInfo(description = "The connection attributes of the PostgreSQL database.", defaultValue = "\"allowPublicKeyRetrieval=true\"", isOptional = true)
     private String postgresql_connection_attributes = "allowPublicKeyRetrieval=true";
 
     @ConnectionPoolProperty
-    @ConfigDescription("The scheme of the PostgreSQL database.")
+    @DashboardInfo(description = "The scheme of the PostgreSQL database.", defaultValue = "\"postgresql\"", isOptional = true)
     private String postgresql_connection_scheme = "postgresql";
 
     @JsonProperty
     @ConnectionPoolProperty
-    @ConfigDescription("Timeout in milliseconds for the idle connections to be closed. (Default: 60000)")
-    @EditableInDashboard
+    @DashboardInfo(description = "Timeout in milliseconds for the idle connections to be closed.", defaultValue = "60000", isOptional = true, isEditable = true)
     private long postgresql_idle_connection_timeout = 60000;
 
     @JsonProperty
     @ConnectionPoolProperty
-    @ConfigDescription("Minimum number of idle connections to be kept active. If not set, minimum idle connections will be same as the connection pool size. (Default: null)")
-    @EditableInDashboard
+    @DashboardInfo(description = "Minimum number of idle connections to be kept active. If not set, minimum idle connections will be same as the connection pool size.", defaultValue = "null", isOptional = true, isEditable = true)
     private Integer postgresql_minimum_idle_connections = null;
 
     @IgnoreForAnnotationCheck
@@ -160,7 +156,7 @@ public class PostgreSQLConfig {
         return validFields;
     }
 
-    public static ArrayList<ConfigFieldInfo> getConfigFieldsInfo(Start start) {
+    public static ArrayList<ConfigFieldInfo> getConfigFieldsInfoForDashboard(Start start) {
         ArrayList<ConfigFieldInfo> result = new ArrayList<ConfigFieldInfo>();
 
         JsonObject tenantConfig = new Gson().toJsonTree(Config.getConfig(start)).getAsJsonObject();
@@ -177,7 +173,7 @@ public class PostgreSQLConfig {
         for (String fieldId : PostgreSQLConfig.getValidFields()) {
             try {
                 Field field = PostgreSQLConfig.class.getDeclaredField(fieldId);
-                if (!field.isAnnotationPresent(JsonProperty.class)) {
+                if (!field.isAnnotationPresent(DashboardInfo.class)) {
                     continue;
                 }
 
@@ -185,13 +181,9 @@ public class PostgreSQLConfig {
                     continue; // do not show
                 }
 
-                if (field.getName().equals("postgresql_config_version")) {
-                    continue;
-                }
-
                 String key = field.getName();
-                String description = field.isAnnotationPresent(ConfigDescription.class)
-                        ? field.getAnnotation(ConfigDescription.class).value()
+                String description = field.isAnnotationPresent(DashboardInfo.class)
+                        ? field.getAnnotation(DashboardInfo.class).description()
                         : "";
                 boolean isDifferentAcrossTenants = true;
 
@@ -214,7 +206,7 @@ public class PostgreSQLConfig {
                 JsonElement defaultValue = defaultConfig.get(field.getName());
                 boolean isNullable = defaultValue == null;
 
-                boolean isEditable = field.isAnnotationPresent(EditableInDashboard.class);
+                boolean isEditable = field.getAnnotation(DashboardInfo.class).isEditable();
 
                 result.add(new ConfigFieldInfo(
                         key, valueType, value, description, isDifferentAcrossTenants,
