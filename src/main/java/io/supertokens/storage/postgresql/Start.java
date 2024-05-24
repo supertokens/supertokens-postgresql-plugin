@@ -113,7 +113,9 @@ public class Start
     private static String[] PROTECTED_DB_CONFIG = new String[]{"postgresql_connection_pool_size",
             "postgresql_connection_uri", "postgresql_host", "postgresql_port", "postgresql_user", "postgresql_password",
             "postgresql_database_name", "postgresql_table_schema", "postgresql_idle_connection_timeout",
-            "postgresql_minimum_idle_connections"};
+            "postgresql_minimum_idle_connections", "postgresql_connection_attributes", "postgresql_connection_scheme",
+            "postgresql_table_names_prefix"
+    };
     private static final Object appenderLock = new Object();
     public static boolean silent = false;
     private ResourceDistributor resourceDistributor = new ResourceDistributor();
@@ -2831,7 +2833,7 @@ public class Start
     }
 
     @Override
-    public List<ConfigFieldInfo> getConfigFieldsInfoForDashboard() {
+    public List<ConfigFieldInfo> getPluginConfigFieldsInfo() {
         return PostgreSQLConfig.getConfigFieldsInfoForDashboard(this);
     }
 
