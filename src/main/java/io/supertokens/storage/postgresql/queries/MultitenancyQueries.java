@@ -51,6 +51,8 @@ public class MultitenancyQueries {
                 + "email_password_enabled BOOLEAN,"
                 + "passwordless_enabled BOOLEAN,"
                 + "third_party_enabled BOOLEAN,"
+                + "is_first_factors_null BOOLEAN,"
+                + "is_third_party_providers_null BOOLEAN,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tenantConfigsTable, null, "pkey") + " PRIMARY KEY (connection_uri_domain, app_id, tenant_id)"
                 + ");";
         // @formatter:on
@@ -173,11 +175,13 @@ public class MultitenancyQueries {
 
         TenantConfigSQLHelper.create(start, sqlCon, tenantConfig);
 
-        for (ThirdPartyConfig.Provider provider : tenantConfig.thirdPartyConfig.providers) {
-            ThirdPartyProviderSQLHelper.create(start, sqlCon, tenantConfig, provider);
+        if (tenantConfig.thirdPartyConfig.providers != null) {
+            for (ThirdPartyConfig.Provider provider : tenantConfig.thirdPartyConfig.providers) {
+                ThirdPartyProviderSQLHelper.create(start, sqlCon, tenantConfig, provider);
 
-            for (ThirdPartyConfig.ProviderClient providerClient : provider.clients) {
-                ThirdPartyProviderClientSQLHelper.create(start, sqlCon, tenantConfig, provider, providerClient);
+                for (ThirdPartyConfig.ProviderClient providerClient : provider.clients) {
+                    ThirdPartyProviderClientSQLHelper.create(start, sqlCon, tenantConfig, provider, providerClient);
+                }
             }
         }
 

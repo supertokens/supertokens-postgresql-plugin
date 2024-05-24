@@ -16,15 +16,11 @@
 
 package io.supertokens.storage.postgresql.queries.multitenancy;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.*;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.queries.utils.JsonUtils;
-import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -56,12 +52,16 @@ public class TenantConfigSQLHelper {
         @Override
         public TenantConfig map(ResultSet result) throws StorageQueryException {
             try {
+                boolean isFirstFactorsNull = result.getBoolean("is_first_factors_null");
+                boolean isThirdPartyProvidersNull = result.getBoolean("is_third_party_providers_null");
                 return new TenantConfig(
                         new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id")),
                         new EmailPasswordConfig(result.getBoolean("email_password_enabled")),
-                        new ThirdPartyConfig(result.getBoolean("third_party_enabled"), this.providers),
+                        new ThirdPartyConfig(
+                                result.getBoolean("third_party_enabled"),
+                                providers.length == 0 && isThirdPartyProvidersNull ? null : providers),
                         new PasswordlessConfig(result.getBoolean("passwordless_enabled")),
-                        firstFactors.length == 0 ? null : firstFactors,
+                        firstFactors.length == 0 && isFirstFactorsNull ? null : firstFactors,
                         requiredSecondaryFactors.length == 0 ? null : requiredSecondaryFactors,
                         JsonUtils.stringToJsonObject(result.getString("core_config"))
                 );
@@ -74,16 +74,19 @@ public class TenantConfigSQLHelper {
     public static TenantConfig[] selectAll(Start start, HashMap<TenantIdentifier, HashMap<String, ThirdPartyConfig.Provider>> providerMap, HashMap<TenantIdentifier, String[]> firstFactorsMap, HashMap<TenantIdentifier, String[]> requiredSecondaryFactorsMap)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, core_config,"
-                + " email_password_enabled, passwordless_enabled, third_party_enabled FROM "
+                + " email_password_enabled, passwordless_enabled, third_party_enabled, "
+                + " is_first_factors_null, is_third_party_providers_null FROM "
                 + getConfig(start).getTenantConfigsTable() + ";";
 
         TenantConfig[] tenantConfigs = execute(start, QUERY, pst -> {}, result -> {
             List<TenantConfig> temp = new ArrayList<>();
             while (result.next()) {
                 TenantIdentifier tenantIdentifier = new TenantIdentifier(result.getString("connection_uri_domain"), result.getString("app_id"), result.getString("tenant_id"));
-                ThirdPartyConfig.Provider[] providers = null;
+                ThirdPartyConfig.Provider[] providers;
                 if (providerMap.containsKey(tenantIdentifier)) {
                     providers = providerMap.get(tenantIdentifier).values().toArray(new ThirdPartyConfig.Provider[0]);
+                } else {
+                    providers = new ThirdPartyConfig.Provider[0];
                 }
                 String[] firstFactors = firstFactorsMap.containsKey(tenantIdentifier) ? firstFactorsMap.get(tenantIdentifier) : new String[0];
 
@@ -104,8 +107,9 @@ public class TenantConfigSQLHelper {
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getTenantConfigsTable()
                 + "(connection_uri_domain, app_id, tenant_id, core_config,"
-                + " email_password_enabled, passwordless_enabled, third_party_enabled)"
-                + " VALUES(?, ?, ?, ?, ?, ?, ?)";
+                + " email_password_enabled, passwordless_enabled, third_party_enabled,"
+                + " is_first_factors_null, is_third_party_providers_null)"
+                + " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         update(sqlCon, QUERY, pst -> {
             pst.setString(1, tenantConfig.tenantIdentifier.getConnectionUriDomain());
@@ -115,6 +119,8 @@ public class TenantConfigSQLHelper {
             pst.setBoolean(5, tenantConfig.emailPasswordConfig.enabled);
             pst.setBoolean(6, tenantConfig.passwordlessConfig.enabled);
             pst.setBoolean(7, tenantConfig.thirdPartyConfig.enabled);
+            pst.setBoolean(8, tenantConfig.firstFactors == null);
+            pst.setBoolean(9, tenantConfig.thirdPartyConfig.providers == null);
         });
     }
 
