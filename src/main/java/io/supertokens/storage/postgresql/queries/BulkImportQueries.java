@@ -45,12 +45,12 @@ public class BulkImportQueries {
         return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
                 + "id CHAR(36),"
                 + "app_id VARCHAR(64) NOT NULL DEFAULT 'public',"
-                + "primary_user_id VARCHAR(64),"
+                + "primary_user_id VARCHAR(36),"
                 + "raw_data TEXT NOT NULL,"
                 + "status VARCHAR(128) DEFAULT 'NEW',"
                 + "error_msg TEXT,"
-                + "created_at BIGINT DEFAULT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000,"
-                + "updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000,"
+                + "created_at BIGINT NOT NULL, "
+                + "updated_at BIGINT NOT NULL, "
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
                 + " PRIMARY KEY(app_id, id),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "app_id", "fkey") + " "
@@ -77,12 +77,12 @@ public class BulkImportQueries {
     public static void insertBulkImportUsers(Start start, AppIdentifier appIdentifier, List<BulkImportUser> users)
             throws SQLException, StorageQueryException {
         StringBuilder queryBuilder = new StringBuilder(
-                "INSERT INTO " + Config.getConfig(start).getBulkImportUsersTable() + " (id, app_id, raw_data) VALUES ");
+                "INSERT INTO " + Config.getConfig(start).getBulkImportUsersTable() + " (id, app_id, raw_data, created_at, updated_at) VALUES ");
 
         int userCount = users.size();
 
         for (int i = 0; i < userCount; i++) {
-            queryBuilder.append(" (?, ?, ?)");
+            queryBuilder.append(" (?, ?, ?, ?, ?)");
 
             if (i < userCount - 1) {
                 queryBuilder.append(",");
@@ -95,6 +95,8 @@ public class BulkImportQueries {
                 pst.setString(parameterIndex++, user.id);
                 pst.setString(parameterIndex++, appIdentifier.getAppId());
                 pst.setString(parameterIndex++, user.toRawDataForDbStorage());
+                pst.setLong(parameterIndex++, System.currentTimeMillis());
+                pst.setLong(parameterIndex++, System.currentTimeMillis());
             }
         });
     }
@@ -129,6 +131,10 @@ public class BulkImportQueries {
             Connection sqlCon = (Connection) con.getConnection();
             try {
                 // NOTE: On average, we take about 66 seconds to process 1000 users. If, for any reason, the bulk import users were marked as processing but couldn't be processed within 10 minutes, we'll attempt to process them again.
+
+                // "FOR UPDATE" ensures that multiple cron jobs don't read the same rows simultaneously.
+                // If one process locks the first 1000 rows, others will wait for the lock to be released.
+                // "SKIP LOCKED" allows other processes to skip locked rows and select the next 1000 available rows.
                 String selectQuery = "SELECT * FROM " + Config.getConfig(start).getBulkImportUsersTable()
                         + " WHERE app_id = ?"
                         + " AND (status = 'NEW' OR (status = 'PROCESSING' AND updated_at < (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000) -  10 * 60 * 1000))" /* 10 mins */
@@ -253,17 +259,6 @@ public class BulkImportQueries {
         });
     }
 
-    public static void deleteBulkImportUser_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
-            @Nonnull String bulkImportUserId) throws SQLException {
-        String query = "DELETE FROM " + Config.getConfig(start).getBulkImportUsersTable()
-                + " WHERE app_id = ? AND id = ?";
-
-        update(con, query, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, bulkImportUserId);
-        });
-    }
-
     public static void updateBulkImportUserPrimaryUserId(Start start, AppIdentifier appIdentifier,
             @Nonnull String bulkImportUserId,
             @Nonnull String primaryUserId) throws SQLException, StorageQueryException {
@@ -275,6 +270,32 @@ public class BulkImportQueries {
             pst.setLong(2, System.currentTimeMillis());
             pst.setString(3, appIdentifier.getAppId());
             pst.setString(4, bulkImportUserId);
+        });
+    }
+
+    public static long getBulkImportUsersCount(Start start, AppIdentifier appIdentifier, @Nullable BULK_IMPORT_USER_STATUS status) throws SQLException, StorageQueryException {
+        String baseQuery = "SELECT COUNT(*) FROM " + Config.getConfig(start).getBulkImportUsersTable();
+        StringBuilder queryBuilder = new StringBuilder(baseQuery);
+
+        List<Object> parameters = new ArrayList<>();
+
+        queryBuilder.append(" WHERE app_id = ?");
+        parameters.add(appIdentifier.getAppId());
+
+        if (status != null) {
+            queryBuilder.append(" AND status = ?");
+            parameters.add(status.toString());
+        }
+
+        String query = queryBuilder.toString();
+
+        return execute(start, query, pst -> {
+            for (int i = 0; i < parameters.size(); i++) {
+                pst.setObject(i + 1, parameters.get(i));
+            }
+        }, result -> {
+            result.next();
+            return result.getLong(1);
         });
     }
 
