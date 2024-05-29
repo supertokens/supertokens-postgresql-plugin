@@ -544,6 +544,15 @@ public class GeneralQueries {
                     update(con, TOTPQueries.getQueryToCreateTenantIdIndexForUsedCodesTable(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, con, Config.getConfig(start).getBulkImportUsersTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, BulkImportQueries.getQueryToCreateBulkImportUsersTable(start), NO_OP_SETTER);
+                    // index:
+                    update(start, BulkImportQueries.getQueryToCreateStatusUpdatedAtIndex(start), NO_OP_SETTER);
+                    update(start, BulkImportQueries.getQueryToCreatePaginationIndex1(start), NO_OP_SETTER);
+                    update(start, BulkImportQueries.getQueryToCreatePaginationIndex2(start), NO_OP_SETTER);
+                }
+
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
@@ -579,7 +588,18 @@ public class GeneralQueries {
             String DROP_QUERY = "DROP INDEX IF EXISTS all_auth_recipe_users_pagination_index";
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
-
+        {
+            String DROP_QUERY = "DROP INDEX IF EXISTS bulk_import_users_status_updated_at_index";
+            update(start, DROP_QUERY, NO_OP_SETTER);
+        }
+        {
+            String DROP_QUERY = "DROP INDEX IF EXISTS bulk_import_users_pagination_index1";
+            update(start, DROP_QUERY, NO_OP_SETTER);
+        }
+        {
+            String DROP_QUERY = "DROP INDEX IF EXISTS bulk_import_users_pagination_index2";
+            update(start, DROP_QUERY, NO_OP_SETTER);
+        }
         {
             String DROP_QUERY = "DROP TABLE IF EXISTS "
                     + getConfig(start).getAppsTable() + ","
@@ -616,7 +636,8 @@ public class GeneralQueries {
                     + getConfig(start).getDashboardSessionsTable() + ","
                     + getConfig(start).getTotpUsedCodesTable() + "," 
                     + getConfig(start).getTotpUserDevicesTable() + ","
-                    + getConfig(start).getTotpUsersTable();
+                    + getConfig(start).getTotpUsersTable() + ","
+                    + getConfig(start).getBulkImportUsersTable();
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
     }

@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [7.1.0] - 2024-04-25
+
+- Adds queries for Bulk Import
+
 ## [7.0.1] - 2024-04-17
 
 - Fixes issues with partial failures during tenant creation
