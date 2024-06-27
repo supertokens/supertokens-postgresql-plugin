@@ -39,6 +39,7 @@ import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateClientTyp
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateTenantException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateThirdPartyIdException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
+import io.supertokens.pluginInterface.multitenancy.TenantConfig;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.test.TestingProcessManager;
 import io.supertokens.storage.postgresql.test.Utils;

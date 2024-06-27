@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.multitenancy.*;
+import io.supertokens.pluginInterface.multitenancy.TenantConfig;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Rule;

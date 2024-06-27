@@ -19,6 +19,7 @@ package io.supertokens.storage.postgresql.queries.multitenancy;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.*;
+import io.supertokens.pluginInterface.multitenancy.TenantConfig;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.queries.utils.JsonUtils;
 
