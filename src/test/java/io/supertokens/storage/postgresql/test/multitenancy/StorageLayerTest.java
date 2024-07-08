@@ -329,7 +329,8 @@ public class StorageLayerTest {
             fail();
         } catch (InvalidConfigException e) {
             assertEquals(e.getMessage(),
-                    "You cannot set different values for postgresql_thirdparty_users_table_name for the same user pool");
+                    "You cannot set different values for postgresql_thirdparty_users_table_name for the same user " +
+                            "pool");
         }
 
         process.kill();
@@ -806,7 +807,8 @@ public class StorageLayerTest {
                     tenantConfigJson);
 
             StorageLayer.getMultitenancyStorage(process.getProcess()).createTenant(tenantConfig);
-            MultitenancyHelper.getInstance(process.getProcess()).refreshTenantsInCoreBasedOnChangesInCoreConfigOrIfTenantListChanged(true);
+            MultitenancyHelper.getInstance(process.getProcess())
+                    .refreshTenantsInCoreBasedOnChangesInCoreConfigOrIfTenantListChanged(true);
 
             try {
                 EmailPassword.signIn(tid, (StorageLayer.getStorage(tid, process.getProcess())),

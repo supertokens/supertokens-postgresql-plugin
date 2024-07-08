@@ -522,21 +522,26 @@ public class PostgreSQLConfig {
         }
 
         if (postgresql_emailpassword_pswd_reset_tokens_table_name != null) {
-            postgresql_emailpassword_pswd_reset_tokens_table_name = addSchemaToTableName(postgresql_emailpassword_pswd_reset_tokens_table_name);
+            postgresql_emailpassword_pswd_reset_tokens_table_name = addSchemaToTableName(
+                    postgresql_emailpassword_pswd_reset_tokens_table_name);
         } else {
-            postgresql_emailpassword_pswd_reset_tokens_table_name = addSchemaAndPrefixToTableName("emailpassword_pswd_reset_tokens");
+            postgresql_emailpassword_pswd_reset_tokens_table_name = addSchemaAndPrefixToTableName(
+                    "emailpassword_pswd_reset_tokens");
         }
 
         if (postgresql_emailverification_tokens_table_name != null) {
-            postgresql_emailverification_tokens_table_name = addSchemaToTableName(postgresql_emailverification_tokens_table_name);
+            postgresql_emailverification_tokens_table_name = addSchemaToTableName(
+                    postgresql_emailverification_tokens_table_name);
         } else {
             postgresql_emailverification_tokens_table_name = addSchemaAndPrefixToTableName("emailverification_tokens");
         }
 
         if (postgresql_emailverification_verified_emails_table_name != null) {
-            postgresql_emailverification_verified_emails_table_name = addSchemaToTableName(postgresql_emailverification_verified_emails_table_name);
+            postgresql_emailverification_verified_emails_table_name = addSchemaToTableName(
+                    postgresql_emailverification_verified_emails_table_name);
         } else {
-            postgresql_emailverification_verified_emails_table_name = addSchemaAndPrefixToTableName("emailverification_verified_emails");
+            postgresql_emailverification_verified_emails_table_name = addSchemaAndPrefixToTableName(
+                    "emailverification_verified_emails");
         }
 
         if (postgresql_thirdparty_users_table_name != null) {
@@ -588,10 +593,11 @@ public class PostgreSQLConfig {
                 try {
                     String fieldName = field.getName();
                     String fieldValue = field.get(this) != null ? field.get(this).toString() : null;
-                    if(fieldValue == null) {
+                    if (fieldValue == null) {
                         continue;
                     }
-                    // To ensure a unique connectionPoolId we include the database password and use the "|db_pass|" identifier.
+                    // To ensure a unique connectionPoolId we include the database password and use the "|db_pass|"
+                    // identifier.
                     // This facilitates easy removal of the password from logs when necessary.
                     if (fieldName.equals("postgresql_password")) {
                         connectionPoolId.append("|db_pass|" + fieldValue + "|db_pass");

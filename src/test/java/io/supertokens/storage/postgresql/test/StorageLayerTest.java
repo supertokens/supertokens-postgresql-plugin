@@ -115,13 +115,18 @@ public class StorageLayerTest {
 
         AuthRecipeUserInfo user1 = EmailPassword.signUp(process.getProcess(), "test1@example.com", "password");
         Thread.sleep(50);
-        AuthRecipeUserInfo user2 = ThirdParty.signInUp(process.getProcess(), "google", "googleid", "test2@example.com").user;
+        AuthRecipeUserInfo user2 = ThirdParty.signInUp(process.getProcess(), "google", "googleid",
+                "test2@example.com").user;
         Thread.sleep(50);
-        Passwordless.CreateCodeResponse code1 = Passwordless.createCode(process.getProcess(), "test3@example.com", null, null, null);
-        AuthRecipeUserInfo user3 = Passwordless.consumeCode(process.getProcess(), code1.deviceId, code1.deviceIdHash, code1.userInputCode, null).user;
+        Passwordless.CreateCodeResponse code1 = Passwordless.createCode(process.getProcess(), "test3@example.com", null,
+                null, null);
+        AuthRecipeUserInfo user3 = Passwordless.consumeCode(process.getProcess(), code1.deviceId, code1.deviceIdHash,
+                code1.userInputCode, null).user;
         Thread.sleep(50);
-        Passwordless.CreateCodeResponse code2 = Passwordless.createCode(process.getProcess(), null, "+919876543210", null, null);
-        AuthRecipeUserInfo user4 = Passwordless.consumeCode(process.getProcess(), code2.deviceId, code2.deviceIdHash, code2.userInputCode, null).user;
+        Passwordless.CreateCodeResponse code2 = Passwordless.createCode(process.getProcess(), null, "+919876543210",
+                null, null);
+        AuthRecipeUserInfo user4 = Passwordless.consumeCode(process.getProcess(), code2.deviceId, code2.deviceIdHash,
+                code2.userInputCode, null).user;
 
         AuthRecipe.createPrimaryUser(process.getProcess(), user3.getSupertokensUserId());
         AuthRecipe.linkAccounts(process.getProcess(), user1.getSupertokensUserId(), user3.getSupertokensUserId());
@@ -135,8 +140,9 @@ public class StorageLayerTest {
                 user4.getSupertokensUserId()
         };
 
-        for (String userId : userIds){
-            AuthRecipeUserInfo primaryUser = ((AuthRecipeStorage) StorageLayer.getStorage(process.getProcess())).getPrimaryUserById(
+        for (String userId : userIds) {
+            AuthRecipeUserInfo primaryUser = ((AuthRecipeStorage) StorageLayer.getStorage(
+                    process.getProcess())).getPrimaryUserById(
                     new AppIdentifier(null, null), userId);
             assertEquals(user3.getSupertokensUserId(), primaryUser.getSupertokensUserId());
             assertEquals(4, primaryUser.loginMethods.length);
