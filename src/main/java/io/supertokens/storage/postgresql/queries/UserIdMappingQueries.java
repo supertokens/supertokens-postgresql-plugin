@@ -55,7 +55,8 @@ public class UserIdMappingQueries {
                 + " PRIMARY KEY(app_id, supertokens_user_id, external_user_id),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, userIdMappingTable, "supertokens_user_id", "fkey")
                 + " FOREIGN KEY (app_id, supertokens_user_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() + "(app_id, user_id)" + " ON DELETE CASCADE"
+                + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() + "(app_id, user_id)" +
+                " ON DELETE CASCADE"
                 + ");";
         // @formatter:on
     }
@@ -65,7 +66,8 @@ public class UserIdMappingQueries {
                 + getConfig(start).getUserIdMappingTable() + "(app_id, supertokens_user_id);";
     }
 
-    public static void createUserIdMapping(Start start, AppIdentifier appIdentifier, String superTokensUserId, String externalUserId,
+    public static void createUserIdMapping(Start start, AppIdentifier appIdentifier, String superTokensUserId,
+                                           String externalUserId,
                                            String externalUserIdInfo) throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + Config.getConfig(start).getUserIdMappingTable()
                 + " (app_id, supertokens_user_id, external_user_id, external_user_id_info)" + " VALUES(?, ?, ?, ?)";
@@ -78,7 +80,8 @@ public class UserIdMappingQueries {
         });
     }
 
-    public static UserIdMapping getuseraIdMappingWithSuperTokensUserId(Start start, AppIdentifier appIdentifier, String userId)
+    public static UserIdMapping getuseraIdMappingWithSuperTokensUserId(Start start, AppIdentifier appIdentifier,
+                                                                       String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT * FROM " + Config.getConfig(start).getUserIdMappingTable()
                 + " WHERE app_id = ? AND supertokens_user_id = ?";
@@ -93,7 +96,8 @@ public class UserIdMappingQueries {
         });
     }
 
-    public static UserIdMapping getUserIdMappingWithExternalUserId(Start start, AppIdentifier appIdentifier, String userId)
+    public static UserIdMapping getUserIdMappingWithExternalUserId(Start start, AppIdentifier appIdentifier,
+                                                                   String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT * FROM " + Config.getConfig(start).getUserIdMappingTable()
                 + " WHERE app_id = ? AND external_user_id = ?";
@@ -110,7 +114,9 @@ public class UserIdMappingQueries {
     }
 
     public static UserIdMapping[] getUserIdMappingWithEitherSuperTokensUserIdOrExternalUserId(Start start,
-            AppIdentifier appIdentifier, String userId) throws SQLException, StorageQueryException {
+                                                                                              AppIdentifier appIdentifier,
+                                                                                              String userId)
+            throws SQLException, StorageQueryException {
         String QUERY = "SELECT * FROM " + Config.getConfig(start).getUserIdMappingTable()
                 + " WHERE app_id = ? AND (supertokens_user_id = ? OR external_user_id = ?)";
 
@@ -201,7 +207,8 @@ public class UserIdMappingQueries {
         });
     }
 
-    public static boolean deleteUserIdMappingWithSuperTokensUserId(Start start, AppIdentifier appIdentifier, String userId)
+    public static boolean deleteUserIdMappingWithSuperTokensUserId(Start start, AppIdentifier appIdentifier,
+                                                                   String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + Config.getConfig(start).getUserIdMappingTable()
                 + " WHERE app_id = ? AND supertokens_user_id = ?";
@@ -217,7 +224,8 @@ public class UserIdMappingQueries {
 
     public static boolean deleteUserIdMappingWithExternalUserId(Start start, AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
-        String QUERY = "DELETE FROM " + Config.getConfig(start).getUserIdMappingTable() + " WHERE app_id = ? AND external_user_id = ?";
+        String QUERY = "DELETE FROM " + Config.getConfig(start).getUserIdMappingTable() +
+                " WHERE app_id = ? AND external_user_id = ?";
 
         // store the number of rows updated
         int rowUpdatedCount = update(start, QUERY, pst -> {
@@ -229,8 +237,10 @@ public class UserIdMappingQueries {
     }
 
     public static boolean updateOrDeleteExternalUserIdInfoWithSuperTokensUserId(Start start,
-                                                                                AppIdentifier appIdentifier, String userId,
-                                                                                @Nullable String externalUserIdInfo) throws SQLException, StorageQueryException {
+                                                                                AppIdentifier appIdentifier,
+                                                                                String userId,
+                                                                                @Nullable String externalUserIdInfo)
+            throws SQLException, StorageQueryException {
         String QUERY = "UPDATE " + Config.getConfig(start).getUserIdMappingTable()
                 + " SET external_user_id_info = ? WHERE app_id = ? AND supertokens_user_id = ?";
 
@@ -245,7 +255,8 @@ public class UserIdMappingQueries {
 
     public static boolean updateOrDeleteExternalUserIdInfoWithExternalUserId(Start start, AppIdentifier appIdentifier,
                                                                              String userId,
-                                                                             @Nullable String externalUserIdInfo) throws SQLException, StorageQueryException {
+                                                                             @Nullable String externalUserIdInfo)
+            throws SQLException, StorageQueryException {
         String QUERY = "UPDATE " + Config.getConfig(start).getUserIdMappingTable()
                 + " SET external_user_id_info = ? WHERE app_id = ? AND external_user_id = ?";
 
@@ -258,7 +269,9 @@ public class UserIdMappingQueries {
         return rowUpdated > 0;
     }
 
-    public static UserIdMapping getuseraIdMappingWithSuperTokensUserId_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier, String userId)
+    public static UserIdMapping getuseraIdMappingWithSuperTokensUserId_Transaction(Start start, Connection sqlCon,
+                                                                                   AppIdentifier appIdentifier,
+                                                                                   String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT * FROM " + Config.getConfig(start).getUserIdMappingTable()
                 + " WHERE app_id = ? AND supertokens_user_id = ?";
@@ -273,7 +286,9 @@ public class UserIdMappingQueries {
         });
     }
 
-    public static UserIdMapping getUserIdMappingWithExternalUserId_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier, String userId)
+    public static UserIdMapping getUserIdMappingWithExternalUserId_Transaction(Start start, Connection sqlCon,
+                                                                               AppIdentifier appIdentifier,
+                                                                               String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT * FROM " + Config.getConfig(start).getUserIdMappingTable()
                 + " WHERE app_id = ? AND external_user_id = ?";
@@ -289,8 +304,10 @@ public class UserIdMappingQueries {
         });
     }
 
-    public static UserIdMapping[] getUserIdMappingWithEitherSuperTokensUserIdOrExternalUserId_Transaction(Start start, Connection sqlCon,
-                                                                                                          AppIdentifier appIdentifier, String userId)
+    public static UserIdMapping[] getUserIdMappingWithEitherSuperTokensUserIdOrExternalUserId_Transaction(Start start,
+                                                                                                          Connection sqlCon,
+                                                                                                          AppIdentifier appIdentifier,
+                                                                                                          String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT * FROM " + Config.getConfig(start).getUserIdMappingTable()
                 + " WHERE app_id = ? AND (supertokens_user_id = ? OR external_user_id = ?)";

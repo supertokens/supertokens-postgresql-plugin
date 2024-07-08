@@ -83,10 +83,12 @@ public class MultitenancyQueries {
                 + "user_info_map_from_user_info_endpoint_user_id VARCHAR(64),"
                 + "user_info_map_from_user_info_endpoint_email VARCHAR(64),"
                 + "user_info_map_from_user_info_endpoint_email_verified VARCHAR(64),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tenantThirdPartyProvidersTable, null, "pkey") + " PRIMARY KEY (connection_uri_domain, app_id, tenant_id, third_party_id),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tenantThirdPartyProvidersTable, null, "pkey") +
+                " PRIMARY KEY (connection_uri_domain, app_id, tenant_id, third_party_id),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tenantThirdPartyProvidersTable, "tenant_id", "fkey")
                 + " FOREIGN KEY(connection_uri_domain, app_id, tenant_id)"
-                + " REFERENCES " + Config.getConfig(start).getTenantConfigsTable() +  " (connection_uri_domain, app_id, tenant_id) ON DELETE CASCADE"
+                + " REFERENCES " + Config.getConfig(start).getTenantConfigsTable() +
+                " (connection_uri_domain, app_id, tenant_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
     }
@@ -110,16 +112,20 @@ public class MultitenancyQueries {
                 + "scope VARCHAR(128)[],"
                 + "force_pkce BOOLEAN,"
                 + "additional_config TEXT,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tenantThirdPartyProvidersTable, null, "pkey") + " PRIMARY KEY (connection_uri_domain, app_id, tenant_id, third_party_id, client_type),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tenantThirdPartyProvidersTable, "third_party_id", "fkey")
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tenantThirdPartyProvidersTable, null, "pkey") +
+                " PRIMARY KEY (connection_uri_domain, app_id, tenant_id, third_party_id, client_type),"
+                + "CONSTRAINT " +
+                Utils.getConstraintName(schema, tenantThirdPartyProvidersTable, "third_party_id", "fkey")
                 + " FOREIGN KEY(connection_uri_domain, app_id, tenant_id, third_party_id)"
-                + " REFERENCES " + Config.getConfig(start).getTenantThirdPartyProvidersTable() +  " (connection_uri_domain, app_id, tenant_id, third_party_id) ON DELETE CASCADE"
+                + " REFERENCES " + Config.getConfig(start).getTenantThirdPartyProvidersTable() +
+                " (connection_uri_domain, app_id, tenant_id, third_party_id) ON DELETE CASCADE"
                 + ");";
     }
 
     public static String getQueryToCreateThirdPartyIdIndexForTenantThirdPartyProviderClientsTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS tenant_thirdparty_provider_clients_third_party_id_index ON "
-                + getConfig(start).getTenantThirdPartyProviderClientsTable() + " (connection_uri_domain, app_id, tenant_id, third_party_id);";
+                + getConfig(start).getTenantThirdPartyProviderClientsTable() +
+                " (connection_uri_domain, app_id, tenant_id, third_party_id);";
     }
 
     public static String getQueryToCreateFirstFactorsTable(Start start) {
@@ -135,7 +141,8 @@ public class MultitenancyQueries {
                 + " PRIMARY KEY (connection_uri_domain, app_id, tenant_id, factor_id),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "tenant_id", "fkey")
                 + " FOREIGN KEY (connection_uri_domain, app_id, tenant_id)"
-                + " REFERENCES " + Config.getConfig(start).getTenantConfigsTable() +  " (connection_uri_domain, app_id, tenant_id) ON DELETE CASCADE"
+                + " REFERENCES " + Config.getConfig(start).getTenantConfigsTable() +
+                " (connection_uri_domain, app_id, tenant_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
     }
@@ -158,14 +165,16 @@ public class MultitenancyQueries {
                 + " PRIMARY KEY (connection_uri_domain, app_id, tenant_id, factor_id),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "tenant_id", "fkey")
                 + " FOREIGN KEY (connection_uri_domain, app_id, tenant_id)"
-                + " REFERENCES " + Config.getConfig(start).getTenantConfigsTable() +  " (connection_uri_domain, app_id, tenant_id) ON DELETE CASCADE"
+                + " REFERENCES " + Config.getConfig(start).getTenantConfigsTable() +
+                " (connection_uri_domain, app_id, tenant_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
     }
 
     public static String getQueryToCreateTenantIdIndexForRequiredSecondaryFactorsTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS tenant_default_required_factor_ids_tenant_id_index ON "
-                + getConfig(start).getTenantRequiredSecondaryFactorsTable() + " (connection_uri_domain, app_id, tenant_id);";
+                + getConfig(start).getTenantRequiredSecondaryFactorsTable() +
+                " (connection_uri_domain, app_id, tenant_id);";
     }
 
 
@@ -185,10 +194,12 @@ public class MultitenancyQueries {
         }
 
         MfaSqlHelper.createFirstFactors(start, sqlCon, tenantConfig.tenantIdentifier, tenantConfig.firstFactors);
-        MfaSqlHelper.createRequiredSecondaryFactors(start, sqlCon, tenantConfig.tenantIdentifier, tenantConfig.requiredSecondaryFactors);
+        MfaSqlHelper.createRequiredSecondaryFactors(start, sqlCon, tenantConfig.tenantIdentifier,
+                tenantConfig.requiredSecondaryFactors);
     }
 
-    public static void createTenantConfig(Start start, TenantConfig tenantConfig) throws StorageQueryException, StorageTransactionLogicException {
+    public static void createTenantConfig(Start start, TenantConfig tenantConfig)
+            throws StorageQueryException, StorageTransactionLogicException {
         start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             {
@@ -204,7 +215,8 @@ public class MultitenancyQueries {
         });
     }
 
-    public static boolean deleteTenantConfig(Start start, TenantIdentifier tenantIdentifier) throws StorageQueryException {
+    public static boolean deleteTenantConfig(Start start, TenantIdentifier tenantIdentifier)
+            throws StorageQueryException {
         try {
             String QUERY = "DELETE FROM " + getConfig(start).getTenantConfigsTable()
                     + " WHERE connection_uri_domain = ? AND app_id = ? AND tenant_id = ?";
@@ -222,7 +234,8 @@ public class MultitenancyQueries {
         }
     }
 
-    public static void overwriteTenantConfig(Start start, TenantConfig tenantConfig) throws StorageQueryException, StorageTransactionLogicException {
+    public static void overwriteTenantConfig(Start start, TenantConfig tenantConfig)
+            throws StorageQueryException, StorageTransactionLogicException {
         start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             {
@@ -236,7 +249,8 @@ public class MultitenancyQueries {
                             pst.setString(3, tenantConfig.tenantIdentifier.getTenantId());
                         });
                         if (rowsAffected == 0) {
-                            throw new StorageTransactionLogicException(new TenantOrAppNotFoundException(tenantConfig.tenantIdentifier));
+                            throw new StorageTransactionLogicException(
+                                    new TenantOrAppNotFoundException(tenantConfig.tenantIdentifier));
                         }
                     }
 
@@ -259,16 +273,21 @@ public class MultitenancyQueries {
         try {
 
             // Map TenantIdentifier -> thirdPartyId -> clientType
-            HashMap<TenantIdentifier, HashMap<String, HashMap<String, ThirdPartyConfig.ProviderClient>>> providerClientsMap = ThirdPartyProviderClientSQLHelper.selectAll(start);
+            HashMap<TenantIdentifier, HashMap<String, HashMap<String, ThirdPartyConfig.ProviderClient>>> providerClientsMap = ThirdPartyProviderClientSQLHelper.selectAll(
+                    start);
 
             // Map (tenantIdentifier) -> thirdPartyId -> provider
-            HashMap<TenantIdentifier, HashMap<String, ThirdPartyConfig.Provider>> providerMap = ThirdPartyProviderSQLHelper.selectAll(start, providerClientsMap);
+            HashMap<TenantIdentifier, HashMap<String, ThirdPartyConfig.Provider>> providerMap =
+                    ThirdPartyProviderSQLHelper.selectAll(
+                            start, providerClientsMap);
 
             // Map (tenantIdentifier) -> firstFactors
             HashMap<TenantIdentifier, String[]> firstFactorsMap = MfaSqlHelper.selectAllFirstFactors(start);
 
             // Map (tenantIdentifier) -> requiredSecondaryFactors
-            HashMap<TenantIdentifier, String[]> requiredSecondaryFactorsMap = MfaSqlHelper.selectAllRequiredSecondaryFactors(start);
+            HashMap<TenantIdentifier, String[]> requiredSecondaryFactorsMap =
+                    MfaSqlHelper.selectAllRequiredSecondaryFactors(
+                            start);
 
             return TenantConfigSQLHelper.selectAll(start, providerMap, firstFactorsMap, requiredSecondaryFactorsMap);
         } catch (SQLException throwables) {
@@ -293,7 +312,7 @@ public class MultitenancyQueries {
     }
 
     public static void addTenantIdInTargetStorage_Transaction(Start start, Connection con,
-                                                       TenantIdentifier tenantIdentifier) throws
+                                                              TenantIdentifier tenantIdentifier) throws
             SQLException, StorageQueryException {
         {
             if (Start.isTesting && simulateErrorInAddingTenantIdInTargetStorage_forTesting) {
@@ -317,7 +336,7 @@ public class MultitenancyQueries {
                         + "(app_id, created_at_time)" + " VALUES(?, ?) ON CONFLICT DO NOTHING";
                 update(con, QUERY, pst -> {
                     pst.setString(1, tenantIdentifier.getAppId());
-                    pst.setLong(2,  currentTime);
+                    pst.setLong(2, currentTime);
                 });
             }
 
@@ -328,14 +347,14 @@ public class MultitenancyQueries {
                 update(con, QUERY, pst -> {
                     pst.setString(1, tenantIdentifier.getAppId());
                     pst.setString(2, tenantIdentifier.getTenantId());
-                    pst.setLong(3,  currentTime);
+                    pst.setLong(3, currentTime);
                 });
             }
         }
     }
 
     public static void deleteTenantIdInTargetStorage(Start start, TenantIdentifier tenantIdentifier)
-        throws StorageQueryException {
+            throws StorageQueryException {
         try {
             if (tenantIdentifier.getTenantId().equals(TenantIdentifier.DEFAULT_TENANT_ID)) {
                 // Delete the app
