@@ -174,11 +174,11 @@ public class StorageLayerTest {
                 StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()));
 
         Assert.assertEquals(
-                Config.getConfig(new TenantIdentifier(null, null, null), process.getProcess()).getAccessTokenValidity(),
+                Config.getConfig(new TenantIdentifier(null, null, null), process.getProcess()).getAccessTokenValidityInMillis(),
                 (long) 3600 * 1000);
 
         Assert.assertEquals(Config.getConfig(new TenantIdentifier(null, "abc", null), process.getProcess())
-                        .getAccessTokenValidity(),
+                        .getAccessTokenValidityInMillis(),
                 (long) 3601 * 1000);
 
         Assert.assertEquals(
@@ -238,11 +238,11 @@ public class StorageLayerTest {
                 StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()));
 
         Assert.assertEquals(
-                Config.getConfig(new TenantIdentifier(null, null, null), process.getProcess()).getAccessTokenValidity(),
+                Config.getConfig(new TenantIdentifier(null, null, null), process.getProcess()).getAccessTokenValidityInMillis(),
                 (long) 3600 * 1000);
 
         Assert.assertEquals(Config.getConfig(new TenantIdentifier(null, "abc", null), process.getProcess())
-                        .getAccessTokenValidity(),
+                        .getAccessTokenValidityInMillis(),
                 (long) 3601 * 1000);
 
         Assert.assertEquals(
@@ -453,11 +453,11 @@ public class StorageLayerTest {
                 existingStorage);
 
         Assert.assertEquals(
-                Config.getConfig(new TenantIdentifier(null, null, null), process.getProcess()).getAccessTokenValidity(),
+                Config.getConfig(new TenantIdentifier(null, null, null), process.getProcess()).getAccessTokenValidityInMillis(),
                 (long) 3600 * 1000);
 
         Assert.assertEquals(Config.getConfig(new TenantIdentifier(null, "abc", null), process.getProcess())
-                        .getAccessTokenValidity(),
+                        .getAccessTokenValidityInMillis(),
                 (long) 3601 * 1000);
 
         Assert.assertEquals(
