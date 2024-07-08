@@ -56,14 +56,14 @@ public class PostgresSQLConfigTest {
 
     @Test
     public void testMatchConfigPropertiesDescription() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
         // Skipping postgresql_config_version because it doesn't
         // have a description in the config.yaml file
-        String[] ignoredProperties = { "postgresql_config_version" };
+        String[] ignoredProperties = {"postgresql_config_version"};
 
         // Match the descriptions in the config.yaml file with the descriptions in the
         // CoreConfig class
@@ -144,8 +144,10 @@ public class PostgresSQLConfigTest {
                 }
 
                 String descriptionInConfig = field.getAnnotation(DashboardInfo.class).description();
-                descriptionInConfig = "(DIFFERENT_ACROSS_TENANTS" + (field.getAnnotation(DashboardInfo.class).isOptional() ? " | OPTIONAL" : " | COMPULSORY")
-                        + (field.getAnnotation(DashboardInfo.class).isOptional() ? " | Default: " + field.getAnnotation(DashboardInfo.class).defaultValue() : "")
+                descriptionInConfig = "(DIFFERENT_ACROSS_TENANTS" +
+                        (field.getAnnotation(DashboardInfo.class).isOptional() ? " | OPTIONAL" : " | COMPULSORY")
+                        + (field.getAnnotation(DashboardInfo.class).isOptional() ?
+                        " | Default: " + field.getAnnotation(DashboardInfo.class).defaultValue() : "")
                         + ") "
                         + valueInfo + " "
                         + descriptionInConfig;

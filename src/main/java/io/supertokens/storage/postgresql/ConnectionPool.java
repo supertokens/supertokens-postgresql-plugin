@@ -149,7 +149,8 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         return getInstance(start) != null && getInstance(start).hikariDataSource != null;
     }
 
-    static void initPool(Start start, boolean shouldWait, PostConnectCallback postConnectCallback) throws DbInitException {
+    static void initPool(Start start, boolean shouldWait, PostConnectCallback postConnectCallback)
+            throws DbInitException {
         if (isAlreadyInitialised(start)) {
             return;
         }
