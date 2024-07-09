@@ -9,8 +9,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [7.1.0]
 
+- Compatible with plugin interface version 6.2
 - Adds implementation for a new method `getConfigFieldsInfo` to fetch the plugin config fields.
-- Adds `null` state for `firstFactors` by adding `is_first_factors_null` field in `tenant_configs` table
+- Adds `DashboardInfo` annotations to the config properties in `PostgreSQLConfig`
+- Adds `null` state for `firstFactors` by adding `is_first_factors_null` field in `tenant_configs` table. The value of
+  this column is only applicable when there are no entries in the `tenant_first_factors` table for the tenant.
 
 ### Migration
 
