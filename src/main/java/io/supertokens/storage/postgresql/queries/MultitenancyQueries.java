@@ -18,7 +18,9 @@ package io.supertokens.storage.postgresql.queries;
 
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
-import io.supertokens.pluginInterface.multitenancy.*;
+import io.supertokens.pluginInterface.multitenancy.TenantConfig;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.multitenancy.ThirdPartyConfig;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -32,8 +34,8 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.HashMap;
 
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class MultitenancyQueries {
@@ -52,7 +54,6 @@ public class MultitenancyQueries {
                 + "passwordless_enabled BOOLEAN,"
                 + "third_party_enabled BOOLEAN,"
                 + "is_first_factors_null BOOLEAN,"
-                + "is_third_party_providers_null BOOLEAN,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tenantConfigsTable, null, "pkey") +
                 " PRIMARY KEY (connection_uri_domain, app_id, tenant_id)"
                 + ");";
