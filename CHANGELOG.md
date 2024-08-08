@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [7.1.1] - 2024-08-08
+
+- Fixes tests that check for `Internal Error` in 500 status responses
+
 ## [7.1.0]
 
 - Compatible with plugin interface version 6.2
