@@ -552,6 +552,11 @@ public class GeneralQueries {
                     update(con, TOTPQueries.getQueryToCreateTenantIdIndexForUsedCodesTable(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, con, Config.getConfig(start).getOAuthClientTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, OAuthQueries.getQueryToCreateOAuthClientTable(start), NO_OP_SETTER);
+                }
+
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
@@ -622,6 +627,7 @@ public class GeneralQueries {
                     + getConfig(start).getUserRolesTable() + ","
                     + getConfig(start).getDashboardUsersTable() + ","
                     + getConfig(start).getDashboardSessionsTable() + ","
+                    + getConfig(start).getOAuthClientTable() + ","
                     + getConfig(start).getTotpUsedCodesTable() + ","
                     + getConfig(start).getTotpUserDevicesTable() + ","
                     + getConfig(start).getTotpUsersTable();

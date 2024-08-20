@@ -439,6 +439,10 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("dashboard_user_sessions");
     }
 
+    public String getOAuthClientTable() {
+        return addSchemaAndPrefixToTableName("oauth_clients");
+    }
+
     public String getTotpUsersTable() {
         return addSchemaAndPrefixToTableName("totp_users");
     }
