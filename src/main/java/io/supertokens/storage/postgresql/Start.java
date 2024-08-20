@@ -54,6 +54,8 @@ import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateTenantExc
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateThirdPartyIdException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.pluginInterface.multitenancy.sqlStorage.MultitenancySQLStorage;
+import io.supertokens.pluginInterface.oauth.exceptions.OAuth2ClientAlreadyExistsForAppException;
+import io.supertokens.pluginInterface.oauth.sqlStorage.OAuthSQLStorage;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.exception.*;
@@ -106,7 +108,7 @@ public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
         UserIdMappingSQLStorage, MultitenancyStorage, MultitenancySQLStorage, DashboardSQLStorage, TOTPSQLStorage,
-        ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage {
+        ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage, OAuthSQLStorage {
 
     // these configs are protected from being modified / viewed by the dev using the SuperTokens
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
@@ -3079,6 +3081,46 @@ public class Start
             throw new StorageQueryException(e);
         }
     }
+
+    @Override
+    public boolean doesClientIdExistForThisApp(AppIdentifier appIdentifier, String clientId)
+            throws StorageQueryException {
+        try {
+            return OAuthQueries.isClientIdForAppId(this, clientId, appIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void addClientForApp(AppIdentifier appIdentifier, String clientId)
+            throws StorageQueryException, OAuth2ClientAlreadyExistsForAppException {
+        try {
+            OAuthQueries.insertClientIdForAppId(this, clientId, appIdentifier);
+        } catch (SQLException e) {
+
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isPrimaryKeyError(serverMessage, config.getOAuthClientTable())) {
+                    throw new OAuth2ClientAlreadyExistsForAppException();
+                }
+            }
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean removeAppClientAssociation(AppIdentifier appIdentifier, String clientId)
+            throws StorageQueryException {
+        try {
+            return OAuthQueries.deleteClientIdForAppId(this, clientId, appIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
 
     @TestOnly
     public int getDbActivityCount(String dbname) throws SQLException, StorageQueryException {
