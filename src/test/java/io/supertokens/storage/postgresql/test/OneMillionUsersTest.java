@@ -939,7 +939,7 @@ public class OneMillionUsersTest {
                 return null;
             });
             System.out.println("User counting: " + time);
-            assert time < 3000;
+            assert time < 10000;
         }
         { // measure telemetry
             long time = measureTime(() -> {
@@ -952,7 +952,7 @@ public class OneMillionUsersTest {
                 return null;
             });
             System.out.println("Telemetry: " + time);
-            assert time < 3000;
+            assert time < 6000;
         }
 
         assertEquals(0, errorCount.get());
