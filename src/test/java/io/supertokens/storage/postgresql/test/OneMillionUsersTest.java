@@ -501,7 +501,7 @@ public class OneMillionUsersTest {
 
         FeatureFlagTestContent.getInstance(process.getProcess())
                 .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{
-                        EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY});
+                        EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY, EE_FEATURES.MFA, EE_FEATURES.DASHBOARD_LOGIN});
         process.startProcess();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
