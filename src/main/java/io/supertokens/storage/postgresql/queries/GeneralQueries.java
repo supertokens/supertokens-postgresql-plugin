@@ -303,6 +303,8 @@ public class GeneralQueries {
                     // Index
                     update(con, ActiveUsersQueries.getQueryToCreateAppIdIndexForUserLastActiveTable(start),
                             NO_OP_SETTER);
+                    update(con, ActiveUsersQueries.getQueryToCreateLastActiveTimeIndexForUserLastActiveTable(start),
+                            NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, con, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
