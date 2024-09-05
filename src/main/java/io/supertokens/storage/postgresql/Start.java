@@ -3121,6 +3121,15 @@ public class Start
         }
     }
 
+    @Override
+    public List<String> listClientsForApp(AppIdentifier appIdentifier) throws StorageQueryException {
+        try {
+            return OAuthQueries.listClientsForApp(this, appIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
 
     @TestOnly
     public int getDbActivityCount(String dbname) throws SQLException, StorageQueryException {
