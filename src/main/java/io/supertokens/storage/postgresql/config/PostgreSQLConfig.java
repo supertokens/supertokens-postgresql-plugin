@@ -443,6 +443,10 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("oauth_clients");
     }
 
+    public String getOAuthRevokeTable() {
+        return addSchemaAndPrefixToTableName("oauth_revoke");
+    }
+
     public String getTotpUsersTable() {
         return addSchemaAndPrefixToTableName("totp_users");
     }

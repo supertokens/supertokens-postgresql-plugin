@@ -557,6 +557,14 @@ public class GeneralQueries {
                     update(start, OAuthQueries.getQueryToCreateOAuthClientTable(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, con, Config.getConfig(start).getOAuthRevokeTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, OAuthQueries.getQueryToCreateOAuthRevokeTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(con, OAuthQueries.getQueryToCreateOAuthRevokeTimestampIndex(start), NO_OP_SETTER);
+                }
+
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {

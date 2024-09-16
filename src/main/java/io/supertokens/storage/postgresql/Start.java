@@ -3130,6 +3130,26 @@ public class Start
         }
     }
 
+    @Override
+    public void revoke(AppIdentifier appIdentifier, String targetType, String targetValue)
+            throws StorageQueryException {
+        try {
+            OAuthQueries.revoke(this, appIdentifier, targetType, targetValue);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean isRevoked(AppIdentifier appIdentifier, String targetType, String targetValue, long issuedAt)
+            throws StorageQueryException {
+        try {
+            return OAuthQueries.isRevoked(this, appIdentifier, targetType, targetValue, issuedAt);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
 
     @TestOnly
     public int getDbActivityCount(String dbname) throws SQLException, StorageQueryException {
