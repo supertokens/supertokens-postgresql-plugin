@@ -3141,10 +3141,10 @@ public class Start
     }
 
     @Override
-    public boolean isRevoked(AppIdentifier appIdentifier, String targetType, String targetValue, long issuedAt)
+    public boolean isRevoked(AppIdentifier appIdentifier, String[] targetTypes, String[] targetValues, long issuedAt)
             throws StorageQueryException {
         try {
-            return OAuthQueries.isRevoked(this, appIdentifier, targetType, targetValue, issuedAt);
+            return OAuthQueries.isRevoked(this, appIdentifier, targetTypes, targetValues, issuedAt);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

@@ -119,15 +119,32 @@ public class OAuthQueries {
         });
     }
 
-    public static boolean isRevoked(Start start, AppIdentifier appIdentifier, String targetType, String targetValue, long issuedAt)
+    public static boolean isRevoked(Start start, AppIdentifier appIdentifier, String[] targetTypes, String[] targetValues, long issuedAt)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT app_id FROM " + Config.getConfig(start).getOAuthRevokeTable() +
-                " WHERE app_id = ? AND target_type = ? AND target_value = ? and timestamp > ?";
+                " WHERE app_id = ? AND timestamp > ? AND (";
+
+        for (int i = 0; i < targetTypes.length; i++) {
+            QUERY += "(target_type = ? AND target_value = ?)";
+
+            if (i < targetTypes.length - 1) {
+                QUERY += " OR ";
+            }
+        }
+
+        QUERY += ")";
+
         return execute(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, targetType);
-            pst.setString(3, targetValue);
-            pst.setLong(4, issuedAt);
+            pst.setLong(2, issuedAt);
+
+            int index = 3;
+            for (int i = 0; i < targetTypes.length; i++) {
+                pst.setString(index, targetTypes[i]);
+                index++;
+                pst.setString(index, targetValues[i]);
+                index++;
+            }
         }, ResultSet::next);
     }
 }
