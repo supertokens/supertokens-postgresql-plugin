@@ -48,7 +48,7 @@ public class BulkImportProxyStorage extends Start {
         if (this.connection == null) {
             Connection con = ConnectionPool.getConnectionForProxyStorage(this);
             this.connection = new BulkImportProxyConnection(con);
-            connection.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
+            connection.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
             connection.setAutoCommit(false);
         }
         return this.connection;
@@ -64,15 +64,6 @@ public class BulkImportProxyStorage extends Start {
     public void commitTransaction(TransactionConnection con) throws StorageQueryException {
         // We do not want to commit the queries when using the BulkImportProxyStorage to be able to rollback everything 
         // if any query fails while importing the user
-    }
-
-    @Override
-    public void loadConfig(JsonObject configJson, Set<LOG_LEVEL> logLevels, TenantIdentifier tenantIdentifier)
-            throws InvalidConfigException {
-        // We are overriding the loadConfig method to set the connection pool size
-        // to 1 to avoid creating many connections for the bulk import cronjob
-        configJson.addProperty("postgresql_connection_pool_size", 1);
-        super.loadConfig(configJson, logLevels, tenantIdentifier);
     }
 
     @Override

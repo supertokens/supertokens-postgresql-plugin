@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Unrestricts the connection pool size for the Bulk Import 
+
 ## [7.1.0] - 2024-04-25
 
 - Adds queries for Bulk Import
