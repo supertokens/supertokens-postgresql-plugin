@@ -3083,7 +3083,7 @@ public class Start
     }
 
     @Override
-    public boolean doesClientIdExistForThisApp(AppIdentifier appIdentifier, String clientId)
+    public boolean doesClientIdExistForApp(AppIdentifier appIdentifier, String clientId)
             throws StorageQueryException {
         try {
             return OAuthQueries.isClientIdForAppId(this, clientId, appIdentifier);
@@ -3093,7 +3093,7 @@ public class Start
     }
 
     @Override
-    public void addClientForApp(AppIdentifier appIdentifier, String clientId)
+    public void addOrUpdateClientForApp(AppIdentifier appIdentifier, String clientId, boolean isClientCredentialsOnly)
             throws StorageQueryException, OAuth2ClientAlreadyExistsForAppException {
         try {
             OAuthQueries.insertClientIdForAppId(this, clientId, appIdentifier);
@@ -3150,6 +3150,27 @@ public class Start
         }
     }
 
+    @Override
+    public int countTotalNumberOfM2MTokensAlive(AppIdentifier appIdentifier) throws StorageQueryException {
+        return 0; // TODO
+    }
+
+    @Override
+    public int countTotalNumberOfM2MTokensCreatedSince(AppIdentifier appIdentifier, long since)
+            throws StorageQueryException {
+        return 0; // TODO
+    }
+
+    @Override
+    public int countTotalNumberOfClientCredentialsOnlyClientsForApp(AppIdentifier appIdentifier)
+            throws StorageQueryException {
+        return 0; // TODO
+    }
+
+    @Override
+    public int countTotalNumberOfClientsForApp(AppIdentifier appIdentifier) throws StorageQueryException {
+        return 0; // TODO
+    }
 
     @TestOnly
     public int getDbActivityCount(String dbname) throws SQLException, StorageQueryException {
