@@ -17,7 +17,7 @@ import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 public class OAuthQueries {
     public static String getQueryToCreateOAuthClientTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
-        String oAuth2ClientTable = Config.getConfig(start).getOAuthClientTable();
+        String oAuth2ClientTable = Config.getConfig(start).getOAuthClientsTable();
         // @formatter:off
         return "CREATE TABLE IF NOT EXISTS " + oAuth2ClientTable + " ("
                 + "app_id VARCHAR(64) DEFAULT 'public',"
@@ -56,9 +56,39 @@ public class OAuthQueries {
                 + oAuth2ClientTable + "(timestamp DESC, app_id DESC);";
     }
 
+    public static String getQueryToCreateOAuthM2MTokensTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String oAuth2ClientTable = Config.getConfig(start).getOAuthM2MTokensTable();
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + oAuth2ClientTable + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "client_id VARCHAR(128) NOT NULL,"
+                + "iat BIGINT NOT NULL,"
+                + "exp BIGINT NOT NULL,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientTable, "client_id", "pkey")
+                + " PRIMARY KEY (app_id, client_id, iat),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientTable, "app_id", "fkey")
+                + " FOREIGN KEY(app_id)"
+                + " REFERENCES " + Config.getConfig(start).getAppsTable() + "(app_id) ON DELETE CASCADE"
+                + ");";
+        // @formatter:on
+    }
+
+    public static String getQueryToCreateOAuthM2MTokenIatIndex(Start start) {
+        String oAuth2ClientTable = Config.getConfig(start).getOAuthM2MTokensTable();
+        return "CREATE INDEX IF NOT EXISTS oauth_m2m_token_iat_index ON "
+                + oAuth2ClientTable + "(iat DESC, app_id DESC);";
+    }
+
+    public static String getQueryToCreateOAuthM2MTokenExpIndex(Start start) {
+        String oAuth2ClientTable = Config.getConfig(start).getOAuthM2MTokensTable();
+        return "CREATE INDEX IF NOT EXISTS oauth_m2m_token_exp_index ON "
+                + oAuth2ClientTable + "(exp DESC, app_id DESC);";
+    }
+
     public static boolean isClientIdForAppId(Start start, String clientId, AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT app_id FROM " + Config.getConfig(start).getOAuthClientTable() +
+        String QUERY = "SELECT app_id FROM " + Config.getConfig(start).getOAuthClientsTable() +
                 " WHERE client_id = ? AND app_id = ?";
 
         return execute(start, QUERY, pst -> {
@@ -69,7 +99,7 @@ public class OAuthQueries {
 
     public static List<String> listClientsForApp(Start start, AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT client_id FROM " + Config.getConfig(start).getOAuthClientTable() +
+        String QUERY = "SELECT client_id FROM " + Config.getConfig(start).getOAuthClientsTable() +
                 " WHERE app_id = ?";
         return execute(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
@@ -85,7 +115,7 @@ public class OAuthQueries {
     public static void insertClientIdForAppId(Start start, AppIdentifier appIdentifier, String clientId,
             boolean isClientCredentialsOnly)
             throws SQLException, StorageQueryException {
-        String INSERT = "INSERT INTO " + Config.getConfig(start).getOAuthClientTable()
+        String INSERT = "INSERT INTO " + Config.getConfig(start).getOAuthClientsTable()
                 + "(app_id, client_id, is_client_credentials_only) VALUES(?, ?, ?) "
                 + "ON CONFLICT (app_id, client_id) DO UPDATE SET is_client_credentials_only = ?";
         update(start, INSERT, pst -> {
@@ -98,7 +128,7 @@ public class OAuthQueries {
 
     public static boolean deleteClientIdForAppId(Start start, String clientId, AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
-        String DELETE = "DELETE FROM " + Config.getConfig(start).getOAuthClientTable()
+        String DELETE = "DELETE FROM " + Config.getConfig(start).getOAuthClientsTable()
                 + " WHERE app_id = ? AND client_id = ?";
         int numberOfRow = update(start, DELETE, pst -> {
             pst.setString(1, appIdentifier.getAppId());
@@ -156,7 +186,7 @@ public class OAuthQueries {
     public static int countTotalNumberOfClientsForApp(Start start, AppIdentifier appIdentifier,
             boolean filterByClientCredentialsOnly) throws SQLException, StorageQueryException {
         if (filterByClientCredentialsOnly) {
-            String QUERY = "SELECT COUNT(*) as c FROM " + Config.getConfig(start).getOAuthClientTable() +
+            String QUERY = "SELECT COUNT(*) as c FROM " + Config.getConfig(start).getOAuthClientsTable() +
                     " WHERE app_id = ? AND is_client_credentials_only = ?";
             return execute(start, QUERY, pst -> {
                 pst.setString(1, appIdentifier.getAppId());
@@ -168,7 +198,7 @@ public class OAuthQueries {
                 return 0;
             });
         } else {
-            String QUERY = "SELECT COUNT(*) as c FROM " + Config.getConfig(start).getOAuthClientTable() +
+            String QUERY = "SELECT COUNT(*) as c FROM " + Config.getConfig(start).getOAuthClientsTable() +
                     " WHERE app_id = ?";
             return execute(start, QUERY, pst -> {
                 pst.setString(1, appIdentifier.getAppId());
@@ -179,5 +209,47 @@ public class OAuthQueries {
                 return 0;
             });
         }
+    }
+
+    public static int countTotalNumberOfM2MTokensAlive(Start start, AppIdentifier appIdentifier)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT COUNT(*) as c FROM " + Config.getConfig(start).getOAuthM2MTokensTable() +
+                " WHERE app_id = ? AND exp > ?";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setLong(2, System.currentTimeMillis());
+        }, result -> {
+            if (result.next()) {
+                return result.getInt("c");
+            }
+            return 0;
+        });
+    }
+
+    public static int countTotalNumberOfM2MTokensCreatedSince(Start start, AppIdentifier appIdentifier, long since)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT COUNT(*) as c FROM " + Config.getConfig(start).getOAuthM2MTokensTable() +
+                " WHERE app_id = ? AND iat >= ?";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setLong(2, since / 1000);
+        }, result -> {
+            if (result.next()) {
+                return result.getInt("c");
+            }
+            return 0;
+        });
+    }
+
+    public static void addM2MToken(Start start, AppIdentifier appIdentifier, String clientId, long iat, long exp)
+            throws SQLException, StorageQueryException {
+        String QUERY = "INSERT INTO " + Config.getConfig(start).getOAuthM2MTokensTable() +
+                " (app_id, client_id, iat, exp) VALUES (?, ?, ?, ?)";
+        update(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, clientId);
+            pst.setLong(3, iat);
+            pst.setLong(4, exp);
+        });
     }
 }

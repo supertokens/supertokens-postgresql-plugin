@@ -552,7 +552,7 @@ public class GeneralQueries {
                     update(con, TOTPQueries.getQueryToCreateTenantIdIndexForUsedCodesTable(start), NO_OP_SETTER);
                 }
 
-                if (!doesTableExists(start, con, Config.getConfig(start).getOAuthClientTable())) {
+                if (!doesTableExists(start, con, Config.getConfig(start).getOAuthClientsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(start, OAuthQueries.getQueryToCreateOAuthClientTable(start), NO_OP_SETTER);
                 }
@@ -563,6 +563,15 @@ public class GeneralQueries {
 
                     // index
                     update(con, OAuthQueries.getQueryToCreateOAuthRevokeTimestampIndex(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, con, Config.getConfig(start).getOAuthM2MTokensTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, OAuthQueries.getQueryToCreateOAuthM2MTokensTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(con, OAuthQueries.getQueryToCreateOAuthM2MTokenIatIndex(start), NO_OP_SETTER);
+                    update(con, OAuthQueries.getQueryToCreateOAuthM2MTokenExpIndex(start), NO_OP_SETTER);
                 }
 
             } catch (Exception e) {
@@ -635,7 +644,9 @@ public class GeneralQueries {
                     + getConfig(start).getUserRolesTable() + ","
                     + getConfig(start).getDashboardUsersTable() + ","
                     + getConfig(start).getDashboardSessionsTable() + ","
-                    + getConfig(start).getOAuthClientTable() + ","
+                    + getConfig(start).getOAuthClientsTable() + ","
+                    + getConfig(start).getOAuthRevokeTable() + ","
+                    + getConfig(start).getOAuthM2MTokensTable() + ","
                     + getConfig(start).getTotpUsedCodesTable() + ","
                     + getConfig(start).getTotpUserDevicesTable() + ","
                     + getConfig(start).getTotpUsersTable();

@@ -122,7 +122,6 @@ public class Start
     private ResourceDistributor resourceDistributor = new ResourceDistributor();
     private String processId;
     private HikariLoggingAppender appender;
-    private static final String APP_ID_KEY_NAME = "app_id";
     private static final String ACCESS_TOKEN_SIGNING_KEY_NAME = "access_token_signing_key";
     private static final String REFRESH_TOKEN_KEY_NAME = "refresh_token_key";
     public static boolean isTesting = false;
@@ -3141,14 +3140,32 @@ public class Start
     }
 
     @Override
+    public void addM2MToken(AppIdentifier appIdentifier, String clientId, long iat, long exp)
+            throws StorageQueryException {
+        try {
+            OAuthQueries.addM2MToken(this, appIdentifier, clientId, iat, exp);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public int countTotalNumberOfM2MTokensAlive(AppIdentifier appIdentifier) throws StorageQueryException {
-        return 0; // TODO
+        try {
+            return OAuthQueries.countTotalNumberOfM2MTokensAlive(this, appIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
     public int countTotalNumberOfM2MTokensCreatedSince(AppIdentifier appIdentifier, long since)
             throws StorageQueryException {
-        return 0; // TODO
+        try {
+            return OAuthQueries.countTotalNumberOfM2MTokensCreatedSince(this, appIdentifier, since);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
