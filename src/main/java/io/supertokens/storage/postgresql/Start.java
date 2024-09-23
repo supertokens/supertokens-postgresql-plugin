@@ -54,7 +54,6 @@ import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateTenantExc
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateThirdPartyIdException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.pluginInterface.multitenancy.sqlStorage.MultitenancySQLStorage;
-import io.supertokens.pluginInterface.oauth.exceptions.OAuth2ClientAlreadyExistsForAppException;
 import io.supertokens.pluginInterface.oauth.sqlStorage.OAuthSQLStorage;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
@@ -3094,19 +3093,10 @@ public class Start
 
     @Override
     public void addOrUpdateClientForApp(AppIdentifier appIdentifier, String clientId, boolean isClientCredentialsOnly)
-            throws StorageQueryException, OAuth2ClientAlreadyExistsForAppException {
+            throws StorageQueryException {
         try {
-            OAuthQueries.insertClientIdForAppId(this, clientId, appIdentifier);
+            OAuthQueries.insertClientIdForAppId(this, appIdentifier, clientId, isClientCredentialsOnly);
         } catch (SQLException e) {
-
-            if (e instanceof PSQLException) {
-                PostgreSQLConfig config = Config.getConfig(this);
-                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
-
-                if (isPrimaryKeyError(serverMessage, config.getOAuthClientTable())) {
-                    throw new OAuth2ClientAlreadyExistsForAppException();
-                }
-            }
             throw new StorageQueryException(e);
         }
     }
@@ -3164,12 +3154,20 @@ public class Start
     @Override
     public int countTotalNumberOfClientCredentialsOnlyClientsForApp(AppIdentifier appIdentifier)
             throws StorageQueryException {
-        return 0; // TODO
+        try {
+            return OAuthQueries.countTotalNumberOfClientsForApp(this, appIdentifier, true);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
     public int countTotalNumberOfClientsForApp(AppIdentifier appIdentifier) throws StorageQueryException {
-        return 0; // TODO
+        try {
+            return OAuthQueries.countTotalNumberOfClientsForApp(this, appIdentifier, false);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @TestOnly

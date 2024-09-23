@@ -14,7 +14,6 @@ import io.supertokens.storage.postgresql.utils.Utils;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 
-
 public class OAuthQueries {
     public static String getQueryToCreateOAuthClientTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
@@ -23,6 +22,7 @@ public class OAuthQueries {
         return "CREATE TABLE IF NOT EXISTS " + oAuth2ClientTable + " ("
                 + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "client_id VARCHAR(128) NOT NULL,"
+                + "is_client_credentials_only BOOLEAN NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientTable, "client_id", "pkey")
                 + " PRIMARY KEY (app_id, client_id),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientTable, "app_id", "fkey")
@@ -82,13 +82,17 @@ public class OAuthQueries {
         });
     }
 
-    public static void insertClientIdForAppId(Start start, String clientId, AppIdentifier appIdentifier)
+    public static void insertClientIdForAppId(Start start, AppIdentifier appIdentifier, String clientId,
+            boolean isClientCredentialsOnly)
             throws SQLException, StorageQueryException {
         String INSERT = "INSERT INTO " + Config.getConfig(start).getOAuthClientTable()
-                + "(app_id, client_id) VALUES(?, ?)";
+                + "(app_id, client_id, is_client_credentials_only) VALUES(?, ?, ?) "
+                + "ON CONFLICT (app_id, client_id) DO UPDATE SET is_client_credentials_only = ?";
         update(start, INSERT, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, clientId);
+            pst.setBoolean(3, isClientCredentialsOnly);
+            pst.setBoolean(4, isClientCredentialsOnly);
         });
     }
 
@@ -119,7 +123,8 @@ public class OAuthQueries {
         });
     }
 
-    public static boolean isRevoked(Start start, AppIdentifier appIdentifier, String[] targetTypes, String[] targetValues, long issuedAt)
+    public static boolean isRevoked(Start start, AppIdentifier appIdentifier, String[] targetTypes,
+            String[] targetValues, long issuedAt)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT app_id FROM " + Config.getConfig(start).getOAuthRevokeTable() +
                 " WHERE app_id = ? AND timestamp > ? AND (";
@@ -146,5 +151,33 @@ public class OAuthQueries {
                 index++;
             }
         }, ResultSet::next);
+    }
+
+    public static int countTotalNumberOfClientsForApp(Start start, AppIdentifier appIdentifier,
+            boolean filterByClientCredentialsOnly) throws SQLException, StorageQueryException {
+        if (filterByClientCredentialsOnly) {
+            String QUERY = "SELECT COUNT(*) as c FROM " + Config.getConfig(start).getOAuthClientTable() +
+                    " WHERE app_id = ? AND is_client_credentials_only = ?";
+            return execute(start, QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setBoolean(2, true);
+            }, result -> {
+                if (result.next()) {
+                    return result.getInt("c");
+                }
+                return 0;
+            });
+        } else {
+            String QUERY = "SELECT COUNT(*) as c FROM " + Config.getConfig(start).getOAuthClientTable() +
+                    " WHERE app_id = ?";
+            return execute(start, QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+            }, result -> {
+                if (result.next()) {
+                    return result.getInt("c");
+                }
+                return 0;
+            });
+        }
     }
 }
