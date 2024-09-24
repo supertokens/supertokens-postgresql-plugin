@@ -563,6 +563,7 @@ public class GeneralQueries {
 
                     // index
                     update(con, OAuthQueries.getQueryToCreateOAuthRevokeTimestampIndex(start), NO_OP_SETTER);
+                    update(con, OAuthQueries.getQueryToCreateOAuthRevokeExpIndex(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, con, Config.getConfig(start).getOAuthM2MTokensTable())) {

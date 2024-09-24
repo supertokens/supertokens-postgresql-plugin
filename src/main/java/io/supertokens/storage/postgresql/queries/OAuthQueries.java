@@ -41,6 +41,7 @@ public class OAuthQueries {
                 + "target_type VARCHAR(16) NOT NULL,"
                 + "target_value VARCHAR(128) NOT NULL,"
                 + "timestamp BIGINT NOT NULL,"
+                + "exp BIGINT NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientTable, "client_id", "pkey")
                 + " PRIMARY KEY (app_id, target_type, target_value),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientTable, "app_id", "fkey")
@@ -54,6 +55,12 @@ public class OAuthQueries {
         String oAuth2ClientTable = Config.getConfig(start).getOAuthRevokeTable();
         return "CREATE INDEX IF NOT EXISTS oauth_revoke_timestamp_index ON "
                 + oAuth2ClientTable + "(timestamp DESC, app_id DESC);";
+    }
+
+    public static String getQueryToCreateOAuthRevokeExpIndex(Start start) {
+        String oAuth2ClientTable = Config.getConfig(start).getOAuthRevokeTable();
+        return "CREATE INDEX IF NOT EXISTS oauth_revoke_exp_index ON "
+                + oAuth2ClientTable + "(exp DESC, app_id DESC);";
     }
 
     public static String getQueryToCreateOAuthM2MTokensTable(Start start) {
@@ -137,11 +144,11 @@ public class OAuthQueries {
         return numberOfRow > 0;
     }
 
-    public static void revoke(Start start, AppIdentifier appIdentifier, String targetType, String targetValue)
+    public static void revoke(Start start, AppIdentifier appIdentifier, String targetType, String targetValue, long exp)
             throws SQLException, StorageQueryException {
         String INSERT = "INSERT INTO " + Config.getConfig(start).getOAuthRevokeTable()
-                + "(app_id, target_type, target_value, timestamp) VALUES (?, ?, ?, ?) "
-                + "ON CONFLICT (app_id, target_type, target_value) DO UPDATE SET timestamp = ?";
+                + "(app_id, target_type, target_value, timestamp, exp) VALUES (?, ?, ?, ?, ?) "
+                + "ON CONFLICT (app_id, target_type, target_value) DO UPDATE SET timestamp = ?, exp = ?";
 
         long currentTime = System.currentTimeMillis() / 1000;
         update(start, INSERT, pst -> {
@@ -149,7 +156,9 @@ public class OAuthQueries {
             pst.setString(2, targetType);
             pst.setString(3, targetValue);
             pst.setLong(4, currentTime);
-            pst.setLong(5, currentTime);
+            pst.setLong(5, exp);
+            pst.setLong(6, currentTime);
+            pst.setLong(7, exp);
         });
     }
 
@@ -251,5 +260,31 @@ public class OAuthQueries {
             pst.setLong(3, iat);
             pst.setLong(4, exp);
         });
+    }
+
+    public static void cleanUpExpiredAndRevokedTokens(Start start, AppIdentifier appIdentifier) throws SQLException, StorageQueryException {
+        {
+            // delete expired M2M tokens
+            String QUERY = "DELETE FROM " + Config.getConfig(start).getOAuthM2MTokensTable() +
+                    " WHERE app_id = ? AND exp < ?";
+
+            long timestamp = System.currentTimeMillis() / 1000 - 3600 * 24 * 31; // expired 31 days ago
+            update(start, QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setLong(2, timestamp);
+            });
+        }
+
+        {
+            // delete expired revoked tokens
+            String QUERY = "DELETE FROM " + Config.getConfig(start).getOAuthRevokeTable() +
+                    " WHERE app_id = ? AND exp < ?";
+
+            long timestamp = System.currentTimeMillis() / 1000 - 3600 * 24 * 31; // expired 31 days ago
+            update(start, QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setLong(2, timestamp);
+            });
+        }
     }
 }
