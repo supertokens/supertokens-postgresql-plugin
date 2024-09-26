@@ -451,6 +451,10 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("oauth_m2m_tokens");
     }
 
+    public String getOAuthLogoutChallengesTable() {
+        return addSchemaAndPrefixToTableName("oauth_logout_challenges");
+    }
+
     public String getTotpUsersTable() {
         return addSchemaAndPrefixToTableName("totp_users");
     }
