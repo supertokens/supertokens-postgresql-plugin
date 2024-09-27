@@ -86,7 +86,7 @@ public class BulkImportProxyStorage extends Start {
     public void closeConnectionForBulkImportProxyStorage() throws StorageQueryException {
         try {
             if (this.connection != null) {
-                this.connection.close();
+                this.connection.closeForBulkImportProxyStorage();
                 this.connection = null;
             }
             ConnectionPool.close(this);
