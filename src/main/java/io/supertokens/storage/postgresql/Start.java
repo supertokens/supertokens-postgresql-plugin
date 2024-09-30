@@ -26,6 +26,7 @@ import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
 import io.supertokens.pluginInterface.authRecipe.sqlStorage.AuthRecipeSQLStorage;
 import io.supertokens.pluginInterface.bulkimport.BulkImportStorage.BULK_IMPORT_USER_STATUS;
+import io.supertokens.pluginInterface.bulkimport.exceptions.BulkImportTransactionRolledBackException;
 import io.supertokens.pluginInterface.bulkimport.sqlStorage.BulkImportSQLStorage;
 import io.supertokens.pluginInterface.bulkimport.BulkImportUser;
 import io.supertokens.pluginInterface.dashboard.DashboardSearchTags;
@@ -322,6 +323,13 @@ public class Start
 
                 if ((isPSQLRollbackException || isDeadlockException) && tries < NUM_TRIES) {
                     try {
+                        if(this instanceof BulkImportProxyStorage){
+                            throw new StorageTransactionLogicException(new BulkImportTransactionRolledBackException(e));
+                            // if the current instance is of BulkImportProxyStorage, that means we are doing a bulk import
+                            // which uses nested transactions. With MySQL this retry logic doesn't going to work, we have
+                            // to retry the whole "big" transaction, not just the innermost, current one.
+                            // @see BulkImportTransactionRolledBackException for more explanation.
+                        }
                         Thread.sleep((long) (10 + (250 + Math.min(Math.pow(2, tries), 3000)) * Math.random()));
                     } catch (InterruptedException ignored) {
                     }
