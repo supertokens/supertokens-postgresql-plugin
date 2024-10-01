@@ -49,7 +49,6 @@ import org.junit.rules.TestRule;
 
 import java.io.IOException;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -175,11 +174,12 @@ public class StorageLayerTest {
                 StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()));
 
         Assert.assertEquals(
-                Config.getConfig(new TenantIdentifier(null, null, null), process.getProcess()).getAccessTokenValidity(),
+                Config.getConfig(new TenantIdentifier(null, null, null), process.getProcess())
+                        .getAccessTokenValidityInMillis(),
                 (long) 3600 * 1000);
 
         Assert.assertEquals(Config.getConfig(new TenantIdentifier(null, "abc", null), process.getProcess())
-                        .getAccessTokenValidity(),
+                        .getAccessTokenValidityInMillis(),
                 (long) 3601 * 1000);
 
         Assert.assertEquals(
@@ -239,11 +239,12 @@ public class StorageLayerTest {
                 StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess()));
 
         Assert.assertEquals(
-                Config.getConfig(new TenantIdentifier(null, null, null), process.getProcess()).getAccessTokenValidity(),
+                Config.getConfig(new TenantIdentifier(null, null, null), process.getProcess())
+                        .getAccessTokenValidityInMillis(),
                 (long) 3600 * 1000);
 
         Assert.assertEquals(Config.getConfig(new TenantIdentifier(null, "abc", null), process.getProcess())
-                        .getAccessTokenValidity(),
+                        .getAccessTokenValidityInMillis(),
                 (long) 3601 * 1000);
 
         Assert.assertEquals(
@@ -329,7 +330,8 @@ public class StorageLayerTest {
             fail();
         } catch (InvalidConfigException e) {
             assertEquals(e.getMessage(),
-                    "You cannot set different values for postgresql_thirdparty_users_table_name for the same user pool");
+                    "You cannot set different values for postgresql_thirdparty_users_table_name for the same user " +
+                            "pool");
         }
 
         process.kill();
@@ -454,11 +456,12 @@ public class StorageLayerTest {
                 existingStorage);
 
         Assert.assertEquals(
-                Config.getConfig(new TenantIdentifier(null, null, null), process.getProcess()).getAccessTokenValidity(),
+                Config.getConfig(new TenantIdentifier(null, null, null), process.getProcess())
+                        .getAccessTokenValidityInMillis(),
                 (long) 3600 * 1000);
 
         Assert.assertEquals(Config.getConfig(new TenantIdentifier(null, "abc", null), process.getProcess())
-                        .getAccessTokenValidity(),
+                        .getAccessTokenValidityInMillis(),
                 (long) 3601 * 1000);
 
         Assert.assertEquals(
@@ -806,7 +809,8 @@ public class StorageLayerTest {
                     tenantConfigJson);
 
             StorageLayer.getMultitenancyStorage(process.getProcess()).createTenant(tenantConfig);
-            MultitenancyHelper.getInstance(process.getProcess()).refreshTenantsInCoreBasedOnChangesInCoreConfigOrIfTenantListChanged(true);
+            MultitenancyHelper.getInstance(process.getProcess())
+                    .refreshTenantsInCoreBasedOnChangesInCoreConfigOrIfTenantListChanged(true);
 
             try {
                 EmailPassword.signIn(tid, (StorageLayer.getStorage(tid, process.getProcess())),

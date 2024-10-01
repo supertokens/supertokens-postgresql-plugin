@@ -44,7 +44,6 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Scanner;
 
 import static org.junit.Assert.*;
@@ -65,7 +64,7 @@ public class LoggingTest {
 
     @Test
     public void defaultLogging() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
         StorageLayer.close();
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
 
@@ -109,7 +108,7 @@ public class LoggingTest {
     @Test
     public void customLogging() throws Exception {
         try {
-            String[] args = { "../" };
+            String[] args = {"../"};
 
             Utils.setValueInConfig("info_log_path", "\"tempLogging/info.log\"");
             Utils.setValueInConfig("error_log_path", "\"tempLogging/error.log\"");
@@ -160,7 +159,7 @@ public class LoggingTest {
 
     @Test
     public void confirmLoggerClosed() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
         StorageLayer.close();
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
 
@@ -188,7 +187,7 @@ public class LoggingTest {
 
     @Test
     public void testStandardOutLoggingWithNullStr() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
         ByteArrayOutputStream stdOutput = new ByteArrayOutputStream();
         ByteArrayOutputStream errorOutput = new ByteArrayOutputStream();
 
@@ -224,7 +223,7 @@ public class LoggingTest {
 
     @Test
     public void testStandardOutLoggingWithNull() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
         ByteArrayOutputStream stdOutput = new ByteArrayOutputStream();
         ByteArrayOutputStream errorOutput = new ByteArrayOutputStream();
 
@@ -261,7 +260,7 @@ public class LoggingTest {
     @Test
     public void confirmHikariLoggerClosedOnlyWhenProcessEnds() throws Exception {
         StorageLayer.close();
-        String[] args = { "../" };
+        String[] args = {"../"};
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
         FeatureFlagTestContent.getInstance(process.getProcess())
                 .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
@@ -315,7 +314,7 @@ public class LoggingTest {
 
     @Test
     public void testDBPasswordMaskingOnDBConnectionFailUsingConnectionUri() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         String dbUser = "db_user";
         String dbPassword = "db_password";
@@ -347,7 +346,7 @@ public class LoggingTest {
 
     @Test
     public void testDBPasswordMaskingOnDBConnectionFailUsingCredentials() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         String dbUser = "db_user";
         String dbPassword = "db_password";
@@ -381,7 +380,7 @@ public class LoggingTest {
 
     @Test
     public void testDBPasswordMasking() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         ByteArrayOutputStream stdOutput = new ByteArrayOutputStream();
         ByteArrayOutputStream errorOutput = new ByteArrayOutputStream();
@@ -416,7 +415,7 @@ public class LoggingTest {
 
     @Test
     public void testDBPasswordIsNotLoggedWhenProcessStartsEnds() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.setValueInConfig("error_log_path", "null");
         Utils.setValueInConfig("info_log_path", "null");
@@ -479,7 +478,7 @@ public class LoggingTest {
 
     @Test
     public void testDBPasswordIsNotLoggedWhenTenantIsCreated() throws Exception {
-        String[] args = { "../" };
+        String[] args = {"../"};
 
         Utils.setValueInConfig("error_log_path", "null");
         Utils.setValueInConfig("info_log_path", "null");
@@ -505,8 +504,8 @@ public class LoggingTest {
                 Main main = process.getProcess();
 
                 FeatureFlagTestContent.getInstance(main)
-                        .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[] {
-                                EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY });
+                        .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{
+                                EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY});
 
                 JsonObject config = new JsonObject();
                 TenantIdentifier tenantIdentifier = new TenantIdentifier(null, "a1", null);
@@ -548,8 +547,8 @@ public class LoggingTest {
                 Main main = process.getProcess();
 
                 FeatureFlagTestContent.getInstance(main)
-                        .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[] {
-                                EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY });
+                        .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{
+                                EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY});
 
                 TenantIdentifier tenantIdentifier = new TenantIdentifier(null, "a1", null);
                 JsonObject config = new JsonObject();

@@ -9,6 +9,8 @@ import io.supertokens.storage.postgresql.utils.Utils;
 import java.sql.Connection;
 import java.sql.SQLException;
 
+import org.jetbrains.annotations.TestOnly;
+
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
@@ -34,6 +36,11 @@ public class ActiveUsersQueries {
                 + Config.getConfig(start).getUserLastActiveTable() + "(app_id);";
     }
 
+    public static String getQueryToCreateLastActiveTimeIndexForUserLastActiveTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS user_last_active_last_active_time_index ON "
+                + Config.getConfig(start).getUserLastActiveTable() + "(last_active_time DESC, app_id DESC);";
+    }
+
     public static int countUsersActiveSince(Start start, AppIdentifier appIdentifier, long sinceTime)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT COUNT(*) as total FROM " + Config.getConfig(start).getUserLastActiveTable()
@@ -50,7 +57,8 @@ public class ActiveUsersQueries {
         });
     }
 
-    public static int countUsersActiveSinceAndHasMoreThanOneLoginMethod(Start start, AppIdentifier appIdentifier, long sinceTime)
+    public static int countUsersActiveSinceAndHasMoreThanOneLoginMethod(Start start, AppIdentifier appIdentifier,
+                                                                        long sinceTime)
             throws SQLException, StorageQueryException {
         // TODO: Active users are present only on public tenant and MFA users may be present on different storages
         String QUERY = "SELECT count(1) as c FROM ("
@@ -89,6 +97,22 @@ public class ActiveUsersQueries {
         });
     }
 
+    @TestOnly
+    public static int updateUserLastActive(Start start, AppIdentifier appIdentifier, String userId, long timestamp)
+            throws SQLException, StorageQueryException {
+        String QUERY = "INSERT INTO " + Config.getConfig(start).getUserLastActiveTable()
+                +
+                "(app_id, user_id, last_active_time) VALUES(?, ?, ?) ON CONFLICT(app_id, user_id) DO UPDATE SET " +
+                "last_active_time = ?";
+
+        return update(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+            pst.setLong(3, timestamp);
+            pst.setLong(4, timestamp);
+        });
+    }
+
     public static Long getLastActiveByUserId(Start start, AppIdentifier appIdentifier, String userId)
             throws StorageQueryException {
         String QUERY = "SELECT last_active_time FROM " + Config.getConfig(start).getUserLastActiveTable()
@@ -121,30 +145,32 @@ public class ActiveUsersQueries {
         });
     }
 
-    public static int countUsersThatHaveMoreThanOneLoginMethodOrTOTPEnabledAndActiveSince(Start start, AppIdentifier appIdentifier, long sinceTime)
+    public static int countUsersThatHaveMoreThanOneLoginMethodOrTOTPEnabledAndActiveSince(Start start,
+                                                                                          AppIdentifier appIdentifier,
+                                                                                          long sinceTime)
             throws SQLException, StorageQueryException {
         // TODO: Active users are present only on public tenant and MFA users may be present on different storages
         String QUERY =
-              "SELECT COUNT (DISTINCT user_id) as c FROM ("
-            + "  (" // users with more than one login method
-            + "    SELECT primary_or_recipe_user_id AS user_id FROM ("
-            + "      SELECT COUNT(user_id) as num_login_methods, app_id, primary_or_recipe_user_id"
-            + "      FROM " + getConfig(start).getAppIdToUserIdTable()
-            + "      WHERE app_id = ? AND primary_or_recipe_user_id IN ("
-            + "        SELECT user_id FROM " + getConfig(start).getUserLastActiveTable()
-            + "        WHERE app_id = ? AND last_active_time >= ?"
-            + "      )"
-            + "      GROUP BY (app_id, primary_or_recipe_user_id)"
-            + "    ) AS nloginmethods"
-            + "    WHERE num_login_methods > 1"
-            + "  ) UNION (" // TOTP users
-            + "    SELECT user_id FROM " + getConfig(start).getTotpUsersTable()
-            + "    WHERE app_id = ? AND user_id IN ("
-            + "      SELECT user_id FROM " + getConfig(start).getUserLastActiveTable()
-            + "      WHERE app_id = ? AND last_active_time >= ?"
-            + "    )"
-            + "  )"
-            + ") AS all_users";
+                "SELECT COUNT (DISTINCT user_id) as c FROM ("
+                        + "  (" // users with more than one login method
+                        + "    SELECT primary_or_recipe_user_id AS user_id FROM ("
+                        + "      SELECT COUNT(user_id) as num_login_methods, app_id, primary_or_recipe_user_id"
+                        + "      FROM " + getConfig(start).getAppIdToUserIdTable()
+                        + "      WHERE app_id = ? AND primary_or_recipe_user_id IN ("
+                        + "        SELECT user_id FROM " + getConfig(start).getUserLastActiveTable()
+                        + "        WHERE app_id = ? AND last_active_time >= ?"
+                        + "      )"
+                        + "      GROUP BY (app_id, primary_or_recipe_user_id)"
+                        + "    ) AS nloginmethods"
+                        + "    WHERE num_login_methods > 1"
+                        + "  ) UNION (" // TOTP users
+                        + "    SELECT user_id FROM " + getConfig(start).getTotpUsersTable()
+                        + "    WHERE app_id = ? AND user_id IN ("
+                        + "      SELECT user_id FROM " + getConfig(start).getUserLastActiveTable()
+                        + "      WHERE app_id = ? AND last_active_time >= ?"
+                        + "    )"
+                        + "  )"
+                        + ") AS all_users";
 
         return execute(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());

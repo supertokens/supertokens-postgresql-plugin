@@ -142,7 +142,7 @@ public class UserRolesQueries {
     }
 
     public static boolean deleteRole(Start start, AppIdentifier appIdentifier,
-                                                 String role)
+                                     String role)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getRolesTable()
                 + " WHERE app_id = ? AND role = ? ;";

@@ -263,9 +263,11 @@ public class DeadlockTest {
         System.out.println("Durations: " + durations.toString());
 
         assertNull(process
-                .checkOrWaitForEventInPlugin(io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
+                .checkOrWaitForEventInPlugin(
+                        io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
         assertNotNull(process
-                .checkOrWaitForEventInPlugin(io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
+                .checkOrWaitForEventInPlugin(
+                        io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
         assert (pass.get());
 
@@ -627,7 +629,8 @@ public class DeadlockTest {
         for (int i = 0; i < 3000; i++) {
             es.execute(() -> {
                 try {
-                    AuthRecipe.linkAccounts(process.getProcess(), user2.getSupertokensUserId(), user1.getSupertokensUserId());
+                    AuthRecipe.linkAccounts(process.getProcess(), user2.getSupertokensUserId(),
+                            user1.getSupertokensUserId());
                     AuthRecipe.unlinkAccounts(process.getProcess(), user2.getSupertokensUserId());
                 } catch (Exception e) {
                     if (e.getMessage().toLowerCase().contains("the transaction might succeed if retried")) {
@@ -642,9 +645,11 @@ public class DeadlockTest {
 
         assert (pass.get());
         assertNull(process
-                .checkOrWaitForEventInPlugin(io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
+                .checkOrWaitForEventInPlugin(
+                        io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
         assertNotNull(process
-                .checkOrWaitForEventInPlugin(io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
+                .checkOrWaitForEventInPlugin(
+                        io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -685,9 +690,11 @@ public class DeadlockTest {
 
         assert (pass.get());
         assertNull(process
-                .checkOrWaitForEventInPlugin(io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
+                .checkOrWaitForEventInPlugin(
+                        io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
         assertNotNull(process
-                .checkOrWaitForEventInPlugin(io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
+                .checkOrWaitForEventInPlugin(
+                        io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
