@@ -52,14 +52,14 @@ public class JWTSigningQueries {
         return "CREATE TABLE IF NOT EXISTS " + jwtSigningKeysTable + " ("
                 + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "key_id VARCHAR(255) NOT NULL,"
-                + "key_string TEXT NOT NULL," 
+                + "key_string TEXT NOT NULL,"
                 + "algorithm VARCHAR(10) NOT NULL,"
-                + "created_at BIGINT," 
+                + "created_at BIGINT,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, jwtSigningKeysTable, null, "pkey")
                 + " PRIMARY KEY(app_id, key_id),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, jwtSigningKeysTable, "app_id", "fkey")
                 + " FOREIGN KEY(app_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppsTable() +  " (app_id) ON DELETE CASCADE"
+                + " REFERENCES " + Config.getConfig(start).getAppsTable() + " (app_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
     }
@@ -75,7 +75,7 @@ public class JWTSigningQueries {
         String QUERY = "SELECT * FROM " + getConfig(start).getJWTSigningKeysTable()
                 + " WHERE app_id = ? ORDER BY created_at DESC FOR UPDATE";
 
-        return execute(con, QUERY, pst -> pst.setString(1, appIdentifier.getAppId()),result -> {
+        return execute(con, QUERY, pst -> pst.setString(1, appIdentifier.getAppId()), result -> {
             List<JWTSigningKeyInfo> keys = new ArrayList<>();
 
             while (result.next()) {

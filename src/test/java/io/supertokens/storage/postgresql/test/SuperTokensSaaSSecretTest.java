@@ -86,11 +86,12 @@ public class SuperTokensSaaSSecretTest {
             try {
                 JsonObject j = new JsonObject();
                 j.addProperty(PROTECTED_DB_CONFIG[i], "");
-                Multitenancy.addNewOrUpdateAppOrTenant(process.main, new TenantConfig(new TenantIdentifier(null, null, "t1"), new EmailPasswordConfig(false),
-                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
-                        new PasswordlessConfig(false),
-                        null, null,
-                        j), true);
+                Multitenancy.addNewOrUpdateAppOrTenant(process.main,
+                        new TenantConfig(new TenantIdentifier(null, null, "t1"), new EmailPasswordConfig(false),
+                                new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                                new PasswordlessConfig(false),
+                                null, null,
+                                j), true);
                 fail();
             } catch (BadPermissionException e) {
                 assertEquals(e.getMessage(), "Not allowed to modify DB related configs.");
@@ -162,12 +163,13 @@ public class SuperTokensSaaSSecretTest {
             } else if (PROTECTED_DB_CONFIG_VALUES[i] instanceof Integer) {
                 j.addProperty(PROTECTED_DB_CONFIG[i], (Integer) PROTECTED_DB_CONFIG_VALUES[i]);
             }
-            Multitenancy.addNewOrUpdateAppOrTenant(process.main, new TenantConfig(new TenantIdentifier(null, null, "t1"),
-                    new EmailPasswordConfig(false),
-                    new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
-                    new PasswordlessConfig(false),
-                    null, null,
-                    j), false);
+            Multitenancy.addNewOrUpdateAppOrTenant(process.main,
+                    new TenantConfig(new TenantIdentifier(null, null, "t1"),
+                            new EmailPasswordConfig(false),
+                            new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                            new PasswordlessConfig(false),
+                            null, null,
+                            j), false);
         }
 
         JsonObject coreConfig = new JsonObject();
@@ -224,7 +226,8 @@ public class SuperTokensSaaSSecretTest {
 
             {
                 JsonObject response = HttpRequestForTesting.sendJsonRequest(process.getProcess(), "",
-                        HttpRequestForTesting.getMultitenantUrl(TenantIdentifier.BASE_TENANT, "/recipe/multitenancy/tenant/list"),
+                        HttpRequestForTesting.getMultitenantUrl(TenantIdentifier.BASE_TENANT,
+                                "/recipe/multitenancy/tenant/list"),
                         null, 1000, 1000, null,
                         SemVer.v3_0.get(), "GET", apiKey, "multitenancy");
 
@@ -245,7 +248,8 @@ public class SuperTokensSaaSSecretTest {
 
             {
                 JsonObject response = HttpRequestForTesting.sendJsonRequest(process.getProcess(), "",
-                        HttpRequestForTesting.getMultitenantUrl(TenantIdentifier.BASE_TENANT, "/recipe/multitenancy/tenant/list"),
+                        HttpRequestForTesting.getMultitenantUrl(TenantIdentifier.BASE_TENANT,
+                                "/recipe/multitenancy/tenant/list"),
                         null, 1000, 1000, null,
                         SemVer.v3_0.get(), "GET", saasSecret, "multitenancy");
 

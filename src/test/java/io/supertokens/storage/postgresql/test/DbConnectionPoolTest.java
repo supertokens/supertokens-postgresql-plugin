@@ -154,14 +154,15 @@ public class DbConnectionPoolTest {
                     try {
                         TenantIdentifier t1 = new TenantIdentifier(null, null, "t1");
                         Storage t1Storage = (StorageLayer.getStorage(t1, process.getProcess()));
-                        ThirdParty.signInUp(t1, t1Storage, process.getProcess(), "google", "googleid"+ finalI, "user" +
+                        ThirdParty.signInUp(t1, t1Storage, process.getProcess(), "google", "googleid" + finalI, "user" +
                                 finalI + "@example.com");
 
                         if (firstErrorTime.get() != -1 && successAfterErrorTime.get() == -1) {
                             successAfterErrorTime.set(System.currentTimeMillis());
                         }
                     } catch (StorageQueryException e) {
-                        if (e.getMessage().contains("Connection is closed") || e.getMessage().contains("has been closed")) {
+                        if (e.getMessage().contains("Connection is closed") ||
+                                e.getMessage().contains("has been closed")) {
                             if (firstErrorTime.get() == -1) {
                                 firstErrorTime.set(System.currentTimeMillis());
                             }
@@ -355,7 +356,7 @@ public class DbConnectionPoolTest {
                 try {
                     TenantIdentifier t1 = new TenantIdentifier(null, null, "t1");
                     Storage t1Storage = (StorageLayer.getStorage(t1, process.getProcess()));
-                    ThirdParty.signInUp(t1, t1Storage, process.getProcess(), "google", "googleid"+ finalI, "user" +
+                    ThirdParty.signInUp(t1, t1Storage, process.getProcess(), "google", "googleid" + finalI, "user" +
                             finalI + "@example.com");
 
                 } catch (StorageQueryException e) {

@@ -75,8 +75,9 @@ public class TestMainThread {
         JsonObject requestBody = new JsonObject();
         requestBody.addProperty("appId", "a1");
         requestBody.add("coreConfig", config);
-        HttpRequestForTesting.sendJsonPUTRequest(process.getProcess(), "", "http://localhost:3567/recipe/multitenancy/app",
-                requestBody, 1000, 2500, null,  "3.0", "multitenancy");
+        HttpRequestForTesting.sendJsonPUTRequest(process.getProcess(), "",
+                "http://localhost:3567/recipe/multitenancy/app",
+                requestBody, 1000, 2500, null, "3.0", "multitenancy");
 
         Storage storage2 = StorageLayer.getStorage(new TenantIdentifier(null, "a1", null), process.getProcess());
 

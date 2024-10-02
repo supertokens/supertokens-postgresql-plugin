@@ -285,7 +285,9 @@ public class EmailPasswordQueries {
 
                 { // all_auth_recipe_users
                     String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
-                            + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)" +
+                            +
+                            "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, " +
+                            "primary_or_recipe_user_time_joined)" +
                             " VALUES(?, ?, ?, ?, ?, ?, ?)";
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
@@ -375,8 +377,10 @@ public class EmailPasswordQueries {
         }
     }
 
-    private static UserInfoPartial getUserInfoUsingId_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
-                                                     String id) throws SQLException, StorageQueryException {
+    private static UserInfoPartial getUserInfoUsingId_Transaction(Start start, Connection sqlCon,
+                                                                  AppIdentifier appIdentifier,
+                                                                  String id)
+            throws SQLException, StorageQueryException {
         // we don't need a FOR UPDATE here because this is already part of a transaction, and locked on
         // app_id_to_user_id table
         String QUERY = "SELECT user_id, email, password_hash, time_joined FROM "
@@ -426,7 +430,7 @@ public class EmailPasswordQueries {
     }
 
     public static List<LoginMethod> getUsersInfoUsingIdList_Transaction(Start start, Connection con, Set<String> ids,
-                                                            AppIdentifier appIdentifier)
+                                                                        AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
         if (ids.size() > 0) {
             // No need to filter based on tenantId because the id list is already filtered for a tenant
@@ -456,6 +460,7 @@ public class EmailPasswordQueries {
         }
         return Collections.emptyList();
     }
+
     public static String lockEmail_Transaction(Start start, Connection con,
                                                AppIdentifier appIdentifier,
                                                String email)
@@ -475,7 +480,7 @@ public class EmailPasswordQueries {
     }
 
     public static String getPrimaryUserIdUsingEmail(Start start, TenantIdentifier tenantIdentifier,
-                                                     String email)
+                                                    String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getEmailPasswordUserToTenantTable() + " AS ep" +
@@ -495,8 +500,9 @@ public class EmailPasswordQueries {
         });
     }
 
-    public static List<String> getPrimaryUserIdsUsingEmail_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
-                                                     String email)
+    public static List<String> getPrimaryUserIdsUsingEmail_Transaction(Start start, Connection con,
+                                                                       AppIdentifier appIdentifier,
+                                                                       String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getEmailPasswordUsersTable() + " AS ep" +
@@ -526,11 +532,14 @@ public class EmailPasswordQueries {
             throw new UnknownUserIdException();
         }
 
-        GeneralQueries.AccountLinkingInfo accountLinkingInfo = GeneralQueries.getAccountLinkingInfo_Transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userId);
+        GeneralQueries.AccountLinkingInfo accountLinkingInfo = GeneralQueries.getAccountLinkingInfo_Transaction(start,
+                sqlCon, tenantIdentifier.toAppIdentifier(), userId);
 
         { // all_auth_recipe_users
             String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
-                    + "(app_id, tenant_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
+                    +
+                    "(app_id, tenant_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, " +
+                    "recipe_id, time_joined, primary_or_recipe_user_time_joined)"
                     + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)" + " ON CONFLICT DO NOTHING";
             GeneralQueries.AccountLinkingInfo finalAccountLinkingInfo = accountLinkingInfo;
 
@@ -545,14 +554,16 @@ public class EmailPasswordQueries {
                 pst.setLong(8, userInfo.timeJoined);
             });
 
-            GeneralQueries.updateTimeJoinedForPrimaryUser_Transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), finalAccountLinkingInfo.primaryUserId);
+            GeneralQueries.updateTimeJoinedForPrimaryUser_Transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(),
+                    finalAccountLinkingInfo.primaryUserId);
         }
 
         { // emailpassword_user_to_tenant
             String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUserToTenantTable()
                     + "(app_id, tenant_id, user_id, email)"
                     + " VALUES(?, ?, ?, ?) " + " ON CONFLICT ON CONSTRAINT "
-                    + Utils.getConstraintName(Config.getConfig(start).getTableSchema(), getConfig(start).getEmailPasswordUserToTenantTable(), null, "pkey")
+                    + Utils.getConstraintName(Config.getConfig(start).getTableSchema(),
+                    getConfig(start).getEmailPasswordUserToTenantTable(), null, "pkey")
                     + " DO NOTHING";
 
             int numRows = update(sqlCon, QUERY, pst -> {

@@ -662,9 +662,12 @@ public class ConfigTest {
                 continue;
             }
 
-            if (!(field.isAnnotationPresent(UserPoolProperty.class) || field.isAnnotationPresent(ConnectionPoolProperty.class) || field.isAnnotationPresent(
+            if (!(field.isAnnotationPresent(UserPoolProperty.class) ||
+                    field.isAnnotationPresent(ConnectionPoolProperty.class) || field.isAnnotationPresent(
                     NotConflictingWithinUserPool.class))) {
-                fail(field.getName() + " does not have UserPoolProperty, ConnectionPoolProperty or NotConflictingWithinUserPool annotation");
+                fail(field.getName() +
+                        " does not have UserPoolProperty, ConnectionPoolProperty or NotConflictingWithinUserPool " +
+                        "annotation");
             }
         }
     }
