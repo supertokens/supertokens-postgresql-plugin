@@ -7,6 +7,7 @@ import java.util.List;
 
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.pluginInterface.oauth.OAuthLogoutChallenge;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -17,15 +18,15 @@ import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 public class OAuthQueries {
     public static String getQueryToCreateOAuthClientTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
-        String oAuth2ClientTable = Config.getConfig(start).getOAuthClientsTable();
+        String oAuthClientsTable = Config.getConfig(start).getOAuthClientsTable();
         // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + oAuth2ClientTable + " ("
+        return "CREATE TABLE IF NOT EXISTS " + oAuthClientsTable + " ("
                 + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "client_id VARCHAR(128) NOT NULL,"
                 + "is_client_credentials_only BOOLEAN NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientTable, "client_id", "pkey")
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuthClientsTable, "client_id", "pkey")
                 + " PRIMARY KEY (app_id, client_id),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientTable, "app_id", "fkey")
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuthClientsTable, "app_id", "fkey")
                 + " FOREIGN KEY(app_id)"
                 + " REFERENCES " + Config.getConfig(start).getAppsTable() + "(app_id) ON DELETE CASCADE"
                 + ");";
@@ -34,17 +35,17 @@ public class OAuthQueries {
 
     public static String getQueryToCreateOAuthRevokeTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
-        String oAuth2ClientTable = Config.getConfig(start).getOAuthRevokeTable();
+        String oAuthRevokeTable = Config.getConfig(start).getOAuthRevokeTable();
         // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + oAuth2ClientTable + " ("
+        return "CREATE TABLE IF NOT EXISTS " + oAuthRevokeTable + " ("
                 + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "target_type VARCHAR(16) NOT NULL,"
                 + "target_value VARCHAR(128) NOT NULL,"
                 + "timestamp BIGINT NOT NULL,"
                 + "exp BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientTable, "client_id", "pkey")
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuthRevokeTable, "client_id", "pkey")
                 + " PRIMARY KEY (app_id, target_type, target_value),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientTable, "app_id", "fkey")
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuthRevokeTable, "app_id", "fkey")
                 + " FOREIGN KEY(app_id)"
                 + " REFERENCES " + Config.getConfig(start).getAppsTable() + "(app_id) ON DELETE CASCADE"
                 + ");";
@@ -52,29 +53,29 @@ public class OAuthQueries {
     }
 
     public static String getQueryToCreateOAuthRevokeTimestampIndex(Start start) {
-        String oAuth2ClientTable = Config.getConfig(start).getOAuthRevokeTable();
+        String oAuthRevokeTable = Config.getConfig(start).getOAuthRevokeTable();
         return "CREATE INDEX IF NOT EXISTS oauth_revoke_timestamp_index ON "
-                + oAuth2ClientTable + "(timestamp DESC, app_id DESC);";
+                + oAuthRevokeTable + "(timestamp DESC, app_id DESC);";
     }
 
     public static String getQueryToCreateOAuthRevokeExpIndex(Start start) {
-        String oAuth2ClientTable = Config.getConfig(start).getOAuthRevokeTable();
+        String oAuthRevokeTable = Config.getConfig(start).getOAuthRevokeTable();
         return "CREATE INDEX IF NOT EXISTS oauth_revoke_exp_index ON "
-                + oAuth2ClientTable + "(exp DESC, app_id DESC);";
+                + oAuthRevokeTable + "(exp DESC, app_id DESC);";
     }
 
     public static String getQueryToCreateOAuthM2MTokensTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
-        String oAuth2ClientTable = Config.getConfig(start).getOAuthM2MTokensTable();
+        String oAuthM2MTokensTable = Config.getConfig(start).getOAuthM2MTokensTable();
         // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + oAuth2ClientTable + " ("
+        return "CREATE TABLE IF NOT EXISTS " + oAuthM2MTokensTable + " ("
                 + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "client_id VARCHAR(128) NOT NULL,"
                 + "iat BIGINT NOT NULL,"
                 + "exp BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientTable, "client_id", "pkey")
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuthM2MTokensTable, "client_id", "pkey")
                 + " PRIMARY KEY (app_id, client_id, iat),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2ClientTable, "app_id", "fkey")
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuthM2MTokensTable, "app_id", "fkey")
                 + " FOREIGN KEY(app_id)"
                 + " REFERENCES " + Config.getConfig(start).getAppsTable() + "(app_id) ON DELETE CASCADE"
                 + ");";
@@ -82,15 +83,45 @@ public class OAuthQueries {
     }
 
     public static String getQueryToCreateOAuthM2MTokenIatIndex(Start start) {
-        String oAuth2ClientTable = Config.getConfig(start).getOAuthM2MTokensTable();
+        String oAuthM2MTokensTable = Config.getConfig(start).getOAuthM2MTokensTable();
         return "CREATE INDEX IF NOT EXISTS oauth_m2m_token_iat_index ON "
-                + oAuth2ClientTable + "(iat DESC, app_id DESC);";
+                + oAuthM2MTokensTable + "(iat DESC, app_id DESC);";
     }
 
     public static String getQueryToCreateOAuthM2MTokenExpIndex(Start start) {
-        String oAuth2ClientTable = Config.getConfig(start).getOAuthM2MTokensTable();
+        String oAuthM2MTokensTable = Config.getConfig(start).getOAuthM2MTokensTable();
         return "CREATE INDEX IF NOT EXISTS oauth_m2m_token_exp_index ON "
-                + oAuth2ClientTable + "(exp DESC, app_id DESC);";
+                + oAuthM2MTokensTable + "(exp DESC, app_id DESC);";
+    }
+
+    public static String getQueryToCreateOAuthLogoutChallengesTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String oAuth2LogoutChallengesTable = Config.getConfig(start).getOAuthLogoutChallengesTable();
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + oAuth2LogoutChallengesTable + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "challenge VARCHAR(128) NOT NULL,"
+                + "client_id VARCHAR(128) NOT NULL,"
+                + "post_logout_redirect_uri VARCHAR(1024),"
+                + "session_handle VARCHAR(128),"
+                + "state VARCHAR(128),"
+                + "time_created BIGINT NOT NULL,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2LogoutChallengesTable, "app_id_challenge", "pkey")
+                + " PRIMARY KEY (app_id, challenge),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2LogoutChallengesTable, "app_id_client_id", "fkey")
+                + " FOREIGN KEY(app_id, client_id)"
+                + " REFERENCES " + Config.getConfig(start).getOAuthClientsTable() + "(app_id, client_id) ON DELETE CASCADE,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2LogoutChallengesTable, "app_id", "fkey")
+                + " FOREIGN KEY(app_id)"
+                + " REFERENCES " + Config.getConfig(start).getAppsTable() + "(app_id) ON DELETE CASCADE"
+                + ");";
+        // @formatter:on
+    }
+
+    public static String getQueryToCreateOAuthLogoutChallengesTimeCreatedIndex(Start start) {
+        String oAuth2LogoutChallengesTable = Config.getConfig(start).getOAuthLogoutChallengesTable();
+        return "CREATE INDEX IF NOT EXISTS oauth_logout_challenges_time_created_index ON "
+                + oAuth2LogoutChallengesTable + "(time_created ASC, app_id ASC);";
     }
 
     public static boolean isClientIdForAppId(Start start, String clientId, AppIdentifier appIdentifier)
@@ -286,5 +317,61 @@ public class OAuthQueries {
                 pst.setLong(2, timestamp);
             });
         }
+    }
+
+    public static void addLogoutChallenge(Start start, AppIdentifier appIdentifier, String challenge, String clientId,
+            String postLogoutRedirectionUri, String sessionHandle, String state, long timeCreated) throws SQLException, StorageQueryException {
+        String QUERY = "INSERT INTO " + Config.getConfig(start).getOAuthLogoutChallengesTable() +
+                " (app_id, challenge, client_id, post_logout_redirect_uri, session_handle, state, time_created) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        update(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, challenge);
+            pst.setString(3, clientId);
+            pst.setString(4, postLogoutRedirectionUri);
+            pst.setString(5, sessionHandle);
+            pst.setString(6, state);
+            pst.setLong(7, timeCreated);
+        });
+    }
+
+    public static OAuthLogoutChallenge getLogoutChallenge(Start start, AppIdentifier appIdentifier, String challenge) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT challenge, client_id, post_logout_redirect_uri, session_handle, state, time_created FROM " +
+                Config.getConfig(start).getOAuthLogoutChallengesTable() +
+                " WHERE app_id = ? AND challenge = ?";
+        
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, challenge);
+        }, result -> {
+            if (result.next()) {
+                return new OAuthLogoutChallenge(
+                    result.getString("challenge"),
+                    result.getString("client_id"),
+                    result.getString("post_logout_redirect_uri"),
+                    result.getString("session_handle"),
+                    result.getString("state"),
+                    result.getLong("time_created")
+                );
+            }
+            return null;
+        });
+    }
+
+    public static void deleteLogoutChallenge(Start start, AppIdentifier appIdentifier, String challenge) throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + Config.getConfig(start).getOAuthLogoutChallengesTable() +
+                " WHERE app_id = ? AND challenge = ?";
+        update(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, challenge);
+        });
+    }
+
+    public static void deleteLogoutChallengesBefore(Start start, AppIdentifier appIdentifier, long time) throws SQLException, StorageQueryException {
+        String QUERY = "DELETE FROM " + Config.getConfig(start).getOAuthLogoutChallengesTable() +
+                " WHERE app_id = ? AND time_created < ?";
+        update(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setLong(2, time);
+        });
     }
 }
