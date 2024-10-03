@@ -1,4 +1,20 @@
-package io.supertokens.storage.postgresql.queries;
+/*
+ *    Copyright (c) 2024, VRAI Labs and/or its affiliates. All rights reserved.
+ *
+ *    This software is licensed under the Apache License, Version 2.0 (the
+ *    "License") as published by the Apache Software Foundation.
+ *
+ *    You may not use this file except in compliance with the License. You may
+ *    obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *    Unless required by applicable law or agreed to in writing, software
+ *    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ *    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ *    License for the specific language governing permissions and limitations
+ *    under the License.
+ */
+
+ package io.supertokens.storage.postgresql.queries;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -8,6 +24,7 @@ import java.util.List;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.oauth.OAuthLogoutChallenge;
+import io.supertokens.pluginInterface.oauth.OAuthRevokeTargetType;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -61,7 +78,7 @@ public class OAuthQueries {
     public static String getQueryToCreateOAuthRevokeExpIndex(Start start) {
         String oAuthRevokeTable = Config.getConfig(start).getOAuthRevokeTable();
         return "CREATE INDEX IF NOT EXISTS oauth_revoke_exp_index ON "
-                + oAuthRevokeTable + "(exp DESC, app_id DESC);";
+                + oAuthRevokeTable + "(exp DESC);";
     }
 
     public static String getQueryToCreateOAuthM2MTokensTable(Start start) {
@@ -91,7 +108,7 @@ public class OAuthQueries {
     public static String getQueryToCreateOAuthM2MTokenExpIndex(Start start) {
         String oAuthM2MTokensTable = Config.getConfig(start).getOAuthM2MTokensTable();
         return "CREATE INDEX IF NOT EXISTS oauth_m2m_token_exp_index ON "
-                + oAuthM2MTokensTable + "(exp DESC, app_id DESC);";
+                + oAuthM2MTokensTable + "(exp DESC);";
     }
 
     public static String getQueryToCreateOAuthLogoutChallengesTable(Start start) {
@@ -124,7 +141,7 @@ public class OAuthQueries {
                 + oAuth2LogoutChallengesTable + "(time_created ASC, app_id ASC);";
     }
 
-    public static boolean isClientIdForAppId(Start start, String clientId, AppIdentifier appIdentifier)
+    public static boolean doesOAuthClientIdExist(Start start, String clientId, AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT app_id FROM " + Config.getConfig(start).getOAuthClientsTable() +
                 " WHERE client_id = ? AND app_id = ?";
@@ -135,7 +152,7 @@ public class OAuthQueries {
         }, ResultSet::next);
     }
 
-    public static List<String> listClientsForApp(Start start, AppIdentifier appIdentifier)
+    public static List<String> listOAuthClients(Start start, AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT client_id FROM " + Config.getConfig(start).getOAuthClientsTable() +
                 " WHERE app_id = ?";
@@ -150,7 +167,7 @@ public class OAuthQueries {
         });
     }
 
-    public static void insertClientIdForAppId(Start start, AppIdentifier appIdentifier, String clientId,
+    public static void addOrUpdateOauthClient(Start start, AppIdentifier appIdentifier, String clientId,
             boolean isClientCredentialsOnly)
             throws SQLException, StorageQueryException {
         String INSERT = "INSERT INTO " + Config.getConfig(start).getOAuthClientsTable()
@@ -164,7 +181,7 @@ public class OAuthQueries {
         });
     }
 
-    public static boolean deleteClientIdForAppId(Start start, String clientId, AppIdentifier appIdentifier)
+    public static boolean deleteOAuthClient(Start start, String clientId, AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
         String DELETE = "DELETE FROM " + Config.getConfig(start).getOAuthClientsTable()
                 + " WHERE app_id = ? AND client_id = ?";
@@ -175,7 +192,7 @@ public class OAuthQueries {
         return numberOfRow > 0;
     }
 
-    public static void revoke(Start start, AppIdentifier appIdentifier, String targetType, String targetValue, long exp)
+    public static void revokeOAuthTokensBasedOnTargetFields(Start start, AppIdentifier appIdentifier, OAuthRevokeTargetType targetType, String targetValue, long exp)
             throws SQLException, StorageQueryException {
         String INSERT = "INSERT INTO " + Config.getConfig(start).getOAuthRevokeTable()
                 + "(app_id, target_type, target_value, timestamp, exp) VALUES (?, ?, ?, ?, ?) "
@@ -184,7 +201,7 @@ public class OAuthQueries {
         long currentTime = System.currentTimeMillis() / 1000;
         update(start, INSERT, pst -> {
             pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, targetType);
+            pst.setString(2, targetType.getValue());
             pst.setString(3, targetValue);
             pst.setLong(4, currentTime);
             pst.setLong(5, exp);
@@ -193,11 +210,11 @@ public class OAuthQueries {
         });
     }
 
-    public static boolean isRevoked(Start start, AppIdentifier appIdentifier, String[] targetTypes,
+    public static boolean isOAuthTokenRevokedBasedOnTargetFields(Start start, AppIdentifier appIdentifier, OAuthRevokeTargetType[] targetTypes,
             String[] targetValues, long issuedAt)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT app_id FROM " + Config.getConfig(start).getOAuthRevokeTable() +
-                " WHERE app_id = ? AND timestamp > ? AND (";
+                " WHERE app_id = ? AND timestamp >= ? AND (";
 
         for (int i = 0; i < targetTypes.length; i++) {
             QUERY += "(target_type = ? AND target_value = ?)";
@@ -215,7 +232,7 @@ public class OAuthQueries {
 
             int index = 3;
             for (int i = 0; i < targetTypes.length; i++) {
-                pst.setString(index, targetTypes[i]);
+                pst.setString(index, targetTypes[i].getValue());
                 index++;
                 pst.setString(index, targetValues[i]);
                 index++;
@@ -223,7 +240,7 @@ public class OAuthQueries {
         }, ResultSet::next);
     }
 
-    public static int countTotalNumberOfClientsForApp(Start start, AppIdentifier appIdentifier,
+    public static int countTotalNumberOfClients(Start start, AppIdentifier appIdentifier,
             boolean filterByClientCredentialsOnly) throws SQLException, StorageQueryException {
         if (filterByClientCredentialsOnly) {
             String QUERY = "SELECT COUNT(*) as c FROM " + Config.getConfig(start).getOAuthClientsTable() +
@@ -251,7 +268,7 @@ public class OAuthQueries {
         }
     }
 
-    public static int countTotalNumberOfM2MTokensAlive(Start start, AppIdentifier appIdentifier)
+    public static int countTotalNumberOfOAuthM2MTokensAlive(Start start, AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT COUNT(*) as c FROM " + Config.getConfig(start).getOAuthM2MTokensTable() +
                 " WHERE app_id = ? AND exp > ?";
@@ -266,7 +283,7 @@ public class OAuthQueries {
         });
     }
 
-    public static int countTotalNumberOfM2MTokensCreatedSince(Start start, AppIdentifier appIdentifier, long since)
+    public static int countTotalNumberOfOAuthM2MTokensCreatedSince(Start start, AppIdentifier appIdentifier, long since)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT COUNT(*) as c FROM " + Config.getConfig(start).getOAuthM2MTokensTable() +
                 " WHERE app_id = ? AND iat >= ?";
@@ -281,7 +298,7 @@ public class OAuthQueries {
         });
     }
 
-    public static void addM2MToken(Start start, AppIdentifier appIdentifier, String clientId, long iat, long exp)
+    public static void addOAuthM2MTokenForStats(Start start, AppIdentifier appIdentifier, String clientId, long iat, long exp)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + Config.getConfig(start).getOAuthM2MTokensTable() +
                 " (app_id, client_id, iat, exp) VALUES (?, ?, ?, ?)";
@@ -293,33 +310,31 @@ public class OAuthQueries {
         });
     }
 
-    public static void cleanUpExpiredAndRevokedTokens(Start start, AppIdentifier appIdentifier) throws SQLException, StorageQueryException {
+    public static void cleanUpExpiredAndRevokedOAuthTokensList(Start start) throws SQLException, StorageQueryException {
         {
             // delete expired M2M tokens
             String QUERY = "DELETE FROM " + Config.getConfig(start).getOAuthM2MTokensTable() +
-                    " WHERE app_id = ? AND exp < ?";
+                    " WHERE exp < ?";
 
             long timestamp = System.currentTimeMillis() / 1000 - 3600 * 24 * 31; // expired 31 days ago
             update(start, QUERY, pst -> {
-                pst.setString(1, appIdentifier.getAppId());
-                pst.setLong(2, timestamp);
+                pst.setLong(1, timestamp);
             });
         }
 
         {
             // delete expired revoked tokens
             String QUERY = "DELETE FROM " + Config.getConfig(start).getOAuthRevokeTable() +
-                    " WHERE app_id = ? AND exp < ?";
+                    " WHERE exp < ?";
 
             long timestamp = System.currentTimeMillis() / 1000 - 3600 * 24 * 31; // expired 31 days ago
             update(start, QUERY, pst -> {
-                pst.setString(1, appIdentifier.getAppId());
-                pst.setLong(2, timestamp);
+                pst.setLong(1, timestamp);
             });
         }
     }
 
-    public static void addLogoutChallenge(Start start, AppIdentifier appIdentifier, String challenge, String clientId,
+    public static void addOAuthLogoutChallenge(Start start, AppIdentifier appIdentifier, String challenge, String clientId,
             String postLogoutRedirectionUri, String sessionHandle, String state, long timeCreated) throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + Config.getConfig(start).getOAuthLogoutChallengesTable() +
                 " (app_id, challenge, client_id, post_logout_redirect_uri, session_handle, state, time_created) VALUES (?, ?, ?, ?, ?, ?, ?)";
@@ -334,7 +349,7 @@ public class OAuthQueries {
         });
     }
 
-    public static OAuthLogoutChallenge getLogoutChallenge(Start start, AppIdentifier appIdentifier, String challenge) throws SQLException, StorageQueryException {
+    public static OAuthLogoutChallenge getOAuthLogoutChallenge(Start start, AppIdentifier appIdentifier, String challenge) throws SQLException, StorageQueryException {
         String QUERY = "SELECT challenge, client_id, post_logout_redirect_uri, session_handle, state, time_created FROM " +
                 Config.getConfig(start).getOAuthLogoutChallengesTable() +
                 " WHERE app_id = ? AND challenge = ?";
@@ -357,7 +372,7 @@ public class OAuthQueries {
         });
     }
 
-    public static void deleteLogoutChallenge(Start start, AppIdentifier appIdentifier, String challenge) throws SQLException, StorageQueryException {
+    public static void deleteOAuthLogoutChallenge(Start start, AppIdentifier appIdentifier, String challenge) throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + Config.getConfig(start).getOAuthLogoutChallengesTable() +
                 " WHERE app_id = ? AND challenge = ?";
         update(start, QUERY, pst -> {
@@ -366,12 +381,11 @@ public class OAuthQueries {
         });
     }
 
-    public static void deleteLogoutChallengesBefore(Start start, AppIdentifier appIdentifier, long time) throws SQLException, StorageQueryException {
+    public static void deleteOAuthLogoutChallengesBefore(Start start, long time) throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + Config.getConfig(start).getOAuthLogoutChallengesTable() +
-                " WHERE app_id = ? AND time_created < ?";
+                " WHERE time_created < ?";
         update(start, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setLong(2, time);
+            pst.setLong(1, time);
         });
     }
 }
