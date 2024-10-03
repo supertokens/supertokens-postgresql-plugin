@@ -9,7 +9,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [7.2.0] - 2024-10-03
 
-- Compatible with plugin interface version 6.3.
+- Compatible with plugin interface version 6.3
 - Adds support for OAuthStorage
 
 ## [7.1.1] - 2024-08-08
