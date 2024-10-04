@@ -58,6 +58,7 @@ import io.supertokens.pluginInterface.oauth.OAuthLogoutChallenge;
 import io.supertokens.pluginInterface.oauth.OAuthRevokeTargetType;
 import io.supertokens.pluginInterface.oauth.OAuthStorage;
 import io.supertokens.pluginInterface.oauth.exception.DuplicateOAuthLogoutChallengeException;
+import io.supertokens.pluginInterface.oauth.exception.OAuthClientNotFoundException;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.exception.*;
@@ -3097,10 +3098,18 @@ public class Start
 
     @Override
     public void addOrUpdateOauthClient(AppIdentifier appIdentifier, String clientId, boolean isClientCredentialsOnly)
-            throws StorageQueryException {
+            throws StorageQueryException, TenantOrAppNotFoundException {
         try {
             OAuthQueries.addOrUpdateOauthClient(this, appIdentifier, clientId, isClientCredentialsOnly);
         } catch (SQLException e) {
+            PostgreSQLConfig config = Config.getConfig(this);
+            if (e instanceof PSQLException) {
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isForeignKeyConstraintError(serverMessage, config.getOAuthClientsTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
+            }
             throw new StorageQueryException(e);
         }
     }
@@ -3125,10 +3134,18 @@ public class Start
 
     @Override
     public void revokeOAuthTokensBasedOnTargetFields(AppIdentifier appIdentifier, OAuthRevokeTargetType targetType, String targetValue, long exp)
-            throws StorageQueryException {
+            throws StorageQueryException, TenantOrAppNotFoundException {
         try {
             OAuthQueries.revokeOAuthTokensBasedOnTargetFields(this, appIdentifier, targetType, targetValue, exp);
         } catch (SQLException e) {
+            PostgreSQLConfig config = Config.getConfig(this);
+            if (e instanceof PSQLException) {
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isForeignKeyConstraintError(serverMessage, config.getOAuthRevokeTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
+            }
             throw new StorageQueryException(e);
         }
         
@@ -3146,10 +3163,18 @@ public class Start
 
     @Override
     public void addOAuthM2MTokenForStats(AppIdentifier appIdentifier, String clientId, long iat, long exp)
-            throws StorageQueryException {
+            throws StorageQueryException, OAuthClientNotFoundException {
         try {
             OAuthQueries.addOAuthM2MTokenForStats(this, appIdentifier, clientId, iat, exp);
         } catch (SQLException e) {
+            PostgreSQLConfig config = Config.getConfig(this);
+            if (e instanceof PSQLException) {
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isForeignKeyConstraintError(serverMessage, config.getOAuthM2MTokensTable(), "client_id")) {
+                    throw new OAuthClientNotFoundException();
+                }
+            }
             throw new StorageQueryException(e);
         }
     }
@@ -3166,7 +3191,7 @@ public class Start
     @Override
     public void addOAuthLogoutChallenge(AppIdentifier appIdentifier, String challenge, String clientId,
             String postLogoutRedirectionUri, String sessionHandle, String state, long timeCreated)
-            throws StorageQueryException, DuplicateOAuthLogoutChallengeException {
+            throws StorageQueryException, DuplicateOAuthLogoutChallengeException, OAuthClientNotFoundException {
         try {
             OAuthQueries.addOAuthLogoutChallenge(this, appIdentifier, challenge, clientId, postLogoutRedirectionUri, sessionHandle, state, timeCreated);
         } catch (SQLException e) {
@@ -3176,6 +3201,8 @@ public class Start
 
                 if (isPrimaryKeyError(serverMessage, config.getOAuthLogoutChallengesTable())) {
                     throw new DuplicateOAuthLogoutChallengeException();
+                } else if (isForeignKeyConstraintError(serverMessage, config.getOAuthLogoutChallengesTable(), "client_id")) {
+                    throw new OAuthClientNotFoundException();
                 }
             }
             throw new StorageQueryException(e);

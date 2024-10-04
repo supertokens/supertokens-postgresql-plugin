@@ -41,7 +41,7 @@ public class OAuthQueries {
                 + "app_id VARCHAR(64) DEFAULT 'public',"
                 + "client_id VARCHAR(128) NOT NULL,"
                 + "is_client_credentials_only BOOLEAN NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuthClientsTable, "client_id", "pkey")
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuthClientsTable, null, "pkey")
                 + " PRIMARY KEY (app_id, client_id),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, oAuthClientsTable, "app_id", "fkey")
                 + " FOREIGN KEY(app_id)"
@@ -60,7 +60,7 @@ public class OAuthQueries {
                 + "target_value VARCHAR(128) NOT NULL,"
                 + "timestamp BIGINT NOT NULL,"
                 + "exp BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuthRevokeTable, "client_id", "pkey")
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuthRevokeTable, null, "pkey")
                 + " PRIMARY KEY (app_id, target_type, target_value),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, oAuthRevokeTable, "app_id", "fkey")
                 + " FOREIGN KEY(app_id)"
@@ -90,11 +90,11 @@ public class OAuthQueries {
                 + "client_id VARCHAR(128) NOT NULL,"
                 + "iat BIGINT NOT NULL,"
                 + "exp BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuthM2MTokensTable, "client_id", "pkey")
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuthM2MTokensTable, null, "pkey")
                 + " PRIMARY KEY (app_id, client_id, iat),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuthM2MTokensTable, "app_id", "fkey")
-                + " FOREIGN KEY(app_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppsTable() + "(app_id) ON DELETE CASCADE"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuthM2MTokensTable, "client_id", "fkey")
+                + " FOREIGN KEY(app_id, client_id)"
+                + " REFERENCES " + Config.getConfig(start).getOAuthClientsTable() + "(app_id, client_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
     }
@@ -123,14 +123,11 @@ public class OAuthQueries {
                 + "session_handle VARCHAR(128),"
                 + "state VARCHAR(128),"
                 + "time_created BIGINT NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2LogoutChallengesTable, "app_id_challenge", "pkey")
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2LogoutChallengesTable, null, "pkey")
                 + " PRIMARY KEY (app_id, challenge),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2LogoutChallengesTable, "app_id_client_id", "fkey")
+                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2LogoutChallengesTable, "client_id", "fkey")
                 + " FOREIGN KEY(app_id, client_id)"
-                + " REFERENCES " + Config.getConfig(start).getOAuthClientsTable() + "(app_id, client_id) ON DELETE CASCADE,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, oAuth2LogoutChallengesTable, "app_id", "fkey")
-                + " FOREIGN KEY(app_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppsTable() + "(app_id) ON DELETE CASCADE"
+                + " REFERENCES " + Config.getConfig(start).getOAuthClientsTable() + "(app_id, client_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
     }
@@ -301,7 +298,7 @@ public class OAuthQueries {
     public static void addOAuthM2MTokenForStats(Start start, AppIdentifier appIdentifier, String clientId, long iat, long exp)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + Config.getConfig(start).getOAuthM2MTokensTable() +
-                " (app_id, client_id, iat, exp) VALUES (?, ?, ?, ?)";
+                " (app_id, client_id, iat, exp) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING";
         update(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, clientId);
