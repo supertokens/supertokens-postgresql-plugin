@@ -7,6 +7,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [7.2.0] - 2024-10-03
+
+- Compatible with plugin interface version 6.3
+- Adds support for OAuthStorage
+
 ## [7.1.3] - 2024-09-04
 
 - Adds index on `last_active_time` for `user_last_active` table to improve the performance of MAU computation.
