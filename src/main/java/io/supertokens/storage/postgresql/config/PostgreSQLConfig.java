@@ -434,20 +434,8 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("dashboard_user_sessions");
     }
 
-    public String getOAuthClientsTable() {
-        return addSchemaAndPrefixToTableName("oauth_clients");
-    }
-
     public String getOAuthRevokeTable() {
         return addSchemaAndPrefixToTableName("oauth_revoke");
-    }
-
-    public String getOAuthM2MTokensTable() {
-        return addSchemaAndPrefixToTableName("oauth_m2m_tokens");
-    }
-
-    public String getOAuthLogoutChallengesTable() {
-        return addSchemaAndPrefixToTableName("oauth_logout_challenges");
     }
 
     public String getTotpUsersTable() {

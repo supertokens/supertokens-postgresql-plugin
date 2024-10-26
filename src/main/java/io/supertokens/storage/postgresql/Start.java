@@ -3101,33 +3101,6 @@ public class Start
         }
     }
 
-    @Override
-    public boolean doesOAuthClientIdExist(AppIdentifier appIdentifier, String clientId)
-            throws StorageQueryException {
-        try {
-            return OAuthQueries.doesOAuthClientIdExist(this, clientId, appIdentifier);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public void addOrUpdateOauthClient(AppIdentifier appIdentifier, String clientId, boolean isClientCredentialsOnly)
-            throws StorageQueryException, TenantOrAppNotFoundException {
-        try {
-            OAuthQueries.addOrUpdateOauthClient(this, appIdentifier, clientId, isClientCredentialsOnly);
-        } catch (SQLException e) {
-            PostgreSQLConfig config = Config.getConfig(this);
-            if (e instanceof PSQLException) {
-                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
-
-                if (isForeignKeyConstraintError(serverMessage, config.getOAuthClientsTable(), "app_id")) {
-                    throw new TenantOrAppNotFoundException(appIdentifier);
-                }
-            }
-            throw new StorageQueryException(e);
-        }
-    }
 
     @Override
     public boolean deleteOAuthClient(AppIdentifier appIdentifier, String clientId) throws StorageQueryException {
@@ -3138,156 +3111,7 @@ public class Start
         }
     }
 
-    @Override
-    public List<String> listOAuthClients(AppIdentifier appIdentifier) throws StorageQueryException {
-        try {
-            return OAuthQueries.listOAuthClients(this, appIdentifier);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
 
-    @Override
-    public void revokeOAuthTokensBasedOnTargetFields(AppIdentifier appIdentifier, OAuthRevokeTargetType targetType, String targetValue, long exp)
-            throws StorageQueryException, TenantOrAppNotFoundException {
-        try {
-            OAuthQueries.revokeOAuthTokensBasedOnTargetFields(this, appIdentifier, targetType, targetValue, exp);
-        } catch (SQLException e) {
-            PostgreSQLConfig config = Config.getConfig(this);
-            if (e instanceof PSQLException) {
-                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
-
-                if (isForeignKeyConstraintError(serverMessage, config.getOAuthRevokeTable(), "app_id")) {
-                    throw new TenantOrAppNotFoundException(appIdentifier);
-                }
-            }
-            throw new StorageQueryException(e);
-        }
-        
-    }
-
-    @Override
-    public boolean isOAuthTokenRevokedBasedOnTargetFields(AppIdentifier appIdentifier, OAuthRevokeTargetType[] targetTypes, String[] targetValues, long issuedAt)
-            throws StorageQueryException {
-        try {
-            return OAuthQueries.isOAuthTokenRevokedBasedOnTargetFields(this, appIdentifier, targetTypes, targetValues, issuedAt);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public void addOAuthM2MTokenForStats(AppIdentifier appIdentifier, String clientId, long iat, long exp)
-            throws StorageQueryException, OAuthClientNotFoundException {
-        try {
-            OAuthQueries.addOAuthM2MTokenForStats(this, appIdentifier, clientId, iat, exp);
-        } catch (SQLException e) {
-            PostgreSQLConfig config = Config.getConfig(this);
-            if (e instanceof PSQLException) {
-                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
-
-                if (isForeignKeyConstraintError(serverMessage, config.getOAuthM2MTokensTable(), "client_id")) {
-                    throw new OAuthClientNotFoundException();
-                }
-            }
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public void cleanUpExpiredAndRevokedOAuthTokensList() throws StorageQueryException {
-        try {
-            OAuthQueries.cleanUpExpiredAndRevokedOAuthTokensList(this);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public void addOAuthLogoutChallenge(AppIdentifier appIdentifier, String challenge, String clientId,
-            String postLogoutRedirectionUri, String sessionHandle, String state, long timeCreated)
-            throws StorageQueryException, DuplicateOAuthLogoutChallengeException, OAuthClientNotFoundException {
-        try {
-            OAuthQueries.addOAuthLogoutChallenge(this, appIdentifier, challenge, clientId, postLogoutRedirectionUri, sessionHandle, state, timeCreated);
-        } catch (SQLException e) {
-            PostgreSQLConfig config = Config.getConfig(this);
-            if (e instanceof PSQLException) {
-                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
-
-                if (isPrimaryKeyError(serverMessage, config.getOAuthLogoutChallengesTable())) {
-                    throw new DuplicateOAuthLogoutChallengeException();
-                } else if (isForeignKeyConstraintError(serverMessage, config.getOAuthLogoutChallengesTable(), "client_id")) {
-                    throw new OAuthClientNotFoundException();
-                }
-            }
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public OAuthLogoutChallenge getOAuthLogoutChallenge(AppIdentifier appIdentifier, String challenge) throws StorageQueryException {
-        try {
-            return OAuthQueries.getOAuthLogoutChallenge(this, appIdentifier, challenge);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public void deleteOAuthLogoutChallenge(AppIdentifier appIdentifier, String challenge) throws StorageQueryException {
-        try {
-            OAuthQueries.deleteOAuthLogoutChallenge(this, appIdentifier, challenge);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public void deleteOAuthLogoutChallengesBefore(long time) throws StorageQueryException {
-        try {
-            OAuthQueries.deleteOAuthLogoutChallengesBefore(this, time);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public int countTotalNumberOfOAuthClients(AppIdentifier appIdentifier) throws StorageQueryException {
-        try {
-            return OAuthQueries.countTotalNumberOfClients(this, appIdentifier, false);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public int countTotalNumberOfClientCredentialsOnlyOAuthClients(AppIdentifier appIdentifier)
-            throws StorageQueryException {
-        try {
-            return OAuthQueries.countTotalNumberOfClients(this, appIdentifier, true);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public int countTotalNumberOfOAuthM2MTokensCreatedSince(AppIdentifier appIdentifier, long since)
-            throws StorageQueryException {
-        try {
-            return OAuthQueries.countTotalNumberOfOAuthM2MTokensCreatedSince(this, appIdentifier, since);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public int countTotalNumberOfOAuthM2MTokensAlive(AppIdentifier appIdentifier) throws StorageQueryException {
-        try {
-            return OAuthQueries.countTotalNumberOfOAuthM2MTokensAlive(this, appIdentifier);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
 
     @TestOnly
     public int getDbActivityCount(String dbname) throws SQLException, StorageQueryException {
@@ -3331,15 +3155,6 @@ public class Start
                     "app_id")) {
                 throw new TenantOrAppNotFoundException(appIdentifier);
             }
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
-    public boolean deleteOAuthClient(AppIdentifier appIdentifier, String clientId) throws StorageQueryException {
-        try {
-            return OAuthQueries.deleteOAuthClient(this, clientId, appIdentifier);
-        } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
