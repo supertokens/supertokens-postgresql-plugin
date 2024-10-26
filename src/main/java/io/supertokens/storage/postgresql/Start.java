@@ -48,12 +48,20 @@ import io.supertokens.pluginInterface.jwt.JWTRecipeStorage;
 import io.supertokens.pluginInterface.jwt.JWTSigningKeyInfo;
 import io.supertokens.pluginInterface.jwt.exceptions.DuplicateKeyIdException;
 import io.supertokens.pluginInterface.jwt.sqlstorage.JWTRecipeSQLStorage;
-import io.supertokens.pluginInterface.multitenancy.*;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.pluginInterface.multitenancy.MultitenancyStorage;
+import io.supertokens.pluginInterface.multitenancy.TenantConfig;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateClientTypeException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateTenantException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateThirdPartyIdException;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.pluginInterface.multitenancy.sqlStorage.MultitenancySQLStorage;
+import io.supertokens.pluginInterface.oauth.OAuthClient;
+import io.supertokens.pluginInterface.oauth.OAuthLogoutChallenge;
+import io.supertokens.pluginInterface.oauth.OAuthStorage;
+import io.supertokens.pluginInterface.oauth.exception.DuplicateOAuthLogoutChallengeException;
+import io.supertokens.pluginInterface.oauth.exception.OAuthClientNotFoundException;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.exception.*;
@@ -98,7 +106,10 @@ import javax.annotation.Nonnull;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Set;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 
@@ -106,7 +117,7 @@ public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
         UserIdMappingSQLStorage, MultitenancyStorage, MultitenancySQLStorage, DashboardSQLStorage, TOTPSQLStorage,
-        ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage {
+        ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage, OAuthStorage {
 
     // these configs are protected from being modified / viewed by the dev using the SuperTokens
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
@@ -3100,5 +3111,270 @@ public class Start
             }
             return -1;
         });
+    }
+
+    @Override
+    public OAuthClient getOAuthClientById(AppIdentifier appIdentifier, String clientId)
+            throws StorageQueryException, OAuthClientNotFoundException {
+        try {
+            OAuthClient client =  OAuthQueries.getOAuthClientById(this, clientId, appIdentifier);
+            if (client == null) {
+                throw new OAuthClientNotFoundException();
+            }
+            return client;
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void addOrUpdateOauthClient(AppIdentifier appIdentifier, String clientId, String clientSecret, boolean isClientCredentialsOnly, boolean enableRefreshTokenRotation)
+            throws StorageQueryException, TenantOrAppNotFoundException {
+        try {
+            OAuthQueries.addOrUpdateOauthClient(this, appIdentifier, clientId, clientSecret, isClientCredentialsOnly, enableRefreshTokenRotation);
+        } catch (SQLException e) {
+            ServerErrorMessage errorMessage = ((PSQLException) e).getServerErrorMessage();
+            PostgreSQLConfig config = Config.getConfig(this);
+
+            if (isForeignKeyConstraintError(
+                    errorMessage,
+                    config.getOAuthClientsTable(),
+                    "app_id")) {
+                throw new TenantOrAppNotFoundException(appIdentifier);
+            }
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean deleteOAuthClient(AppIdentifier appIdentifier, String clientId) throws StorageQueryException {
+        try {
+            return OAuthQueries.deleteOAuthClient(this, clientId, appIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public List<OAuthClient> getOAuthClients(AppIdentifier appIdentifier, List<String> clientIds) throws StorageQueryException {
+        try {
+            return OAuthQueries.getOAuthClients(this, appIdentifier, clientIds);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean revokeOAuthTokenByGID(AppIdentifier appIdentifier, String gid) throws StorageQueryException {
+        try {
+            return OAuthQueries.deleteOAuthSessionByGID(this, appIdentifier, gid);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean revokeOAuthTokenByClientId(AppIdentifier appIdentifier, String clientId)
+            throws StorageQueryException {
+        try {
+            return OAuthQueries.deleteOAuthSessionByClientId(this, appIdentifier, clientId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean revokeOAuthTokenByJTI(AppIdentifier appIdentifier, String gid, String jti)
+            throws StorageQueryException {
+        try {
+            return OAuthQueries.deleteJTIFromOAuthSession(this, appIdentifier, gid, jti);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean revokeOAuthTokenBySessionHandle(AppIdentifier appIdentifier, String sessionHandle)
+            throws StorageQueryException {
+        try {
+            return OAuthQueries.deleteOAuthSessionBySessionHandle(this, appIdentifier, sessionHandle);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void addOAuthM2MTokenForStats(AppIdentifier appIdentifier, String clientId, long iat, long exp)
+            throws StorageQueryException, OAuthClientNotFoundException {
+        try {
+            OAuthQueries.addOAuthM2MTokenForStats(this, appIdentifier, clientId, iat, exp);
+        } catch (SQLException e) {
+            ServerErrorMessage errorMessage = ((PSQLException) e).getServerErrorMessage();
+            PostgreSQLConfig config = Config.getConfig(this);
+
+            if (isForeignKeyConstraintError(
+                    errorMessage,
+                    config.getOAuthM2MTokensTable(),
+                    "client_id")) {
+                throw new OAuthClientNotFoundException();
+            }
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void deleteExpiredOAuthM2MTokens(long exp) throws StorageQueryException {
+        try {
+            OAuthQueries.deleteExpiredOAuthM2MTokens(this, exp);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void addOAuthLogoutChallenge(AppIdentifier appIdentifier, String challenge, String clientId,
+                                        String postLogoutRedirectionUri, String sessionHandle, String state, long timeCreated)
+            throws StorageQueryException, DuplicateOAuthLogoutChallengeException, OAuthClientNotFoundException {
+        try {
+            OAuthQueries.addOAuthLogoutChallenge(this, appIdentifier, challenge, clientId, postLogoutRedirectionUri, sessionHandle, state, timeCreated);
+        } catch (SQLException e) {
+            ServerErrorMessage errorMessage = ((PSQLException) e).getServerErrorMessage();
+            PostgreSQLConfig config = Config.getConfig(this);
+
+            if (isPrimaryKeyError(errorMessage, config.getOAuthLogoutChallengesTable())) {
+                throw new DuplicateOAuthLogoutChallengeException();
+            } else if (isForeignKeyConstraintError(
+                    errorMessage,
+                    config.getOAuthLogoutChallengesTable(),
+                    "client_id")) {
+                throw new OAuthClientNotFoundException();
+            }
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public OAuthLogoutChallenge getOAuthLogoutChallenge(AppIdentifier appIdentifier, String challenge) throws StorageQueryException {
+        try {
+            return OAuthQueries.getOAuthLogoutChallenge(this, appIdentifier, challenge);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void deleteOAuthLogoutChallenge(AppIdentifier appIdentifier, String challenge) throws StorageQueryException {
+        try {
+            OAuthQueries.deleteOAuthLogoutChallenge(this, appIdentifier, challenge);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void deleteOAuthLogoutChallengesBefore(long time) throws StorageQueryException {
+        try {
+            OAuthQueries.deleteOAuthLogoutChallengesBefore(this, time);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void createOrUpdateOAuthSession(AppIdentifier appIdentifier, String gid, String clientId,
+                                           String externalRefreshToken, String internalRefreshToken,
+                                           String sessionHandle, List<String> jtis, long exp)
+            throws StorageQueryException, OAuthClientNotFoundException {
+        try {
+            OAuthQueries.createOrUpdateOAuthSession(this, appIdentifier, gid, clientId, externalRefreshToken,
+                    internalRefreshToken, sessionHandle, jtis, exp);
+        } catch (SQLException e) {
+            ServerErrorMessage errorMessage = ((PSQLException) e).getServerErrorMessage();
+            PostgreSQLConfig config = Config.getConfig(this);
+
+            if (isForeignKeyConstraintError(
+                    errorMessage,
+                    config.getOAuthSessionsTable(),
+                    "client_id")) {
+                throw new OAuthClientNotFoundException();
+            }
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public String getRefreshTokenMapping(AppIdentifier appIdentifier, String externalRefreshToken)
+            throws StorageQueryException {
+        try {
+            return OAuthQueries.getRefreshTokenMapping(this, appIdentifier, externalRefreshToken);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void deleteExpiredOAuthSessions(long exp) throws StorageQueryException {
+        try {
+            OAuthQueries.deleteExpiredOAuthSessions(this, exp);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public int countTotalNumberOfOAuthClients(AppIdentifier appIdentifier) throws StorageQueryException {
+        try {
+            return OAuthQueries.countTotalNumberOfClients(this, appIdentifier, false);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public int countTotalNumberOfClientCredentialsOnlyOAuthClients(AppIdentifier appIdentifier)
+            throws StorageQueryException {
+        try {
+            return OAuthQueries.countTotalNumberOfClients(this, appIdentifier, true);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public int countTotalNumberOfOAuthM2MTokensCreatedSince(AppIdentifier appIdentifier, long since)
+            throws StorageQueryException {
+        try {
+            return OAuthQueries.countTotalNumberOfOAuthM2MTokensCreatedSince(this, appIdentifier, since);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public int countTotalNumberOfOAuthM2MTokensAlive(AppIdentifier appIdentifier) throws StorageQueryException {
+        try {
+            return OAuthQueries.countTotalNumberOfOAuthM2MTokensAlive(this, appIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean isOAuthTokenRevokedByGID(AppIdentifier appIdentifier, String gid) throws StorageQueryException {
+        try {
+            return !OAuthQueries.isOAuthSessionExistsByGID(this, appIdentifier, gid);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean isOAuthTokenRevokedByJTI(AppIdentifier appIdentifier, String gid, String jti)
+            throws StorageQueryException {
+        try {
+            return !OAuthQueries.isOAuthSessionExistsByJTI(this, appIdentifier, gid, jti);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 }

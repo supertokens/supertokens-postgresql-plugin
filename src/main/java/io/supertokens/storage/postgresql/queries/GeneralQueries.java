@@ -554,6 +554,37 @@ public class GeneralQueries {
                     update(con, TOTPQueries.getQueryToCreateTenantIdIndexForUsedCodesTable(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, con, Config.getConfig(start).getOAuthClientsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, OAuthQueries.getQueryToCreateOAuthClientTable(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, con, Config.getConfig(start).getOAuthSessionsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, OAuthQueries.getQueryToCreateOAuthSessionsTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(con, OAuthQueries.getQueryToCreateOAuthSessionsExpIndex(start), NO_OP_SETTER);
+                    update(con, OAuthQueries.getQueryToCreateOAuthSessionsExternalRefreshTokenIndex(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, con, Config.getConfig(start).getOAuthM2MTokensTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, OAuthQueries.getQueryToCreateOAuthM2MTokensTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(con, OAuthQueries.getQueryToCreateOAuthM2MTokenIatIndex(start), NO_OP_SETTER);
+                    update(con, OAuthQueries.getQueryToCreateOAuthM2MTokenExpIndex(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, con, Config.getConfig(start).getOAuthLogoutChallengesTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, OAuthQueries.getQueryToCreateOAuthLogoutChallengesTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(con, OAuthQueries.getQueryToCreateOAuthLogoutChallengesTimeCreatedIndex(start), NO_OP_SETTER);
+                }
+
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
@@ -626,7 +657,11 @@ public class GeneralQueries {
                     + getConfig(start).getDashboardSessionsTable() + ","
                     + getConfig(start).getTotpUsedCodesTable() + ","
                     + getConfig(start).getTotpUserDevicesTable() + ","
-                    + getConfig(start).getTotpUsersTable();
+                    + getConfig(start).getTotpUsersTable() + ","
+                    + getConfig(start).getOAuthClientsTable() + ","
+                    + getConfig(start).getOAuthSessionsTable() + ","
+                    + getConfig(start).getOAuthLogoutChallengesTable() + ","
+                    + getConfig(start).getOAuthM2MTokensTable();
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
     }
