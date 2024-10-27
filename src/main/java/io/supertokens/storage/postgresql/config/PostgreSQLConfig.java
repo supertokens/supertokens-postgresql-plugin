@@ -434,9 +434,6 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("dashboard_user_sessions");
     }
 
-    public String getOAuthRevokeTable() {
-        return addSchemaAndPrefixToTableName("oauth_revoke");
-    }
 
     public String getTotpUsersTable() {
         return addSchemaAndPrefixToTableName("totp_users");
