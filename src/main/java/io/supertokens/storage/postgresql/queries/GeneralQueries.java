@@ -656,7 +656,6 @@ public class GeneralQueries {
                     + getConfig(start).getDashboardUsersTable() + ","
                     + getConfig(start).getDashboardSessionsTable() + ","
                     + getConfig(start).getOAuthClientsTable() + ","
-                    + getConfig(start).getOAuthRevokeTable() + ","
                     + getConfig(start).getOAuthM2MTokensTable() + ","
                     + getConfig(start).getOAuthLogoutChallengesTable() + ","
                     + getConfig(start).getTotpUsedCodesTable() + ","
