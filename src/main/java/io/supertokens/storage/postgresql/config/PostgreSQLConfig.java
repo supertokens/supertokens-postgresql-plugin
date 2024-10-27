@@ -23,7 +23,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-
 import io.supertokens.pluginInterface.ConfigFieldInfo;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.storage.postgresql.Start;
@@ -31,11 +30,7 @@ import io.supertokens.storage.postgresql.annotations.*;
 
 import java.lang.reflect.Field;
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class PostgreSQLConfig {
@@ -439,21 +434,6 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("dashboard_user_sessions");
     }
 
-    public String getOAuthClientsTable() {
-        return addSchemaAndPrefixToTableName("oauth_clients");
-    }
-
-    public String getOAuthRevokeTable() {
-        return addSchemaAndPrefixToTableName("oauth_revoke");
-    }
-
-    public String getOAuthM2MTokensTable() {
-        return addSchemaAndPrefixToTableName("oauth_m2m_tokens");
-    }
-
-    public String getOAuthLogoutChallengesTable() {
-        return addSchemaAndPrefixToTableName("oauth_logout_challenges");
-    }
 
     public String getTotpUsersTable() {
         return addSchemaAndPrefixToTableName("totp_users");
@@ -465,6 +445,21 @@ public class PostgreSQLConfig {
 
     public String getTotpUsedCodesTable() {
         return addSchemaAndPrefixToTableName("totp_used_codes");
+    }
+    public String getOAuthClientsTable() {
+        return addSchemaAndPrefixToTableName("oauth_clients");
+    }
+
+    public String getOAuthM2MTokensTable() {
+        return addSchemaAndPrefixToTableName("oauth_m2m_tokens");
+    }
+
+    public String getOAuthSessionsTable() {
+        return addSchemaAndPrefixToTableName("oauth_sessions");
+    }
+
+    public String getOAuthLogoutChallengesTable() {
+        return addSchemaAndPrefixToTableName("oauth_logout_challenges");
     }
 
     private String addSchemaAndPrefixToTableName(String tableName) {
