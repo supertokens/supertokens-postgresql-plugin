@@ -287,6 +287,16 @@ public class DbConnectionPoolTest {
 
         Thread.sleep(1000); // let the new tenant be ready
 
+        for (int retry = 0; retry < 5; retry++) {
+            try {
+                assertEquals(10, start.getDbActivityCount("st1"));
+                break;
+            } catch (AssertionError e) {
+                Thread.sleep(1000);
+                continue;
+            }
+        }
+
         assertEquals(10, start.getDbActivityCount("st1"));
 
         // change connection pool size
