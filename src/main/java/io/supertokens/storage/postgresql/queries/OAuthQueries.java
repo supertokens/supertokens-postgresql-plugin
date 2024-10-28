@@ -204,7 +204,6 @@ public class OAuthQueries {
             for (int i = 0; i < clientIds.size(); i++) {
                 pst.setString(i + 2, clientIds.get(i));
             }
-            System.out.println(pst);
         }, (result) -> {
             List<OAuthClient> res = new ArrayList<>();
             while (result.next()) {
