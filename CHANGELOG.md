@@ -68,7 +68,6 @@ CREATE TABLE IF NOT EXISTS oauth_logout_challenges (
 
 CREATE INDEX IF NOT EXISTS oauth_logout_challenges_time_created_index ON oauth_logout_challenges(time_created DESC);
 ```
->>>>>>> origin/master
 
 ## [7.1.3] - 2024-09-04
 
@@ -102,7 +101,6 @@ CREATE INDEX IF NOT EXISTS user_last_active_last_active_time_index ON user_last_
 ALTER TABLE tenant_configs ADD COLUMN IF NOT EXISTS is_first_factors_null BOOLEAN DEFAULT TRUE;
 ALTER TABLE tenant_configs ALTER COLUMN is_first_factors_null DROP DEFAULT;
 ```
->>>>>>> master
 
 ## [7.0.1] - 2024-04-17
 
