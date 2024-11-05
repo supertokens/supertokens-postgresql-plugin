@@ -16,21 +16,7 @@
 
 package io.supertokens.storage.postgresql;
 
-import java.sql.Array;
-import java.sql.Blob;
-import java.sql.CallableStatement;
-import java.sql.Clob;
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.NClob;
-import java.sql.PreparedStatement;
-import java.sql.SQLClientInfoException;
-import java.sql.SQLException;
-import java.sql.SQLWarning;
-import java.sql.SQLXML;
-import java.sql.Savepoint;
-import java.sql.Statement;
-import java.sql.Struct;
+import java.sql.*;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executor;
@@ -53,17 +39,17 @@ public class BulkImportProxyConnection implements Connection {
 
     @Override
     public void close() throws SQLException {
-        // We simply ignore when close is called BulkImportProxyConnection
+//        this.con.close();
     }
 
     @Override
     public void commit() throws SQLException {
-        // We simply ignore when commit is called BulkImportProxyConnection
+//        this.con.commit();
     }
 
     @Override
     public void rollback() throws SQLException {
-        // We simply ignore when rollback is called BulkImportProxyConnection
+//        this.con.rollback();
     }
 
     public void closeForBulkImportProxyStorage() throws SQLException {

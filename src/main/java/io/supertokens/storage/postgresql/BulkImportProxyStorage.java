@@ -16,20 +16,15 @@
 
 package io.supertokens.storage.postgresql;
 
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.List;
-import java.util.Set;
-
-import com.google.gson.JsonObject;
-
-import io.supertokens.pluginInterface.LOG_LEVEL;
 import io.supertokens.pluginInterface.exceptions.DbInitException;
-import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
+
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.List;
 
 
 /**
@@ -62,8 +57,9 @@ public class BulkImportProxyStorage extends Start {
 
     @Override
     public void commitTransaction(TransactionConnection con) throws StorageQueryException {
-        // We do not want to commit the queries when using the BulkImportProxyStorage to be able to rollback everything 
+        // We do not want to commit the queries when using the BulkImportProxyStorage to be able to rollback everything
         // if any query fails while importing the user
+//        super.commitTransaction(con);
     }
 
     @Override
@@ -110,6 +106,14 @@ public class BulkImportProxyStorage extends Start {
     public void rollbackTransactionForBulkImportProxyStorage() throws StorageQueryException {
         try {
             this.connection.rollbackForBulkImportProxyStorage();
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    public void doVacuumFull() throws StorageQueryException {
+        try {
+            this.connection.prepareStatement("VACUUM FULL").execute();
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

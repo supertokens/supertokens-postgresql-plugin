@@ -103,7 +103,15 @@ public class GeneralQueries {
 
     public static String getQueryToCreateUserIdIndexForUsersTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS all_auth_recipe_user_id_index ON "
+                + Config.getConfig(start).getUsersTable() + "(user_id);";
+    }
+    public static String getQueryToCreateUserIdAppIdIndexForUsersTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS all_auth_recipe_user_id_app_id_index ON "
                 + Config.getConfig(start).getUsersTable() + "(app_id, user_id);";
+    }
+    public static String getQueryToCreateAppIdIndexForUsersTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS all_auth_recipe_user_app_id_index ON "
+                + Config.getConfig(start).getUsersTable() + "(app_id);";
     }
 
     public static String getQueryToCreateTenantIdIndexForUsersTable(Start start) {
@@ -247,6 +255,11 @@ public class GeneralQueries {
                 + Config.getConfig(start).getAppIdToUserIdTable() + "(primary_or_recipe_user_id, app_id);";
     }
 
+    static String getQueryToCreateUserIdIndexForAppIdToUserIdTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS app_id_to_user_id_user_id_index ON "
+                + Config.getConfig(start).getAppIdToUserIdTable() + "(user_id, app_id);";
+    }
+
     public static void createTablesIfNotExists(Start start, Connection con) throws SQLException, StorageQueryException {
         int numberOfRetries = 0;
         boolean retry = true;
@@ -281,6 +294,7 @@ public class GeneralQueries {
                     // index
                     update(con, getQueryToCreateAppIdIndexForAppIdToUserIdTable(start), NO_OP_SETTER);
                     update(con, getQueryToCreatePrimaryUserIdIndexForAppIdToUserIdTable(start), NO_OP_SETTER);
+                    update(con, getQueryToCreateUserIdIndexForAppIdToUserIdTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, con, Config.getConfig(start).getUsersTable())) {
@@ -433,6 +447,8 @@ public class GeneralQueries {
 
                     // index
                     update(con, getQueryToCreateUserIdIndexForUsersTable(start), NO_OP_SETTER);
+                    update(con, getQueryToCreateUserIdAppIdIndexForUsersTable(start), NO_OP_SETTER);
+                    update(con, getQueryToCreateAppIdIndexForUsersTable(start), NO_OP_SETTER);
                     update(con, getQueryToCreateTenantIdIndexForUsersTable(start), NO_OP_SETTER);
                 }
 
@@ -1534,18 +1550,37 @@ public class GeneralQueries {
         // which is linked to a primary user ID in which case it won't be in the primary_or_recipe_user_id column,
         // or the input may have a primary user ID whose recipe user ID was removed, so it won't be in the user_id
         // column
-        String QUERY =
-                "SELECT au.user_id, au.primary_or_recipe_user_id, au.is_linked_or_is_a_primary_user, au.recipe_id, " +
-                        "aaru.tenant_id, aaru.time_joined FROM " +
-                        getConfig(start).getAppIdToUserIdTable() + " as au" +
-                        " LEFT JOIN " + getConfig(start).getUsersTable() +
-                        " as aaru ON au.app_id = aaru.app_id AND au.user_id = aaru.user_id" +
-                        " WHERE au.primary_or_recipe_user_id IN (SELECT primary_or_recipe_user_id FROM " +
-                        getConfig(start).getAppIdToUserIdTable() + " WHERE (user_id IN ("
-                        + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
-                        ") OR primary_or_recipe_user_id IN (" +
-                        Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
-                        ")) AND app_id = ?) AND au.app_id = ?";
+//        String QUERY =
+//                "SELECT au.user_id, au.primary_or_recipe_user_id, au.is_linked_or_is_a_primary_user, au.recipe_id, " +
+//                        "aaru.tenant_id, aaru.time_joined " +
+//                        "FROM " + getConfig(start).getAppIdToUserIdTable() + " as au" +
+//                        "    LEFT JOIN " + getConfig(start).getUsersTable() +
+//                        "    as aaru ON au.app_id = aaru.app_id AND au.user_id = aaru.user_id" +
+//                        " WHERE au.primary_or_recipe_user_id IN " +
+//                        "    (SELECT primary_or_recipe_user_id FROM " +
+//                                getConfig(start).getAppIdToUserIdTable() +
+//                                " WHERE (user_id IN ("
+//                                 + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +") " +
+//                        "         OR primary_or_recipe_user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +")) " +
+//                        "   AND app_id = ?) " +
+//                        "AND au.app_id = ?";
+
+        String QUERY = "SELECT" +
+                "    au.user_id," +
+                "    au.primary_or_recipe_user_id," +
+                "    au.is_linked_or_is_a_primary_user," +
+                "    au.recipe_id," +
+                "    aaru.tenant_id," +
+                "    aaru.time_joined" +
+                " FROM " + getConfig(start).getAppIdToUserIdTable() + " as au" +
+                "    LEFT JOIN " + getConfig(start).getUsersTable() + " as aaru ON au.app_id = aaru.app_id" +
+                "    AND au.user_id = aaru.user_id" +
+                "    LEFT JOIN " + getConfig(start).getAppIdToUserIdTable() + " as aiui ON au.primary_or_recipe_user_id = aiui.user_id" +
+                "    AND aiui.app_id = au.app_id" +
+                " WHERE" +
+                "    aiui.user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) + ")" +
+                "    OR au.primary_or_recipe_user_id IN ("+ Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +")" +
+                "    AND au.app_id = ?";
 
         List<AllAuthRecipeUsersResultHolder> allAuthUsersResult = execute(sqlCon, QUERY, pst -> {
             // IN user_id
@@ -1559,7 +1594,7 @@ public class GeneralQueries {
             }
             // for app_id
             pst.setString(index, appIdentifier.getAppId());
-            pst.setString(index + 1, appIdentifier.getAppId());
+//            System.out.println(pst);
         }, result -> {
             List<AllAuthRecipeUsersResultHolder> parsedResult = new ArrayList<>();
             while (result.next()) {
