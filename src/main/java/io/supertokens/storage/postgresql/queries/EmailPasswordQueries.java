@@ -19,19 +19,19 @@ package io.supertokens.storage.postgresql.queries;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
+import io.supertokens.pluginInterface.emailpassword.EmailPasswordImportUser;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
-import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
-import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
@@ -333,6 +333,96 @@ public class EmailPasswordQueries {
             } catch (SQLException throwables) {
                 throw new StorageTransactionLogicException(throwables);
             }
+        });
+    }
+
+    public static void signUpMultiple(Start start, List<EmailPasswordImportUser> usersToSignUp)
+            throws StorageQueryException, StorageTransactionLogicException {
+        start.startTransaction(con -> {
+            Connection sqlCon = (Connection) con.getConnection();
+            try {
+                String app_id_to_user_id_QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
+                            + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
+
+                String all_auth_recipe_users_QUERY = "INSERT INTO " + getConfig(start).getUsersTable() +
+                        "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, " +
+                        "primary_or_recipe_user_time_joined)" +
+                        " VALUES(?, ?, ?, ?, ?, ?, ?)";
+
+                String emailpassword_users_QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUsersTable()
+                        + "(app_id, user_id, email, password_hash, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
+
+                String emailpassword_users_to_tenant_QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUserToTenantTable()
+                        + "(app_id, tenant_id, user_id, email)" + " VALUES(?, ?, ?, ?)";
+
+                PreparedStatement appIdToUserId = sqlCon.prepareStatement(app_id_to_user_id_QUERY);
+                PreparedStatement allAuthRecipeUsers = sqlCon.prepareStatement(all_auth_recipe_users_QUERY);
+                PreparedStatement emailPasswordUsers = sqlCon.prepareStatement(emailpassword_users_QUERY);
+                PreparedStatement emailPasswordUsersToTenant = sqlCon.prepareStatement(emailpassword_users_to_tenant_QUERY);
+
+                int counter = 0;
+                for(EmailPasswordImportUser user: usersToSignUp) {
+                    String userId = user.userId;
+                    TenantIdentifier tenantIdentifier = user.tenantIdentifier;
+
+                    appIdToUserId.setString(1, tenantIdentifier.getAppId());
+                    appIdToUserId.setString(2, userId);
+                    appIdToUserId.setString(3, userId);
+                    appIdToUserId.setString(4, EMAIL_PASSWORD.toString());
+                    appIdToUserId.addBatch();
+
+
+                    allAuthRecipeUsers.setString(1, tenantIdentifier.getAppId());
+                    allAuthRecipeUsers.setString(2, tenantIdentifier.getTenantId());
+                    allAuthRecipeUsers.setString(3, userId);
+                    allAuthRecipeUsers.setString(4, userId);
+                    allAuthRecipeUsers.setString(5, EMAIL_PASSWORD.toString());
+                    allAuthRecipeUsers.setLong(6, user.timeJoinedMSSinceEpoch);
+                    allAuthRecipeUsers.setLong(7, user.timeJoinedMSSinceEpoch);
+                    allAuthRecipeUsers.addBatch();
+
+                    emailPasswordUsers.setString(1, tenantIdentifier.getAppId());
+                    emailPasswordUsers.setString(2, userId);
+                    emailPasswordUsers.setString(3, user.email);
+                    emailPasswordUsers.setString(4, user.passwordHash);
+                    emailPasswordUsers.setLong(5, user.timeJoinedMSSinceEpoch);
+                    emailPasswordUsers.addBatch();
+
+                    emailPasswordUsersToTenant.setString(1, tenantIdentifier.getAppId());
+                    emailPasswordUsersToTenant.setString(2, tenantIdentifier.getTenantId());
+                    emailPasswordUsersToTenant.setString(3, userId);
+                    emailPasswordUsersToTenant.setString(4, user.email);
+                    emailPasswordUsersToTenant.addBatch();
+                    counter++;
+                    if(counter % 100 == 0) {
+                        appIdToUserId.executeBatch();
+                        allAuthRecipeUsers.executeBatch();
+                        emailPasswordUsers.executeBatch();
+                        emailPasswordUsersToTenant.executeBatch();
+                    }
+                }
+
+                //execute the remaining ones
+                appIdToUserId.executeBatch();
+                allAuthRecipeUsers.executeBatch();
+                emailPasswordUsers.executeBatch();
+                emailPasswordUsersToTenant.executeBatch();
+
+                //UserInfoPartial userInfo = new UserInfoPartial(userId, email, passwordHash, timeJoined);
+//                fillUserInfoWithTenantIds_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
+//                fillUserInfoWithVerified_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
+                sqlCon.commit();
+                //return AuthRecipeUserInfo.create(userId, false, userInfo.toLoginMethod());
+            } catch (SQLException throwables) {
+                throwables.printStackTrace(System.out);
+                SQLException next = throwables.getNextException();
+                while(next != null) {
+                    next.printStackTrace(System.out);
+                    next = next.getNextException();
+                }
+                throw new StorageTransactionLogicException(throwables);
+            }
+            return null;
         });
     }
 

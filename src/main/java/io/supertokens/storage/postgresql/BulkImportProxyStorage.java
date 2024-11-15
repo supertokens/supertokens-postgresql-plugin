@@ -20,6 +20,7 @@ import io.supertokens.pluginInterface.exceptions.DbInitException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
 
 import java.sql.Connection;
@@ -51,7 +52,7 @@ public class BulkImportProxyStorage extends Start {
 
     @Override
     protected <T> T startTransactionHelper(TransactionLogic<T> logic, TransactionIsolationLevel isolationLevel)
-            throws StorageQueryException, StorageTransactionLogicException, SQLException {
+            throws StorageQueryException, StorageTransactionLogicException, SQLException, TenantOrAppNotFoundException {
         return logic.mainLogicAndCommit(new TransactionConnection(getTransactionConnection()));
     }
 
@@ -59,7 +60,7 @@ public class BulkImportProxyStorage extends Start {
     public void commitTransaction(TransactionConnection con) throws StorageQueryException {
         // We do not want to commit the queries when using the BulkImportProxyStorage to be able to rollback everything
         // if any query fails while importing the user
-//        super.commitTransaction(con);
+        //super.commitTransaction(con);
     }
 
     @Override
@@ -106,14 +107,6 @@ public class BulkImportProxyStorage extends Start {
     public void rollbackTransactionForBulkImportProxyStorage() throws StorageQueryException {
         try {
             this.connection.rollbackForBulkImportProxyStorage();
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    public void doVacuumFull() throws StorageQueryException {
-        try {
-            this.connection.prepareStatement("VACUUM FULL").execute();
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

@@ -16,18 +16,6 @@
 
 package io.supertokens.storage.postgresql.queries;
 
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
-
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
-
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.bulkimport.BulkImportStorage.BULK_IMPORT_USER_STATUS;
 import io.supertokens.pluginInterface.bulkimport.BulkImportUser;
@@ -37,6 +25,17 @@ import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 
 public class BulkImportQueries {
     static String getQueryToCreateBulkImportUsersTable(Start start) {
@@ -222,6 +221,7 @@ public class BulkImportQueries {
 
     public static List<String> deleteBulkImportUsers(Start start, AppIdentifier appIdentifier,
             @Nonnull String[] bulkImportUserIds) throws SQLException, StorageQueryException {
+        System.out.println("Deleting bulkimportuser ids: " + bulkImportUserIds.length);
         if (bulkImportUserIds.length == 0) {
             return new ArrayList<>();
         }

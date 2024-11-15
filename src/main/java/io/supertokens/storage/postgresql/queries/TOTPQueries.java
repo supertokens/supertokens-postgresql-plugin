@@ -1,21 +1,21 @@
 package io.supertokens.storage.postgresql.queries;
 
+import io.supertokens.pluginInterface.RowMapper;
+import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.totp.TOTPDevice;
+import io.supertokens.pluginInterface.totp.TOTPUsedCode;
+import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
+import io.supertokens.storage.postgresql.utils.Utils;
+
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-
-import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
-import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
-import io.supertokens.storage.postgresql.Start;
-import io.supertokens.storage.postgresql.config.Config;
-import io.supertokens.pluginInterface.RowMapper;
-import io.supertokens.pluginInterface.exceptions.StorageQueryException;
-import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
-import io.supertokens.pluginInterface.totp.TOTPDevice;
-import io.supertokens.pluginInterface.totp.TOTPUsedCode;
-import io.supertokens.storage.postgresql.utils.Utils;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
@@ -144,6 +144,52 @@ public class TOTPQueries {
             throws SQLException, StorageQueryException {
         insertUser_Transaction(start, sqlCon, appIdentifier, device.userId);
         insertDevice_Transaction(start, sqlCon, appIdentifier, device);
+    }
+
+    public static void createDevices_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
+                                                List<TOTPDevice> devices)
+            throws SQLException, StorageQueryException {
+
+        String insert_user_QUERY = "INSERT INTO " + Config.getConfig(start).getTotpUsersTable()
+                + " (app_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING";
+
+        String insert_device_QUERY = "INSERT INTO " + Config.getConfig(start).getTotpUserDevicesTable()
+                +
+                " (app_id, user_id, device_name, secret_key, period, skew, verified, created_at) VALUES (?, ?, ?, ?, " +
+                "?, ?, ?, ?) ON CONFLICT (app_id, user_id, device_name) DO UPDATE SET secret_key = ?, period = ?, skew = ?, created_at = ?, verified = ?";
+
+        PreparedStatement insertUserStatement = sqlCon.prepareStatement(insert_user_QUERY);
+        PreparedStatement insertDeviceStatement = sqlCon.prepareStatement(insert_device_QUERY);
+
+        int counter = 0;
+        for(TOTPDevice device : devices){
+            insertUserStatement.setString(1, appIdentifier.getAppId());
+            insertUserStatement.setString(2, device.userId);
+            insertUserStatement.addBatch();
+
+            insertDeviceStatement.setString(1, appIdentifier.getAppId());
+            insertDeviceStatement.setString(2, device.userId);
+            insertDeviceStatement.setString(3, device.deviceName);
+            insertDeviceStatement.setString(4, device.secretKey);
+            insertDeviceStatement.setInt(5, device.period);
+            insertDeviceStatement.setInt(6, device.skew);
+            insertDeviceStatement.setBoolean(7, device.verified);
+            insertDeviceStatement.setLong(8, device.createdAt);
+            insertDeviceStatement.setString(9, device.secretKey);
+            insertDeviceStatement.setInt(10, device.period);
+            insertDeviceStatement.setInt(11, device.skew);
+            insertDeviceStatement.setLong(12, device.createdAt);
+            insertDeviceStatement.setBoolean(13, device.verified);
+            insertDeviceStatement.addBatch();
+            counter++;
+            if(counter % 100 == 0) {
+                insertUserStatement.executeBatch();
+                insertDeviceStatement.executeBatch();
+            }
+        }
+
+        insertUserStatement.executeBatch();
+        insertDeviceStatement.executeBatch();
     }
 
     public static TOTPDevice getDeviceByName_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,

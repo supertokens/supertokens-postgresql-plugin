@@ -19,19 +19,19 @@ package io.supertokens.storage.postgresql.queries;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
-import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
-import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
+import io.supertokens.pluginInterface.thirdparty.ThirdPartyImportUser;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
@@ -525,6 +525,80 @@ public class ThirdPartyQueries {
         }
 
         // automatically deleted from thirdparty_user_to_tenant because of foreign key constraint
+    }
+
+    public static void importUser_Transaction(Start start, Connection sqlConnection, Collection<ThirdPartyImportUser> users)
+            throws SQLException {
+
+        String app_id_userid_QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
+                + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
+
+        String all_auth_recipe_users_QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
+                +
+                "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, " +
+                "primary_or_recipe_user_time_joined)" +
+                " VALUES(?, ?, ?, ?, ?, ?, ?)";
+
+        String thirdparty_users_QUERY = "INSERT INTO " + getConfig(start).getThirdPartyUsersTable()
+                + "(app_id, third_party_id, third_party_user_id, user_id, email, time_joined)"
+                + " VALUES(?, ?, ?, ?, ?, ?)";
+
+        String thirdparty_user_to_tenant_QUERY = "INSERT INTO " + getConfig(start).getThirdPartyUserToTenantTable()
+                + "(app_id, tenant_id, user_id, third_party_id, third_party_user_id)"
+                + " VALUES(?, ?, ?, ?, ?)";
+
+        PreparedStatement appIdToUserIdStatement = sqlConnection.prepareStatement(app_id_userid_QUERY);
+        PreparedStatement allAuthRecipeUsersStatement = sqlConnection.prepareStatement(all_auth_recipe_users_QUERY);
+        PreparedStatement thirdPartyUsersStatement = sqlConnection.prepareStatement(thirdparty_users_QUERY);
+        PreparedStatement thirdPartyUsersToTenantStatement = sqlConnection.prepareStatement(
+                thirdparty_user_to_tenant_QUERY);
+
+        int counter = 0;
+        for (ThirdPartyImportUser user : users) {
+            TenantIdentifier tenantIdentifier = user.tenantIdentifier;
+            appIdToUserIdStatement.setString(1, tenantIdentifier.getAppId());
+            appIdToUserIdStatement.setString(2, user.userId);
+            appIdToUserIdStatement.setString(3, user.userId);
+            appIdToUserIdStatement.setString(4, THIRD_PARTY.toString());
+            appIdToUserIdStatement.addBatch();
+
+            allAuthRecipeUsersStatement.setString(1, tenantIdentifier.getAppId());
+            allAuthRecipeUsersStatement.setString(2, tenantIdentifier.getTenantId());
+            allAuthRecipeUsersStatement.setString(3, user.userId);
+            allAuthRecipeUsersStatement.setString(4, user.userId);
+            allAuthRecipeUsersStatement.setString(5, THIRD_PARTY.toString());
+            allAuthRecipeUsersStatement.setLong(6, user.timeJoinedMSSinceEpoch);
+            allAuthRecipeUsersStatement.setLong(7, user.timeJoinedMSSinceEpoch);
+            allAuthRecipeUsersStatement.addBatch();
+
+            thirdPartyUsersStatement.setString(1, tenantIdentifier.getAppId());
+            thirdPartyUsersStatement.setString(2, user.thirdpartyId);
+            thirdPartyUsersStatement.setString(3, user.thirdpartyUserId);
+            thirdPartyUsersStatement.setString(4, user.userId);
+            thirdPartyUsersStatement.setString(5, user.email);
+            thirdPartyUsersStatement.setLong(6, user.timeJoinedMSSinceEpoch);
+            thirdPartyUsersStatement.addBatch();
+
+            thirdPartyUsersToTenantStatement.setString(1, tenantIdentifier.getAppId());
+            thirdPartyUsersToTenantStatement.setString(2, tenantIdentifier.getTenantId());
+            thirdPartyUsersToTenantStatement.setString(3, user.userId);
+            thirdPartyUsersToTenantStatement.setString(4, user.thirdpartyId);
+            thirdPartyUsersToTenantStatement.setString(5, user.thirdpartyUserId);
+            thirdPartyUsersToTenantStatement.addBatch();
+
+            counter++;
+            if(counter % 100 == 0) {
+                appIdToUserIdStatement.executeBatch();
+                allAuthRecipeUsersStatement.executeBatch();
+                thirdPartyUsersStatement.executeBatch();
+                thirdPartyUsersToTenantStatement.executeBatch();
+            }
+        }
+
+        appIdToUserIdStatement.executeBatch();
+        allAuthRecipeUsersStatement.executeBatch();
+        thirdPartyUsersStatement.executeBatch();
+        thirdPartyUsersToTenantStatement.executeBatch();
     }
 
     private static UserInfoPartial fillUserInfoWithVerified_transaction(Start start, Connection sqlCon,

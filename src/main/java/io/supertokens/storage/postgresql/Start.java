@@ -34,6 +34,7 @@ import io.supertokens.pluginInterface.dashboard.DashboardSessionInfo;
 import io.supertokens.pluginInterface.dashboard.DashboardUser;
 import io.supertokens.pluginInterface.dashboard.exceptions.UserIdNotFoundException;
 import io.supertokens.pluginInterface.dashboard.sqlStorage.DashboardSQLStorage;
+import io.supertokens.pluginInterface.emailpassword.EmailPasswordImportUser;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicatePasswordResetTokenException;
@@ -68,12 +69,14 @@ import io.supertokens.pluginInterface.oauth.exception.DuplicateOAuthLogoutChalle
 import io.supertokens.pluginInterface.oauth.exception.OAuthClientNotFoundException;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
+import io.supertokens.pluginInterface.passwordless.PasswordlessImportUser;
 import io.supertokens.pluginInterface.passwordless.exception.*;
 import io.supertokens.pluginInterface.passwordless.sqlStorage.PasswordlessSQLStorage;
 import io.supertokens.pluginInterface.session.SessionInfo;
 import io.supertokens.pluginInterface.session.SessionStorage;
 import io.supertokens.pluginInterface.session.sqlStorage.SessionSQLStorage;
 import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
+import io.supertokens.pluginInterface.thirdparty.ThirdPartyImportUser;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.pluginInterface.thirdparty.sqlStorage.ThirdPartySQLStorage;
 import io.supertokens.pluginInterface.totp.TOTPDevice;
@@ -110,10 +113,7 @@ import javax.annotation.Nonnull;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 
@@ -298,7 +298,8 @@ public class Start
             tries++;
             try {
                 return startTransactionHelper(logic, isolationLevel);
-            } catch (SQLException | StorageQueryException | StorageTransactionLogicException e) {
+            } catch (SQLException | StorageQueryException | StorageTransactionLogicException |
+                     TenantOrAppNotFoundException e) {
                 Throwable actualException = e;
                 if (e instanceof StorageQueryException) {
                     actualException = e.getCause();
@@ -358,6 +359,8 @@ public class Start
                     throw (StorageQueryException) e;
                 } else if (e instanceof StorageTransactionLogicException) {
                     throw (StorageTransactionLogicException) e;
+                } else if  (e instanceof TenantOrAppNotFoundException) {
+                    throw new StorageTransactionLogicException(e);
                 }
                 throw new StorageQueryException(e);
             }
@@ -365,7 +368,7 @@ public class Start
     }
 
     protected <T> T startTransactionHelper(TransactionLogic<T> logic, TransactionIsolationLevel isolationLevel)
-            throws StorageQueryException, StorageTransactionLogicException, SQLException {
+            throws StorageQueryException, StorageTransactionLogicException, SQLException, TenantOrAppNotFoundException { // TODO here something is fucked up
         Connection con = null;
         Integer defaultTransactionIsolation = null;
         try {
@@ -969,6 +972,13 @@ public class Start
     }
 
     @Override
+    public void signUpMultiple(List<EmailPasswordImportUser> users)
+            throws StorageQueryException, DuplicateUserIdException, DuplicateEmailException,
+            TenantOrAppNotFoundException, StorageTransactionLogicException {
+        EmailPasswordQueries.signUpMultiple(this, users);
+    }
+
+    @Override
     public void deleteEmailPasswordUser_Transaction(TransactionConnection con, AppIdentifier appIdentifier,
                                                     String userId, boolean deleteUserIdMappingToo)
             throws StorageQueryException {
@@ -1124,6 +1134,35 @@ public class Start
             EmailVerificationQueries.updateUsersIsEmailVerified_Transaction(this, sqlCon, appIdentifier, userId,
                     email,
                     isEmailVerified);
+        } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isForeignKeyConstraintError(serverMessage, config.getEmailVerificationTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
+            }
+
+            boolean isPSQLPrimKeyError = e instanceof PSQLException && isPrimaryKeyError(
+                    ((PSQLException) e).getServerErrorMessage(),
+                    Config.getConfig(this).getEmailVerificationTable());
+
+            if (!isEmailVerified || !isPSQLPrimKeyError) {
+                throw new StorageQueryException(e);
+            }
+            // we do not throw an error since the email is already verified
+        }
+    }
+
+    @Override
+    public void updateMultipleIsEmailVerified_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                          Map<String, String> emailToUserId, boolean isEmailVerified)
+            throws StorageQueryException, TenantOrAppNotFoundException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            EmailVerificationQueries.updateMultipleUsersIsEmailVerified_Transaction(this, sqlCon, appIdentifier,
+                    emailToUserId, isEmailVerified);
         } catch (SQLException e) {
             if (e instanceof PSQLException) {
                 PostgreSQLConfig config = Config.getConfig(this);
@@ -1325,6 +1364,19 @@ public class Start
             Connection sqlCon = (Connection) con.getConnection();
             ThirdPartyQueries.deleteUser_Transaction(sqlCon, this, appIdentifier, userId, deleteUserIdMappingToo);
         } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void importThirdPartyUsers_Transaction(TransactionConnection con,
+                                                  Collection<ThirdPartyImportUser> usersToImport)
+            throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            ThirdPartyQueries.importUser_Transaction(this, sqlCon, usersToImport);
+        } catch (SQLException e) {
+            e.printStackTrace(System.out);
             throw new StorageQueryException(e);
         }
     }
@@ -1848,6 +1900,18 @@ public class Start
     }
 
     @Override
+    public void importPasswordlessUsers_Transaction(TransactionConnection con,
+                                                    Collection<PasswordlessImportUser> users)
+            throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            PasswordlessQueries.importUsers_Transaction(sqlCon, this, users);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public PasswordlessDevice getDevice(TenantIdentifier tenantIdentifier, String deviceIdHash)
             throws StorageQueryException {
         try {
@@ -1940,6 +2004,18 @@ public class Start
     }
 
     @Override
+    public Map<String, JsonObject> getMultipleUsersMetadatas_Transaction(AppIdentifier appIdentifier, TransactionConnection
+            con, List<String> userIds)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return UserMetadataQueries.getMultipleUsersMetadatas_Transaction(this, sqlCon, appIdentifier, userIds);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public int setUserMetadata_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String userId,
                                            JsonObject metadata)
             throws StorageQueryException, TenantOrAppNotFoundException {
@@ -1947,6 +2023,26 @@ public class Start
         try {
             return UserMetadataQueries.setUserMetadata_Transaction(this, sqlCon, appIdentifier, userId,
                     metadata);
+        } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isForeignKeyConstraintError(serverMessage, config.getUserMetadataTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
+            }
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void setMultipleUsersMetadatas_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                      Map<String, JsonObject> metadataByUserId)
+            throws StorageQueryException, TenantOrAppNotFoundException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            UserMetadataQueries.setMultipleUsersMetadatas_Transaction(this, sqlCon, appIdentifier, metadataByUserId);
         } catch (SQLException e) {
             if (e instanceof PSQLException) {
                 PostgreSQLConfig config = Config.getConfig(this);
@@ -1998,6 +2094,17 @@ public class Start
                     throw new TenantOrAppNotFoundException(tenantIdentifier);
                 }
             }
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void addRolesToUsers_Transaction(TransactionConnection connection,
+                                            Map<TenantIdentifier, Map<String, String>> rolesToUserByTenants)
+            throws StorageQueryException {
+        try {
+            UserRolesQueries.addRolesToUsers_Transaction(this, (Connection) connection.getConnection(), rolesToUserByTenants);
+        } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
 
@@ -2747,6 +2854,26 @@ public class Start
     }
 
     @Override
+    public void createDevices_Transaction(TransactionConnection con, AppIdentifier appIdentifier,
+                                          List<TOTPDevice> devices)
+            throws StorageQueryException, TenantOrAppNotFoundException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            TOTPQueries.createDevices_Transaction(this, sqlCon, appIdentifier, devices);
+        } catch (SQLException e) {
+            Exception actualException = e;
+
+            if (actualException instanceof PSQLException) {
+                ServerErrorMessage errMsg = ((PSQLException) actualException).getServerErrorMessage();
+                if (isForeignKeyConstraintError(errMsg, Config.getConfig(this).getTotpUsersTable(), "app_id")) {
+                    throw new TenantOrAppNotFoundException(appIdentifier);
+                }
+            }
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public TOTPDevice getDeviceByName_Transaction(TransactionConnection con, AppIdentifier appIdentifier, String userId,
                                                   String deviceName) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
@@ -2946,6 +3073,18 @@ public class Start
     }
 
     @Override
+    public List<AuthRecipeUserInfo> getPrimaryUsersByIds_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                             List<String> userIds)
+            throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            return GeneralQueries.getPrimaryUserInfosForUserIds_Transaction(this, sqlCon, appIdentifier, userIds);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public AuthRecipeUserInfo[] listPrimaryUsersByEmail_Transaction(AppIdentifier appIdentifier,
                                                                     TransactionConnection con, String email)
             throws StorageQueryException {
@@ -3013,6 +3152,17 @@ public class Start
     }
 
     @Override
+    public void makePrimaryUsers_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                             List<String> userIds) throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            GeneralQueries.makePrimaryUsers_Transaction(this, sqlCon, appIdentifier, userIds);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public void linkAccounts_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String recipeUserId,
                                          String primaryUserId) throws StorageQueryException {
         try {
@@ -3023,6 +3173,19 @@ public class Start
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
+    }
+
+    @Override
+    public void linkMultipleAccounts_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                 Map<String, String> recipeUserIdByPrimaryUserId)
+            throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            GeneralQueries.linkMultipleAccounts_Transaction(this, sqlCon, appIdentifier, recipeUserIdByPrimaryUserId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+
     }
 
     @Override

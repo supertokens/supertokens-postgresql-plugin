@@ -39,17 +39,17 @@ public class BulkImportProxyConnection implements Connection {
 
     @Override
     public void close() throws SQLException {
-//        this.con.close();
+        //this.con.close(); // why are we against the close?
     }
 
     @Override
     public void commit() throws SQLException {
-//        this.con.commit();
+        //this.con.commit();
     }
 
     @Override
     public void rollback() throws SQLException {
-//        this.con.rollback();
+        //this.con.rollback();
     }
 
     public void closeForBulkImportProxyStorage() throws SQLException {

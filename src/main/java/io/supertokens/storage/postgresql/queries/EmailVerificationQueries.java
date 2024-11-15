@@ -28,6 +28,7 @@ import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
@@ -121,6 +122,48 @@ public class EmailVerificationQueries {
                 pst.setString(2, userId);
                 pst.setString(3, email);
             });
+        }
+    }
+
+    public static void updateMultipleUsersIsEmailVerified_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
+                                                              Map<String, String> emailToUserIds,
+                                                              boolean isEmailVerified)
+            throws SQLException, StorageQueryException {
+
+        if (isEmailVerified) {
+            String QUERY = "INSERT INTO " + getConfig(start).getEmailVerificationTable()
+                    + "(app_id, user_id, email) VALUES(?, ?, ?)";
+            PreparedStatement insertQuery = con.prepareStatement(QUERY);
+            int counter = 0;
+            for(Map.Entry<String, String> emailToUser : emailToUserIds.entrySet()){
+                insertQuery.setString(1, appIdentifier.getAppId());
+                insertQuery.setString(2, emailToUser.getValue());
+                insertQuery.setString(3, emailToUser.getKey());
+                insertQuery.addBatch();
+
+                counter++;
+                if (counter % 100 == 0) {
+                    insertQuery.executeBatch();
+                }
+            }
+                insertQuery.executeBatch();
+        } else {
+            String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTable()
+                    + " WHERE app_id = ? AND user_id = ? AND email = ?";
+            PreparedStatement deleteQuery = con.prepareStatement(QUERY);
+            int counter = 0;
+            for (Map.Entry<String, String> emailToUser : emailToUserIds.entrySet()) {
+                deleteQuery.setString(1, appIdentifier.getAppId());
+                deleteQuery.setString(2, emailToUser.getValue());
+                deleteQuery.setString(3, emailToUser.getKey());
+                deleteQuery.addBatch();
+
+                counter++;
+                if (counter % 100 == 0) {
+                    deleteQuery.executeBatch();
+                }
+            }
+            deleteQuery.executeBatch();
         }
     }
 
