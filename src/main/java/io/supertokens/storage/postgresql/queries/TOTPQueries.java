@@ -15,7 +15,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
@@ -288,6 +290,30 @@ public class TOTPQueries {
             }
 
             return devices.toArray(TOTPDevice[]::new);
+        });
+    }
+
+    public static Map<String, List<TOTPDevice>> getDevicesForMultipleUsers(Start start, AppIdentifier appIdentifier, List<String> userIds)
+            throws StorageQueryException, SQLException {
+        String QUERY = "SELECT * FROM " + Config.getConfig(start).getTotpUserDevicesTable()
+                + " WHERE app_id = ? AND user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) + ");";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            for(int i = 0; i < userIds.size(); i++) {
+                pst.setString(2+i, userIds.get(i));
+            }
+        }, result -> {
+            Map<String, List<TOTPDevice>> devicesByUserIds = new HashMap<>();
+            while (result.next()) {
+                String userId = result.getString("user_id");
+                if (!devicesByUserIds.containsKey(userId)){
+                    devicesByUserIds.put(userId, new ArrayList<>());
+                }
+                devicesByUserIds.get(userId).add(TOTPDeviceRowMapper.getInstance().map(result));
+            }
+
+            return devicesByUserIds;
         });
     }
 

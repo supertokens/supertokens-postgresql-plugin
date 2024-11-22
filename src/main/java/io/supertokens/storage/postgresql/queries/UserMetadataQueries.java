@@ -19,6 +19,7 @@ package io.supertokens.storage.postgresql.queries;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -174,6 +175,13 @@ public class UserMetadataQueries {
                 return jp.parse(result.getString("user_metadata")).getAsJsonObject();
             }
             return null;
+        });
+    }
+
+    public static Map<String, JsonObject> getMultipleUserMetadatas(Start start, AppIdentifier appIdentifier, List<String> userIds)
+            throws StorageQueryException, StorageTransactionLogicException {
+        return start.startTransaction(con -> {
+            return getMultipleUsersMetadatas_Transaction(start, (Connection) con.getConnection(), appIdentifier, userIds);
         });
     }
 }

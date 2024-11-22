@@ -814,6 +814,30 @@ public class PasswordlessQueries {
         });
     }
 
+    public static List<String> lockEmail_Transaction(Start start, Connection con,
+                                                     AppIdentifier appIdentifier,
+                                                     List<String> emails)
+            throws StorageQueryException, SQLException {
+        if(emails == null || emails.isEmpty()){
+            return new ArrayList<>();
+        }
+        String QUERY = "SELECT user_id FROM " + getConfig(start).getPasswordlessUsersTable() +
+                " WHERE app_id = ? AND email IN (" + Utils.generateCommaSeperatedQuestionMarks(emails.size()) + ") FOR UPDATE";
+
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            for (int i = 0; i < emails.size(); i++) {
+                pst.setString(2 + i, emails.get(i));
+            }
+        }, result -> {
+            List<String> results = new ArrayList<>();
+            while (result.next()) {
+                results.add(result.getString("user_id"));
+            }
+            return results;
+        });
+    }
+
     public static List<String> lockPhoneAndTenant_Transaction(Start start, Connection con,
                                                               AppIdentifier appIdentifier,
                                                               String phoneNumber)
@@ -830,6 +854,30 @@ public class PasswordlessQueries {
                 userIds.add(result.getString("user_id"));
             }
             return userIds;
+        });
+    }
+
+    public static List<String> lockPhoneAndTenant_Transaction(Start start, Connection con,
+                                                     AppIdentifier appIdentifier,
+                                                     List<String> phones)
+            throws StorageQueryException, SQLException {
+        if(phones == null || phones.isEmpty()){
+            return new ArrayList<>();
+        }
+        String QUERY = "SELECT user_id FROM " + getConfig(start).getPasswordlessUsersTable() +
+                " WHERE app_id = ? AND phone_number IN (" + Utils.generateCommaSeperatedQuestionMarks(phones.size()) + ") FOR UPDATE";
+
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            for (int i = 0; i < phones.size(); i++) {
+                pst.setString(2 + i, phones.get(i));
+            }
+        }, result -> {
+            List<String> results = new ArrayList<>();
+            while (result.next()) {
+                results.add(result.getString("user_id"));
+            }
+            return results;
         });
     }
 
@@ -876,6 +924,33 @@ public class PasswordlessQueries {
         });
     }
 
+    public static List<String> getPrimaryUserIdsUsingMultipleEmails_Transaction(Start start, Connection con,
+                                                                                AppIdentifier appIdentifier,
+                                                                                List<String> emails)
+            throws StorageQueryException, SQLException {
+        if(emails.isEmpty()){
+            return new ArrayList<>();
+        }
+        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
+                + "FROM " + getConfig(start).getPasswordlessUsersTable() + " AS ep" +
+                " JOIN " + getConfig(start).getAppIdToUserIdTable() + " AS all_users" +
+                " ON ep.app_id = all_users.app_id AND ep.user_id = all_users.user_id" +
+                " WHERE ep.app_id = ? AND ep.email IN ( " + Utils.generateCommaSeperatedQuestionMarks(emails.size()) + " )";
+
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            for (int i = 0; i < emails.size(); i++) {
+                pst.setString(2+i, emails.get(i));
+            }
+        }, result -> {
+            List<String> userIds = new ArrayList<>();
+            while (result.next()) {
+                userIds.add(result.getString("user_id"));
+            }
+            return userIds;
+        });
+    }
+
     public static String getPrimaryUserByPhoneNumber(Start start, TenantIdentifier tenantIdentifier,
                                                      @Nonnull String phoneNumber)
             throws StorageQueryException, SQLException {
@@ -910,6 +985,33 @@ public class PasswordlessQueries {
         return execute(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, phoneNumber);
+        }, result -> {
+            List<String> userIds = new ArrayList<>();
+            while (result.next()) {
+                userIds.add(result.getString("user_id"));
+            }
+            return userIds;
+        });
+    }
+
+    public static List<String> listUserIdsByMultiplePhoneNumber_Transaction(Start start, Connection con,
+                                                                    AppIdentifier appIdentifier,
+                                                                    @Nonnull List<String> phoneNumbers)
+            throws StorageQueryException, SQLException {
+        if(phoneNumbers.isEmpty()){
+            return new ArrayList<>();
+        }
+        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
+                + "FROM " + getConfig(start).getPasswordlessUsersTable() + " AS pless" +
+                " JOIN " + getConfig(start).getUsersTable() + " AS all_users" +
+                " ON pless.app_id = all_users.app_id AND pless.user_id = all_users.user_id" +
+                " WHERE pless.app_id = ? AND pless.phone_number IN ( "+ Utils.generateCommaSeperatedQuestionMarks(phoneNumbers.size()) +" )";
+
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            for (int i = 0; i < phoneNumbers.size(); i++) {
+                pst.setString(2 + i, phoneNumbers.get(i));
+            }
         }, result -> {
             List<String> userIds = new ArrayList<>();
             while (result.next()) {
