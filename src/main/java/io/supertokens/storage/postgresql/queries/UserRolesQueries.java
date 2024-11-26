@@ -204,25 +204,26 @@ public class UserRolesQueries {
         });
     }
 
-    public static void addRolesToUsers_Transaction(Start start, Connection connection, Map<TenantIdentifier, Map<String, String>> rolesToUserByTenants) //tenant -> user -> role
+    public static void addRolesToUsers_Transaction(Start start, Connection connection, Map<TenantIdentifier, Map<String, List<String>>> rolesToUserByTenants) //tenant -> user -> role
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getUserRolesTable()
                 + "(app_id, tenant_id, user_id, role) VALUES(?, ?, ?, ?);";
         PreparedStatement insertStatement = connection.prepareStatement(QUERY);
 
         int counter = 0;
-        for(Map.Entry<TenantIdentifier, Map<String, String>> tenantsEntry : rolesToUserByTenants.entrySet()) {
-            for(Map.Entry<String, String> rolesToUser : tenantsEntry.getValue().entrySet()) {
+        for(Map.Entry<TenantIdentifier, Map<String, List<String>>> tenantsEntry : rolesToUserByTenants.entrySet()) {
+            for(Map.Entry<String, List<String>> rolesToUser : tenantsEntry.getValue().entrySet()) {
+                for(String roleForUser : rolesToUser.getValue()){
+                    insertStatement.setString(1, tenantsEntry.getKey().getAppId());
+                    insertStatement.setString(2, tenantsEntry.getKey().getTenantId());
+                    insertStatement.setString(3, rolesToUser.getKey());
+                    insertStatement.setString(4, roleForUser);
+                    insertStatement.addBatch();
+                    counter++;
 
-                insertStatement.setString(1, tenantsEntry.getKey().getAppId());
-                insertStatement.setString(2, tenantsEntry.getKey().getTenantId());
-                insertStatement.setString(3, rolesToUser.getKey());
-                insertStatement.setString(4, rolesToUser.getValue());
-                insertStatement.addBatch();
-                counter++;
-
-                if(counter % 100 == 0) {
-                    insertStatement.executeBatch();
+                    if(counter % 100 == 0) {
+                        insertStatement.executeBatch();
+                    }
                 }
             }
         }
@@ -315,7 +316,7 @@ public class UserRolesQueries {
         }, ResultSet::next);
     }
 
-    public static List<Boolean> doesMultipleRoleExist_transaction(Start start, Connection con, AppIdentifier appIdentifier,
+    public static List<String> doesMultipleRoleExist_transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                     List<String> roles)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT role FROM " + getConfig(start).getRolesTable()
@@ -326,15 +327,11 @@ public class UserRolesQueries {
                 pst.setString(2+i, roles.get(i));
             }
         }, result -> {
-            List<Boolean> rolesExistsAnswer = new ArrayList<>();
             List<String> rolesFound = new ArrayList<>();
             while(result.next()){
                 rolesFound.add(result.getString("role"));
             }
-            for(String role : roles){
-                rolesExistsAnswer.add(rolesFound.contains(role));
-            }
-            return rolesExistsAnswer;
+           return rolesFound;
         });
     }
 

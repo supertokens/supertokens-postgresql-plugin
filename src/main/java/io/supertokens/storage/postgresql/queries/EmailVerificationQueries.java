@@ -137,8 +137,8 @@ public class EmailVerificationQueries {
             int counter = 0;
             for(Map.Entry<String, String> emailToUser : emailToUserIds.entrySet()){
                 insertQuery.setString(1, appIdentifier.getAppId());
-                insertQuery.setString(2, emailToUser.getValue());
-                insertQuery.setString(3, emailToUser.getKey());
+                insertQuery.setString(2, emailToUser.getKey());
+                insertQuery.setString(3, emailToUser.getValue());
                 insertQuery.addBatch();
 
                 counter++;

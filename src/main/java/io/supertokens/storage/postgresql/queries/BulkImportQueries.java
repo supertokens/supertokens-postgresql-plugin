@@ -157,14 +157,14 @@ public class BulkImportQueries {
         return start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try {
-                // NOTE: On average, we take about 60 seconds to process 10k users. If, for any reason, the bulk import users were marked as processing but couldn't be processed within 10 minutes, we'll attempt to process them again.
 
                 // "FOR UPDATE" ensures that multiple cron jobs don't read the same rows simultaneously.
                 // If one process locks the first 1000 rows, others will wait for the lock to be released.
                 // "SKIP LOCKED" allows other processes to skip locked rows and select the next 1000 available rows.
                 String selectQuery = "SELECT * FROM " + Config.getConfig(start).getBulkImportUsersTable()
                         + " WHERE app_id = ?"
-                        + " AND (status = 'NEW' OR (status = 'PROCESSING' AND updated_at < (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000) -  10 * 60 * 1000))" /* 10 mins */
+                        //+ " AND (status = 'NEW' OR (status = 'PROCESSING' AND updated_at < (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000) -  10 * 60 * 1000))" /* 10 mins */
+                        + " AND (status = 'NEW' OR status = 'PROCESSING' )"
                         + " LIMIT ? FOR UPDATE SKIP LOCKED";
 
                 List<BulkImportUser> bulkImportUsers = new ArrayList<>();
@@ -249,7 +249,6 @@ public class BulkImportQueries {
 
     public static List<String> deleteBulkImportUsers(Start start, AppIdentifier appIdentifier,
             @Nonnull String[] bulkImportUserIds) throws SQLException, StorageQueryException {
-        System.out.println("Deleting bulkimportuser ids: " + bulkImportUserIds.length);
         if (bulkImportUserIds.length == 0) {
             return new ArrayList<>();
         }

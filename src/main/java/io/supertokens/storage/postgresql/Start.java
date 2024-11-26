@@ -2299,7 +2299,7 @@ public class Start
 
     @Override
     public void addRolesToUsers_Transaction(TransactionConnection connection,
-                                            Map<TenantIdentifier, Map<String, String>> rolesToUserByTenants)
+                                            Map<TenantIdentifier, Map<String, List<String>>> rolesToUserByTenants)
             throws StorageQueryException {
         try {
             UserRolesQueries.addRolesToUsers_Transaction(this, (Connection) connection.getConnection(), rolesToUserByTenants);
@@ -2514,7 +2514,7 @@ public class Start
     }
 
     @Override
-    public List<Boolean> doesMultipleRoleExist_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+    public List<String> doesMultipleRoleExist_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
                                                            List<String> roles) throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
