@@ -1063,6 +1063,10 @@ public class Start
                                 || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
                             errorByPosition.put(users.get(position).userId,
                                     new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException());
+                        } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
+                            errorByPosition.put(users.get(position).userId, new TenantOrAppNotFoundException(users.get(position).tenantIdentifier.toAppIdentifier()));
+                        } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
+                            errorByPosition.put(users.get(position).userId,new TenantOrAppNotFoundException(users.get(position).tenantIdentifier));
                         }
 
                     }
