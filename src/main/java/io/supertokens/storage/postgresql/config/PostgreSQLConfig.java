@@ -462,6 +462,14 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("oauth_logout_challenges");
     }
 
+    public String getWebAuthNUsersTable(){ return  addSchemaAndPrefixToTableName("webauthn_users");}
+
+    public String getWebAuthNUserToTenantTable(){ return  addSchemaAndPrefixToTableName("webauthn_user_to_tenant"); }
+
+    public String getWebAuthNGeneratedOptionsTable() { return   addSchemaAndPrefixToTableName("webauthn_generated_options"); }
+
+    public String getWebAuthNCredentialsTable() { return  addSchemaAndPrefixToTableName("webauthn_credentials"); }
+
     private String addSchemaAndPrefixToTableName(String tableName) {
         return addSchemaToTableName(postgresql_table_names_prefix + tableName);
     }
