@@ -585,6 +585,28 @@ public class GeneralQueries {
                     update(con, OAuthQueries.getQueryToCreateOAuthLogoutChallengesTimeCreatedIndex(start), NO_OP_SETTER);
                 }
 
+                if(!doesTableExists(start, con, Config.getConfig(start).getWebAuthNUsersTable())){
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, WebAuthNQueries.getQueryToCreateWebAuthNUsersTable(start), NO_OP_SETTER);
+                }
+
+                if(!doesTableExists(start, con, Config.getConfig(start).getWebAuthNUserToTenantTable())){
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, WebAuthNQueries.getQueryToCreateWebAuthNUsersToTenantTable(start), NO_OP_SETTER);
+                }
+
+                if(!doesTableExists(start, con, Config.getConfig(start).getWebAuthNGeneratedOptionsTable())){
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, WebAuthNQueries.getQueryToCreateWebAuthNGeneratedOptionsTable(start), NO_OP_SETTER);
+                    //index
+                    update(con, WebAuthNQueries.getQueryToCreateWebAuthNChallengeExpiresIndex(start), NO_OP_SETTER);
+                }
+
+                if(!doesTableExists(start, con, Config.getConfig(start).getWebAuthNCredentialsTable())){
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, WebAuthNQueries.getQueryToCreateWebAuthNCredentialsTable(start), NO_OP_SETTER);
+                }
+
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
@@ -664,7 +686,12 @@ public class GeneralQueries {
                     + getConfig(start).getOAuthClientsTable() + ","
                     + getConfig(start).getOAuthSessionsTable() + ","
                     + getConfig(start).getOAuthLogoutChallengesTable() + ","
-                    + getConfig(start).getOAuthM2MTokensTable();
+                    + getConfig(start).getOAuthM2MTokensTable() + ","
+                    + getConfig(start).getWebAuthNCredentialsTable() + ","
+                    + getConfig(start).getWebAuthNGeneratedOptionsTable() + ","
+                    + getConfig(start).getWebAuthNUserToTenantTable() + ","
+                    + getConfig(start).getWebAuthNUsersTable();
+
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
     }
