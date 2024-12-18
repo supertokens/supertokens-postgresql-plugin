@@ -39,7 +39,9 @@ public class BulkImportProxyConnection implements Connection {
 
     @Override
     public void close() throws SQLException {
-        //this.con.close(); // why are we against the close?
+        //this.con.close();
+        //we don't want to close here because we are trying to reuse existing code but also using the same connection
+        //for bulk importing
     }
 
     @Override
