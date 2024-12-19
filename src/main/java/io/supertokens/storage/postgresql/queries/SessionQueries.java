@@ -33,7 +33,9 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
@@ -303,6 +305,31 @@ public class SessionQueries {
                 finalResult[i] = temp.get(i);
             }
             return finalResult;
+        });
+    }
+
+    public static Map<String, List<String>> getAllNonExpiredSessionHandlesForUsers(Start start, AppIdentifier appIdentifier,
+                                                                          List<String> userIds)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT user_id, session_handle FROM " + getConfig(start).getSessionInfoTable()
+                + " WHERE app_id = ? AND expires_at >= ? AND user_id IN ( " + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) + " )";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setLong(2, currentTimeMillis());
+            for(int i = 0; i < userIds.size() ; i++){
+                pst.setString(3 + i, userIds.get(i));
+            }
+        }, result -> {
+            Map<String, List<String>> temp = new HashMap<>();
+            while (result.next()) {
+                String userId = result.getString("user_id");
+                if(!temp.containsKey(userId)){
+                    temp.put(userId, new ArrayList<>());
+                }
+                temp.get(userId).add(result.getString("session_handle"));
+            }
+            return temp;
         });
     }
 
