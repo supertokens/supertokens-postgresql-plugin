@@ -20,17 +20,20 @@ import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.useridmapping.UserIdMapping;
+import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
 
 import javax.annotation.Nullable;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
@@ -78,6 +81,30 @@ public class UserIdMappingQueries {
             pst.setString(3, externalUserId);
             pst.setString(4, externalUserIdInfo);
         });
+    }
+
+    public static void createBulkUserIdMapping(Start start, AppIdentifier appIdentifier,
+                                               Map<String, String> superTokensUserIdToExternalUserId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "INSERT INTO " + Config.getConfig(start).getUserIdMappingTable()
+                + " (app_id, supertokens_user_id, external_user_id)" + " VALUES(?, ?, ?)";
+
+        Connection sqlConnection = ConnectionPool.getConnection(start);
+        PreparedStatement insertStatement = sqlConnection.prepareStatement(QUERY);
+
+        int counter = 0;
+        for(String superTokensUserId : superTokensUserIdToExternalUserId.keySet()) {
+            insertStatement.setString(1, appIdentifier.getAppId());
+            insertStatement.setString(2, superTokensUserId);
+            insertStatement.setString(3, superTokensUserIdToExternalUserId.get(superTokensUserId));
+            insertStatement.addBatch();
+
+            counter++;
+            if(counter % 100 == 0) {
+                insertStatement.executeBatch();
+            }
+        }
+        insertStatement.executeBatch();
     }
 
     public static UserIdMapping getuseraIdMappingWithSuperTokensUserId(Start start, AppIdentifier appIdentifier,
@@ -301,6 +328,50 @@ public class UserIdMappingQueries {
                 return UserIdMappingRowMapper.getInstance().mapOrThrow(result);
             }
             return null;
+        });
+    }
+
+    public static List<UserIdMapping> getMultipleUserIdMappingWithExternalUserId_Transaction(Start start, Connection sqlCon,
+                                                                               AppIdentifier appIdentifier,
+                                                                               List<String> userId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT * FROM " + Config.getConfig(start).getUserIdMappingTable()
+                + " WHERE app_id = ? AND external_user_id IN ( "+ Utils.generateCommaSeperatedQuestionMarks(
+                userId.size()) + " )";
+
+        return execute(sqlCon, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            for(int i = 0; i < userId.size(); i++) {
+                pst.setString(2 + i, userId.get(i));
+            }
+        }, result -> {
+            List<UserIdMapping> results =  new ArrayList<>();
+            while (result.next()) {
+                results.add(UserIdMappingRowMapper.getInstance().mapOrThrow(result));
+            }
+            return results;
+        });
+    }
+
+    public static List<UserIdMapping> getMultipleUserIdMappingWithSupertokensUserId_Transaction(Start start, Connection sqlCon,
+                                                                                             AppIdentifier appIdentifier,
+                                                                                             List<String> userId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT * FROM " + Config.getConfig(start).getUserIdMappingTable()
+                + " WHERE app_id = ? AND supertokens_user_id IN ( "+ Utils.generateCommaSeperatedQuestionMarks(
+                userId.size()) + " )";
+
+        return execute(sqlCon, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            for(int i = 0; i < userId.size(); i++) {
+                pst.setString(2 + i, userId.get(i));
+            }
+        }, result -> {
+            List<UserIdMapping> results =  new ArrayList<>();
+            while (result.next()) {
+                results.add(UserIdMappingRowMapper.getInstance().mapOrThrow(result));
+            }
+            return results;
         });
     }
 

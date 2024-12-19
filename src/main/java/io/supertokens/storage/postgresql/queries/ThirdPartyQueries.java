@@ -19,19 +19,19 @@ package io.supertokens.storage.postgresql.queries;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
-import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
-import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
+import io.supertokens.pluginInterface.thirdparty.ThirdPartyImportUser;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
@@ -222,6 +222,30 @@ public class ThirdPartyQueries {
         });
     }
 
+    public static List<String> lockEmail_Transaction(Start start, Connection con,
+                                                     AppIdentifier appIdentifier,
+                                                     List<String> emails)
+            throws StorageQueryException, SQLException {
+        if(emails == null || emails.isEmpty()){
+            return new ArrayList<>();
+        }
+        String QUERY = "SELECT user_id FROM " + getConfig(start).getThirdPartyUsersTable() +
+                " WHERE app_id = ? AND email IN (" + Utils.generateCommaSeperatedQuestionMarks(emails.size()) + ") FOR UPDATE";
+
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            for (int i = 0; i < emails.size(); i++) {
+                pst.setString(2 + i, emails.get(i));
+            }
+        }, result -> {
+            List<String> results = new ArrayList<>();
+            while (result.next()) {
+                results.add(result.getString("user_id"));
+            }
+            return results;
+        });
+    }
+
     public static List<String> lockThirdPartyInfoAndTenant_Transaction(Start start, Connection con,
                                                                        AppIdentifier appIdentifier,
                                                                        String thirdPartyId, String thirdPartyUserId)
@@ -234,6 +258,38 @@ public class ThirdPartyQueries {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, thirdPartyId);
             pst.setString(3, thirdPartyUserId);
+        }, result -> {
+            List<String> finalResult = new ArrayList<>();
+            while (result.next()) {
+                finalResult.add(result.getString("user_id"));
+            }
+            return finalResult;
+        });
+    }
+
+    public static List<String> lockThirdPartyInfoAndTenant_Transaction(Start start, Connection con,
+                                                                       AppIdentifier appIdentifier,
+                                                                       Map<String, String> thirdPartyUserIdToThirdPartyId)
+            throws SQLException, StorageQueryException {
+        if(thirdPartyUserIdToThirdPartyId == null || thirdPartyUserIdToThirdPartyId.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        String QUERY = "SELECT user_id " +
+                " FROM " + getConfig(start).getThirdPartyUsersTable() +
+                " WHERE app_id = ? AND third_party_id IN ("+Utils.generateCommaSeperatedQuestionMarks(
+                thirdPartyUserIdToThirdPartyId.size())+") AND third_party_user_id IN ("+
+                Utils.generateCommaSeperatedQuestionMarks(thirdPartyUserIdToThirdPartyId.size())+") FOR UPDATE";
+
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            int counter = 2;
+            for (String thirdPartyId : thirdPartyUserIdToThirdPartyId.values()){
+                pst.setString(counter++, thirdPartyId);
+            }
+            for (String thirdPartyUserId : thirdPartyUserIdToThirdPartyId.keySet()) {
+                pst.setString(counter++, thirdPartyUserId);
+            }
         }, result -> {
             List<String> finalResult = new ArrayList<>();
             while (result.next()) {
@@ -353,6 +409,41 @@ public class ThirdPartyQueries {
         });
     }
 
+    public static List<String> listUserIdsByMultipleThirdPartyInfo_Transaction(Start start, Connection con,
+                                                                       AppIdentifier appIdentifier,
+                                                                       Map<String, String> thirdPartyUserIdToThirdPartyId)
+            throws SQLException, StorageQueryException {
+        if(thirdPartyUserIdToThirdPartyId.isEmpty()){
+            return new ArrayList<>();
+        }
+        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
+                + "FROM " + getConfig(start).getThirdPartyUsersTable() + " AS tp" +
+                " JOIN " + getConfig(start).getUsersTable() + " AS all_users" +
+                " ON tp.app_id = all_users.app_id AND tp.user_id = all_users.user_id" +
+                " WHERE tp.app_id = ? AND tp.third_party_id IN ( " + Utils.generateCommaSeperatedQuestionMarks(
+                thirdPartyUserIdToThirdPartyId.size()) + " ) AND tp.third_party_user_id IN ( " + Utils.generateCommaSeperatedQuestionMarks(
+                thirdPartyUserIdToThirdPartyId.size()) + " )";
+
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            int counter = 2;
+            for (String thirdpartId : thirdPartyUserIdToThirdPartyId.values()){
+                pst.setString(counter, thirdpartId);
+                counter++;
+            }
+            for (String thirdparyUserId : thirdPartyUserIdToThirdPartyId.keySet()){
+                pst.setString(counter, thirdparyUserId);
+                counter++;
+            }
+        }, result -> {
+            List<String> userIds = new ArrayList<>();
+            while (result.next()) {
+                userIds.add(result.getString("user_id"));
+            }
+            return userIds;
+        });
+    }
+
     public static String getUserIdByThirdPartyInfo(Start start, TenantIdentifier tenantIdentifier,
                                                    String thirdPartyId, String thirdPartyUserId)
             throws SQLException, StorageQueryException {
@@ -455,6 +546,33 @@ public class ThirdPartyQueries {
         });
     }
 
+    public static List<String> getPrimaryUserIdsUsingMultipleEmails_Transaction(Start start, Connection con,
+                                                                                AppIdentifier appIdentifier,
+                                                                                List<String> emails)
+            throws StorageQueryException, SQLException {
+        if(emails.isEmpty()){
+            return new ArrayList<>();
+        }
+        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
+                + "FROM " + getConfig(start).getThirdPartyUsersTable() + " AS ep" +
+                " JOIN " + getConfig(start).getAppIdToUserIdTable() + " AS all_users" +
+                " ON ep.app_id = all_users.app_id AND ep.user_id = all_users.user_id" +
+                " WHERE ep.app_id = ? AND ep.email IN ( " + Utils.generateCommaSeperatedQuestionMarks(emails.size()) + " )";
+
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            for (int i = 0; i < emails.size(); i++) {
+                pst.setString(2+i, emails.get(i));
+            }
+        }, result -> {
+            List<String> userIds = new ArrayList<>();
+            while (result.next()) {
+                userIds.add(result.getString("user_id"));
+            }
+            return userIds;
+        });
+    }
+
     public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon,
                                                         TenantIdentifier tenantIdentifier, String userId)
             throws SQLException, StorageQueryException, UnknownUserIdException {
@@ -525,6 +643,80 @@ public class ThirdPartyQueries {
         }
 
         // automatically deleted from thirdparty_user_to_tenant because of foreign key constraint
+    }
+
+    public static void importUser_Transaction(Start start, Connection sqlConnection, Collection<ThirdPartyImportUser> users)
+            throws SQLException {
+
+        String app_id_userid_QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
+                + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
+
+        String all_auth_recipe_users_QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
+                +
+                "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, " +
+                "primary_or_recipe_user_time_joined)" +
+                " VALUES(?, ?, ?, ?, ?, ?, ?)";
+
+        String thirdparty_users_QUERY = "INSERT INTO " + getConfig(start).getThirdPartyUsersTable()
+                + "(app_id, third_party_id, third_party_user_id, user_id, email, time_joined)"
+                + " VALUES(?, ?, ?, ?, ?, ?)";
+
+        String thirdparty_user_to_tenant_QUERY = "INSERT INTO " + getConfig(start).getThirdPartyUserToTenantTable()
+                + "(app_id, tenant_id, user_id, third_party_id, third_party_user_id)"
+                + " VALUES(?, ?, ?, ?, ?)";
+
+        PreparedStatement appIdToUserIdStatement = sqlConnection.prepareStatement(app_id_userid_QUERY);
+        PreparedStatement allAuthRecipeUsersStatement = sqlConnection.prepareStatement(all_auth_recipe_users_QUERY);
+        PreparedStatement thirdPartyUsersStatement = sqlConnection.prepareStatement(thirdparty_users_QUERY);
+        PreparedStatement thirdPartyUsersToTenantStatement = sqlConnection.prepareStatement(
+                thirdparty_user_to_tenant_QUERY);
+
+        int counter = 0;
+        for (ThirdPartyImportUser user : users) {
+            TenantIdentifier tenantIdentifier = user.tenantIdentifier;
+            appIdToUserIdStatement.setString(1, tenantIdentifier.getAppId());
+            appIdToUserIdStatement.setString(2, user.userId);
+            appIdToUserIdStatement.setString(3, user.userId);
+            appIdToUserIdStatement.setString(4, THIRD_PARTY.toString());
+            appIdToUserIdStatement.addBatch();
+
+            allAuthRecipeUsersStatement.setString(1, tenantIdentifier.getAppId());
+            allAuthRecipeUsersStatement.setString(2, tenantIdentifier.getTenantId());
+            allAuthRecipeUsersStatement.setString(3, user.userId);
+            allAuthRecipeUsersStatement.setString(4, user.userId);
+            allAuthRecipeUsersStatement.setString(5, THIRD_PARTY.toString());
+            allAuthRecipeUsersStatement.setLong(6, user.timeJoinedMSSinceEpoch);
+            allAuthRecipeUsersStatement.setLong(7, user.timeJoinedMSSinceEpoch);
+            allAuthRecipeUsersStatement.addBatch();
+
+            thirdPartyUsersStatement.setString(1, tenantIdentifier.getAppId());
+            thirdPartyUsersStatement.setString(2, user.thirdpartyId);
+            thirdPartyUsersStatement.setString(3, user.thirdpartyUserId);
+            thirdPartyUsersStatement.setString(4, user.userId);
+            thirdPartyUsersStatement.setString(5, user.email);
+            thirdPartyUsersStatement.setLong(6, user.timeJoinedMSSinceEpoch);
+            thirdPartyUsersStatement.addBatch();
+
+            thirdPartyUsersToTenantStatement.setString(1, tenantIdentifier.getAppId());
+            thirdPartyUsersToTenantStatement.setString(2, tenantIdentifier.getTenantId());
+            thirdPartyUsersToTenantStatement.setString(3, user.userId);
+            thirdPartyUsersToTenantStatement.setString(4, user.thirdpartyId);
+            thirdPartyUsersToTenantStatement.setString(5, user.thirdpartyUserId);
+            thirdPartyUsersToTenantStatement.addBatch();
+
+            counter++;
+            if(counter % 100 == 0) {
+                appIdToUserIdStatement.executeBatch();
+                allAuthRecipeUsersStatement.executeBatch();
+                thirdPartyUsersStatement.executeBatch();
+                thirdPartyUsersToTenantStatement.executeBatch();
+            }
+        }
+
+        appIdToUserIdStatement.executeBatch();
+        allAuthRecipeUsersStatement.executeBatch();
+        thirdPartyUsersStatement.executeBatch();
+        thirdPartyUsersToTenantStatement.executeBatch();
     }
 
     private static UserInfoPartial fillUserInfoWithVerified_transaction(Start start, Connection sqlCon,
