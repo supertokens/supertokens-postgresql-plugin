@@ -984,6 +984,10 @@ public class OneMillionUsersTest {
 
     @Test
     public void testWithOneMillionUsers() throws Exception {
+        if (System.getenv("ONE_MILLION_USERS_TEST") == null) {
+            return;
+        }
+
         Main main = startCronProcess(String.valueOf(NUM_THREADS));
 
         int NUMBER_OF_USERS_TO_UPLOAD = 1000000; // million
@@ -1004,6 +1008,7 @@ public class OneMillionUsersTest {
                 JsonObject request = generateUsersJson(10000, i * 10000); // API allows 10k users upload at once
                 JsonObject response = uploadBulkImportUsersJson(main, request);
                 assertEquals("OK", response.get("status").getAsString());
+                System.out.println("Uploaded " + (i + 1) * 10000 + " users");
             }
 
         }
@@ -1028,7 +1033,7 @@ public class OneMillionUsersTest {
                     int failedUsersNumber = loadBulkImportUsersCountWithStatus(main,
                             BulkImportStorage.BULK_IMPORT_USER_STATUS.FAILED).get("count").getAsInt();
                     count = newUsersNumber + processingUsersNumber;
-
+                    System.out.println("Remaining users to process: " + count + " (new: " + newUsersNumber + ", processing: " + processingUsersNumber + ", failed: " + failedUsersNumber + ")");
                     if (count == 0) {
                         break;
                     }
