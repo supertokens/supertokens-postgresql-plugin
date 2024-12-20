@@ -19,12 +19,12 @@ package io.supertokens.storage.postgresql.queries;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -32,8 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class UserRolesQueries {
@@ -208,27 +207,22 @@ public class UserRolesQueries {
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getUserRolesTable()
                 + "(app_id, tenant_id, user_id, role) VALUES(?, ?, ?, ?);";
-        PreparedStatement insertStatement = connection.prepareStatement(QUERY);
+        List<PreparedStatementValueSetter> insertStatements = new ArrayList<>();
 
-        int counter = 0;
         for(Map.Entry<TenantIdentifier, Map<String, List<String>>> tenantsEntry : rolesToUserByTenants.entrySet()) {
             for(Map.Entry<String, List<String>> rolesToUser : tenantsEntry.getValue().entrySet()) {
                 for(String roleForUser : rolesToUser.getValue()){
-                    insertStatement.setString(1, tenantsEntry.getKey().getAppId());
-                    insertStatement.setString(2, tenantsEntry.getKey().getTenantId());
-                    insertStatement.setString(3, rolesToUser.getKey());
-                    insertStatement.setString(4, roleForUser);
-                    insertStatement.addBatch();
-                    counter++;
-
-                    if(counter % 100 == 0) {
-                        insertStatement.executeBatch();
-                    }
+                    insertStatements.add(pst -> {
+                        pst.setString(1, tenantsEntry.getKey().getAppId());
+                        pst.setString(2, tenantsEntry.getKey().getTenantId());
+                        pst.setString(3, rolesToUser.getKey());
+                        pst.setString(4, roleForUser);
+                    });
                 }
             }
         }
 
-        insertStatement.executeBatch();
+        executeBatch(connection, QUERY, insertStatements);
     }
 
     public static String[] getRolesForUser(Start start, TenantIdentifier tenantIdentifier, String userId)

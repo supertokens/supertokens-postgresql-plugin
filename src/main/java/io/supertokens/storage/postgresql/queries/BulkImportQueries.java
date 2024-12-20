@@ -22,6 +22,7 @@ import io.supertokens.pluginInterface.bulkimport.BulkImportUser;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -29,15 +30,13 @@ import io.supertokens.storage.postgresql.utils.Utils;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 
 public class BulkImportQueries {
     static String getQueryToCreateBulkImportUsersTable(Start start) {
@@ -125,28 +124,23 @@ public class BulkImportQueries {
 
     public static void updateMultipleBulkImportUsersStatusToError_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                                               @Nonnull Map<String,String> bulkImportUserIdToErrorMessage)
-            throws SQLException {
+            throws SQLException, StorageQueryException {
         BULK_IMPORT_USER_STATUS errorStatus = BULK_IMPORT_USER_STATUS.FAILED;
         String query = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable()
                 + " SET status = ?, error_msg = ?, updated_at = ? WHERE app_id = ? and id = ?";
+        List<PreparedStatementValueSetter> setters = new ArrayList<>();
 
-        PreparedStatement setErrorStatement = con.prepareStatement(query);
-
-        int counter = 0;
         for(String bulkImportUserId : bulkImportUserIdToErrorMessage.keySet()){
-            setErrorStatement.setString(1, errorStatus.toString());
-            setErrorStatement.setString(2, bulkImportUserIdToErrorMessage.get(bulkImportUserId));
-            setErrorStatement.setLong(3, System.currentTimeMillis());
-            setErrorStatement.setString(4, appIdentifier.getAppId());
-            setErrorStatement.setString(5, bulkImportUserId);
-            setErrorStatement.addBatch();
-
-            if(counter % 100 == 0) {
-                setErrorStatement.executeBatch();
-            }
+            setters.add(pst -> {
+                pst.setString(1, errorStatus.toString());
+                pst.setString(2, bulkImportUserIdToErrorMessage.get(bulkImportUserId));
+                pst.setLong(3, System.currentTimeMillis());
+                pst.setString(4, appIdentifier.getAppId());
+                pst.setString(5, bulkImportUserId);
+            });
         }
 
-        setErrorStatement.executeBatch();
+        executeBatch(con, query, setters);
     }
 
     public static List<BulkImportUser> getBulkImportUsersAndChangeStatusToProcessing(Start start,

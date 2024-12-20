@@ -26,6 +26,7 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ConnectionPool;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -34,7 +35,6 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
@@ -43,8 +43,7 @@ import java.util.stream.Collectors;
 import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
 import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.CREATING_NEW_TABLE;
 import static io.supertokens.storage.postgresql.ProcessState.getInstance;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import static io.supertokens.storage.postgresql.queries.EmailPasswordQueries.*;
 import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.*;
@@ -1248,26 +1247,22 @@ public class GeneralQueries {
             String appid_to_userid_update_QUERY = "UPDATE " + getConfig(start).getAppIdToUserIdTable() +
                     " SET is_linked_or_is_a_primary_user = true WHERE app_id = ? AND user_id = ?";
 
-            PreparedStatement usersUpdateStatement = sqlCon.prepareStatement(users_update_QUERY);
-            PreparedStatement appIdToUserIdUpdateStatement = sqlCon.prepareStatement(appid_to_userid_update_QUERY);
-            int counter = 0;
+            List<PreparedStatementValueSetter> usersUpdateBatch = new ArrayList<>();
+            List<PreparedStatementValueSetter> appIdToUserIdUpdateBatch = new ArrayList<>();
+
             for(String userId: userIds){
-                usersUpdateStatement.setString(1, appIdentifier.getAppId());
-                usersUpdateStatement.setString(2, userId);
-                usersUpdateStatement.addBatch();
-
-                appIdToUserIdUpdateStatement.setString(1, appIdentifier.getAppId());
-                appIdToUserIdUpdateStatement.setString(2, userId);
-                appIdToUserIdUpdateStatement.addBatch();
-
-                counter++;
-                if(counter % 100 == 0) {
-                    usersUpdateStatement.executeBatch();
-                    appIdToUserIdUpdateStatement.executeBatch();
-                }
+                usersUpdateBatch.add(pst -> {
+                    pst.setString(1, appIdentifier.getAppId());
+                    pst.setString(2, userId);
+                });
+                appIdToUserIdUpdateBatch.add(pst -> {
+                    pst.setString(1, appIdentifier.getAppId());
+                    pst.setString(2, userId);
+                });
             }
-        usersUpdateStatement.executeBatch();
-        appIdToUserIdUpdateStatement.executeBatch();
+
+            executeBatch(sqlCon, users_update_QUERY, usersUpdateBatch);
+            executeBatch(sqlCon, appid_to_userid_update_QUERY, appIdToUserIdUpdateBatch);
     }
 
     public static void linkAccounts_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
@@ -1316,33 +1311,26 @@ public class GeneralQueries {
                 " SET is_linked_or_is_a_primary_user = true, primary_or_recipe_user_id = ? WHERE app_id = ? AND " +
                 "user_id = ?";
 
-        PreparedStatement updateUsers = sqlCon.prepareStatement(update_users_QUERY);
-        PreparedStatement updateAppIdToUserId = sqlCon.prepareStatement(update_appid_to_userid_QUERY);
+        List<PreparedStatementValueSetter> usersUpdateBatch = new ArrayList<>();
+        List<PreparedStatementValueSetter> appIdToUserIdUpdateBatch = new ArrayList<>();
 
-        int counter = 0;
         for(Map.Entry<String, String> linkEntry : recipeUserIdToPrimaryUserId.entrySet()) {
             String primaryUserId = linkEntry.getValue();
             String recipeUserId = linkEntry.getKey();
 
-            updateUsers.setString(1, primaryUserId);
-            updateUsers.setString(2, appIdentifier.getAppId());
-            updateUsers.setString(3, recipeUserId);
-            updateUsers.addBatch();
-
-            updateAppIdToUserId.setString(1, primaryUserId);
-            updateAppIdToUserId.setString(2, appIdentifier.getAppId());
-            updateAppIdToUserId.setString(3, recipeUserId);
-            updateAppIdToUserId.addBatch();
-
-            counter++;
-            if (counter % 100 == 0) {
-                updateUsers.executeBatch();
-                updateAppIdToUserId.executeBatch();
-            }
+            usersUpdateBatch.add(pst -> {
+                pst.setString(1, primaryUserId);
+                pst.setString(2, appIdentifier.getAppId());
+                pst.setString(3, recipeUserId);
+            });
+            appIdToUserIdUpdateBatch.add(pst -> {
+                pst.setString(1, primaryUserId);
+                pst.setString(2, appIdentifier.getAppId());
+                pst.setString(3, recipeUserId);
+            });
         }
-
-        updateUsers.executeBatch();
-        updateAppIdToUserId.executeBatch();
+        executeBatch(sqlCon, update_users_QUERY, usersUpdateBatch);
+        executeBatch(sqlCon, update_appid_to_userid_QUERY, appIdToUserIdUpdateBatch);
 
         updateTimeJoinedForPrimaryUsers_Transaction(start, sqlCon, appIdentifier,
                 new ArrayList<>(recipeUserIdToPrimaryUserId.values()));
@@ -1355,16 +1343,17 @@ public class GeneralQueries {
                 " SET primary_or_recipe_user_time_joined = (SELECT MIN(time_joined) FROM " +
                 getConfig(start).getUsersTable() + " WHERE app_id = ? AND primary_or_recipe_user_id = ?) WHERE " +
                 " app_id = ? AND primary_or_recipe_user_id = ?";
-        PreparedStatement updateStatement = sqlCon.prepareStatement(QUERY);
+        List<PreparedStatementValueSetter> usersUpdateBatch = new ArrayList<>();
         for(String primaryUserId : primaryUserIds) {
-            updateStatement.setString(1, appIdentifier.getAppId());
-            updateStatement.setString(2, primaryUserId);
-            updateStatement.setString(3, appIdentifier.getAppId());
-            updateStatement.setString(4, primaryUserId);
-            updateStatement.addBatch();
+            usersUpdateBatch.add(pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, primaryUserId);
+                pst.setString(3, appIdentifier.getAppId());
+                pst.setString(4, primaryUserId);
+            });
         }
 
-        updateStatement.executeBatch();
+        executeBatch(sqlCon, QUERY, usersUpdateBatch);
     }
 
     public static void unlinkAccounts_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,

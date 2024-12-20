@@ -6,12 +6,12 @@ import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.totp.TOTPDevice;
 import io.supertokens.pluginInterface.totp.TOTPUsedCode;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -19,8 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 
 public class TOTPQueries {
     public static String getQueryToCreateUsersTable(Start start) {
@@ -160,38 +159,34 @@ public class TOTPQueries {
                 " (app_id, user_id, device_name, secret_key, period, skew, verified, created_at) VALUES (?, ?, ?, ?, " +
                 "?, ?, ?, ?) ON CONFLICT (app_id, user_id, device_name) DO UPDATE SET secret_key = ?, period = ?, skew = ?, created_at = ?, verified = ?";
 
-        PreparedStatement insertUserStatement = sqlCon.prepareStatement(insert_user_QUERY);
-        PreparedStatement insertDeviceStatement = sqlCon.prepareStatement(insert_device_QUERY);
+        List<PreparedStatementValueSetter> userSetters = new ArrayList<>();
+        List<PreparedStatementValueSetter> deviceSetters = new ArrayList<>();
 
-        int counter = 0;
         for(TOTPDevice device : devices){
-            insertUserStatement.setString(1, appIdentifier.getAppId());
-            insertUserStatement.setString(2, device.userId);
-            insertUserStatement.addBatch();
+            userSetters.add(pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, device.userId);
+            });
 
-            insertDeviceStatement.setString(1, appIdentifier.getAppId());
-            insertDeviceStatement.setString(2, device.userId);
-            insertDeviceStatement.setString(3, device.deviceName);
-            insertDeviceStatement.setString(4, device.secretKey);
-            insertDeviceStatement.setInt(5, device.period);
-            insertDeviceStatement.setInt(6, device.skew);
-            insertDeviceStatement.setBoolean(7, device.verified);
-            insertDeviceStatement.setLong(8, device.createdAt);
-            insertDeviceStatement.setString(9, device.secretKey);
-            insertDeviceStatement.setInt(10, device.period);
-            insertDeviceStatement.setInt(11, device.skew);
-            insertDeviceStatement.setLong(12, device.createdAt);
-            insertDeviceStatement.setBoolean(13, device.verified);
-            insertDeviceStatement.addBatch();
-            counter++;
-            if(counter % 100 == 0) {
-                insertUserStatement.executeBatch();
-                insertDeviceStatement.executeBatch();
-            }
+            deviceSetters.add(pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, device.userId);
+                pst.setString(3, device.deviceName);
+                pst.setString(4, device.secretKey);
+                pst.setInt(5, device.period);
+                pst.setInt(6, device.skew);
+                pst.setBoolean(7, device.verified);
+                pst.setLong(8, device.createdAt);
+                pst.setString(9, device.secretKey);
+                pst.setInt(10, device.period);
+                pst.setInt(11, device.skew);
+                pst.setLong(12, device.createdAt);
+                pst.setBoolean(13, device.verified);
+            });
         }
 
-        insertUserStatement.executeBatch();
-        insertDeviceStatement.executeBatch();
+        executeBatch(sqlCon, insert_user_QUERY, userSetters);
+        executeBatch(sqlCon, insert_device_QUERY, deviceSetters);
     }
 
     public static TOTPDevice getDeviceByName_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,

@@ -23,18 +23,17 @@ import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicExceptio
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import static java.lang.System.currentTimeMillis;
 
@@ -130,41 +129,25 @@ public class EmailVerificationQueries {
                                                               boolean isEmailVerified)
             throws SQLException, StorageQueryException {
 
+        String QUERY;
         if (isEmailVerified) {
-            String QUERY = "INSERT INTO " + getConfig(start).getEmailVerificationTable()
+            QUERY = "INSERT INTO " + getConfig(start).getEmailVerificationTable()
                     + "(app_id, user_id, email) VALUES(?, ?, ?)";
-            PreparedStatement insertQuery = con.prepareStatement(QUERY);
-            int counter = 0;
-            for(Map.Entry<String, String> emailToUser : emailToUserIds.entrySet()){
-                insertQuery.setString(1, appIdentifier.getAppId());
-                insertQuery.setString(2, emailToUser.getKey());
-                insertQuery.setString(3, emailToUser.getValue());
-                insertQuery.addBatch();
-
-                counter++;
-                if (counter % 100 == 0) {
-                    insertQuery.executeBatch();
-                }
-            }
-                insertQuery.executeBatch();
         } else {
-            String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTable()
+            QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTable()
                     + " WHERE app_id = ? AND user_id = ? AND email = ?";
-            PreparedStatement deleteQuery = con.prepareStatement(QUERY);
-            int counter = 0;
-            for (Map.Entry<String, String> emailToUser : emailToUserIds.entrySet()) {
-                deleteQuery.setString(1, appIdentifier.getAppId());
-                deleteQuery.setString(2, emailToUser.getValue());
-                deleteQuery.setString(3, emailToUser.getKey());
-                deleteQuery.addBatch();
-
-                counter++;
-                if (counter % 100 == 0) {
-                    deleteQuery.executeBatch();
-                }
-            }
-            deleteQuery.executeBatch();
         }
+
+        List<PreparedStatementValueSetter> setters = new ArrayList<>();
+
+        for(Map.Entry<String, String> emailToUser : emailToUserIds.entrySet()){
+            setters.add(pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, emailToUser.getKey());
+                pst.setString(3, emailToUser.getValue());
+            });
+        }
+        executeBatch(con, QUERY, setters);
     }
 
     public static void deleteAllEmailVerificationTokensForUser_Transaction(Start start, Connection con,
@@ -610,30 +593,30 @@ public class EmailVerificationQueries {
                             + " SET user_id = ? WHERE app_id = ? AND user_id = ?";
                     String update_email_verification_tokens_table_query = "UPDATE " + getConfig(start).getEmailVerificationTokensTable()
                             + " SET user_id = ? WHERE app_id = ? AND user_id = ?";
-                    PreparedStatement updateEmailVerificationQuery = sqlCon.prepareStatement(update_email_verification_table_query);
-                    PreparedStatement updateEmailVerificationTokensQuery = sqlCon.prepareStatement(update_email_verification_tokens_table_query);
 
-                    int counter = 0;
+                    List<PreparedStatementValueSetter> emailVerificationSetters = new ArrayList<>();
+                    List<PreparedStatementValueSetter> emalVerificationTokensSetters = new ArrayList<>();
+
                     for (String supertokensUserId : supertokensUserIdToExternalUserId.keySet()){
-                        updateEmailVerificationQuery.setString(1, supertokensUserIdToExternalUserId.get(supertokensUserId));
-                        updateEmailVerificationQuery.setString(2, appIdentifier.getAppId());
-                        updateEmailVerificationQuery.setString(3, supertokensUserId);
-                        updateEmailVerificationQuery.addBatch();
+                        emailVerificationSetters.add(pst -> {
+                            pst.setString(1, supertokensUserIdToExternalUserId.get(supertokensUserId));
+                            pst.setString(2, appIdentifier.getAppId());
+                            pst.setString(3, supertokensUserId);
+                        });
 
-                        updateEmailVerificationTokensQuery.setString(1, supertokensUserIdToExternalUserId.get(supertokensUserId));
-                        updateEmailVerificationTokensQuery.setString(2, appIdentifier.getAppId());
-                        updateEmailVerificationTokensQuery.setString(3, supertokensUserId);
-                        updateEmailVerificationTokensQuery.addBatch();
-
-                        counter++;
-                        if(counter % 100 == 0) {
-                            updateEmailVerificationQuery.executeBatch();
-                            updateEmailVerificationTokensQuery.executeBatch();
-                        }
+                        emalVerificationTokensSetters.add(pst -> {
+                            pst.setString(1, supertokensUserIdToExternalUserId.get(supertokensUserId));
+                            pst.setString(2, appIdentifier.getAppId());
+                            pst.setString(3, supertokensUserId);
+                        });
                     }
-                    updateEmailVerificationQuery.executeBatch();
-                    updateEmailVerificationTokensQuery.executeBatch();
 
+                    if(emailVerificationSetters.isEmpty()){
+                        return null;
+                    }
+
+                    executeBatch(sqlCon, update_email_verification_table_query, emailVerificationSetters);
+                    executeBatch(sqlCon, update_email_verification_tokens_table_query, emalVerificationTokensSetters);
                 } catch (SQLException e) {
                     throw new StorageTransactionLogicException(e);
                 }
