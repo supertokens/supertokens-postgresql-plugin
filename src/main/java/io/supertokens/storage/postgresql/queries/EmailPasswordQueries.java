@@ -26,20 +26,19 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import static io.supertokens.pluginInterface.RECIPE_ID.EMAIL_PASSWORD;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import static java.lang.System.currentTimeMillis;
 
@@ -354,59 +353,52 @@ public class EmailPasswordQueries {
                     "INSERT INTO " + getConfig(start).getEmailPasswordUserToTenantTable()
                             + "(app_id, tenant_id, user_id, email)" + " VALUES(?, ?, ?, ?)";
 
-            PreparedStatement appIdToUserId = sqlCon.prepareStatement(app_id_to_user_id_QUERY);
-            PreparedStatement allAuthRecipeUsers = sqlCon.prepareStatement(all_auth_recipe_users_QUERY);
-            PreparedStatement emailPasswordUsers = sqlCon.prepareStatement(emailpassword_users_QUERY);
-            PreparedStatement emailPasswordUsersToTenant = sqlCon.prepareStatement(emailpassword_users_to_tenant_QUERY);
+            List<PreparedStatementValueSetter> appIdToUserIdSetters = new ArrayList<>();
+            List<PreparedStatementValueSetter> allAuthRecipeUsersSetters = new ArrayList<>();
+            List<PreparedStatementValueSetter> emailPasswordUsersSetters = new ArrayList<>();
+            List<PreparedStatementValueSetter> emailPasswordUsersToTenantSetters = new ArrayList<>();
 
-            int counter = 0;
             for (EmailPasswordImportUser user : usersToSignUp) {
                 String userId = user.userId;
                 TenantIdentifier tenantIdentifier = user.tenantIdentifier;
 
-                appIdToUserId.setString(1, tenantIdentifier.getAppId());
-                appIdToUserId.setString(2, userId);
-                appIdToUserId.setString(3, userId);
-                appIdToUserId.setString(4, EMAIL_PASSWORD.toString());
-                appIdToUserId.addBatch();
+                appIdToUserIdSetters.add(pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, userId);
+                    pst.setString(3, userId);
+                    pst.setString(4, EMAIL_PASSWORD.toString());
+                });
 
+                allAuthRecipeUsersSetters.add(pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, tenantIdentifier.getTenantId());
+                    pst.setString(3, userId);
+                    pst.setString(4, userId);
+                    pst.setString(5, EMAIL_PASSWORD.toString());
+                    pst.setLong(6, user.timeJoinedMSSinceEpoch);
+                    pst.setLong(7, user.timeJoinedMSSinceEpoch);
+                });
 
-                allAuthRecipeUsers.setString(1, tenantIdentifier.getAppId());
-                allAuthRecipeUsers.setString(2, tenantIdentifier.getTenantId());
-                allAuthRecipeUsers.setString(3, userId);
-                allAuthRecipeUsers.setString(4, userId);
-                allAuthRecipeUsers.setString(5, EMAIL_PASSWORD.toString());
-                allAuthRecipeUsers.setLong(6, user.timeJoinedMSSinceEpoch);
-                allAuthRecipeUsers.setLong(7, user.timeJoinedMSSinceEpoch);
-                allAuthRecipeUsers.addBatch();
+                emailPasswordUsersSetters.add(pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, userId);
+                    pst.setString(3, user.email);
+                    pst.setString(4, user.passwordHash);
+                    pst.setLong(5, user.timeJoinedMSSinceEpoch);
+                });
 
-                emailPasswordUsers.setString(1, tenantIdentifier.getAppId());
-                emailPasswordUsers.setString(2, userId);
-                emailPasswordUsers.setString(3, user.email);
-                emailPasswordUsers.setString(4, user.passwordHash);
-                emailPasswordUsers.setLong(5, user.timeJoinedMSSinceEpoch);
-                emailPasswordUsers.addBatch();
-
-                emailPasswordUsersToTenant.setString(1, tenantIdentifier.getAppId());
-                emailPasswordUsersToTenant.setString(2, tenantIdentifier.getTenantId());
-                emailPasswordUsersToTenant.setString(3, userId);
-                emailPasswordUsersToTenant.setString(4, user.email);
-                emailPasswordUsersToTenant.addBatch();
-                counter++;
-                if (counter % 100 == 0) {
-                    appIdToUserId.executeBatch();
-                    allAuthRecipeUsers.executeBatch();
-                    emailPasswordUsers.executeBatch();
-                    emailPasswordUsersToTenant.executeBatch();
-                }
+                emailPasswordUsersToTenantSetters.add(pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, tenantIdentifier.getTenantId());
+                    pst.setString(3, userId);
+                    pst.setString(4, user.email);
+                });
             }
 
-            //execute the remaining ones
-            appIdToUserId.executeBatch();
-            allAuthRecipeUsers.executeBatch();
-            emailPasswordUsers.executeBatch();
-            emailPasswordUsersToTenant.executeBatch();
-
+            executeBatch(sqlCon, app_id_to_user_id_QUERY, appIdToUserIdSetters);
+            executeBatch(sqlCon, all_auth_recipe_users_QUERY, allAuthRecipeUsersSetters);
+            executeBatch(sqlCon, emailpassword_users_QUERY, emailPasswordUsersSetters);
+            executeBatch(sqlCon, emailpassword_users_to_tenant_QUERY, emailPasswordUsersToTenantSetters);
             sqlCon.commit();
         } catch (SQLException throwables) {
             throw new StorageTransactionLogicException(throwables);

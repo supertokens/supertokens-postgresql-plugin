@@ -29,6 +29,7 @@ import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.PasswordlessImportUser;
 import io.supertokens.pluginInterface.sqlStorage.SQLStorage.TransactionIsolationLevel;
 import io.supertokens.storage.postgresql.ConnectionPool;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -36,15 +37,13 @@ import io.supertokens.storage.postgresql.utils.Utils;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import static io.supertokens.pluginInterface.RECIPE_ID.PASSWORDLESS;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class PasswordlessQueries {
@@ -1215,73 +1214,69 @@ public class PasswordlessQueries {
     }
 
     public static void importUsers_Transaction(Connection sqlCon, Start start,
-                                               Collection<PasswordlessImportUser> users) throws SQLException {
+                                               Collection<PasswordlessImportUser> users)
+            throws SQLException, StorageQueryException {
 
         String app_id_to_user_id_QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
                 + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
-        PreparedStatement appIdToUserIdStatement = sqlCon.prepareStatement(app_id_to_user_id_QUERY);
 
         String all_auth_recipe_users_QUERY = "INSERT INTO " + getConfig(start).getUsersTable() +
                 "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, " +
                 "primary_or_recipe_user_time_joined)" +
                 " VALUES(?, ?, ?, ?, ?, ?, ?)";
-        PreparedStatement allAuthRecipeUsersStatement = sqlCon.prepareStatement(all_auth_recipe_users_QUERY);
 
         String passwordless_users_QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUsersTable()
                 + "(app_id, user_id, email, phone_number, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
-        PreparedStatement passwordlessUsersStatement = sqlCon.prepareStatement(passwordless_users_QUERY);
 
         String passwordless_user_to_tenant_QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUserToTenantTable()
                 + "(app_id, tenant_id, user_id, email, phone_number)" + " VALUES(?, ?, ?, ?, ?)";
-        PreparedStatement passwordlessUserToTenantStatement = sqlCon.prepareStatement(passwordless_user_to_tenant_QUERY);
 
-        int counter = 0;
+        List<PreparedStatementValueSetter> appIdToUserIdBatch = new ArrayList<>();
+        List<PreparedStatementValueSetter> allAuthRecipeUsersBatch = new ArrayList<>();
+        List<PreparedStatementValueSetter> passwordlessUsersBatch = new ArrayList<>();
+        List<PreparedStatementValueSetter> passwordlessUserToTenantBatch = new ArrayList<>();
+
         for (PasswordlessImportUser user: users){
             TenantIdentifier tenantIdentifier = user.tenantIdentifier;
-            appIdToUserIdStatement.setString(1, tenantIdentifier.getAppId());
-            appIdToUserIdStatement.setString(2, user.userId);
-            appIdToUserIdStatement.setString(3, user.userId);
-            appIdToUserIdStatement.setString(4, PASSWORDLESS.toString());
-            appIdToUserIdStatement.addBatch();
+            appIdToUserIdBatch.add(pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, user.userId);
+                pst.setString(3, user.userId);
+                pst.setString(4, PASSWORDLESS.toString());
+            });
 
-            allAuthRecipeUsersStatement.setString(1, tenantIdentifier.getAppId());
-            allAuthRecipeUsersStatement.setString(2, tenantIdentifier.getTenantId());
-            allAuthRecipeUsersStatement.setString(3, user.userId);
-            allAuthRecipeUsersStatement.setString(4, user.userId);
-            allAuthRecipeUsersStatement.setString(5, PASSWORDLESS.toString());
-            allAuthRecipeUsersStatement.setLong(6, user.timeJoinedMSSinceEpoch);
-            allAuthRecipeUsersStatement.setLong(7, user.timeJoinedMSSinceEpoch);
-            allAuthRecipeUsersStatement.addBatch();
+            allAuthRecipeUsersBatch.add(pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, user.userId);
+                pst.setString(4, user.userId);
+                pst.setString(5, PASSWORDLESS.toString());
+                pst.setLong(6, user.timeJoinedMSSinceEpoch);
+                pst.setLong(7, user.timeJoinedMSSinceEpoch);
+            });
 
-            passwordlessUsersStatement.setString(1, tenantIdentifier.getAppId());
-            passwordlessUsersStatement.setString(2, user.userId);
-            passwordlessUsersStatement.setString(3, user.email);
-            passwordlessUsersStatement.setString(4, user.phoneNumber);
-            passwordlessUsersStatement.setLong(5, user.timeJoinedMSSinceEpoch);
-            passwordlessUsersStatement.addBatch();
+            passwordlessUsersBatch.add(pst -> {
+                       pst.setString(1, tenantIdentifier.getAppId());
+                       pst.setString(2, user.userId);
+                       pst.setString(3, user.email);
+                       pst.setString(4, user.phoneNumber);
+                       pst.setLong(5, user.timeJoinedMSSinceEpoch);
+            });
 
-            passwordlessUserToTenantStatement.setString(1, tenantIdentifier.getAppId());
-            passwordlessUserToTenantStatement.setString(2, tenantIdentifier.getTenantId());
-            passwordlessUserToTenantStatement.setString(3, user.userId);
-            passwordlessUserToTenantStatement.setString(4, user.email);
-            passwordlessUserToTenantStatement.setString(5, user.phoneNumber);
-            passwordlessUserToTenantStatement.addBatch();
+            passwordlessUserToTenantBatch.add(pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, user.userId);
+                pst.setString(4, user.email);
+                pst.setString(5, user.phoneNumber);
+            });
 
-            counter++;
-
-            if(counter % 100 == 0) {
-                appIdToUserIdStatement.executeBatch();
-                allAuthRecipeUsersStatement.executeBatch();
-                passwordlessUsersStatement.executeBatch();
-                passwordlessUserToTenantStatement.executeBatch();
-            }
         }
 
-        appIdToUserIdStatement.executeBatch();
-        allAuthRecipeUsersStatement.executeBatch();
-        passwordlessUsersStatement.executeBatch();
-        passwordlessUserToTenantStatement.executeBatch();
-
+        executeBatch(sqlCon, app_id_to_user_id_QUERY, appIdToUserIdBatch);
+        executeBatch(sqlCon, all_auth_recipe_users_QUERY, allAuthRecipeUsersBatch);
+        executeBatch(sqlCon, passwordless_users_QUERY, passwordlessUsersBatch);
+        executeBatch(sqlCon, passwordless_user_to_tenant_QUERY, passwordlessUserToTenantBatch);
     }
 
     private static class PasswordlessDeviceRowMapper implements RowMapper<PasswordlessDevice, ResultSet> {
