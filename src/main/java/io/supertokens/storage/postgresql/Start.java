@@ -3587,7 +3587,6 @@ public class Start
         });
     }
 
-    // TODO make it transaction wrapped, to be as similar to mysql as possible
     @Override
     public void addBulkImportUsers(AppIdentifier appIdentifier, List<BulkImportUser> users)
             throws StorageQueryException,
@@ -3595,7 +3594,7 @@ public class Start
         try {
             this.startTransaction(con -> {
                 try {
-                    BulkImportQueries.insertBulkImportUsers(this, (Connection) con.getConnection(), appIdentifier, users);
+                    BulkImportQueries.insertBulkImportUsers_Transaction(this, (Connection) con.getConnection(), appIdentifier, users);
                 } catch (SQLException e) {
                     if (e instanceof PSQLException) {
                         ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();

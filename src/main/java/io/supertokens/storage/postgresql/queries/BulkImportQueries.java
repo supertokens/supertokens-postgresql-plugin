@@ -74,7 +74,7 @@ public class BulkImportQueries {
                 + Config.getConfig(start).getBulkImportUsersTable() + " (app_id, created_at DESC, id DESC)";
     }
 
-    public static void insertBulkImportUsers(Start start, Connection connection, AppIdentifier appIdentifier, List<BulkImportUser> users)
+    public static void insertBulkImportUsers_Transaction(Start start, Connection connection, AppIdentifier appIdentifier, List<BulkImportUser> users)
             throws SQLException, StorageQueryException {
         String queryBuilder = "INSERT INTO " + Config.getConfig(start).getBulkImportUsersTable() +
                 " (id, app_id, raw_data, created_at, updated_at) VALUES "
