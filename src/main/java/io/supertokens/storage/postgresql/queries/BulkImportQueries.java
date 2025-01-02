@@ -74,31 +74,24 @@ public class BulkImportQueries {
                 + Config.getConfig(start).getBulkImportUsersTable() + " (app_id, created_at DESC, id DESC)";
     }
 
-    public static void insertBulkImportUsers(Start start, AppIdentifier appIdentifier, List<BulkImportUser> users)
+    public static void insertBulkImportUsers(Start start, Connection connection, AppIdentifier appIdentifier, List<BulkImportUser> users)
             throws SQLException, StorageQueryException {
-        StringBuilder queryBuilder = new StringBuilder(
-                "INSERT INTO " + Config.getConfig(start).getBulkImportUsersTable() + " (id, app_id, raw_data, created_at, updated_at) VALUES ");
+        String queryBuilder = "INSERT INTO " + Config.getConfig(start).getBulkImportUsersTable() +
+                " (id, app_id, raw_data, created_at, updated_at) VALUES "
+                + " (?, ?, ?, ?, ?)";
 
-        int userCount = users.size();
-
-        for (int i = 0; i < userCount; i++) {
-            queryBuilder.append(" (?, ?, ?, ?, ?)");
-
-            if (i < userCount - 1) {
-                queryBuilder.append(",");
-            }
+        List<PreparedStatementValueSetter> valueSetters = new ArrayList<>();
+        for (BulkImportUser user : users) {
+            valueSetters.add(pst -> {
+                pst.setString(1, user.id);
+                pst.setString(2, appIdentifier.getAppId());
+                pst.setString(3, user.toRawDataForDbStorage());
+                pst.setLong(4, System.currentTimeMillis());
+                pst.setLong(5, System.currentTimeMillis());
+            });
         }
 
-        update(start, queryBuilder.toString(), pst -> {
-            int parameterIndex = 1;
-            for (BulkImportUser user : users) {
-                pst.setString(parameterIndex++, user.id);
-                pst.setString(parameterIndex++, appIdentifier.getAppId());
-                pst.setString(parameterIndex++, user.toRawDataForDbStorage());
-                pst.setLong(parameterIndex++, System.currentTimeMillis());
-                pst.setLong(parameterIndex++, System.currentTimeMillis());
-            }
-        });
+        executeBatch(connection, queryBuilder, valueSetters);
     }
 
     public static void updateBulkImportUserStatus_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
@@ -178,18 +171,20 @@ public class BulkImportQueries {
                 }
 
                 String updateQuery = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable()
-                        + " SET status = ?, updated_at = ? WHERE app_id = ? AND id IN (" + Utils
-                                .generateCommaSeperatedQuestionMarks(bulkImportUsers.size()) + ")";
+                        + " SET status = ?, updated_at = ? WHERE app_id = ? AND id = ?";
 
-                update(sqlCon, updateQuery, pst -> {
-                    int index = 1;
-                    pst.setString(index++, BULK_IMPORT_USER_STATUS.PROCESSING.toString());
-                    pst.setLong(index++, System.currentTimeMillis());
-                    pst.setString(index++, appIdentifier.getAppId());
-                    for (BulkImportUser user : bulkImportUsers) {
-                        pst.setObject(index++, user.id);
-                    }
-                });
+                List<PreparedStatementValueSetter> updateSetters = new ArrayList<>();
+                for(BulkImportUser user : bulkImportUsers){
+                    updateSetters.add(pst -> {
+                        pst.setString(1, BULK_IMPORT_USER_STATUS.PROCESSING.toString());
+                        pst.setLong(2, System.currentTimeMillis());
+                        pst.setString(3, appIdentifier.getAppId());
+                        pst.setObject(4, user.id);
+                    });
+                }
+
+                executeBatch(sqlCon, updateQuery, updateSetters);
+
                 return bulkImportUsers;
             } catch (SQLException throwables) {
                 throw new StorageTransactionLogicException(throwables);

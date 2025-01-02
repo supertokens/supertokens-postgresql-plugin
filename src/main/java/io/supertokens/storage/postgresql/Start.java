@@ -3587,25 +3587,37 @@ public class Start
         });
     }
 
+    // TODO make it transaction wrapped, to be as similar to mysql as possible
     @Override
     public void addBulkImportUsers(AppIdentifier appIdentifier, List<BulkImportUser> users)
             throws StorageQueryException,
-            TenantOrAppNotFoundException,
-            io.supertokens.pluginInterface.bulkimport.exceptions.DuplicateUserIdException {
+            TenantOrAppNotFoundException {
         try {
-            BulkImportQueries.insertBulkImportUsers(this, appIdentifier, users);
-        } catch (SQLException e) {
-            if (e instanceof PSQLException) {
-                ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
-                if (isPrimaryKeyError(serverErrorMessage, Config.getConfig(this).getBulkImportUsersTable())) {
-                    throw new io.supertokens.pluginInterface.bulkimport.exceptions.DuplicateUserIdException();
+            this.startTransaction(con -> {
+                try {
+                    BulkImportQueries.insertBulkImportUsers(this, (Connection) con.getConnection(), appIdentifier, users);
+                } catch (SQLException e) {
+                    if (e instanceof PSQLException) {
+                        ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
+                        if (isPrimaryKeyError(serverErrorMessage, Config.getConfig(this).getBulkImportUsersTable())) {
+                            throw new StorageTransactionLogicException(new io.supertokens.pluginInterface.bulkimport.exceptions.DuplicateUserIdException());
+                        }
+                        if (isForeignKeyConstraintError(serverErrorMessage, Config.getConfig(this).getBulkImportUsersTable(),
+                                "app_id")) {
+                            throw new TenantOrAppNotFoundException(appIdentifier);
+                        }
+                    }
                 }
-                if (isForeignKeyConstraintError(serverErrorMessage, Config.getConfig(this).getBulkImportUsersTable(),
-                        "app_id")) {
-                    throw new TenantOrAppNotFoundException(appIdentifier);
-                }
+                return null;
+            });
+        } catch (StorageTransactionLogicException e) {
+            if(e.actualException instanceof StorageQueryException) {
+                throw (StorageQueryException) e.actualException;
+            } else {
+                throw new StorageQueryException(e.actualException);
             }
         }
+
     }
 
     @Override
