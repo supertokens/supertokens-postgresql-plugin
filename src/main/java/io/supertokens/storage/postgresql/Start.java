@@ -3598,7 +3598,6 @@ public class Start
                 } catch (SQLException e) {
                     if (e instanceof BatchUpdateException) {
                         BatchUpdateException batchUpdateException = (BatchUpdateException) e;
-                        Map<String, Exception> errorByPosition = new HashMap<>();
                         SQLException nextException = batchUpdateException.getNextException();
                         if(nextException instanceof PSQLException){
                             ServerErrorMessage serverErrorMessage = ((PSQLException) nextException).getServerErrorMessage();
