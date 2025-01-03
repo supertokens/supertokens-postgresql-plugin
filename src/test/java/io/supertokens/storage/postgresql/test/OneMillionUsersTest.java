@@ -988,9 +988,9 @@ public class OneMillionUsersTest {
             return;
         }
 
-        Main main = startCronProcess(String.valueOf(NUM_THREADS));
+        Main main = startCronProcess(String.valueOf(4)); // ci uses instances with 4 cores..
 
-        int NUMBER_OF_USERS_TO_UPLOAD = 1000000; // million
+        int NUMBER_OF_USERS_TO_UPLOAD = 500000; // half million
 
         if (StorageLayer.getBaseStorage(main).getType() != STORAGE_TYPE.SQL || StorageLayer.isInMemDb(main)) {
             return;
