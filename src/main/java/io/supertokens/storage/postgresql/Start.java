@@ -3596,15 +3596,21 @@ public class Start
                 try {
                     BulkImportQueries.insertBulkImportUsers_Transaction(this, (Connection) con.getConnection(), appIdentifier, users);
                 } catch (SQLException e) {
-                    if (e instanceof PSQLException) {
-                        ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
-                        if (isPrimaryKeyError(serverErrorMessage, Config.getConfig(this).getBulkImportUsersTable())) {
-                            throw new StorageTransactionLogicException(new io.supertokens.pluginInterface.bulkimport.exceptions.DuplicateUserIdException());
+                    if (e instanceof BatchUpdateException) {
+                        BatchUpdateException batchUpdateException = (BatchUpdateException) e;
+                        Map<String, Exception> errorByPosition = new HashMap<>();
+                        SQLException nextException = batchUpdateException.getNextException();
+                        if(nextException instanceof PSQLException){
+                            ServerErrorMessage serverErrorMessage = ((PSQLException) nextException).getServerErrorMessage();
+                            if (isPrimaryKeyError(serverErrorMessage, Config.getConfig(this).getBulkImportUsersTable())) {
+                                throw new StorageTransactionLogicException(new io.supertokens.pluginInterface.bulkimport.exceptions.DuplicateUserIdException());
+                            }
+                            if (isForeignKeyConstraintError(serverErrorMessage, Config.getConfig(this).getBulkImportUsersTable(),
+                                    "app_id")) {
+                                throw new TenantOrAppNotFoundException(appIdentifier);
+                            }
                         }
-                        if (isForeignKeyConstraintError(serverErrorMessage, Config.getConfig(this).getBulkImportUsersTable(),
-                                "app_id")) {
-                            throw new TenantOrAppNotFoundException(appIdentifier);
-                        }
+
                     }
                 }
                 return null;
