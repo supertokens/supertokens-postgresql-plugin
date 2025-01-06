@@ -104,7 +104,7 @@ do
     ./loadModules
 
     #gradle properties overrides
-    echo -e "org.gradle.jvmargs=-Xms8g -Xmx8g -XX:+UseContainerSupport" > gradle.properties
+    echo -e "org.gradle.jvmargs=-Xms1g -Xmx6g -XX:+UseContainerSupport" > gradle.properties
     echo -e "org.gradle.daemon=false" >> gradle.properties
 
     cd supertokens-core
