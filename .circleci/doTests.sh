@@ -104,9 +104,11 @@ do
     ./loadModules
 
     #gradle properties overrides
+    export _JAVA_OPTIONS="-Xms1g -Xmx4g"
     echo -e "org.gradle.jvmargs=-Xms1g -Xmx4g -XX:+UseContainerSupport" > gradle.properties
     echo -e "org.gradle.daemon=false" >> gradle.properties
-    echo -e "org.gradle.logging.level=debug" >> gradle.properties # remove this after discovering the issue
+    #echo -e "org.gradle.logging.level=debug" >> gradle.properties # remove this after discovering the issue
+
 
     cd supertokens-core
     git checkout $coreVersionTag
