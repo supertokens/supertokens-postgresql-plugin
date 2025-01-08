@@ -48,8 +48,8 @@ import org.junit.Test;
 
 import java.io.IOException;
 
-import static org.junit.Assert.*;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static org.junit.Assert.*;
 
 public class TestForNoCrashDuringStartup {
     TestingProcessManager.TestingProcess process;
@@ -112,7 +112,7 @@ public class TestForNoCrashDuringStartup {
             fail();
         } catch (HttpResponseException e) {
             // ignore
-            assertEquals("Http error. Status Code: 500. Message: java.sql.SQLException: Simulated error in addTenantIdInTargetStorage", e.getMessage());
+            assertEquals("Http error. Status Code: 500. Message: io.supertokens.pluginInterface.exceptions.StorageQueryException: java.sql.SQLException: Simulated error in addTenantIdInTargetStorage", e.getMessage());
         }
 
         MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage_forTesting = false;
@@ -165,7 +165,7 @@ public class TestForNoCrashDuringStartup {
             fail();
         } catch (HttpResponseException e) {
             // ignore
-            assertEquals("Http error. Status Code: 500. Message: java.sql.SQLException: com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to initialize pool: FATAL: database \"st5000\" does not exist", e.getMessage());
+            assertEquals("Http error. Status Code: 500. Message: io.supertokens.pluginInterface.exceptions.StorageQueryException: java.sql.SQLException: com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to initialize pool: FATAL: database \"st5000\" does not exist", e.getMessage());
         }
 
         update(start, "CREATE DATABASE st5000;", pst -> {
@@ -546,7 +546,7 @@ public class TestForNoCrashDuringStartup {
             fail();
         } catch (HttpResponseException e) {
             // ignore
-            assertEquals("Http error. Status Code: 500. Message: java.sql.SQLException: com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to initialize pool: FATAL: database \"st5000\" does not exist", e.getMessage());
+            assertEquals("Http error. Status Code: 500. Message: io.supertokens.pluginInterface.exceptions.StorageQueryException: java.sql.SQLException: com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to initialize pool: FATAL: database \"st5000\" does not exist", e.getMessage());
         }
 
         process.kill(false);

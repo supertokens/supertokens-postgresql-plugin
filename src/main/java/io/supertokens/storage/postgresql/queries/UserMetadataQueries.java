@@ -19,16 +19,21 @@ package io.supertokens.storage.postgresql.queries;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class UserMetadataQueries {
@@ -93,6 +98,26 @@ public class UserMetadataQueries {
         });
     }
 
+    public static void setMultipleUsersMetadatas_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
+                                                  Map<String, JsonObject> metadatasByUserId)
+            throws SQLException, StorageQueryException {
+
+        String QUERY = "INSERT INTO " + getConfig(start).getUserMetadataTable()
+                + "(app_id, user_id, user_metadata) VALUES(?, ?, ?) "
+                + "ON CONFLICT(app_id, user_id) DO UPDATE SET user_metadata=excluded.user_metadata;";
+        List<PreparedStatementValueSetter> metadataSetters = new ArrayList<>();
+
+        for(Map.Entry<String, JsonObject> metadataByUserId : metadatasByUserId.entrySet()){
+            metadataSetters.add(pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, metadataByUserId.getKey());
+                pst.setString(3, metadataByUserId.getValue().toString());
+            });
+        }
+
+        executeBatch(con, QUERY, metadataSetters);
+    }
+
     public static JsonObject getUserMetadata_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                          String userId)
             throws SQLException, StorageQueryException {
@@ -110,6 +135,28 @@ public class UserMetadataQueries {
         });
     }
 
+    public static Map<String, JsonObject> getMultipleUsersMetadatas_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
+                                                                                List<String> userIds)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT user_id, user_metadata FROM " + getConfig(start).getUserMetadataTable()
+                + " WHERE app_id = ? AND user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(userIds.size())
+                + ") FOR UPDATE";
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            for (int i = 0; i< userIds.size(); i++){
+                pst.setString(2+i, userIds.get(i));
+            }
+        }, result -> {
+            Map<String, JsonObject>  userMetadataByUserId = new HashMap<>();
+            JsonParser jp = new JsonParser();
+            if (result.next()) {
+                userMetadataByUserId.put(result.getString("user_id"),
+                        jp.parse(result.getString("user_metadata")).getAsJsonObject());
+            }
+            return userMetadataByUserId;
+        });
+    }
+
     public static JsonObject getUserMetadata(Start start, AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT user_metadata FROM " + getConfig(start).getUserMetadataTable()
@@ -123,6 +170,13 @@ public class UserMetadataQueries {
                 return jp.parse(result.getString("user_metadata")).getAsJsonObject();
             }
             return null;
+        });
+    }
+
+    public static Map<String, JsonObject> getMultipleUserMetadatas(Start start, AppIdentifier appIdentifier, List<String> userIds)
+            throws StorageQueryException, StorageTransactionLogicException {
+        return start.startTransaction(con -> {
+            return getMultipleUsersMetadatas_Transaction(start, (Connection) con.getConnection(), appIdentifier, userIds);
         });
     }
 }

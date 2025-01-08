@@ -206,7 +206,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         }
     }
 
-    public static Connection getConnection(Start start) throws SQLException, StorageQueryException {
+    private static Connection getNewConnection(Start start) throws SQLException, StorageQueryException {
         if (getInstance(start) == null) {
             throw new IllegalStateException("Please call initPool before getConnection");
         }
@@ -217,6 +217,17 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
             getInstance(start).initialiseHikariDataSource();
         }
         return getInstance(start).hikariDataSource.getConnection();
+    }
+
+    public static Connection getConnectionForProxyStorage(Start start) throws SQLException, StorageQueryException {
+        return getNewConnection(start);
+    }
+
+    public static Connection getConnection(Start start) throws SQLException, StorageQueryException {
+        if (start instanceof BulkImportProxyStorage) {
+            return ((BulkImportProxyStorage) start).getTransactionConnection();
+        }
+        return getNewConnection(start);
     }
 
     static void close(Start start) {

@@ -22,6 +22,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.List;
 
 public interface QueryExecutorTemplate {
 
@@ -44,6 +45,25 @@ public interface QueryExecutorTemplate {
         }
     }
 
+    static void executeBatch(Connection connection, String QUERY, List<PreparedStatementValueSetter> setters)
+            throws SQLException, StorageQueryException {
+        assert setters != null;
+        assert !setters.isEmpty();
+        try (PreparedStatement pst = connection.prepareStatement(QUERY)) {
+            int counter = 0;
+            for(PreparedStatementValueSetter setter: setters) {
+                setter.setValues(pst);
+                pst.addBatch();
+                counter++;
+
+                if(counter % 100 == 0) {
+                    pst.executeBatch();
+                }
+            }
+            pst.executeBatch(); //for the possible remaining ones
+        }
+    }
+
     static int update(Start start, String QUERY, PreparedStatementValueSetter setter)
             throws SQLException, StorageQueryException {
         try (Connection con = ConnectionPool.getConnection(start)) {
@@ -51,12 +71,22 @@ public interface QueryExecutorTemplate {
         }
     }
 
-    static int update(Connection con, String QUERY, PreparedStatementValueSetter setter)
-            throws SQLException, StorageQueryException {
+    static int update(Connection con, String QUERY, PreparedStatementValueSetter setter) throws SQLException {
         try (PreparedStatement pst = con.prepareStatement(QUERY)) {
             setter.setValues(pst);
             return pst.executeUpdate();
         }
     }
 
+    static <T> T update(Start start, String QUERY, PreparedStatementValueSetter setter, ResultSetValueExtractor<T> mapper)
+            throws SQLException, StorageQueryException {
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            try (PreparedStatement pst = con.prepareStatement(QUERY)) {
+                setter.setValues(pst);
+                try (ResultSet result = pst.executeQuery()) {
+                    return mapper.extract(result);
+                }
+            }
+        }
+    }
 }

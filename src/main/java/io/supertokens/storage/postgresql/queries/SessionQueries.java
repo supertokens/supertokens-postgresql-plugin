@@ -33,7 +33,9 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
@@ -124,9 +126,6 @@ public class SessionQueries {
     public static SessionInfo getSessionInfo_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,
                                                          String sessionHandle)
             throws SQLException, StorageQueryException {
-        // we do this as two separate queries and not one query with left join cause psql does not
-        // support left join with for update if the right table returns null.
-
         String QUERY =
                 "SELECT session_handle, user_id, refresh_token_hash_2, session_data, " +
                         "expires_at, created_at_time, jwt_user_payload, use_static_key FROM " +
@@ -147,21 +146,55 @@ public class SessionQueries {
             return null;
         }
 
-        QUERY = "SELECT primary_or_recipe_user_id FROM " + getConfig(start).getUsersTable()
-                + " WHERE app_id = ? AND user_id = ?";
+        QUERY = "SELECT external_user_id " +
+                "FROM " + getConfig(start).getUserIdMappingTable() + " um2 " +
+                "WHERE um2.app_id = ? AND um2.supertokens_user_id IN (" +
+                    "SELECT primary_or_recipe_user_id " + 
+                    "FROM " + getConfig(start).getUsersTable() + " " +
+                    "WHERE app_id = ? AND user_id IN (" +
+                        "SELECT um1.supertokens_user_id as user_id " +
+                        "FROM " + getConfig(start).getUserIdMappingTable() + " um1 " +
+                        "WHERE um1.app_id = ? AND um1.external_user_id = ? " +
+                        "UNION ALL " +
+                        "SELECT ? " +
+                        "LIMIT 1" +
+                    ")" +
+                ") " +
+                "UNION ALL " +
+                "SELECT primary_or_recipe_user_id " +
+                "FROM " + getConfig(start).getUsersTable() + " " +
+                "WHERE app_id = ? AND user_id IN (" +
+                    "SELECT um1.supertokens_user_id as user_id " +
+                    "FROM " + getConfig(start).getUserIdMappingTable() + " um1 " +
+                    "WHERE um1.app_id = ? AND um1.external_user_id = ? " +
+                    "UNION ALL " +
+                    "SELECT ? " +
+                    "LIMIT 1" +
+                ") " +
+                "LIMIT 1";
 
-        return execute(con, QUERY, pst -> {
+        String finalUserId = execute(con, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, sessionInfo.recipeUserId);
+            pst.setString(2, tenantIdentifier.getAppId());
+            pst.setString(3, tenantIdentifier.getAppId());
+            pst.setString(4, sessionInfo.recipeUserId);
+            pst.setString(5, sessionInfo.recipeUserId);
+            pst.setString(6, tenantIdentifier.getAppId());
+            pst.setString(7, tenantIdentifier.getAppId());
+            pst.setString(8, sessionInfo.recipeUserId);
+            pst.setString(9, sessionInfo.recipeUserId);
         }, result -> {
             if (result.next()) {
-                String primaryUserId = result.getString("primary_or_recipe_user_id");
-                if (primaryUserId != null) {
-                    sessionInfo.userId = primaryUserId;
-                }
+                return result.getString(1);
             }
-            return sessionInfo;
+            return sessionInfo.recipeUserId;
         });
+
+        if (finalUserId != null) {
+            sessionInfo.userId = finalUserId;
+        }
+
+        return sessionInfo;
     }
 
     public static void updateSessionInfo_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,
@@ -303,6 +336,31 @@ public class SessionQueries {
                 finalResult[i] = temp.get(i);
             }
             return finalResult;
+        });
+    }
+
+    public static Map<String, List<String>> getAllNonExpiredSessionHandlesForUsers(Start start, AppIdentifier appIdentifier,
+                                                                          List<String> userIds)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT user_id, session_handle FROM " + getConfig(start).getSessionInfoTable()
+                + " WHERE app_id = ? AND expires_at >= ? AND user_id IN ( " + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) + " )";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setLong(2, currentTimeMillis());
+            for(int i = 0; i < userIds.size() ; i++){
+                pst.setString(3 + i, userIds.get(i));
+            }
+        }, result -> {
+            Map<String, List<String>> temp = new HashMap<>();
+            while (result.next()) {
+                String userId = result.getString("user_id");
+                if(!temp.containsKey(userId)){
+                    temp.put(userId, new ArrayList<>());
+                }
+                temp.get(userId).add(result.getString("session_handle"));
+            }
+            return temp;
         });
     }
 
