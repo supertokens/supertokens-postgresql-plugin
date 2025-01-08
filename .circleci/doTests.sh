@@ -111,7 +111,7 @@ do
 
 
     cd supertokens-core
-    git checkout $coreVersionTag
+    git checkout test-cicd/mysql8-upgrade
     cd ../supertokens-plugin-interface
     git checkout $currTag
     cd ../supertokens-postgresql-plugin
