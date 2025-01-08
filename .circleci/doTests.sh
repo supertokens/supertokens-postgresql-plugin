@@ -115,7 +115,8 @@ do
     cd ../supertokens-plugin-interface
     git checkout $currTag
     cd ../supertokens-postgresql-plugin
-    git checkout dev-v$pluginVersion
+    #git checkout dev-v$pluginVersion
+    git checkout "test-cicd/upgrade-postgresql-to-13"
     cd ../
     echo $SUPERTOKENS_API_KEY > apiPassword
     ./startTestingEnv --cicd
