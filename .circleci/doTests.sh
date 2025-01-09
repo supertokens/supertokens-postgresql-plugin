@@ -105,18 +105,13 @@ do
 
     #gradle properties overrides
     export _JAVA_OPTIONS="-Xms1g -Xmx4g"
-    echo -e "org.gradle.jvmargs=-Xms1g -Xmx4g -XX:+UseContainerSupport" > gradle.properties
-    echo -e "org.gradle.daemon=false" >> gradle.properties
-    #echo -e "org.gradle.logging.level=debug" >> gradle.properties # remove this after discovering the issue
-
 
     cd supertokens-core
-    git checkout test-cicd/mysql8-upgrade
+    git checkout $coreVersionTag
     cd ../supertokens-plugin-interface
     git checkout $currTag
     cd ../supertokens-postgresql-plugin
-    #git checkout dev-v$pluginVersion
-    git checkout "test-cicd/upgrade-postgresql-to-13"
+    git checkout dev-v$pluginVersion
     cd ../
     echo $SUPERTOKENS_API_KEY > apiPassword
     ./startTestingEnv --cicd
