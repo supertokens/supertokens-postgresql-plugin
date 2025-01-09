@@ -10,6 +10,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [7.3.0] 
 
 - Adds tables and queries for Bulk Import
+- Optimize getUserIdMappingWithEitherSuperTokensUserIdOrExternalUserId query
 
 ### Migration
 
@@ -34,6 +35,7 @@ CREATE INDEX IF NOT EXISTS bulk_import_users_pagination_index1 ON bulk_import_us
  
 CREATE INDEX IF NOT EXISTS bulk_import_users_pagination_index2 ON bulk_import_users (app_id, created_at DESC, id DESC);
 ```
+
 ## [7.2.0] - 2024-10-03
 
 - Compatible with plugin interface version 6.3
