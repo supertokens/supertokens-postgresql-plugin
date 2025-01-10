@@ -102,6 +102,10 @@ do
     pluginY=$(cut -d'.' -f2 <<<"$pluginVersion")
     echo -e "core,$coreVersionX2\nplugin-interface,$piVersion\npostgresql-plugin,$pluginX.$pluginY" > modules.txt
     ./loadModules
+
+    #gradle properties overrides
+    export _JAVA_OPTIONS="-Xms1g -Xmx4g"
+
     cd supertokens-core
     git checkout $coreVersionTag
     cd ../supertokens-plugin-interface
