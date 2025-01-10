@@ -335,6 +335,7 @@ public class GeneralQueries {
 
                     // index
                     update(con, getQueryToCreateSessionExpiryIndex(start), NO_OP_SETTER);
+                    update(con, getQueryToCreateSessionAppIdUserIdIndex(start), NO_OP_SETTER);
                     update(con, getQueryToCreateTenantIdIndexForSessionInfoTable(start), NO_OP_SETTER);
                 }
 
