@@ -63,6 +63,11 @@ public class EmailPasswordQueries {
         // @formatter:on
     }
 
+    static String getQueryToCreateEmailPasswordUsersEmailIndex(Start start) {
+        return "CREATE INDEX emailpassword_users_email_index ON "
+                + Config.getConfig(start).getEmailPasswordUsersTable() + "(app_id, email);";
+    }
+
     static String getQueryToCreateEmailPasswordUserToTenantTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String emailPasswordUserToTenantTable = Config.getConfig(start).getEmailPasswordUserToTenantTable();
@@ -82,6 +87,11 @@ public class EmailPasswordQueries {
                 "(app_id, tenant_id, user_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
+    }
+
+    static String getQueryToCreateEmailPasswordUserToTenantEmailIndex(Start start) {
+        return "CREATE INDEX emailpassword_user_to_tenant_email_index ON "
+                + Config.getConfig(start).getEmailPasswordUserToTenantTable() + "(app_id, tenant_id, email);";
     }
 
     static String getQueryToCreatePasswordResetTokensTable(Start start) {
