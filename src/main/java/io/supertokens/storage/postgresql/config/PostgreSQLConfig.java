@@ -470,6 +470,8 @@ public class PostgreSQLConfig {
 
     public String getWebAuthNCredentialsTable() { return  addSchemaAndPrefixToTableName("webauthn_credentials"); }
 
+    public String getWebAuthNAccountRecoveryTokenTable() { return   addSchemaAndPrefixToTableName("webauthn_account_recovery_tokens"); }
+
     private String addSchemaAndPrefixToTableName(String tableName) {
         return addSchemaToTableName(postgresql_table_names_prefix + tableName);
     }
