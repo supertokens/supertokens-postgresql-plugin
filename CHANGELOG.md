@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [8.0.2]
+
+- Fixes `NullPointerException` in user search API
+
 ## [8.0.1]
 
 - Fixes slow queries for account linking
