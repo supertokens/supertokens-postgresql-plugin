@@ -4,7 +4,7 @@ orbs:
 jobs:
   test:
     docker:
-      - image: rishabhpoddar/supertokens_postgresql_plugin_test
+      - image: tamassupertokens/supertokens_postgresql_plugin_test
       - image: rishabhpoddar/oauth-server-cicd
     resource_class: large
     steps:
@@ -15,7 +15,7 @@ jobs:
       - run:
           name: update postgresql max_connections
           command: |
-            sed -i 's/^#*\s*max_connections\s*=.*/max_connections = 10000/' /etc/postgresql/9.5/main/postgresql.conf
+            sed -i 's/^#*\s*max_connections\s*=.*/max_connections = 10000/' /etc/postgresql/13/main/postgresql.conf
       - run:
           name: starting postgresql
           command: |
@@ -80,7 +80,7 @@ jobs:
       - slack/status
   test-onemillionusers:
     docker:
-      - image: rishabhpoddar/supertokens_postgresql_plugin_test
+      - image: tamassupertokens/supertokens_postgresql_plugin_test
     resource_class: large
     steps:
       - add_ssh_keys:
@@ -90,7 +90,7 @@ jobs:
       - run:
           name: update postgresql max_connections
           command: |
-            sed -i 's/^#*\s*max_connections\s*=.*/max_connections = 10000/' /etc/postgresql/9.5/main/postgresql.conf
+            sed -i 's/^#*\s*max_connections\s*=.*/max_connections = 10000/' /etc/postgresql/13/main/postgresql.conf
       - run:
           name: starting postgresql
           command: |
@@ -155,7 +155,7 @@ jobs:
       - slack/status
   mark-passed:
     docker:
-      - image: rishabhpoddar/supertokens_postgresql_plugin_test
+      - image: tamassupertokens/supertokens_postgresql_plugin_test
     steps:
       - checkout
       - run: (cd .circleci && ./markPassed.sh)
@@ -172,7 +172,7 @@ workflows:
             tags:
               only: /dev-v[0-9]+(\.[0-9]+)*/
             branches:
-              ignore: /.*/
+              only: /test-cicd\/.*/
       - test-onemillionusers:
           context:
             - slack-notification
@@ -180,7 +180,7 @@ workflows:
             tags:
               only: /dev-v[0-9]+(\.[0-9]+)*/
             branches:
-              ignore: /.*/
+              only: /test-cicd\/.*/
       - mark-passed:
           context:
             - slack-notification

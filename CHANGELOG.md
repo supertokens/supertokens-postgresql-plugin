@@ -7,6 +7,60 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [8.0.2]
+
+- Fixes `NullPointerException` in user search API
+
+## [8.0.1]
+
+- Fixes slow queries for account linking
+
+### Migration
+
+```sql
+CREATE INDEX IF NOT EXISTS emailpassword_users_email_index ON emailpassword_users (app_id, email);
+CREATE INDEX IF NOT EXISTS emailpassword_user_to_tenant_email_index ON emailpassword_user_to_tenant (app_id, tenant_id, email);
+
+CREATE INDEX IF NOT EXISTS passwordless_users_email_index ON passwordless_users (app_id, email);
+CREATE INDEX IF NOT EXISTS passwordless_users_phone_number_index ON passwordless_users (app_id, phone_number);
+CREATE INDEX IF NOT EXISTS passwordless_user_to_tenant_email_index ON passwordless_user_to_tenant (app_id, tenant_id, email);
+CREATE INDEX IF NOT EXISTS passwordless_user_to_tenant_phone_number_index ON passwordless_user_to_tenant (app_id, tenant_id, phone_number);
+
+CREATE INDEX IF NOT EXISTS thirdparty_user_to_tenant_third_party_user_id_index ON thirdparty_user_to_tenant (app_id, tenant_id, third_party_id, third_party_user_id);
+```
+
+## [8.0.0]
+
+- Adds tables and queries for Bulk Import
+- Optimize getUserIdMappingWithEitherSuperTokensUserIdOrExternalUserId query
+- Adds indexing for `session_info` table on `user_id, app_id` columns
+
+### Migration
+
+```sql
+"CREATE TABLE IF NOT EXISTS bulk_import_users (
+                id CHAR(36),
+                app_id VARCHAR(64) NOT NULL DEFAULT 'public',
+                primary_user_id VARCHAR(36),
+                raw_data TEXT NOT NULL,
+                status VARCHAR(128) DEFAULT 'NEW',
+                error_msg TEXT,
+                created_at BIGINT NOT NULL, 
+                updated_at BIGINT NOT NULL, 
+                CONSTRAINT bulk_import_users_pkey PRIMARY KEY(app_id, id),
+                CONSTRAINT bulk_import_users__app_id_fkey FOREIGN KEY(app_id) REFERENCES apps(app_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS bulk_import_users_status_updated_at_index ON bulk_import_users (app_id, status, updated_at);
+
+CREATE INDEX IF NOT EXISTS bulk_import_users_pagination_index1 ON bulk_import_users (app_id, status, created_at DESC,
+ id DESC);
+ 
+CREATE INDEX IF NOT EXISTS bulk_import_users_pagination_index2 ON bulk_import_users (app_id, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS session_info_user_id_app_id_index ON session_info (user_id, app_id);
+```
+
 ## [7.2.0] - 2024-10-03
 
 - Compatible with plugin interface version 6.3

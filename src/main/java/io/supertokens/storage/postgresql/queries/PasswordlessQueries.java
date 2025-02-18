@@ -26,8 +26,10 @@ import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
+import io.supertokens.pluginInterface.passwordless.PasswordlessImportUser;
 import io.supertokens.pluginInterface.sqlStorage.SQLStorage.TransactionIsolationLevel;
 import io.supertokens.storage.postgresql.ConnectionPool;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -41,8 +43,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static io.supertokens.pluginInterface.RECIPE_ID.PASSWORDLESS;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class PasswordlessQueries {
@@ -63,6 +64,16 @@ public class PasswordlessQueries {
                 + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, null, "pkey")
                 + " PRIMARY KEY (app_id, user_id)"
                 + ");";
+    }
+
+    static String getQueryToCreatePasswordlessUsersEmailIndex(Start start) {
+        return "CREATE INDEX passwordless_users_email_index ON "
+                + Config.getConfig(start).getPasswordlessUsersTable() + "(app_id, email);";
+    }
+
+    static String getQueryToCreatePasswordlessUsersPhoneNumberIndex(Start start) {
+        return "CREATE INDEX passwordless_users_phone_number_index ON "
+                + Config.getConfig(start).getPasswordlessUsersTable() + "(app_id, phone_number);";
     }
 
     static String getQueryToCreatePasswordlessUserToTenantTable(Start start) {
@@ -87,6 +98,16 @@ public class PasswordlessQueries {
                 "(app_id, tenant_id, user_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
+    }
+
+    static String getQueryToCreatePasswordlessUserToTenantEmailIndex(Start start) {
+        return "CREATE INDEX passwordless_user_to_tenant_email_index ON "
+                + Config.getConfig(start).getPasswordlessUserToTenantTable() + "(app_id, tenant_id, email);";
+    }
+
+    static String getQueryToCreatePasswordlessUserToTenantPhoneNumberIndex(Start start) {
+        return "CREATE INDEX passwordless_user_to_tenant_phone_number_index ON "
+                + Config.getConfig(start).getPasswordlessUserToTenantTable() + "(app_id, tenant_id, phone_number);";
     }
 
     public static String getQueryToCreateDevicesTable(Start start) {
@@ -812,6 +833,30 @@ public class PasswordlessQueries {
         });
     }
 
+    public static List<String> lockEmail_Transaction(Start start, Connection con,
+                                                     AppIdentifier appIdentifier,
+                                                     List<String> emails)
+            throws StorageQueryException, SQLException {
+        if(emails == null || emails.isEmpty()){
+            return new ArrayList<>();
+        }
+        String QUERY = "SELECT user_id FROM " + getConfig(start).getPasswordlessUsersTable() +
+                " WHERE app_id = ? AND email IN (" + Utils.generateCommaSeperatedQuestionMarks(emails.size()) + ") FOR UPDATE";
+
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            for (int i = 0; i < emails.size(); i++) {
+                pst.setString(2 + i, emails.get(i));
+            }
+        }, result -> {
+            List<String> results = new ArrayList<>();
+            while (result.next()) {
+                results.add(result.getString("user_id"));
+            }
+            return results;
+        });
+    }
+
     public static List<String> lockPhoneAndTenant_Transaction(Start start, Connection con,
                                                               AppIdentifier appIdentifier,
                                                               String phoneNumber)
@@ -828,6 +873,30 @@ public class PasswordlessQueries {
                 userIds.add(result.getString("user_id"));
             }
             return userIds;
+        });
+    }
+
+    public static List<String> lockPhoneAndTenant_Transaction(Start start, Connection con,
+                                                     AppIdentifier appIdentifier,
+                                                     List<String> phones)
+            throws StorageQueryException, SQLException {
+        if(phones == null || phones.isEmpty()){
+            return new ArrayList<>();
+        }
+        String QUERY = "SELECT user_id FROM " + getConfig(start).getPasswordlessUsersTable() +
+                " WHERE app_id = ? AND phone_number IN (" + Utils.generateCommaSeperatedQuestionMarks(phones.size()) + ") FOR UPDATE";
+
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            for (int i = 0; i < phones.size(); i++) {
+                pst.setString(2 + i, phones.get(i));
+            }
+        }, result -> {
+            List<String> results = new ArrayList<>();
+            while (result.next()) {
+                results.add(result.getString("user_id"));
+            }
+            return results;
         });
     }
 
@@ -874,6 +943,33 @@ public class PasswordlessQueries {
         });
     }
 
+    public static List<String> getPrimaryUserIdsUsingMultipleEmails_Transaction(Start start, Connection con,
+                                                                                AppIdentifier appIdentifier,
+                                                                                List<String> emails)
+            throws StorageQueryException, SQLException {
+        if(emails.isEmpty()){
+            return new ArrayList<>();
+        }
+        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
+                + "FROM " + getConfig(start).getPasswordlessUsersTable() + " AS ep" +
+                " JOIN " + getConfig(start).getAppIdToUserIdTable() + " AS all_users" +
+                " ON ep.app_id = all_users.app_id AND ep.user_id = all_users.user_id" +
+                " WHERE ep.app_id = ? AND ep.email IN ( " + Utils.generateCommaSeperatedQuestionMarks(emails.size()) + " )";
+
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            for (int i = 0; i < emails.size(); i++) {
+                pst.setString(2+i, emails.get(i));
+            }
+        }, result -> {
+            List<String> userIds = new ArrayList<>();
+            while (result.next()) {
+                userIds.add(result.getString("user_id"));
+            }
+            return userIds;
+        });
+    }
+
     public static String getPrimaryUserByPhoneNumber(Start start, TenantIdentifier tenantIdentifier,
                                                      @Nonnull String phoneNumber)
             throws StorageQueryException, SQLException {
@@ -908,6 +1004,33 @@ public class PasswordlessQueries {
         return execute(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, phoneNumber);
+        }, result -> {
+            List<String> userIds = new ArrayList<>();
+            while (result.next()) {
+                userIds.add(result.getString("user_id"));
+            }
+            return userIds;
+        });
+    }
+
+    public static List<String> listUserIdsByMultiplePhoneNumber_Transaction(Start start, Connection con,
+                                                                    AppIdentifier appIdentifier,
+                                                                    @Nonnull List<String> phoneNumbers)
+            throws StorageQueryException, SQLException {
+        if(phoneNumbers.isEmpty()){
+            return new ArrayList<>();
+        }
+        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
+                + "FROM " + getConfig(start).getPasswordlessUsersTable() + " AS pless" +
+                " JOIN " + getConfig(start).getUsersTable() + " AS all_users" +
+                " ON pless.app_id = all_users.app_id AND pless.user_id = all_users.user_id" +
+                " WHERE pless.app_id = ? AND pless.phone_number IN ( "+ Utils.generateCommaSeperatedQuestionMarks(phoneNumbers.size()) +" )";
+
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            for (int i = 0; i < phoneNumbers.size(); i++) {
+                pst.setString(2 + i, phoneNumbers.get(i));
+            }
         }, result -> {
             List<String> userIds = new ArrayList<>();
             while (result.next()) {
@@ -1108,6 +1231,72 @@ public class PasswordlessQueries {
             userInfo.tenantIds = tenantIdsForUserIds.get(userInfo.id).toArray(new String[0]);
         }
         return userInfos;
+    }
+
+    public static void importUsers_Transaction(Connection sqlCon, Start start,
+                                               Collection<PasswordlessImportUser> users)
+            throws SQLException, StorageQueryException {
+
+        String app_id_to_user_id_QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
+                + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
+
+        String all_auth_recipe_users_QUERY = "INSERT INTO " + getConfig(start).getUsersTable() +
+                "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, " +
+                "primary_or_recipe_user_time_joined)" +
+                " VALUES(?, ?, ?, ?, ?, ?, ?)";
+
+        String passwordless_users_QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUsersTable()
+                + "(app_id, user_id, email, phone_number, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
+
+        String passwordless_user_to_tenant_QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUserToTenantTable()
+                + "(app_id, tenant_id, user_id, email, phone_number)" + " VALUES(?, ?, ?, ?, ?)";
+
+        List<PreparedStatementValueSetter> appIdToUserIdBatch = new ArrayList<>();
+        List<PreparedStatementValueSetter> allAuthRecipeUsersBatch = new ArrayList<>();
+        List<PreparedStatementValueSetter> passwordlessUsersBatch = new ArrayList<>();
+        List<PreparedStatementValueSetter> passwordlessUserToTenantBatch = new ArrayList<>();
+
+        for (PasswordlessImportUser user: users){
+            TenantIdentifier tenantIdentifier = user.tenantIdentifier;
+            appIdToUserIdBatch.add(pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, user.userId);
+                pst.setString(3, user.userId);
+                pst.setString(4, PASSWORDLESS.toString());
+            });
+
+            allAuthRecipeUsersBatch.add(pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, user.userId);
+                pst.setString(4, user.userId);
+                pst.setString(5, PASSWORDLESS.toString());
+                pst.setLong(6, user.timeJoinedMSSinceEpoch);
+                pst.setLong(7, user.timeJoinedMSSinceEpoch);
+            });
+
+            passwordlessUsersBatch.add(pst -> {
+                       pst.setString(1, tenantIdentifier.getAppId());
+                       pst.setString(2, user.userId);
+                       pst.setString(3, user.email);
+                       pst.setString(4, user.phoneNumber);
+                       pst.setLong(5, user.timeJoinedMSSinceEpoch);
+            });
+
+            passwordlessUserToTenantBatch.add(pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, user.userId);
+                pst.setString(4, user.email);
+                pst.setString(5, user.phoneNumber);
+            });
+
+        }
+
+        executeBatch(sqlCon, app_id_to_user_id_QUERY, appIdToUserIdBatch);
+        executeBatch(sqlCon, all_auth_recipe_users_QUERY, allAuthRecipeUsersBatch);
+        executeBatch(sqlCon, passwordless_users_QUERY, passwordlessUsersBatch);
+        executeBatch(sqlCon, passwordless_user_to_tenant_QUERY, passwordlessUserToTenantBatch);
     }
 
     private static class PasswordlessDeviceRowMapper implements RowMapper<PasswordlessDevice, ResultSet> {

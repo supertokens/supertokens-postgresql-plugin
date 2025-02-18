@@ -23,6 +23,7 @@ import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicExceptio
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -32,8 +33,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import static java.lang.System.currentTimeMillis;
 
@@ -122,6 +122,32 @@ public class EmailVerificationQueries {
                 pst.setString(3, email);
             });
         }
+    }
+
+    public static void updateMultipleUsersIsEmailVerified_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
+                                                              Map<String, String> emailToUserIds,
+                                                              boolean isEmailVerified)
+            throws SQLException, StorageQueryException {
+
+        String QUERY;
+        if (isEmailVerified) {
+            QUERY = "INSERT INTO " + getConfig(start).getEmailVerificationTable()
+                    + "(app_id, user_id, email) VALUES(?, ?, ?)";
+        } else {
+            QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTable()
+                    + " WHERE app_id = ? AND user_id = ? AND email = ?";
+        }
+
+        List<PreparedStatementValueSetter> setters = new ArrayList<>();
+
+        for(Map.Entry<String, String> emailToUser : emailToUserIds.entrySet()){
+            setters.add(pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, emailToUser.getKey());
+                pst.setString(3, emailToUser.getValue());
+            });
+        }
+        executeBatch(con, QUERY, setters);
     }
 
     public static void deleteAllEmailVerificationTokensForUser_Transaction(Start start, Connection con,
@@ -481,6 +507,45 @@ public class EmailVerificationQueries {
         }
     }
 
+    public static Set<String> findUserIdsBeingUsedForEmailVerification(Start start, AppIdentifier appIdentifier, List<String> userIds)
+            throws SQLException, StorageQueryException {
+
+        Set<String> foundUserIds = new HashSet<>();
+
+        String email_verificiation_tokens_QUERY = "SELECT * FROM " + getConfig(start).getEmailVerificationTokensTable()
+                + " WHERE app_id = ? AND user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +")";
+
+        foundUserIds.addAll(execute(start, email_verificiation_tokens_QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            for (int i = 0; i < userIds.size(); i++) {
+                pst.setString(2 + i, userIds.get(i));
+            }
+        }, result -> {
+            Set<String> userIdsFound = new HashSet<>();
+            while (result.next()) {
+                userIdsFound.add(result.getString("user_id"));
+            }
+            return userIdsFound;
+        }));
+
+        String email_verification_table_QUERY = "SELECT * FROM " + getConfig(start).getEmailVerificationTable()
+                + " WHERE app_id = ? AND user_id  IN (" + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +")";
+
+        foundUserIds.addAll(execute(start, email_verification_table_QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            for (int i = 0; i < userIds.size(); i++) {
+                pst.setString(2 + i, userIds.get(i));
+            }
+        }, result -> {
+            Set<String> userIdsFound = new HashSet<>();
+            while (result.next()) {
+                userIdsFound.add(result.getString("user_id"));
+            }
+            return userIdsFound;
+        }));
+        return foundUserIds;
+    }
+
     public static void updateIsEmailVerifiedToExternalUserId(Start start, AppIdentifier appIdentifier,
                                                              String supertokensUserId, String externalUserId)
             throws StorageQueryException {
@@ -506,6 +571,52 @@ public class EmailVerificationQueries {
                             pst.setString(3, supertokensUserId);
                         });
                     }
+                } catch (SQLException e) {
+                    throw new StorageTransactionLogicException(e);
+                }
+
+                return null;
+            });
+        } catch (StorageTransactionLogicException e) {
+            throw new StorageQueryException(e.actualException);
+        }
+    }
+
+    public static void updateMultipleIsEmailVerifiedToExternalUserIds(Start start, AppIdentifier appIdentifier,
+                                                             Map<String, String> supertokensUserIdToExternalUserId)
+            throws StorageQueryException {
+        try {
+            start.startTransaction((TransactionConnection con) -> {
+                Connection sqlCon = (Connection) con.getConnection();
+                try {
+                    String update_email_verification_table_query = "UPDATE " + getConfig(start).getEmailVerificationTable()
+                            + " SET user_id = ? WHERE app_id = ? AND user_id = ?";
+                    String update_email_verification_tokens_table_query = "UPDATE " + getConfig(start).getEmailVerificationTokensTable()
+                            + " SET user_id = ? WHERE app_id = ? AND user_id = ?";
+
+                    List<PreparedStatementValueSetter> emailVerificationSetters = new ArrayList<>();
+                    List<PreparedStatementValueSetter> emalVerificationTokensSetters = new ArrayList<>();
+
+                    for (String supertokensUserId : supertokensUserIdToExternalUserId.keySet()){
+                        emailVerificationSetters.add(pst -> {
+                            pst.setString(1, supertokensUserIdToExternalUserId.get(supertokensUserId));
+                            pst.setString(2, appIdentifier.getAppId());
+                            pst.setString(3, supertokensUserId);
+                        });
+
+                        emalVerificationTokensSetters.add(pst -> {
+                            pst.setString(1, supertokensUserIdToExternalUserId.get(supertokensUserId));
+                            pst.setString(2, appIdentifier.getAppId());
+                            pst.setString(3, supertokensUserId);
+                        });
+                    }
+
+                    if(emailVerificationSetters.isEmpty()){
+                        return null;
+                    }
+
+                    executeBatch(sqlCon, update_email_verification_table_query, emailVerificationSetters);
+                    executeBatch(sqlCon, update_email_verification_tokens_table_query, emalVerificationTokensSetters);
                 } catch (SQLException e) {
                     throw new StorageTransactionLogicException(e);
                 }

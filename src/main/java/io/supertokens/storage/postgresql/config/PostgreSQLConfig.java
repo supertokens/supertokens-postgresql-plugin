@@ -472,6 +472,11 @@ public class PostgreSQLConfig {
 
     public String getWebAuthNAccountRecoveryTokenTable() { return   addSchemaAndPrefixToTableName("webauthn_account_recovery_tokens"); }
 
+    public String getBulkImportUsersTable() {
+        return addSchemaAndPrefixToTableName("bulk_import_users");
+    }
+
+
     private String addSchemaAndPrefixToTableName(String tableName) {
         return addSchemaToTableName(postgresql_table_names_prefix + tableName);
     }
