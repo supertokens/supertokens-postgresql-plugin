@@ -129,6 +129,12 @@ public class WebAuthNQueries {
                 ");";
     }
 
+    static String getQueryToCreateWebAuthNCredentialsUserIdIndex(Start start) {
+        return  "CREATE INDEX webauthn_credentials_user_id_index ON " +
+                getConfig(start).getWebAuthNCredentialsTable() +
+                " (user_id);";
+    }
+
     public static String getQueryToCreateWebAuthNAccountRecoveryTokenTable(Start start) {
         return "CREATE TABLE IF NOT EXISTS " + getConfig(start).getWebAuthNAccountRecoveryTokenTable() + "(" +
                 " app_id VARCHAR(64) DEFAULT 'public' NOT NULL," +
@@ -399,10 +405,10 @@ public class WebAuthNQueries {
     public static String getPrimaryUserIdUsingEmail_Transaction(Start start, Connection sqlConnection, AppIdentifier appIdentifier, String email)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
-                + "FROM " + getConfig(start).getWebAuthNUserToTenantTable() + " AS ep" +
+                + "FROM " + getConfig(start).getWebAuthNUserToTenantTable() + " AS webauthn" +
                 " JOIN " + getConfig(start).getUsersTable() + " AS all_users" +
-                " ON ep.app_id = all_users.app_id AND ep.user_id = all_users.user_id" +
-                " WHERE ep.app_id = ? AND ep.email = ?";
+                " ON webauthn.app_id = all_users.app_id AND webauthn.user_id = all_users.user_id" +
+                " WHERE webauthn.app_id = ? AND webauthn.email = ?";
 
         return execute(sqlConnection, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
@@ -448,7 +454,8 @@ public class WebAuthNQueries {
                     "JOIN " + usersTable + " as all_users ON webauthn.app_id = all_users.app_id AND webauthn.user_id = all_users.user_id " +
                     "LEFT JOIN " + credentialTable + " as credentials ON webauthn.user_id = credentials.user_id " +
                     "LEFT JOIN " + userIdMappingTable + " as user_id_mapping ON webauthn.user_id = user_id_mapping.supertokens_user_id " +
-                    "LEFT JOIN " + emailVerificationTable + " as email_verification ON webauthn.app_id = email_verification.app_id AND user_id_mapping.external_user_id = email_verification.user_id OR user_id_mapping.supertokens_user_id = email_verification.user_id " +
+                    "LEFT JOIN " + emailVerificationTable + " as email_verification ON webauthn.app_id = " +
+                    "email_verification.app_id AND user_id_mapping.external_user_id = email_verification.user_id OR user_id_mapping.supertokens_user_id = email_verification.user_id  OR webauthn.user_id = email_verification.user_id " +
                     "WHERE webauthn.app_id = ? AND webauthn.user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(ids.size()) + ")";
 
             return execute(connection, queryAll, pst -> {
@@ -495,7 +502,8 @@ public class WebAuthNQueries {
                 "JOIN " + getConfig(start).getUsersTable() + " as all_users ON webauthn.app_id = all_users.app_id AND webauthn.user_id = all_users.user_id " +
                 "LEFT JOIN " + getConfig(start).getWebAuthNCredentialsTable() + " as credentials ON webauthn.user_id = credentials.user_id " +
                 "LEFT JOIN " + getConfig(start).getUserIdMappingTable() + " as user_id_mapping ON webauthn.user_id = user_id_mapping.supertokens_user_id " +
-                "LEFT JOIN " + getConfig(start).getEmailVerificationTable() + " as email_verification ON webauthn.app_id = email_verification.app_id AND user_id_mapping.external_user_id = email_verification.user_id OR user_id_mapping.supertokens_user_id = email_verification.user_id " +
+                "LEFT JOIN " + getConfig(start).getEmailVerificationTable() + " as email_verification ON webauthn" +
+                ".app_id = email_verification.app_id AND user_id_mapping.external_user_id = email_verification.user_id OR user_id_mapping.supertokens_user_id = email_verification.user_id  OR webauthn.user_id = email_verification.user_id " +
                 "WHERE webauthn.app_id = ? AND credentials.id = ?";
 
         return execute(sqlCon, QUERY, pst -> {

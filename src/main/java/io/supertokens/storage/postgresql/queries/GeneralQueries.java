@@ -649,6 +649,9 @@ public class GeneralQueries {
                 if(!doesTableExists(start, con, Config.getConfig(start).getWebAuthNCredentialsTable())){
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(con, WebAuthNQueries.getQueryToCreateWebAuthNCredentialsTable(start), NO_OP_SETTER);
+
+                    //index
+                    //TODO
                 }
 
                 if(!doesTableExists(start, con, Config.getConfig(start).getWebAuthNAccountRecoveryTokenTable())){
@@ -1654,16 +1657,25 @@ public class GeneralQueries {
                                                                           TenantIdentifier tenantIdentifier,
                                                                           String credentialId)
             throws StorageQueryException, SQLException, StorageTransactionLogicException {
-        // TODO: revisit this. Seems like we are loading the same data multiple times
         AuthRecipeUserInfo webauthnUser = start.startTransaction(con -> {
             try {
                 Connection sqlCon = (Connection) con.getConnection();
-                return WebAuthNQueries.getUserInfoByCredentialId_Transaction(start, sqlCon, tenantIdentifier,
+                return getPrimaryUserByWebauthNCredentialId_Transaction(start, sqlCon, tenantIdentifier,
                         credentialId);
             } catch (SQLException e) {
                 throw new StorageQueryException(e);
             }
         });
+        return getPrimaryUserInfoForUserId(start, tenantIdentifier.toAppIdentifier(), webauthnUser.getSupertokensUserId());
+    }
+
+    public static AuthRecipeUserInfo getPrimaryUserByWebauthNCredentialId_Transaction(Start start,
+                                                                          Connection connection,
+                                                                          TenantIdentifier tenantIdentifier,
+                                                                          String credentialId)
+            throws StorageQueryException, SQLException, StorageTransactionLogicException {
+        AuthRecipeUserInfo webauthnUser = WebAuthNQueries.getUserInfoByCredentialId_Transaction(start, connection, tenantIdentifier,
+                        credentialId);
         return getPrimaryUserInfoForUserId(start, tenantIdentifier.toAppIdentifier(), webauthnUser.getSupertokensUserId());
     }
 

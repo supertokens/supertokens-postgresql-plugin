@@ -1693,6 +1693,19 @@ public class Start
     }
 
     @Override
+    public AuthRecipeUserInfo getPrimaryUserByWebauthNCredentialId_Transaction(TenantIdentifier tenantIdentifier,
+                                                                               TransactionConnection con,
+                                                                               String credentialId)
+            throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            return GeneralQueries.getPrimaryUserByWebauthNCredentialId_Transaction(this, sqlCon, tenantIdentifier, credentialId);
+        } catch (SQLException | StorageTransactionLogicException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public AuthRecipeUserInfo getPrimaryUserByThirdPartyInfo(TenantIdentifier tenantIdentifier, String thirdPartyId,
                                                              String thirdPartyUserId) throws StorageQueryException {
         try {
@@ -4062,6 +4075,8 @@ public class Start
                 PostgreSQLConfig config = Config.getConfig(this);
 
                 if (isUniqueConstraintError(errorMessage, config.getWebAuthNUserToTenantTable(),"email")) {
+                    Logging.error(this, errorMessage.getMessage(), true);
+                    Logging.error(this, email, true);
                     throw new DuplicateUserEmailException();
                 } else if (isPrimaryKeyError(errorMessage, config.getWebAuthNUsersTable())
                         || isPrimaryKeyError(errorMessage, config.getUsersTable())
