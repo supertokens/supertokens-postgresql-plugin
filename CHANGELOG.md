@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [8.0.3]
+
+- Adds `USE_STRUCTURED_LOGGING` environment variable to control the logging format.
+
 ## [8.0.2]
 
 - Fixes `NullPointerException` in user search API
