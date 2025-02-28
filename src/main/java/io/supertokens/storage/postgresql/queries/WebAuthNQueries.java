@@ -78,6 +78,12 @@ public class WebAuthNQueries {
                 ");";
     }
 
+    public static String getQueryToCreateWebAuthNUserToTenantEmailIndex(Start start) {
+        return "CREATE INDEX webauthn_user_to_tenant_email_index ON " +
+                getConfig(start).getWebAuthNUserToTenantTable() +
+                " (app_id, email);";
+    }
+
     static String getQueryToCreateWebAuthNGeneratedOptionsTable(Start start){
         String schema = getConfig(start).getTableSchema();
         String webAuthNGeneratedOptionsTable = getConfig(start).getWebAuthNGeneratedOptionsTable();
@@ -605,32 +611,36 @@ public class WebAuthNQueries {
             throws StorageQueryException {
         try {
             start.startTransaction(con -> {
-                Connection sqlConnection = (Connection) con.getConnection();
-                try {
-                    String UPDATE_USER_TO_TENANT_QUERY =
-                            "UPDATE " + getConfig(start).getWebAuthNUserToTenantTable() +
-                                    " SET email = ? WHERE app_id = ? AND tenant_id = ? AND user_id = ?";
-                    String UPDATE_USER_QUERY = "UPDATE " + getConfig(start).getWebAuthNUsersTable() +
-                            " SET email = ? WHERE app_id = ? AND user_id = ?";
-
-                    update(sqlConnection, UPDATE_USER_TO_TENANT_QUERY, pst -> {
-                        pst.setString(1, newEmail);
-                        pst.setString(2, tenantIdentifier.getAppId());
-                        pst.setString(3, tenantIdentifier.getTenantId());
-                        pst.setString(4, userId);
-                    });
-
-                    update(sqlConnection, UPDATE_USER_QUERY, pst -> {
-                        pst.setString(1, newEmail);
-                        pst.setString(2, tenantIdentifier.getAppId());
-                        pst.setString(3, userId);
-                    });
-                } catch (SQLException e) {
-                    throw new StorageQueryException(e);
-                }
+                updateUserEmail_Transaction(start, (Connection) con.getConnection(), tenantIdentifier, userId, newEmail);
                 return null;
             });
         } catch (StorageTransactionLogicException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    public static void updateUserEmail_Transaction(Start start, Connection sqlConnection, TenantIdentifier tenantIdentifier,
+                                                   String userId, String newEmail) throws StorageQueryException {
+        try {
+            String UPDATE_USER_TO_TENANT_QUERY =
+                    "UPDATE " + getConfig(start).getWebAuthNUserToTenantTable() +
+                            " SET email = ? WHERE app_id = ? AND tenant_id = ? AND user_id = ?";
+            String UPDATE_USER_QUERY = "UPDATE " + getConfig(start).getWebAuthNUsersTable() +
+                    " SET email = ? WHERE app_id = ? AND user_id = ?";
+
+            update(sqlConnection, UPDATE_USER_TO_TENANT_QUERY, pst -> {
+                pst.setString(1, newEmail);
+                pst.setString(2, tenantIdentifier.getAppId());
+                pst.setString(3, tenantIdentifier.getTenantId());
+                pst.setString(4, userId);
+            });
+
+            update(sqlConnection, UPDATE_USER_QUERY, pst -> {
+                pst.setString(1, newEmail);
+                pst.setString(2, tenantIdentifier.getAppId());
+                pst.setString(3, userId);
+            });
+        } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
