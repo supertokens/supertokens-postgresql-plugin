@@ -10,6 +10,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [8.0.3]
 
 - Fixes `StorageTransactionLogicException` in bulk import when not using userRoles and totpDevices in import json.
+- Adds `USE_STRUCTURED_LOGGING` environment variable to control the logging format.
 
 ## [8.0.2]
 
