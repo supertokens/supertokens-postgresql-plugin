@@ -629,7 +629,7 @@ public class EmailPasswordQueries {
                                                                        AppIdentifier appIdentifier,
                                                                        List<String> emails)
             throws StorageQueryException, SQLException {
-        if(emails.isEmpty()){
+        if(emails == null || emails.isEmpty()){
             return new ArrayList<>();
         }
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
