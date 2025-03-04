@@ -352,6 +352,9 @@ public class SessionQueries {
     public static Map<String, List<String>> getAllNonExpiredSessionHandlesForUsers(Start start, AppIdentifier appIdentifier,
                                                                           List<String> userIds)
             throws SQLException, StorageQueryException {
+        if(userIds == null || userIds.isEmpty()){
+            return new HashMap<>();
+        }
         String QUERY = "SELECT user_id, session_handle FROM " + getConfig(start).getSessionInfoTable()
                 + " WHERE app_id = ? AND expires_at >= ? AND user_id IN ( " + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) + " )";
 
