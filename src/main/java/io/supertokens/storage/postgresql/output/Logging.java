@@ -22,12 +22,18 @@ import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.ConsoleAppender;
 import ch.qos.logback.core.FileAppender;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import io.supertokens.pluginInterface.LOG_LEVEL;
 import io.supertokens.storage.postgresql.ResourceDistributor;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
 import org.slf4j.LoggerFactory;
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 public class Logging extends ResourceDistributor.SingletonResource {
 
@@ -65,10 +71,43 @@ public class Logging extends ResourceDistributor.SingletonResource {
         try {
             msg = msg.trim();
             if (getInstance(start) != null) {
-                getInstance(start).infoLogger.debug(msg);
+                getInstance(start).infoLogger.debug(getFormattedMessage(msg));
             }
         } catch (NullPointerException ignored) {
         }
+    }
+
+    public static String throwableStacktraceToString(Throwable e) {
+        if (e == null) {
+            return "";
+        }
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (PrintStream ps = new PrintStream(baos)) {
+            e.printStackTrace(ps);
+        }
+        return baos.toString();
+    }
+
+    private static String getFormattedMessage(String msg, Exception e) {
+        JsonObject msgObj = new JsonObject();
+        msgObj.addProperty("message", msg);
+
+        if (e != null) {
+            String stackTrace = throwableStacktraceToString(e);
+            String[] stackTraceArr = stackTrace.split("\n");
+            JsonArray stackTraceArrObj = new JsonArray();
+            for (String stackTraceElement : stackTraceArr) {
+                stackTraceArrObj.add(new JsonPrimitive(stackTraceElement));
+            }
+
+            msgObj.add("exception", stackTraceArrObj);
+        }
+
+        return msgObj.toString();
+    }
+
+    private static String getFormattedMessage(String msg) {
+        return getFormattedMessage(msg, null);
     }
 
     public static void info(Start start, String msg, boolean toConsoleAsWell) {
@@ -77,11 +116,13 @@ public class Logging extends ResourceDistributor.SingletonResource {
         }
         try {
             msg = msg.trim();
-            if (getInstance(start) != null) {
-                getInstance(start).infoLogger.info(msg);
-            }
             if (toConsoleAsWell) {
                 systemOut(msg);
+            }
+            msg = getFormattedMessage(msg);
+
+            if (getInstance(start) != null) {
+                getInstance(start).infoLogger.info(msg);
             }
         } catch (NullPointerException ignored) {
         }
@@ -93,6 +134,7 @@ public class Logging extends ResourceDistributor.SingletonResource {
         }
         try {
             msg = msg.trim();
+            msg = getFormattedMessage(msg);
             if (getInstance(start) != null) {
                 getInstance(start).errorLogger.warn(msg);
             }
@@ -113,7 +155,7 @@ public class Logging extends ResourceDistributor.SingletonResource {
         try {
             err = err.trim();
             if (getInstance(start) != null) {
-                getInstance(start).errorLogger.error(err);
+                getInstance(start).errorLogger.error(getFormattedMessage(err));
             }
             if (toConsoleAsWell || getInstance(start) == null) {
                 systemErr(err);
@@ -122,7 +164,8 @@ public class Logging extends ResourceDistributor.SingletonResource {
         }
     }
 
-    public static void error(Start start, String message, boolean toConsoleAsWell, Exception e) {
+    public static void error(Start start, String message, boolean toConsoleAsWell, 
+                             Exception e) {
         try {
             if (!Config.getLogLevels(start).contains(LOG_LEVEL.ERROR)) {
                 return;
@@ -142,7 +185,7 @@ public class Logging extends ResourceDistributor.SingletonResource {
             if (message != null) {
                 message = message.trim();
                 if (getInstance(start) != null) {
-                    getInstance(start).errorLogger.error(message);
+                    getInstance(start).errorLogger.error(getFormattedMessage(message, e));
                 }
                 if (toConsoleAsWell || getInstance(start) == null) {
                     systemErr(message);
@@ -220,5 +263,4 @@ public class Logging extends ResourceDistributor.SingletonResource {
 
         return logger;
     }
-
 }
