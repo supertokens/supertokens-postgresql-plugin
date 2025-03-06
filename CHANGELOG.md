@@ -10,6 +10,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [8.1.0]
 
 - Adds support for webauthn (passkeys)
+- Adds additional indexing for `emailverification_verified_emails`
 
 ### Migration
 
