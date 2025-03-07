@@ -102,10 +102,7 @@ import io.supertokens.pluginInterface.userroles.sqlStorage.UserRolesSQLStorage;
 import io.supertokens.pluginInterface.webauthn.AccountRecoveryTokenInfo;
 import io.supertokens.pluginInterface.webauthn.WebAuthNOptions;
 import io.supertokens.pluginInterface.webauthn.WebAuthNStoredCredential;
-import io.supertokens.pluginInterface.webauthn.exceptions.DuplicateRecoverAccountTokenException;
-import io.supertokens.pluginInterface.webauthn.exceptions.DuplicateUserEmailException;
-import io.supertokens.pluginInterface.webauthn.exceptions.WebauthNCredentialNotExistsException;
-import io.supertokens.pluginInterface.webauthn.exceptions.WebauthNOptionsNotExistsException;
+import io.supertokens.pluginInterface.webauthn.exceptions.*;
 import io.supertokens.pluginInterface.webauthn.slqStorage.WebAuthNSQLStorage;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
@@ -3992,38 +3989,53 @@ public class Start
         try {
             return WebAuthNQueries.saveCredential(this, tenantIdentifier, credential);
         } catch (SQLException e) {
-            if (e instanceof SQLException) {
-                ServerErrorMessage errorMessage = ((PSQLException) e).getServerErrorMessage();
-                PostgreSQLConfig config = Config.getConfig(this);
+            ServerErrorMessage errorMessage = ((PSQLException) e).getServerErrorMessage();
+            PostgreSQLConfig config = Config.getConfig(this);
 
-                if (isPrimaryKeyError(errorMessage, config.getWebAuthNCredentialsTable())) {
-                    throw new io.supertokens.pluginInterface.webauthn.exceptions.DuplicateCredentialException();
-                } else if (isForeignKeyConstraintError(
-                        errorMessage,
-                        config.getWebAuthNCredentialsTable(),
-                        "user_id")) {
-                    throw new io.supertokens.pluginInterface.webauthn.exceptions.UserIdNotFoundException();
-                }else if (isForeignKeyConstraintError(
-                        errorMessage,
-                        config.getAppsTable(),
-                        "app_id")) {
-                    throw new TenantOrAppNotFoundException(tenantIdentifier.toAppIdentifier());
-                } else if (isForeignKeyConstraintError(
-                        errorMessage,
-                        config.getTenantsTable(),
-                        "tenant_id")) {
-                    throw new TenantOrAppNotFoundException(tenantIdentifier);
-                }
+            if (isPrimaryKeyError(errorMessage, config.getWebAuthNCredentialsTable())) {
+                throw new io.supertokens.pluginInterface.webauthn.exceptions.DuplicateCredentialException();
+            } else if (isForeignKeyConstraintError(
+                    errorMessage,
+                    config.getWebAuthNCredentialsTable(),
+                    "user_id")) {
+                throw new io.supertokens.pluginInterface.webauthn.exceptions.UserIdNotFoundException();
+            } else if (isForeignKeyConstraintError(
+                    errorMessage,
+                    config.getAppsTable(),
+                    "app_id")) {
+                throw new TenantOrAppNotFoundException(tenantIdentifier.toAppIdentifier());
+            } else if (isForeignKeyConstraintError(
+                    errorMessage,
+                    config.getTenantsTable(),
+                    "tenant_id")) {
+                throw new TenantOrAppNotFoundException(tenantIdentifier);
             }
             throw new StorageQueryException(e);
         }
     }
 
     @Override
-    public WebAuthNOptions saveGeneratedOptions(TenantIdentifier tenantIdentifier, WebAuthNOptions optionsToSave) throws StorageQueryException {
+    public WebAuthNOptions saveGeneratedOptions(TenantIdentifier tenantIdentifier, WebAuthNOptions optionsToSave)
+            throws StorageQueryException, DuplicateOptionsIdException, TenantOrAppNotFoundException {
         try {
             return WebAuthNQueries.saveOptions(this, tenantIdentifier, optionsToSave);
         } catch (SQLException e) {
+            ServerErrorMessage errorMessage = ((PSQLException) e).getServerErrorMessage();
+            PostgreSQLConfig config = Config.getConfig(this);
+
+            if (isPrimaryKeyError(errorMessage, config.getWebAuthNGeneratedOptionsTable())) {
+                throw new DuplicateOptionsIdException();
+            } else if (isForeignKeyConstraintError(
+                    errorMessage,
+                    config.getAppsTable(),
+                    "app_id")) {
+                throw new TenantOrAppNotFoundException(tenantIdentifier.toAppIdentifier());
+            } else if (isForeignKeyConstraintError(
+                    errorMessage,
+                    config.getTenantsTable(),
+                    "tenant_id")) {
+                throw new TenantOrAppNotFoundException(tenantIdentifier);
+            }
             throw new StorageQueryException(e);
         }
     }
