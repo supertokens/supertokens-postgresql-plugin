@@ -61,6 +61,11 @@ public class EmailVerificationQueries {
                 + Config.getConfig(start).getEmailVerificationTable() + "(app_id);";
     }
 
+    public static String getQueryToCreateAppIdEmailIndexForEmailVerificationTable(Start start) {
+        return "CREATE INDEX emailverification_verified_emails_app_id_email_index ON "
+                + Config.getConfig(start).getEmailVerificationTable() + "(app_id, email);";
+    }
+
     static String getQueryToCreateEmailVerificationTokensTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String emailVerificationTokensTable = Config.getConfig(start).getEmailVerificationTokensTable();

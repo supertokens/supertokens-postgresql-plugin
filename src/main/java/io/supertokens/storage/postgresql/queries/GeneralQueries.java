@@ -23,6 +23,7 @@ import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
 import io.supertokens.pluginInterface.dashboard.DashboardSearchTags;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ConnectionPool;
@@ -418,6 +419,7 @@ public class GeneralQueries {
 
                     // index
                     update(con, getQueryToCreateAppIdIndexForEmailVerificationTable(start), NO_OP_SETTER);
+                    update(con, getQueryToCreateAppIdEmailIndexForEmailVerificationTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, con, Config.getConfig(start).getEmailVerificationTokensTable())) {
@@ -628,6 +630,44 @@ public class GeneralQueries {
                     update(con, OAuthQueries.getQueryToCreateOAuthLogoutChallengesTimeCreatedIndex(start), NO_OP_SETTER);
                 }
 
+                if(!doesTableExists(start, con, Config.getConfig(start).getWebAuthNUsersTable())){
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, WebAuthNQueries.getQueryToCreateWebAuthNUsersTable(start), NO_OP_SETTER);
+                }
+
+                if(!doesTableExists(start, con, Config.getConfig(start).getWebAuthNUserToTenantTable())){
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, WebAuthNQueries.getQueryToCreateWebAuthNUsersToTenantTable(start), NO_OP_SETTER);
+
+                    // index
+                    update(con, WebAuthNQueries.getQueryToCreateWebAuthNUserToTenantEmailIndex(start), NO_OP_SETTER);
+                }
+
+                if(!doesTableExists(start, con, Config.getConfig(start).getWebAuthNGeneratedOptionsTable())){
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, WebAuthNQueries.getQueryToCreateWebAuthNGeneratedOptionsTable(start), NO_OP_SETTER);
+                    //index
+                    update(con, WebAuthNQueries.getQueryToCreateWebAuthNChallengeExpiresIndex(start), NO_OP_SETTER);
+                }
+
+                if(!doesTableExists(start, con, Config.getConfig(start).getWebAuthNCredentialsTable())){
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, WebAuthNQueries.getQueryToCreateWebAuthNCredentialsTable(start), NO_OP_SETTER);
+
+                    //index
+                    update(con, WebAuthNQueries.getQueryToCreateWebAuthNCredentialsUserIdIndex(start), NO_OP_SETTER);
+                }
+
+                if(!doesTableExists(start, con, Config.getConfig(start).getWebAuthNAccountRecoveryTokenTable())){
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(start, WebAuthNQueries.getQueryToCreateWebAuthNAccountRecoveryTokenTable(start), NO_OP_SETTER);
+
+                    //index
+                    update(start, WebAuthNQueries.getQueryToCreateWebAuthNAccountRecoveryTokenTokenIndex(start), NO_OP_SETTER);
+                    update(start, WebAuthNQueries.getQueryToCreateWebAuthNAccountRecoveryTokenEmailIndex(start), NO_OP_SETTER);
+                    update(start, WebAuthNQueries.getQueryToCreateWebAuthNAccountRecoveryTokenExpiresAtIndex(start), NO_OP_SETTER);
+                }
+
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
@@ -719,7 +759,12 @@ public class GeneralQueries {
                     + getConfig(start).getOAuthClientsTable() + ","
                     + getConfig(start).getOAuthSessionsTable() + ","
                     + getConfig(start).getOAuthLogoutChallengesTable() + ","
-                    + getConfig(start).getOAuthM2MTokensTable();
+                    + getConfig(start).getOAuthM2MTokensTable() + ","
+                    + getConfig(start).getWebAuthNCredentialsTable() + ","
+                    + getConfig(start).getWebAuthNGeneratedOptionsTable() + ","
+                    + getConfig(start).getWebAuthNUserToTenantTable() + ","
+                    + getConfig(start).getWebAuthNUsersTable() + ","
+                    + getConfig(start).getWebAuthNAccountRecoveryTokenTable();
 
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
@@ -1497,6 +1542,11 @@ public class GeneralQueries {
 
         userIds.addAll(ThirdPartyQueries.getPrimaryUserIdUsingEmail_Transaction(start, sqlCon, appIdentifier, email));
 
+        String webauthnUserId = WebAuthNQueries.getPrimaryUserIdUsingEmail_Transaction(start, sqlCon, appIdentifier, email);
+        if(webauthnUserId != null) {
+            userIds.add(webauthnUserId);
+        }
+
         // remove duplicates from userIds
         Set<String> userIdsSet = new HashSet<>(userIds);
         userIds = new ArrayList<>(userIdsSet);
@@ -1561,6 +1611,11 @@ public class GeneralQueries {
 
         userIds.addAll(ThirdPartyQueries.getPrimaryUserIdUsingEmail(start, tenantIdentifier, email));
 
+        String webauthnUserId = WebAuthNQueries.getPrimaryUserIdUsingEmail(start, tenantIdentifier.toAppIdentifier(), email);
+        if(webauthnUserId != null) {
+            userIds.add(webauthnUserId);
+        }
+
         // remove duplicates from userIds
         Set<String> userIdsSet = new HashSet<>(userIds);
         userIds = new ArrayList<>(userIdsSet);
@@ -1603,6 +1658,32 @@ public class GeneralQueries {
         String userId = ThirdPartyQueries.getUserIdByThirdPartyInfo(start, tenantIdentifier,
                 thirdPartyId, thirdPartyUserId);
         return getPrimaryUserInfoForUserId(start, tenantIdentifier.toAppIdentifier(), userId);
+    }
+
+    public static AuthRecipeUserInfo getPrimaryUserByWebauthNCredentialId(Start start,
+                                                                          TenantIdentifier tenantIdentifier,
+                                                                          String credentialId)
+            throws StorageQueryException, SQLException, StorageTransactionLogicException {
+        AuthRecipeUserInfo webauthnUser = start.startTransaction(con -> {
+            try {
+                Connection sqlCon = (Connection) con.getConnection();
+                return getPrimaryUserByWebauthNCredentialId_Transaction(start, sqlCon, tenantIdentifier,
+                        credentialId);
+            } catch (SQLException e) {
+                throw new StorageQueryException(e);
+            }
+        });
+        return getPrimaryUserInfoForUserId(start, tenantIdentifier.toAppIdentifier(), webauthnUser.getSupertokensUserId());
+    }
+
+    public static AuthRecipeUserInfo getPrimaryUserByWebauthNCredentialId_Transaction(Start start,
+                                                                          Connection connection,
+                                                                          TenantIdentifier tenantIdentifier,
+                                                                          String credentialId)
+            throws StorageQueryException, SQLException, StorageTransactionLogicException {
+        AuthRecipeUserInfo webauthnUser = WebAuthNQueries.getUserInfoByCredentialId_Transaction(start, connection, tenantIdentifier,
+                        credentialId);
+        return getPrimaryUserInfoForUserId(start, tenantIdentifier.toAppIdentifier(), webauthnUser.getSupertokensUserId());
     }
 
     public static String getPrimaryUserIdStrForUserId(Start start, AppIdentifier appIdentifier, String id)
@@ -1718,6 +1799,7 @@ public class GeneralQueries {
         loginMethods.addAll(ThirdPartyQueries.getUsersInfoUsingIdList(start, recipeUserIdsToFetch, appIdentifier));
         loginMethods.addAll(
                 PasswordlessQueries.getUsersInfoUsingIdList(start, recipeUserIdsToFetch, appIdentifier));
+        loginMethods.addAll(WebAuthNQueries.getUsersInfoUsingIdList(start, recipeUserIdsToFetch, appIdentifier));
 
         Map<String, LoginMethod> recipeUserIdToLoginMethodMap = new HashMap<>();
         for (LoginMethod loginMethod : loginMethods) {
@@ -1820,6 +1902,8 @@ public class GeneralQueries {
         loginMethods.addAll(
                 PasswordlessQueries.getUsersInfoUsingIdList_Transaction(start, sqlCon, recipeUserIdsToFetch,
                         appIdentifier));
+        loginMethods.addAll(WebAuthNQueries.getUsersInfoUsingIdList_Transaction(start, sqlCon, recipeUserIdsToFetch,
+                appIdentifier));
 
         Map<String, LoginMethod> recipeUserIdToLoginMethodMap = new HashMap<>();
         for (LoginMethod loginMethod : loginMethods) {
