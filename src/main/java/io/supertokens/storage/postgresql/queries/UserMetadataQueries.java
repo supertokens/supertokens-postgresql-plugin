@@ -138,6 +138,9 @@ public class UserMetadataQueries {
     public static Map<String, JsonObject> getMultipleUsersMetadatas_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                                                 List<String> userIds)
             throws SQLException, StorageQueryException {
+        if(userIds == null || userIds.isEmpty()){
+            return new HashMap<>();
+        }
         String QUERY = "SELECT user_id, user_metadata FROM " + getConfig(start).getUserMetadataTable()
                 + " WHERE app_id = ? AND user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(userIds.size())
                 + ") FOR UPDATE";

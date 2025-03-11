@@ -150,43 +150,44 @@ public class TOTPQueries {
     public static void createDevices_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
                                                 List<TOTPDevice> devices)
             throws SQLException, StorageQueryException {
+        if(devices != null && !devices.isEmpty()) {
+            String insert_user_QUERY = "INSERT INTO " + Config.getConfig(start).getTotpUsersTable()
+                    + " (app_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING";
 
-        String insert_user_QUERY = "INSERT INTO " + Config.getConfig(start).getTotpUsersTable()
-                + " (app_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING";
+            String insert_device_QUERY = "INSERT INTO " + Config.getConfig(start).getTotpUserDevicesTable()
+                    +
+                    " (app_id, user_id, device_name, secret_key, period, skew, verified, created_at) VALUES (?, ?, ?, ?, " +
+                    "?, ?, ?, ?) ON CONFLICT (app_id, user_id, device_name) DO UPDATE SET secret_key = ?, period = ?, skew = ?, created_at = ?, verified = ?";
 
-        String insert_device_QUERY = "INSERT INTO " + Config.getConfig(start).getTotpUserDevicesTable()
-                +
-                " (app_id, user_id, device_name, secret_key, period, skew, verified, created_at) VALUES (?, ?, ?, ?, " +
-                "?, ?, ?, ?) ON CONFLICT (app_id, user_id, device_name) DO UPDATE SET secret_key = ?, period = ?, skew = ?, created_at = ?, verified = ?";
+            List<PreparedStatementValueSetter> userSetters = new ArrayList<>();
+            List<PreparedStatementValueSetter> deviceSetters = new ArrayList<>();
 
-        List<PreparedStatementValueSetter> userSetters = new ArrayList<>();
-        List<PreparedStatementValueSetter> deviceSetters = new ArrayList<>();
+            for (TOTPDevice device : devices) {
+                userSetters.add(pst -> {
+                    pst.setString(1, appIdentifier.getAppId());
+                    pst.setString(2, device.userId);
+                });
 
-        for(TOTPDevice device : devices){
-            userSetters.add(pst -> {
-                pst.setString(1, appIdentifier.getAppId());
-                pst.setString(2, device.userId);
-            });
+                deviceSetters.add(pst -> {
+                    pst.setString(1, appIdentifier.getAppId());
+                    pst.setString(2, device.userId);
+                    pst.setString(3, device.deviceName);
+                    pst.setString(4, device.secretKey);
+                    pst.setInt(5, device.period);
+                    pst.setInt(6, device.skew);
+                    pst.setBoolean(7, device.verified);
+                    pst.setLong(8, device.createdAt);
+                    pst.setString(9, device.secretKey);
+                    pst.setInt(10, device.period);
+                    pst.setInt(11, device.skew);
+                    pst.setLong(12, device.createdAt);
+                    pst.setBoolean(13, device.verified);
+                });
+            }
 
-            deviceSetters.add(pst -> {
-                pst.setString(1, appIdentifier.getAppId());
-                pst.setString(2, device.userId);
-                pst.setString(3, device.deviceName);
-                pst.setString(4, device.secretKey);
-                pst.setInt(5, device.period);
-                pst.setInt(6, device.skew);
-                pst.setBoolean(7, device.verified);
-                pst.setLong(8, device.createdAt);
-                pst.setString(9, device.secretKey);
-                pst.setInt(10, device.period);
-                pst.setInt(11, device.skew);
-                pst.setLong(12, device.createdAt);
-                pst.setBoolean(13, device.verified);
-            });
+            executeBatch(sqlCon, insert_user_QUERY, userSetters);
+            executeBatch(sqlCon, insert_device_QUERY, deviceSetters);
         }
-
-        executeBatch(sqlCon, insert_user_QUERY, userSetters);
-        executeBatch(sqlCon, insert_device_QUERY, deviceSetters);
     }
 
     public static TOTPDevice getDeviceByName_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
@@ -290,6 +291,9 @@ public class TOTPQueries {
 
     public static Map<String, List<TOTPDevice>> getDevicesForMultipleUsers(Start start, AppIdentifier appIdentifier, List<String> userIds)
             throws StorageQueryException, SQLException {
+        if(userIds == null || userIds.isEmpty()){
+            return new HashMap<>();
+        }
         String QUERY = "SELECT * FROM " + Config.getConfig(start).getTotpUserDevicesTable()
                 + " WHERE app_id = ? AND user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) + ");";
 

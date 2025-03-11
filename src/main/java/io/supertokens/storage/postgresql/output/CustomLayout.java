@@ -20,6 +20,10 @@ package io.supertokens.storage.postgresql.output;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.CoreConstants;
 import ch.qos.logback.core.LayoutBase;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.text.DateFormat;
@@ -29,39 +33,82 @@ import java.util.Date;
 class CustomLayout extends LayoutBase<ILoggingEvent> {
 
     private final String processID;
+    private boolean useStructuredLogging = false;
 
     CustomLayout(String processID) {
         super();
         this.processID = processID;
+        this.useStructuredLogging = Boolean.parseBoolean(System.getenv("USE_STRUCTURED_LOGGING"));
     }
 
     @Override
     public String doLayout(ILoggingEvent event) {
-        StringBuilder sbuf = new StringBuilder();
-
+        JsonObject msgObj = new Gson().fromJson(event.getMessage(), JsonObject.class);
         DateFormat dateFormat = new SimpleDateFormat("dd MMM yyyy HH:mm:ss:SSS Z");
-        sbuf.append(dateFormat.format(new Date(event.getTimeStamp())));
-        sbuf.append(" | ");
 
-        sbuf.append(event.getLevel());
-        sbuf.append(" | ");
+        if (useStructuredLogging) {
+            msgObj.addProperty("timestamp", dateFormat.format(new Date(event.getTimeStamp())));
+            msgObj.addProperty("level", event.getLevel().toString());
+            msgObj.addProperty("pid", this.processID);
+            msgObj.addProperty("threadName", event.getThreadName());
+            msgObj.addProperty("callerData", event.getCallerData()[1].toString());
 
-        sbuf.append("pid: ");
-        sbuf.append(this.processID);
-        sbuf.append(" | ");
+            return msgObj.toString() + CoreConstants.LINE_SEPARATOR;
+        } else {
+            StringBuilder sbuf = new StringBuilder();
 
-        sbuf.append("[");
-        sbuf.append(event.getThreadName());
-        sbuf.append("] thread");
-        sbuf.append(" | ");
+            if (msgObj.has("exception")) {
+                JsonArray stackTraceObj = msgObj.get("exception").getAsJsonArray();
+                sbuf.append(dateFormat.format(new Date(event.getTimeStamp())));
+                sbuf.append(" | ");
 
-        sbuf.append(event.getCallerData()[1]);
-        sbuf.append(" | ");
+                sbuf.append(event.getLevel());
+                sbuf.append(" | ");
 
-        sbuf.append(Utils.maskDBPassword(event.getFormattedMessage()));
-        sbuf.append(CoreConstants.LINE_SEPARATOR);
-        sbuf.append(CoreConstants.LINE_SEPARATOR);
+                sbuf.append("pid: ");
+                sbuf.append(this.processID);
+                sbuf.append(" | ");
 
-        return sbuf.toString();
+                sbuf.append("[");
+                sbuf.append(event.getThreadName());
+                sbuf.append("] thread");
+                sbuf.append(" | ");
+
+                sbuf.append(event.getCallerData()[1]);
+                sbuf.append(" | ");
+
+                for (JsonElement stackTraceElement : stackTraceObj) {
+                    sbuf.append(stackTraceElement.getAsString());
+                    sbuf.append(CoreConstants.LINE_SEPARATOR);
+                }
+
+                sbuf.append(CoreConstants.LINE_SEPARATOR);
+                sbuf.append(CoreConstants.LINE_SEPARATOR);
+            }
+
+            sbuf.append(dateFormat.format(new Date(event.getTimeStamp())));
+            sbuf.append(" | ");
+
+            sbuf.append(event.getLevel());
+            sbuf.append(" | ");
+
+            sbuf.append("pid: ");
+            sbuf.append(this.processID);
+            sbuf.append(" | ");
+
+            sbuf.append("[");
+            sbuf.append(event.getThreadName());
+            sbuf.append("] thread");
+            sbuf.append(" | ");
+
+            sbuf.append(event.getCallerData()[1]);
+            sbuf.append(" | ");
+
+            sbuf.append(Utils.maskDBPassword(event.getFormattedMessage()));
+            sbuf.append(CoreConstants.LINE_SEPARATOR);
+            sbuf.append(CoreConstants.LINE_SEPARATOR);
+
+            return sbuf.toString();
+        }
     }
 }

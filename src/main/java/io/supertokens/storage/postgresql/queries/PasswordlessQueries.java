@@ -738,7 +738,7 @@ public class PasswordlessQueries {
     public static List<LoginMethod> getUsersInfoUsingIdList(Start start, Set<String> ids,
                                                             AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
-        if (ids.size() > 0) {
+        if (ids != null && !ids.isEmpty()) {
             // No need to filter based on tenantId because the id list is already filtered for a tenant
             String QUERY = "SELECT user_id, email, phone_number, time_joined "
                     + "FROM " + getConfig(start).getPasswordlessUsersTable() + " WHERE user_id IN (" +
@@ -768,7 +768,7 @@ public class PasswordlessQueries {
     public static List<LoginMethod> getUsersInfoUsingIdList_Transaction(Start start, Connection con, Set<String> ids,
                                                                         AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
-        if (ids.size() > 0) {
+        if (ids != null && !ids.isEmpty()) {
             // No need to filter based on tenantId because the id list is already filtered for a tenant
             String QUERY = "SELECT user_id, email, phone_number, time_joined "
                     + "FROM " + getConfig(start).getPasswordlessUsersTable() + " WHERE user_id IN (" +
@@ -947,7 +947,7 @@ public class PasswordlessQueries {
                                                                                 AppIdentifier appIdentifier,
                                                                                 List<String> emails)
             throws StorageQueryException, SQLException {
-        if(emails.isEmpty()){
+        if(emails == null || emails.isEmpty()){
             return new ArrayList<>();
         }
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
@@ -1017,7 +1017,7 @@ public class PasswordlessQueries {
                                                                     AppIdentifier appIdentifier,
                                                                     @Nonnull List<String> phoneNumbers)
             throws StorageQueryException, SQLException {
-        if(phoneNumbers.isEmpty()){
+        if(phoneNumbers == null || phoneNumbers.isEmpty()){
             return new ArrayList<>();
         }
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "

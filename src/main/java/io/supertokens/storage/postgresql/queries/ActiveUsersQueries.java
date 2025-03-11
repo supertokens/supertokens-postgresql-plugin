@@ -137,6 +137,9 @@ public class ActiveUsersQueries {
 
     public static Map<String, Long> getLastActiveByMultipleUserIds(Start start, AppIdentifier appIdentifier, List<String> userIds)
             throws StorageQueryException {
+        if(userIds == null || userIds.isEmpty()) {
+            return new HashMap<>();
+        }
         String QUERY = "SELECT user_id, last_active_time FROM " + Config.getConfig(start).getUserLastActiveTable()
                 + " WHERE app_id = ? AND user_id IN ( " + Utils.generateCommaSeperatedQuestionMarks(userIds.size())+ " )";
 

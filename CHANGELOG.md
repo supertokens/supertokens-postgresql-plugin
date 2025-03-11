@@ -93,6 +93,10 @@ CREATE INDEX IF NOT EXISTS webauthn_account_recovery_token_expires_at_index ON w
 CREATE INDEX IF NOT EXISTS webauthn_account_recovery_token_email_index ON webauthn_account_recovery_tokens (app_id, tenant_id, email);
 ```
 
+## [8.0.3]
+
+- Fixes `StorageTransactionLogicException` in bulk import when not using userRoles and totpDevices in import json.
+- Adds `USE_STRUCTURED_LOGGING` environment variable to control the logging format.
 
 ## [8.0.2]
 

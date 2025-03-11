@@ -205,6 +205,11 @@ public class UserRolesQueries {
 
     public static void addRolesToUsers_Transaction(Start start, Connection connection, Map<TenantIdentifier, Map<String, List<String>>> rolesToUserByTenants) //tenant -> user -> role
             throws SQLException, StorageQueryException {
+
+        if(rolesToUserByTenants == null || rolesToUserByTenants.isEmpty()) {
+            return;
+        }
+
         String QUERY = "INSERT INTO " + getConfig(start).getUserRolesTable()
                 + "(app_id, tenant_id, user_id, role) VALUES(?, ?, ?, ?);";
         List<PreparedStatementValueSetter> insertStatements = new ArrayList<>();
@@ -262,6 +267,9 @@ public class UserRolesQueries {
 
     public static Map<String, List<String>> getRolesForUsers(Start start, AppIdentifier appIdentifier, List<String> userIds)
             throws SQLException, StorageQueryException {
+        if(userIds == null || userIds.isEmpty()){
+            return new HashMap<>();
+        }
         String QUERY = "SELECT user_id, role FROM " + getConfig(start).getUserRolesTable()
                 + " WHERE app_id = ? AND user_id IN ("+Utils.generateCommaSeperatedQuestionMarks(userIds.size())+") ;";
 
@@ -313,20 +321,24 @@ public class UserRolesQueries {
     public static List<String> doesMultipleRoleExist_transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                     List<String> roles)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT role FROM " + getConfig(start).getRolesTable()
-                + " WHERE app_id = ? AND role IN (" +Utils.generateCommaSeperatedQuestionMarks(roles.size())+ ") FOR UPDATE";
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            for (int i = 0; i < roles.size(); i++) {
-                pst.setString(2+i, roles.get(i));
-            }
-        }, result -> {
-            List<String> rolesFound = new ArrayList<>();
-            while(result.next()){
-                rolesFound.add(result.getString("role"));
-            }
-           return rolesFound;
-        });
+        if(roles != null && !roles.isEmpty()) {
+            String QUERY = "SELECT role FROM " + getConfig(start).getRolesTable()
+                    + " WHERE app_id = ? AND role IN (" + Utils.generateCommaSeperatedQuestionMarks(roles.size()) +
+                    ") FOR UPDATE";
+            return execute(con, QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                for (int i = 0; i < roles.size(); i++) {
+                    pst.setString(2 + i, roles.get(i));
+                }
+            }, result -> {
+                List<String> rolesFound = new ArrayList<>();
+                while (result.next()) {
+                    rolesFound.add(result.getString("role"));
+                }
+                return rolesFound;
+            });
+        }
+        return new ArrayList<>();
     }
 
     public static String[] getUsersForRole(Start start, TenantIdentifier tenantIdentifier, String role)
