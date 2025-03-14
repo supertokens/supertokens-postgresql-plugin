@@ -76,6 +76,9 @@ public class BulkImportQueries {
 
     public static void insertBulkImportUsers_Transaction(Start start, Connection connection, AppIdentifier appIdentifier, List<BulkImportUser> users)
             throws SQLException, StorageQueryException {
+        if(users == null || users.isEmpty()){
+            return;
+        }
         String queryBuilder = "INSERT INTO " + Config.getConfig(start).getBulkImportUsersTable() +
                 " (id, app_id, raw_data, created_at, updated_at) VALUES "
                 + " (?, ?, ?, ?, ?)";
@@ -118,6 +121,9 @@ public class BulkImportQueries {
     public static void updateMultipleBulkImportUsersStatusToError_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                                               @Nonnull Map<String,String> bulkImportUserIdToErrorMessage)
             throws SQLException, StorageQueryException {
+        if(bulkImportUserIdToErrorMessage == null || bulkImportUserIdToErrorMessage.isEmpty()){
+            return;
+        }
         BULK_IMPORT_USER_STATUS errorStatus = BULK_IMPORT_USER_STATUS.FAILED;
         String query = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable()
                 + " SET status = ?, error_msg = ?, updated_at = ? WHERE app_id = ? and id = ?";
