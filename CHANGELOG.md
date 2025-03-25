@@ -15,7 +15,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Migration
 
 ```sql
-CREATE INDEX IF NOT EXISTS user_roles_user_id_index ON user_roles (user_id);
+CREATE INDEX IF NOT EXISTS user_roles_app_id_tenant_id_user_id_index ON user_roles (app_id, tenant_id, user_id);
 ```
 ## [8.1.0]
 
