@@ -534,6 +534,7 @@ public class GeneralQueries {
                     update(con, UserRolesQueries.getQueryToCreateUserRolesRoleIndex(start), NO_OP_SETTER);
                     update(con, UserRolesQueries.getQueryToCreateTenantIdIndexForUserRolesTable(start), NO_OP_SETTER);
                     update(con, UserRolesQueries.getQueryToCreateRoleIndexForUserRolesTable(start), NO_OP_SETTER);
+                    update(con, UserRolesQueries.getQueryToCreateUserIdIndexForUserRolesTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, con, Config.getConfig(start).getUserIdMappingTable())) {

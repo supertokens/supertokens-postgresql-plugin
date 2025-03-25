@@ -10,7 +10,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [8.1.1]
 
 - Adds more null and empty checks for bulk migration
+- Adds user_id index to the user roles table
 
+### Migration
+
+```sql
+CREATE INDEX IF NOT EXISTS user_roles_user_id_index ON user_roles (user_id);
+```
 ## [8.1.0]
 
 - Adds support for webauthn (passkeys)
