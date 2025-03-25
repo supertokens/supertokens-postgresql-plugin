@@ -1587,6 +1587,9 @@ public class GeneralQueries {
         //collect ids by thirdparty
         userIds.addAll(ThirdPartyQueries.listUserIdsByMultipleThirdPartyInfo_Transaction(start, sqlCon, appIdentifier, thirdpartyUserIdToThirdpartyId));
 
+        //collect ids by webauthn
+        userIds.addAll(WebAuthNQueries.getPrimaryUserIdsUsingEmails_Transaction(start, sqlCon, appIdentifier, emails));
+
         List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds_Transaction(start, sqlCon, appIdentifier,
                 new ArrayList<>(userIds));
 

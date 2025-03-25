@@ -427,6 +427,33 @@ public class WebAuthNQueries {
         });
     }
 
+    public static List<String> getPrimaryUserIdsUsingEmails_Transaction(Start start, Connection sqlConnection,
+                                                                        AppIdentifier appIdentifier, List<String> emails)
+            throws SQLException, StorageQueryException {
+        if(emails == null || emails.isEmpty()) {
+            return new ArrayList<>();
+        }
+        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
+                + "FROM " + getConfig(start).getWebAuthNUserToTenantTable() + " AS ep" +
+                " JOIN " + getConfig(start).getUsersTable() + " AS all_users" +
+                " ON ep.app_id = all_users.app_id AND ep.user_id = all_users.user_id" +
+                " WHERE ep.app_id = ? AND ep.email in (" + Utils.generateCommaSeperatedQuestionMarks(emails.size()) + ")";
+
+        return execute(sqlConnection, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            int i = 2;
+            for(String email : emails) {
+                pst.setString(i++, email);
+            }
+        }, result -> {
+            List<String> idResult = new ArrayList<>();
+            if (result.next()) {
+                idResult.add(result.getString("user_id"));
+            }
+            return idResult;
+        });
+    }
+
     public static Collection<? extends LoginMethod> getUsersInfoUsingIdList(Start start, Set<String> ids, AppIdentifier appIdentifier)
             throws StorageQueryException {
         try {

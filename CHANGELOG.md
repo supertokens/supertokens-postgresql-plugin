@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [8.1.1]
+
+- Adds more null and empty checks for bulk migration
+
 ## [8.1.0]
 
 - Adds support for webauthn (passkeys)
