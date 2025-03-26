@@ -116,6 +116,11 @@ public class UserRolesQueries {
                 + "(app_id, tenant_id, role);";
     }
 
+    public static String getQueryToCreateUserIdIndexForUserRolesTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS user_roles_app_id_user_id_index ON " + getConfig(start).getUserRolesTable() +
+                "(app_id, user_id);";
+    }
+
     public static boolean createNewRoleOrDoNothingIfExists_Transaction(Start start, Connection con,
                                                                        AppIdentifier appIdentifier, String role)
             throws SQLException, StorageQueryException {
