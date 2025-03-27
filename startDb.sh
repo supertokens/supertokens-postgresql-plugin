@@ -1,4 +1,13 @@
-docker run --rm --name postgres -e 'POSTGRES_USER=root' -e 'POSTGRES_PASSWORD=root' -d -p 5432:5432 -v ~/Desktop/db/pstgres:/var/lib/postgresql/data postgres -c 'max_connections=10000'
+docker run --rm --name postgres \
+    -e 'POSTGRES_USER=root' \
+    -e 'POSTGRES_PASSWORD=root' \
+    -d -p 5432:5432 \
+    -v ~/Desktop/db/pstgres:/var/lib/postgresql/data \
+    postgres \
+    -c 'max_connections=1000' \
+    -c 'autovacuum_naptime=1' \
+    -c 'autovacuum_vacuum_threshold=10' \
+    -c 'autovacuum_analyze_threshold=10'
 
 sleep 30
 
