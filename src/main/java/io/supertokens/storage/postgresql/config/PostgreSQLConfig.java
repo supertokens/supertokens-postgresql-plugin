@@ -651,7 +651,7 @@ public class PostgreSQLConfig {
 
         { // postgresql_port
             if (postgresql_port < 0) {
-                postgresql_port = Integer.parseInt(System.getProperty("ST_PLUGIN_SERVER_PORT", "5432"));
+                postgresql_port = Integer.parseInt(System.getProperty("ST_POSTGRESQL_PLUGIN_SERVER_PORT", "5432"));
             }
         }
 
