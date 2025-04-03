@@ -120,18 +120,18 @@ public class ConfigTest {
     public void testThatMissingConfigFileThrowsError() throws Exception {
         String[] args = {"../"};
 
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+
         String workerId = System.getProperty("org.gradle.test.worker");
         ProcessBuilder pb = new ProcessBuilder("rm", "-r", "config" + workerId + ".yaml");
         pb.directory(new File(args[0]));
         Process process1 = pb.start();
         process1.waitFor();
 
-        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
-
         ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
         assertNotNull(e);
         TestCase.assertEquals(e.exception.getMessage(),
-                "config" + workerId + ".yaml (No such file or directory)");
+                "../config" + workerId + ".yaml (No such file or directory)");
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
