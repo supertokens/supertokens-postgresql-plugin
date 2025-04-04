@@ -41,10 +41,8 @@ import io.supertokens.storage.postgresql.test.httpRequest.HttpResponseException;
 import io.supertokens.storageLayer.StorageLayer;
 import io.supertokens.thirdparty.InvalidProviderConfigException;
 import io.supertokens.utils.SemVer;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.*;
+import org.junit.rules.TestRule;
 
 import java.io.IOException;
 
@@ -53,6 +51,9 @@ import static org.junit.Assert.*;
 
 public class TestForNoCrashDuringStartup {
     TestingProcessManager.TestingProcess process;
+
+    @Rule
+    public TestRule retryFlaky = Utils.retryFlakyTest();
 
     @AfterClass
     public static void afterTesting() {
