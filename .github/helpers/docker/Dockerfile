@@ -31,7 +31,7 @@ RUN set -x \
 	&& apt-get purge -y --auto-remove wget
 COPY --from=tmp --chown=supertokens /usr/lib/supertokens /usr/lib/supertokens
 COPY --from=tmp --chown=supertokens /usr/bin/supertokens /usr/bin/supertokens
-COPY ./supertokens-root/supertokens-postgresql-plugin/.github/helpers/docker/postgresql/docker-entrypoint.sh /usr/local/bin/
+COPY ./supertokens-postgresql-plugin/.github/helpers/docker/docker-entrypoint.sh /usr/local/bin/
 RUN echo "$(md5sum /usr/lib/supertokens/config.yaml | awk '{ print $1 }')" >> /CONFIG_HASH
 RUN ln -s usr/local/bin/docker-entrypoint.sh /entrypoint.sh # backwards compat
 EXPOSE 3567
