@@ -8,6 +8,7 @@ ADD ./cli ./cli
 ADD ./core ./core
 ADD ./plugin-interface ./plugin-interface
 ADD ./plugin ./plugin
+ADD ./ee ./ee
 ADD ./config.yaml ./config.yaml
 ADD ./version.yaml ./version.yaml
 
