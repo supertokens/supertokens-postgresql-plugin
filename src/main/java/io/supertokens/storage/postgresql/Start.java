@@ -3069,7 +3069,7 @@ public class Start
         try {
             startTransaction(con -> {
                 try {
-                    createDevice_Transaction(con, new AppIdentifier(null, null), device);
+                    createDevice_Transaction(con, appIdentifier, device);
                 } catch (DeviceAlreadyExistsException | TenantOrAppNotFoundException e) {
                     throw new StorageTransactionLogicException(e);
                 }
