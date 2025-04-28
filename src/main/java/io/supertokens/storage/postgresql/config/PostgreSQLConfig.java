@@ -23,6 +23,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+
 import io.supertokens.pluginInterface.ConfigFieldInfo;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.storage.postgresql.Start;
@@ -650,7 +651,7 @@ public class PostgreSQLConfig {
 
         { // postgresql_port
             if (postgresql_port < 0) {
-                postgresql_port = 5432;
+                postgresql_port = Integer.parseInt(System.getProperty("ST_POSTGRESQL_PLUGIN_SERVER_PORT", "5432"));
             }
         }
 
