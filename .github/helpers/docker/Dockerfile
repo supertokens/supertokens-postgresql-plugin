@@ -3,7 +3,7 @@ WORKDIR /build
 RUN apt-get update && apt-get install -y curl wget zip
 RUN wget https://download.java.net/java/GA/jdk15.0.1/51f4f36ad4ef43e39d0dfdbaf6549e32/9/GPL/openjdk-15.0.1_linux-x64_bin.tar.gz
 RUN tar -xzvf openjdk-15.0.1_linux-x64_bin.tar.gz
-RUN ls && mv jdk-15.0.1 jre
+RUN ls && mv jdk-15.0.1 jre && rm jre/lib/src.zip
 ADD ./cli ./cli
 ADD ./core ./core
 ADD ./plugin-interface ./plugin-interface
