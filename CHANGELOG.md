@@ -7,8 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [8.1.3]
+- Migrates to github actions
 
+## [8.1.3]
+ 
 - Adds tcpKeepAlive to the connection pool config
 
 ## [8.1.2]
