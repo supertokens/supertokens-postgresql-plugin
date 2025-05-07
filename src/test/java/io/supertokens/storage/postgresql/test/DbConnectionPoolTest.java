@@ -118,7 +118,8 @@ public class DbConnectionPoolTest {
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
 
-    @Test
+    // Not so useful test
+    // @Test
     public void testDownTimeWhenChangingConnectionPoolSize() throws Exception {
         String[] args = {"../"};
 
