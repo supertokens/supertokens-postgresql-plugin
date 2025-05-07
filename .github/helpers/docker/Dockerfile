@@ -4,10 +4,7 @@ RUN apt-get update && apt-get install -y curl wget zip
 
 RUN wget https://github.com/supertokens/jre/raw/refs/heads/feat/jre21/jre-21.0.7-linux.zip
 RUN unzip jre-21.0.7-linux.zip
-RUN ls
 RUN mv jre-21.0.7 jre
-RUN ls
-RUN ls jre
 ADD ./cli ./cli
 ADD ./core ./core
 ADD ./plugin-interface ./plugin-interface
