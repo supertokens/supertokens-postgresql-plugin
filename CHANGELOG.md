@@ -7,7 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.0.0]
+
 - Migrates to github actions
+- Updates JRE version to 21
 
 ## [8.1.3]
  
