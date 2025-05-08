@@ -7,8 +7,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [8.1.3]
+## [9.0.0]
 
+- Migrates to github actions
+- Updates JRE version to 21
+
+## [8.1.3]
+ 
 - Adds tcpKeepAlive to the connection pool config
 
 ## [8.1.2]
