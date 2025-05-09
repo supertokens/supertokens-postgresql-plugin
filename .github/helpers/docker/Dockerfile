@@ -2,8 +2,15 @@ FROM ubuntu:bionic-20200219 AS tmp
 WORKDIR /build
 RUN apt-get update && apt-get install -y curl wget zip
 
-RUN wget https://github.com/supertokens/jre/raw/refs/heads/feat/jre21/jre-21.0.7-linux.zip
-RUN unzip jre-21.0.7-linux.zip
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "amd64" ]; then \
+        wget https://github.com/supertokens/jre/raw/refs/heads/master/jre-21.0.7-linux.zip; \
+    elif [ "$ARCH" = "arm64" ]; then \
+        wget https://github.com/supertokens/jre/raw/refs/heads/master/jre-21.0.7-linux-aarch.zip; \
+    else \
+        echo "Unsupported architecture: $ARCH" && exit 1; \
+    fi
+RUN unzip jre-21.0.7-linux*.zip
 RUN mv jre-21.0.7 jre
 ADD ./cli ./cli
 ADD ./core ./core
