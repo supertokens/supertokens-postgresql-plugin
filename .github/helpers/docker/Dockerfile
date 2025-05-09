@@ -10,10 +10,8 @@ RUN ARCH=$(dpkg --print-architecture) && \
     else \
         echo "Unsupported architecture: $ARCH" && exit 1; \
     fi
-RUN ls
 RUN unzip jre.zip
-RUN ls
-RUN mv jre-21.0.7 jre
+RUN mv jre-21.0.7 jre || mv jre-21.0.7-linux-aarch/jre-21.0.7 jre
 ADD ./cli ./cli
 ADD ./core ./core
 ADD ./plugin-interface ./plugin-interface
