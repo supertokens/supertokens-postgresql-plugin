@@ -2,7 +2,7 @@ plugins {
     id 'java-library'
 }
 
-version = "9.0.0"
+version = "9.0.1"
 
 repositories {
     mavenCentral()
@@ -20,7 +20,7 @@ dependencies {
     implementation group: 'org.postgresql', name: 'postgresql', version: '42.7.2'
 
     // https://mvnrepository.com/artifact/org.apache.tomcat.embed/tomcat-embed-core
-    implementation group: 'org.apache.tomcat.embed', name: 'tomcat-embed-core', version: '11.0.5'
+    implementation group: 'org.apache.tomcat.embed', name: 'tomcat-embed-core', version: '11.0.6'
 
     // https://mvnrepository.com/artifact/com.fasterxml.jackson.dataformat/jackson-dataformat-yaml
     compileOnly group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-yaml', version: '2.16.1'
