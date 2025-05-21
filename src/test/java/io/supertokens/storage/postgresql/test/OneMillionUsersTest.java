@@ -501,9 +501,7 @@ public class OneMillionUsersTest {
         process.kill(false);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
 
-        Runtime.getRuntime().gc();
         System.gc();
-        System.runFinalization();
         Thread.sleep(10000);
 
         process = TestingProcessManager.start(args, false);
