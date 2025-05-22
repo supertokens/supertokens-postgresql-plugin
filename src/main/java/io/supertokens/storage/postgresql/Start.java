@@ -1270,6 +1270,15 @@ public class Start
         }
     }
 
+    /**
+     * Update the isEmailVerified column for multiple users in the email verification table. This method is used in the
+     * Bulk Migration process.
+     * Important note: this method expects a Map of email to userId, but if there is an error in the batch processing,
+     * it will throw a BulkImportBatchInsertException with a map of userid to Exception, based on the position of the
+     * erroneous item in the batch.
+     * This means, that the underlying map implementation must be one that preserves iteration order (LinkedHashMap
+     * is a good choice) and this is the responsibility of the caller to ensure that the passed map is such.
+     */
     @Override
     public void updateMultipleIsEmailVerified_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
                                                           Map<String, String> emailToUserId, boolean isEmailVerified)
@@ -1279,23 +1288,36 @@ public class Start
             EmailVerificationQueries.updateMultipleUsersIsEmailVerified_Transaction(this, sqlCon, appIdentifier,
                     emailToUserId, isEmailVerified);
         } catch (SQLException e) {
-            if (e instanceof PSQLException) {
-                PostgreSQLConfig config = Config.getConfig(this);
-                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+            if (e instanceof BatchUpdateException) {
+                BatchUpdateException batchUpdateException = (BatchUpdateException) e;
+                SQLException nextException = batchUpdateException.getNextException();
+                Map<String, Exception> errorByPosition = new HashMap<>();
+                    while (nextException != null) {
 
-                if (isForeignKeyConstraintError(serverMessage, config.getEmailVerificationTable(), "app_id")) {
-                    throw new TenantOrAppNotFoundException(appIdentifier);
+                        if (nextException instanceof PSQLException) {
+                            PostgreSQLConfig config = Config.getConfig(this);
+                            ServerErrorMessage serverMessage = ((PSQLException) nextException).getServerErrorMessage();
+
+                            int position = getErroneousEntryPosition(batchUpdateException);
+                            String userid = ((Map.Entry<String, String>) emailToUserId.entrySet().toArray()[position]).getKey();
+                            if (isNullConstraintError(serverMessage, config.getEmailVerificationTable(), "email")) {
+                                errorByPosition.put(userid, new NullPointerException("email is null"));
+                            } else if (isPrimaryKeyError(serverMessage, config.getEmailVerificationTable())) {
+                                errorByPosition.put(userid,
+                                        new DuplicateEmailException());
+                            }
+                            if (isForeignKeyConstraintError(serverMessage, config.getEmailVerificationTable(),
+                                    "app_id")) {
+                                throw new TenantOrAppNotFoundException(appIdentifier);
+                            }
+                        }
+
+                        nextException = nextException.getNextException();
+                    }
+                    throw new StorageQueryException(
+                            new BulkImportBatchInsertException("emailverification errors", errorByPosition));
                 }
-            }
-
-            boolean isPSQLPrimKeyError = e instanceof PSQLException && isPrimaryKeyError(
-                    ((PSQLException) e).getServerErrorMessage(),
-                    Config.getConfig(this).getEmailVerificationTable());
-
-            if (!isEmailVerified || !isPSQLPrimKeyError) {
                 throw new StorageQueryException(e);
-            }
-            // we do not throw an error since the email is already verified
         }
     }
 
@@ -1766,6 +1788,13 @@ public class Start
         tableName = tableNameParts[tableNameParts.length - 1];
         return serverMessage.getSQLState().equals("23503") && serverMessage.getConstraint() != null
                 && serverMessage.getConstraint().equals(tableName + "_" + columnName + "_fkey");
+    }
+
+    private boolean isNullConstraintError(ServerErrorMessage serverMessage, String tableName, String columnName) {
+        String[] tableNameParts = tableName.split("\\.");
+        tableName = tableNameParts[tableNameParts.length - 1];
+        return serverMessage.getSQLState().equals("23502")
+                && serverMessage.getMessage().contains("null value in column \"" + columnName + "\" of relation \"" + tableName + "\" violates not-null constraint");
     }
 
     private boolean isPrimaryKeyError(ServerErrorMessage serverMessage, String tableName) {
