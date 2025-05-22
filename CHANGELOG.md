@@ -7,6 +7,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.0.2]
+
+- Fixes `AuthRecipe#getUserByAccountInfo` to consider the tenantId instead of the appId when fetching the webauthn user
+- Changes dependency structure to avoid multiple dependency declarations for the same library
+
 ## [9.0.1]
 
 - Upgrades the embedded tomcat 11.0.6 and logback classic to 1.5.13 because of security vulnerabilities
