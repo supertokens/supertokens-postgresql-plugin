@@ -346,7 +346,7 @@ public class EmailPasswordQueries {
     }
 
     public static void signUpMultipleForBulkImport_Transaction(Start start, Connection sqlCon, List<EmailPasswordImportUser> usersToSignUp)
-            throws StorageQueryException, StorageTransactionLogicException, SQLException {
+            throws StorageQueryException, StorageTransactionLogicException {
         try {
             String app_id_to_user_id_QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
                     + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
