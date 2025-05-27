@@ -98,7 +98,7 @@ public class BulkImportProxyStorage extends Start {
             if (this.connection != null) {
                 this.connection.commitForBulkImportProxyStorage();
             }
-        } catch (SQLException e) {;
+        } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
