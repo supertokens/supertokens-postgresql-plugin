@@ -1045,10 +1045,9 @@ public class Start
         try {
             Connection sqlConnection = (Connection) connection.getConnection();
             EmailPasswordQueries.signUpMultipleForBulkImport_Transaction(this, sqlConnection, users);
-        } catch (StorageQueryException | SQLException | StorageTransactionLogicException e) {
+        } catch (StorageQueryException | StorageTransactionLogicException e) {
             Throwable actual = e.getCause();
-            if (actual instanceof BatchUpdateException) {
-                BatchUpdateException batchUpdateException = (BatchUpdateException) actual;
+            if (actual instanceof BatchUpdateException batchUpdateException) {
                 Map<String, Exception> errorByPosition = new HashMap<>();
                 SQLException nextException = batchUpdateException.getNextException();
                 while (nextException != null) {
@@ -1288,8 +1287,7 @@ public class Start
             EmailVerificationQueries.updateMultipleUsersIsEmailVerified_Transaction(this, sqlCon, appIdentifier,
                     emailToUserId, isEmailVerified);
         } catch (SQLException e) {
-            if (e instanceof BatchUpdateException) {
-                BatchUpdateException batchUpdateException = (BatchUpdateException) e;
+            if (e instanceof BatchUpdateException batchUpdateException) {
                 SQLException nextException = batchUpdateException.getNextException();
                 Map<String, Exception> errorByPosition = new HashMap<>();
                     while (nextException != null) {
@@ -1520,9 +1518,7 @@ public class Start
             Connection sqlCon = (Connection) con.getConnection();
             ThirdPartyQueries.importUser_Transaction(this, sqlCon, usersToImport);
         } catch (SQLException e) {
-                Throwable actual = e.getCause();
-                if (actual instanceof BatchUpdateException) {
-                    BatchUpdateException batchUpdateException = (BatchUpdateException) actual;
+                if (e instanceof BatchUpdateException batchUpdateException) {
                     Map<String, Exception> errorByPosition = new HashMap<>();
                     SQLException nextException = batchUpdateException.getNextException();
                     while (nextException != null) {
@@ -2126,50 +2122,46 @@ public class Start
             Connection sqlCon = (Connection) con.getConnection();
             PasswordlessQueries.importUsers_Transaction(sqlCon, this, users);
         } catch (SQLException e) {
-            if (e instanceof BatchUpdateException) {
-                Throwable actual = e.getCause();
-                if (actual instanceof BatchUpdateException) {
-                    BatchUpdateException batchUpdateException = (BatchUpdateException) actual;
-                    Map<String, Exception> errorByPosition = new HashMap<>();
-                    SQLException nextException = batchUpdateException.getNextException();
-                    while (nextException != null) {
+            if (e instanceof BatchUpdateException batchUpdateException) {
+                Map<String, Exception> errorByPosition = new HashMap<>();
+                SQLException nextException = batchUpdateException.getNextException();
+                while (nextException != null) {
 
-                        if (nextException instanceof PSQLException) {
-                            PostgreSQLConfig config = Config.getConfig(this);
-                            ServerErrorMessage serverMessage = ((PSQLException) nextException).getServerErrorMessage();
+                    if (nextException instanceof PSQLException) {
+                        PostgreSQLConfig config = Config.getConfig(this);
+                        ServerErrorMessage serverMessage = ((PSQLException) nextException).getServerErrorMessage();
 
-                            int position = getErroneousEntryPosition(batchUpdateException);
+                        int position = getErroneousEntryPosition(batchUpdateException);
 
-                            if (isPrimaryKeyError(serverMessage, config.getPasswordlessUsersTable())
-                                    || isPrimaryKeyError(serverMessage, config.getUsersTable())
-                                    || isPrimaryKeyError(serverMessage, config.getPasswordlessUserToTenantTable())
-                                    || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
-                                errorByPosition.put(users.get(position).userId, new DuplicateUserIdException());
-                            }
-                            if (isUniqueConstraintError(serverMessage, config.getPasswordlessUserToTenantTable(),
-                                    "email")) {
-                                errorByPosition.put(users.get(position).userId, new DuplicateEmailException());
-
-                            } else if (isUniqueConstraintError(serverMessage, config.getPasswordlessUserToTenantTable(),
-                                    "phone_number")) {
-                                errorByPosition.put(users.get(position).userId, new DuplicatePhoneNumberException());
-
-                            } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(),
-                                    "app_id")) {
-                                throw new TenantOrAppNotFoundException(users.get(position).tenantIdentifier.toAppIdentifier());
-
-                            } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(),
-                                    "tenant_id")) {
-                                throw new TenantOrAppNotFoundException(users.get(position).tenantIdentifier.toAppIdentifier());
-                            }
+                        if (isPrimaryKeyError(serverMessage, config.getPasswordlessUsersTable())
+                                || isPrimaryKeyError(serverMessage, config.getUsersTable())
+                                || isPrimaryKeyError(serverMessage, config.getPasswordlessUserToTenantTable())
+                                || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
+                            errorByPosition.put(users.get(position).userId, new DuplicateUserIdException());
                         }
-                        nextException = nextException.getNextException();
+                        if (isUniqueConstraintError(serverMessage, config.getPasswordlessUserToTenantTable(),
+                                "email")) {
+                            errorByPosition.put(users.get(position).userId, new DuplicateEmailException());
+
+                        } else if (isUniqueConstraintError(serverMessage, config.getPasswordlessUserToTenantTable(),
+                                "phone_number")) {
+                            errorByPosition.put(users.get(position).userId, new DuplicatePhoneNumberException());
+
+                        } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(),
+                                "app_id")) {
+                            throw new TenantOrAppNotFoundException(users.get(position).tenantIdentifier.toAppIdentifier());
+
+                        } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(),
+                                "tenant_id")) {
+                            throw new TenantOrAppNotFoundException(users.get(position).tenantIdentifier.toAppIdentifier());
+                        }
                     }
-                    throw new StorageQueryException(
-                            new BulkImportBatchInsertException("passwordless errors", errorByPosition));
+                    nextException = nextException.getNextException();
                 }
-                throw new StorageQueryException(e);
+                throw new StorageQueryException(
+                        new BulkImportBatchInsertException("passwordless errors", errorByPosition));
             }
+            throw new StorageQueryException(e);
         }
     }
 
@@ -3655,8 +3647,7 @@ public class Start
                 try {
                     BulkImportQueries.insertBulkImportUsers_Transaction(this, (Connection) con.getConnection(), appIdentifier, users);
                 } catch (SQLException e) {
-                    if (e instanceof BatchUpdateException) {
-                        BatchUpdateException batchUpdateException = (BatchUpdateException) e;
+                    if (e instanceof BatchUpdateException batchUpdateException) {
                         SQLException nextException = batchUpdateException.getNextException();
                         if(nextException instanceof PSQLException){
                             ServerErrorMessage serverErrorMessage = ((PSQLException) nextException).getServerErrorMessage();
@@ -3784,6 +3775,7 @@ public class Start
         try {
             return BulkImportQueries.deleteBulkImportUsers(this, appIdentifier, bulkImportUserIds);
         } catch (SQLException e) {
+            Logging.error(this, "Error deleting bulk import users", true, e);
             throw new StorageQueryException(e);
         }
     }
