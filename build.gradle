@@ -2,7 +2,7 @@ plugins {
     id 'java-library'
 }
 
-version = "9.0.2"
+version = "9.0.3"
 
 repositories {
     mavenCentral()
@@ -19,14 +19,11 @@ dependencies {
     // https://mvnrepository.com/artifact/org.postgresql/postgresql
     implementation group: 'org.postgresql', name: 'postgresql', version: '42.7.2'
 
-    // https://mvnrepository.com/artifact/org.apache.tomcat.embed/tomcat-embed-core
-    implementation group: 'org.apache.tomcat.embed', name: 'tomcat-embed-core', version: '11.0.6'
-
     // https://mvnrepository.com/artifact/com.fasterxml.jackson.dataformat/jackson-dataformat-yaml
-    compileOnly group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-yaml', version: '2.16.1'
+    compileOnly group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-yaml', version: '2.18.2'
 
     // https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-core
-    compileOnly group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.16.1'
+    compileOnly group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.18.2'
 
     // https://mvnrepository.com/artifact/ch.qos.logback/logback-classic
     compileOnly group: 'ch.qos.logback', name: 'logback-classic', version: '1.5.13'

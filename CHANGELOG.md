@@ -7,9 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [9.0.2]
+## [9.0.3]
 
 - Fixes BatchUpdateException checks and error handling to prevent bulk import users stuck in `PROCESSING` state
+
+## [9.0.2]
+ 
+- Fixes `AuthRecipe#getUserByAccountInfo` to consider the tenantId instead of the appId when fetching the webauthn user
+- Changes dependency structure to avoid multiple dependency declarations for the same library
 
 ## [9.0.1]
 
