@@ -52,11 +52,6 @@
 		"src":"https://repo.maven.apache.org/maven2/com/zaxxer/HikariCP/6.3.0/HikariCP-6.3.0-sources.jar"
 	},
 	{
-		"jar":"https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/2.0.15/slf4j-api-2.0.15.jar",
-		"name":"slf4j-api 2.0.15",
-		"src":"https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/2.0.15/slf4j-api-2.0.15-sources.jar"
-	},
-	{
 		"jar":"https://repo.maven.apache.org/maven2/org/postgresql/postgresql/42.7.2/postgresql-42.7.2.jar",
 		"name":"postgresql 42.7.2",
 		"src":"https://repo.maven.apache.org/maven2/org/postgresql/postgresql/42.7.2/postgresql-42.7.2-sources.jar"
