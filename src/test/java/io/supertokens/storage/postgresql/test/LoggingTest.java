@@ -21,7 +21,6 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.Appender;
 import com.google.gson.JsonObject;
-
 import io.supertokens.Main;
 import io.supertokens.ProcessState;
 import io.supertokens.config.Config;
@@ -331,7 +330,7 @@ public class LoggingTest {
         try {
             process.startProcess();
             process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
-
+            Thread.sleep(10000); // Wait for the error log to be written
             assertTrue(fileContainsString(errorOutput, dbUser));
 //            assertTrue(fileContainsString(errorOutput, dbName));
 //            assertTrue(fileContainsString(errorOutput, "********"));
@@ -366,7 +365,7 @@ public class LoggingTest {
         try {
             process.startProcess();
             process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
-
+            Thread.sleep(10000); // Wait for the error log to be written
             assertTrue(fileContainsString(errorOutput, dbUser));
 //            assertTrue(fileContainsString(errorOutput, dbName));
 //            assertTrue(fileContainsString(errorOutput, "********"));
