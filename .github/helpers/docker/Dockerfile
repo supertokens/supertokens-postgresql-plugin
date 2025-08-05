@@ -32,7 +32,8 @@ ENV GOSU_VERSION=1.7
 RUN apt-get -y --no-install-recommends install alien wget ca-certificates
 RUN wget --no-check-certificate -O libsqlite3.rpm https://download.opensuse.org/repositories/openSUSE:/Factory/standard/x86_64/libsqlite3-0-3.50.3-1.1.x86_64.rpm
 RUN alien -d libsqlite3.rpm
-RUN dpkg -i libsqlite3.dpkg
+RUN ls -la
+RUN dpkg -i libsqlite3-0-3.50.3-1.1.x86_64.dpkg
 RUN apt --fix-broken install
 RUN rm libsqlite3.rpm
 
