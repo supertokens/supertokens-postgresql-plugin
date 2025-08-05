@@ -38,6 +38,14 @@ RUN set -x \
 	&& rm -rf "$GNUPGHOME" /usr/local/bin/gosu.asc \
 	&& chmod +x /usr/local/bin/gosu \
 	&& apt-get purge -y --auto-remove wget
+
+# install fresh libsqlite3
+RUN apt install alien
+RUN wget -O libsqlite3.rpm https://download.opensuse.org/repositories/openSUSE:/Factory/standard/x86_64/libsqlite3-0-3.50.3-1.1.x86_64.rpm
+RUN alien -d libsqlite3.rpm
+RUN dpkg -i libsqlite3.dpkg
+RUN sudo apt --fix-broken install
+RUN rm libsqlite3.rpm
 COPY --from=tmp --chown=supertokens /usr/lib/supertokens /usr/lib/supertokens
 COPY --from=tmp --chown=supertokens /usr/bin/supertokens /usr/bin/supertokens
 COPY ./supertokens-postgresql-plugin/.github/helpers/docker/docker-entrypoint.sh /usr/local/bin/
