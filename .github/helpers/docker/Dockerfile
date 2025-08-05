@@ -29,7 +29,7 @@ RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get -y install tzdata
 ENV GOSU_VERSION=1.7
 
 # install fresh libsqlite3
-RUN apt-get -y --no-install-recommends install alien
+RUN apt-get -y --no-install-recommends install alien wget
 RUN wget -O libsqlite3.rpm https://download.opensuse.org/repositories/openSUSE:/Factory/standard/x86_64/libsqlite3-0-3.50.3-1.1.x86_64.rpm
 RUN alien -d libsqlite3.rpm
 RUN dpkg -i libsqlite3.dpkg
