@@ -24,7 +24,7 @@ RUN ls && ./jre/bin/java -classpath "./cli/*" io.supertokens.cli.Main true $@
 
 FROM debian:bookworm-slim
 RUN groupadd supertokens && useradd -m -s /bin/bash -g supertokens supertokens
-RUN apt-get update && apt-get install -y --no-install-recommends gnupg dirmngr curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends gnupg dirmngr curl # && rm -rf /var/lib/apt/lists/*
 RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get -y install tzdata
 ENV GOSU_VERSION=1.7
 
