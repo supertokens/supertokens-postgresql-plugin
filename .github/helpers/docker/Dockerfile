@@ -27,6 +27,15 @@ RUN groupadd supertokens && useradd -m -s /bin/bash -g supertokens supertokens
 RUN apt-get update && apt-get install -y --no-install-recommends gnupg dirmngr curl && rm -rf /var/lib/apt/lists/*
 RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get -y install tzdata
 ENV GOSU_VERSION=1.7
+
+# install fresh libsqlite3
+RUN apt-get install alien
+RUN wget -O libsqlite3.rpm https://download.opensuse.org/repositories/openSUSE:/Factory/standard/x86_64/libsqlite3-0-3.50.3-1.1.x86_64.rpm
+RUN alien -d libsqlite3.rpm
+RUN dpkg -i libsqlite3.dpkg
+RUN apt --fix-broken install
+RUN rm libsqlite3.rpm
+
 RUN set -x \
 	&& apt-get update && apt-get install -y --no-install-recommends ca-certificates wget && rm -rf /var/lib/apt/lists/* \
 	&& wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)" \
@@ -39,13 +48,8 @@ RUN set -x \
 	&& chmod +x /usr/local/bin/gosu \
 	&& apt-get purge -y --auto-remove wget
 
-# install fresh libsqlite3
-RUN apt-get install alien
-RUN wget -O libsqlite3.rpm https://download.opensuse.org/repositories/openSUSE:/Factory/standard/x86_64/libsqlite3-0-3.50.3-1.1.x86_64.rpm
-RUN alien -d libsqlite3.rpm
-RUN dpkg -i libsqlite3.dpkg
-RUN sudo apt --fix-broken install
-RUN rm libsqlite3.rpm
+
+
 COPY --from=tmp --chown=supertokens /usr/lib/supertokens /usr/lib/supertokens
 COPY --from=tmp --chown=supertokens /usr/bin/supertokens /usr/bin/supertokens
 COPY ./supertokens-postgresql-plugin/.github/helpers/docker/docker-entrypoint.sh /usr/local/bin/
