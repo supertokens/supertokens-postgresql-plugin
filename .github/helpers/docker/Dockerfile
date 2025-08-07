@@ -6,7 +6,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then \
         wget -O jre.zip https://github.com/supertokens/jre/raw/refs/heads/master/jre-15.0.1-linux.zip; \
     elif [ "$ARCH" = "arm64" ]; then \
-        wget -O jre.zip https://github.com/supertokens/jre/raw/refs/heads/master/jre-15.0.1-linux-aarch.zip; \
+        wget -O jre.zip https://github.com/supertokens/jre/raw/refs/heads/master/jre-15.0.1-linux-arm.zip; \
     else \
         echo "Unsupported architecture: $ARCH" && exit 1; \
     fi
