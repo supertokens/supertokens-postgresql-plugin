@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [7.0.2] - 2025-08-12
+
+- Helpers for docker build
+
 ## [7.0.1] - 2024-04-17
 
 - Fixes issues with partial failures during tenant creation
