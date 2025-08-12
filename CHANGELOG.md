@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [7.2.1] 
+
+- Helpers for docker build
+
 ## [7.2.0] - 2024-10-03
 
 - Compatible with plugin interface version 6.3
