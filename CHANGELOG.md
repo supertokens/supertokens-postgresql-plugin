@@ -161,10 +161,6 @@ CREATE INDEX IF NOT EXISTS user_last_active_last_active_time_index ON user_last_
 ALTER TABLE tenant_configs ADD COLUMN IF NOT EXISTS is_first_factors_null BOOLEAN DEFAULT TRUE;
 ALTER TABLE tenant_configs ALTER COLUMN is_first_factors_null DROP DEFAULT;
 ```
-=======
-## [7.0.2] - 2025-08-12
-
-- Helpers for docker build
 
 ## [7.0.1] - 2024-04-17
 
