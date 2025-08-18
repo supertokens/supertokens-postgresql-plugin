@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [8.0.4]
+
+- Helpers for docker build
+
 ## [8.0.3]
 
 - Fixes `StorageTransactionLogicException` in bulk import when not using userRoles and totpDevices in import json.
