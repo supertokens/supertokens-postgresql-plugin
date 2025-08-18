@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [8.1.4]
+
+- Helpers for docker build
+
 ## [8.1.3]
 
 - Adds tcpKeepAlive to the connection pool config
