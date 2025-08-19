@@ -68,6 +68,7 @@ import io.supertokens.pluginInterface.oauth.OAuthLogoutChallenge;
 import io.supertokens.pluginInterface.oauth.OAuthStorage;
 import io.supertokens.pluginInterface.oauth.exception.DuplicateOAuthLogoutChallengeException;
 import io.supertokens.pluginInterface.oauth.exception.OAuthClientNotFoundException;
+import io.supertokens.pluginInterface.opentelemetry.OtelProvider;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.PasswordlessImportUser;
@@ -218,7 +219,7 @@ public class Start
     }
 
     @Override
-    public void initFileLogging(String infoLogPath, String errorLogPath) {
+    public void initFileLogging(String infoLogPath, String errorLogPath, OtelProvider otelProvider) {
         if (Logging.isAlreadyInitialised(this)) {
             return;
         }
@@ -240,6 +241,7 @@ public class Start
              */
             final Logger infoLog = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
             appender = new HikariLoggingAppender(this);
+            appender.setOtelProvider(otelProvider);
             if (infoLog.getAppender(HikariLoggingAppender.NAME) == null) {
                 infoLog.setAdditive(false);
                 infoLog.addAppender(appender);
