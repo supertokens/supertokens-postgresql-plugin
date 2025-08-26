@@ -32,9 +32,13 @@ if [ "${1}" = 'dev' -o "${1}" = "production" -o "${1:0:2}" = "--" ]; then
 fi
 
 CONFIG_FILE=/usr/lib/supertokens/config.yaml
+TEMP_LOCATION_WHEN_READONLY=/lib/supertokens/temp/
+mkdir -p $TEMP_LOCATION_WHEN_READONLY
 
+#required by JNA
+export _JAVA_OPTIONS=-Djava.io.tmpdir=$TEMP_LOCATION_WHEN_READONLY
 #make sure the CLI knows which config file to pass to the core
-set -- "$@" --with-config="$CONFIG_FILE" --foreground
+set -- "$@" --with-config="$CONFIG_FILE" --with-temp-dir="$TEMP_LOCATION_WHEN_READONLY" --foreground
 
 # check if no options has been passed to docker run
 if [[ "$@" == "supertokens start" ]]
