@@ -18,6 +18,8 @@ ADD ./plugin-interface ./plugin-interface
 ADD ./plugin ./plugin
 ADD ./ee ./ee
 ADD ./config.yaml ./config.yaml
+RUN echo "host: 0.0.0.0" >> ./config.yaml
+RUN echo "postgresql_config_version: 0" >> ./config.yaml
 ADD ./version.yaml ./version.yaml
 
 RUN ls && ./jre/bin/java -classpath "./cli/*" io.supertokens.cli.Main true $@
