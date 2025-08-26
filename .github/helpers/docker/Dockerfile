@@ -18,7 +18,6 @@ ADD ./plugin-interface ./plugin-interface
 ADD ./plugin ./plugin
 ADD ./ee ./ee
 ADD ./config.yaml ./config.yaml
-RUN echo "host: 0.0.0.0" >> ./config.yaml
 ADD ./version.yaml ./version.yaml
 
 RUN ls && ./jre/bin/java -classpath "./cli/*" io.supertokens.cli.Main true $@
@@ -44,6 +43,7 @@ COPY --from=tmp --chown=supertokens /usr/bin/supertokens /usr/bin/supertokens
 COPY ./supertokens-postgresql-plugin/.github/helpers/docker/docker-entrypoint.sh /usr/local/bin/
 RUN echo "$(md5sum /usr/lib/supertokens/config.yaml | awk '{ print $1 }')" >> /CONFIG_HASH
 RUN ln -s usr/local/bin/docker-entrypoint.sh /entrypoint.sh # backwards compat
+ENV SUPERTOKENS_HOST "0.0.0.0"
 EXPOSE 3567
 USER "supertokens"
 ENTRYPOINT ["docker-entrypoint.sh"]
