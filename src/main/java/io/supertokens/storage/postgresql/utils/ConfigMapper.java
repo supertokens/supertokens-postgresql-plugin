@@ -28,19 +28,15 @@ import java.lang.reflect.Field;
 import java.util.Map;
 
 public class ConfigMapper {
-    public static <T> T mapConfig(JsonObject config, Class<T> clazz) throws InvalidConfigException {
-        try {
-            T result = clazz.newInstance();
-            for (Map.Entry<String, JsonElement> entry : config.entrySet()) {
-                Field field = findField(clazz, entry.getKey());
-                if (field != null) {
-                    setValue(result, field, entry.getValue());
-                }
+    public static <T> T mapConfig(JsonObject config, T object) throws InvalidConfigException {
+        Class<T> clazz = (Class<T>) object.getClass();
+        for (Map.Entry<String, JsonElement> entry : config.entrySet()) {
+            Field field = findField(clazz, entry.getKey());
+            if (field != null) {
+                setValue(object, field, entry.getValue());
             }
-            return result;
-        } catch (InstantiationException | IllegalAccessException e) {
-            throw new RuntimeException(e);
         }
+        return object;
     }
 
     private static <T> Field findField(Class<T> clazz, String key) {

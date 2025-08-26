@@ -107,7 +107,7 @@ public class Config extends ResourceDistributor.SingletonResource {
 
     public static boolean canBeUsed(JsonObject configJson) throws InvalidConfigException {
         try {
-            PostgreSQLConfig config = ConfigMapper.mapConfig(configJson, PostgreSQLConfig.class);
+            PostgreSQLConfig config = ConfigMapper.mapConfig(configJson, new PostgreSQLConfig());
             return config.getConnectionURI() != null || config.getUser() != null || config.getPassword() != null;
         } catch (InvalidConfigException e) {
             throw e;
