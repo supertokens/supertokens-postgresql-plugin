@@ -17,8 +17,6 @@
 
 package io.supertokens.storage.postgresql.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.gson.JsonObject;
 import io.supertokens.pluginInterface.LOG_LEVEL;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
@@ -99,8 +97,7 @@ public class Config extends ResourceDistributor.SingletonResource {
     }
 
     private PostgreSQLConfig loadPostgreSQLConfig(JsonObject configJson) throws IOException, InvalidConfigException {
-        final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-        PostgreSQLConfig config = mapper.readValue(configJson.toString(), PostgreSQLConfig.class);
+        PostgreSQLConfig config = ConfigMapper.mapConfig(configJson, PostgreSQLConfig.class);
         config.validateAndNormalise();
         return config;
     }
