@@ -105,7 +105,7 @@ docker run \
 ## Logging
 - By default, all the logs will be available via the `docker logs <container-name>` command.
 - You can setup logging to a shared volume by:
-    - Setting the `info_log_path` and `error_log_path` variables in your `config.yaml` file (or passing the values asn env variables).
+    - Setting the `info_log_path` and `error_log_path` variables in your `config.yaml` file (or passing the values as env variables).
     - Mounting the shared volume for the logging directory.
 
 ```bash
