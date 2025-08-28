@@ -202,48 +202,6 @@ public class PostgreSQLConfig {
     boolean isValidAndNormalised = false;
 
     public PostgreSQLConfig() {
-        Map<String, String> env = System.getenv();
-
-        try {
-            for (Field field : PostgreSQLConfig.class.getDeclaredFields()) {
-                if (field.isAnnotationPresent(EnvName.class)) {
-                    String envName = field.getAnnotation(EnvName.class).value();
-                    String stringValue = env.get(envName);
-    
-                    if (stringValue == null || stringValue.isEmpty()) {
-                        continue;
-                    }
-    
-                    if (stringValue.startsWith("\"") && stringValue.endsWith("\"")) {
-                        stringValue = stringValue.substring(1, stringValue.length() - 1);
-                        stringValue = stringValue
-                            .replace("\\n", "\n")
-                            .replace("\\t", "\t")
-                            .replace("\\r", "\r")
-                            .replace("\\\"", "\"")
-                            .replace("\\'", "'")
-                            .replace("\\\\", "\\");
-                    }
-    
-                    field.setAccessible(true);
-                    if (field.getType().equals(String.class)) {
-                        field.set(this, stringValue);
-                    } else if (field.getType().equals(int.class)) {
-                        field.set(this, Integer.parseInt(stringValue));
-                    } else if (field.getType().equals(long.class)) {
-                        field.set(this, Long.parseLong(stringValue));
-                    } else if (field.getType().equals(boolean.class)) {
-                        field.set(this, Boolean.parseBoolean(stringValue));
-                    } else if (field.getType().equals(float.class)) {
-                        field.set(this, Float.parseFloat(stringValue));
-                    } else if (field.getType().equals(double.class)) {
-                        field.set(this, Double.parseDouble(stringValue));
-                    }
-                }
-            }
-        } catch (IllegalAccessException e) {
-            throw new IllegalStateException(e);
-        }
     }
 
     public static Set<String> getValidFields() {
