@@ -25,9 +25,12 @@ import ch.qos.logback.core.LogbackException;
 import ch.qos.logback.core.filter.Filter;
 import ch.qos.logback.core.spi.FilterReply;
 import ch.qos.logback.core.status.Status;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.opentelemetry.OtelProvider;
 import io.supertokens.storage.postgresql.output.Logging;
 
 import java.util.List;
+import java.util.Map;
 
 public class HikariLoggingAppender implements Appender<ILoggingEvent> {
 
@@ -36,6 +39,8 @@ public class HikariLoggingAppender implements Appender<ILoggingEvent> {
     private final Start start;
 
     private Context context;
+
+    private OtelProvider otelProvider;
 
     HikariLoggingAppender(Start start) {
         super();
@@ -126,6 +131,10 @@ public class HikariLoggingAppender implements Appender<ILoggingEvent> {
     public void setName(String name) {
     }
 
+    public void setOtelProvider(OtelProvider otelProvider) {
+        this.otelProvider = otelProvider;
+    }
+
     @Override
     public void doAppend(ILoggingEvent event) throws LogbackException {
         if (event.getLevel() == Level.ERROR) {
@@ -135,7 +144,17 @@ public class HikariLoggingAppender implements Appender<ILoggingEvent> {
         } else {
             Logging.debug(start, event.getFormattedMessage());
         }
+        appendToOtel(event);
+    }
 
+    private void appendToOtel(ILoggingEvent event) {
+        if (otelProvider != null) {
+            String logMessage = event.getFormattedMessage();
+            String logLevel = event.getLevel().toString();
+            otelProvider.createLogEvent(TenantIdentifier.BASE_TENANT, logMessage, logLevel,
+                    Map.of("loggerName", event.getLoggerName(),
+                            "threadName", event.getThreadName()));
+        }
     }
 
 }
