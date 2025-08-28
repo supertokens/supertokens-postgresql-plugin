@@ -105,6 +105,7 @@ import io.supertokens.pluginInterface.webauthn.WebAuthNOptions;
 import io.supertokens.pluginInterface.webauthn.WebAuthNStoredCredential;
 import io.supertokens.pluginInterface.webauthn.exceptions.*;
 import io.supertokens.pluginInterface.webauthn.slqStorage.WebAuthNSQLStorage;
+import io.supertokens.storage.postgresql.annotations.EnvName;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storage.postgresql.output.Logging;
@@ -117,6 +118,7 @@ import org.postgresql.util.ServerErrorMessage;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+import java.lang.reflect.Field;
 import java.sql.BatchUpdateException;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -791,6 +793,47 @@ public class Start
     @Override
     public boolean canBeUsed(JsonObject configJson) throws InvalidConfigException {
         return Config.canBeUsed(configJson);
+    }
+
+    @Override
+    public void updateConfigJsonFromEnv(JsonObject configJson) {
+        Map<String, String> env = System.getenv();
+
+        for (Field field : PostgreSQLConfig.class.getDeclaredFields()) {
+            if (field.isAnnotationPresent(EnvName.class)) {
+                String envName = field.getAnnotation(EnvName.class).value();
+                String stringValue = env.get(envName);
+
+                if (stringValue == null || stringValue.isEmpty()) {
+                    continue;
+                }
+
+                if (stringValue.startsWith("\"") && stringValue.endsWith("\"")) {
+                    stringValue = stringValue.substring(1, stringValue.length() - 1);
+                    stringValue = stringValue
+                            .replace("\\n", "\n")
+                            .replace("\\t", "\t")
+                            .replace("\\r", "\r")
+                            .replace("\\\"", "\"")
+                            .replace("\\'", "'")
+                            .replace("\\\\", "\\");
+                }
+
+                if (field.getType().equals(String.class)) {
+                    configJson.addProperty(field.getName(), stringValue);
+                } else if (field.getType().equals(int.class)) {
+                    configJson.addProperty(field.getName(), Integer.parseInt(stringValue));
+                } else if (field.getType().equals(long.class)) {
+                    configJson.addProperty(field.getName(), Long.parseLong(stringValue));
+                } else if (field.getType().equals(boolean.class)) {
+                    configJson.addProperty(field.getName(), Boolean.parseBoolean(stringValue));
+                } else if (field.getType().equals(float.class)) {
+                    configJson.addProperty(field.getName(), Float.parseFloat(stringValue));
+                } else if (field.getType().equals(double.class)) {
+                    configJson.addProperty(field.getName(), Double.parseDouble(stringValue));
+                }
+            }
+        }
     }
 
     @Override
