@@ -291,6 +291,12 @@ then
         echo "postgresql_connection_uri: $POSTGRESQL_CONNECTION_URI" >> $CONFIG_FILE
     fi
 
+    # check if the otel collector connection uri is passed
+    if [ ! -z $OTEL_COLLECTOR_CONNECTION_URI ]
+    then
+        echo "otel_collector_connection_uri: $OTEL_COLLECTOR_CONNECTION_URI" >> $CONFIG_FILE
+    fi
+
     # THE CONFIGS BELOW ARE DEPRECATED----------------
 
     # check if postgresql key value table name is passed
