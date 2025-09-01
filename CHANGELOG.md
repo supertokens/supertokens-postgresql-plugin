@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [4.0.7]
+
+- Adds opentelemetry collector uri env var.
+
 ## [4.0.5] - 2024-03-21
 
 - Fixes user id mapping queries
