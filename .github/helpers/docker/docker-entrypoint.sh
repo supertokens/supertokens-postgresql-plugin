@@ -389,6 +389,11 @@ then
             echo "webauthn_recover_account_token_lifetime: $WEBAUTHN_RECOVER_ACCOUNT_TOKEN_LIFETIME" >> $CONFIG_FILE
     fi
 
+    if [ ! -z $OTEL_COLLECTOR_CONNECTION_URI ]
+    then
+            echo "otel_collector_connection_uri: $OTEL_COLLECTOR_CONNECTION_URI" >> $CONFIG_FILE
+    fi
+
 fi
 
 # check if no options has been passed to docker run
