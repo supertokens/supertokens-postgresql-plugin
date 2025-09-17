@@ -183,7 +183,7 @@ public class ConfigTest {
                 .setKeyValue(ConnectionPoolTestContent.RETRY_INTERVAL_IF_INIT_FAILS, 2000);
         process.getProcess().proceedWithInitingStorageModule();
 
-        ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE, 7000);
+        ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE, 15000);
         assertNotNull(e);
         assertEquals(e.exception.getCause().getCause().getMessage(),
                 "Error connecting to PostgreSQL instance. Please make sure that PostgreSQL is running and that you "

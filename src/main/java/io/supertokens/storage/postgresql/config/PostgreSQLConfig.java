@@ -40,6 +40,7 @@ public class PostgreSQLConfig {
     @IgnoreForAnnotationCheck
     private int postgresql_config_version = -1;
 
+    @EnvName("POSTGRESQL_CONNECTION_POOL_SIZE")
     @JsonProperty
     @ConnectionPoolProperty
     @DashboardInfo(
@@ -48,6 +49,7 @@ public class PostgreSQLConfig {
             defaultValue = "10", isOptional = true, isEditable = true)
     private int postgresql_connection_pool_size = 10;
 
+    @EnvName("POSTGRESQL_HOST")
     @JsonProperty
     @UserPoolProperty
     @DashboardInfo(
@@ -56,12 +58,14 @@ public class PostgreSQLConfig {
             defaultValue = "\"localhost\"", isOptional = true)
     private String postgresql_host = null;
 
+    @EnvName("POSTGRESQL_PORT")
     @JsonProperty
     @UserPoolProperty
     @DashboardInfo(description = "Specify the port to use when connecting to PostgreSQL instance.",
             defaultValue = "5432", isOptional = true)
     private int postgresql_port = -1;
 
+    @EnvName("POSTGRESQL_USER")
     @JsonProperty
     @ConnectionPoolProperty
     @DashboardInfo(
@@ -72,6 +76,7 @@ public class PostgreSQLConfig {
             defaultValue = "null")
     private String postgresql_user = null;
 
+    @EnvName("POSTGRESQL_PASSWORD")
     @JsonProperty
     @ConnectionPoolProperty
     @DashboardInfo(
@@ -79,12 +84,14 @@ public class PostgreSQLConfig {
             defaultValue = "null")
     private String postgresql_password = null;
 
+    @EnvName("POSTGRESQL_DATABASE_NAME")
     @JsonProperty
     @UserPoolProperty
     @DashboardInfo(description = "The database name to store SuperTokens related data.",
             defaultValue = "\"supertokens\"", isOptional = true)
     private String postgresql_database_name = null;
 
+    @EnvName("POSTGRESQL_TABLE_NAMES_PREFIX")
     @JsonProperty
     @NotConflictingWithinUserPool
     @DashboardInfo(
@@ -93,6 +100,7 @@ public class PostgreSQLConfig {
             defaultValue = "\"\"", isOptional = true)
     private String postgresql_table_names_prefix = "";
 
+    @EnvName("POSTGRESQL_KEY_VALUE_TABLE_NAME")
     @JsonProperty
     @NotConflictingWithinUserPool
     @DashboardInfo(
@@ -101,12 +109,14 @@ public class PostgreSQLConfig {
             defaultValue = "\"key_value\"", isOptional = true)
     private String postgresql_key_value_table_name = null;
 
+    @EnvName("POSTGRESQL_SESSION_INFO_TABLE_NAME")
     @JsonProperty
     @NotConflictingWithinUserPool
     @DashboardInfo(description = "Specify the name of the table that will store the session info for users.",
             defaultValue = "\"session_info\"", isOptional = true)
     private String postgresql_session_info_table_name = null;
 
+    @EnvName("POSTGRESQL_EMAILPASSWORD_USERS_TABLE_NAME")
     @JsonProperty
     @NotConflictingWithinUserPool
     @DashboardInfo(
@@ -115,12 +125,14 @@ public class PostgreSQLConfig {
             defaultValue = "\"emailpassword_users\"", isOptional = true)
     private String postgresql_emailpassword_users_table_name = null;
 
+    @EnvName("POSTGRESQL_EMAILPASSWORD_PSWD_RESET_TOKENS_TABLE_NAME")
     @JsonProperty
     @NotConflictingWithinUserPool
     @DashboardInfo(description = "Specify the name of the table that will store the password reset tokens for users.",
             defaultValue = "\"emailpassword_pswd_reset_tokens\"", isOptional = true)
     private String postgresql_emailpassword_pswd_reset_tokens_table_name = null;
 
+    @EnvName("POSTGRESQL_EMAILVERIFICATION_TOKENS_TABLE_NAME")
     @JsonProperty
     @NotConflictingWithinUserPool
     @DashboardInfo(
@@ -128,23 +140,27 @@ public class PostgreSQLConfig {
             defaultValue = "\"emailverification_tokens\"", isOptional = true)
     private String postgresql_emailverification_tokens_table_name = null;
 
+    @EnvName("POSTGRESQL_EMAILVERIFICATION_VERIFIED_EMAILS_TABLE_NAME")
     @JsonProperty
     @NotConflictingWithinUserPool
     @DashboardInfo(description = "Specify the name of the table that will store the verified email addresses.",
             defaultValue = "\"emailverification_verified_emails\"", isOptional = true)
     private String postgresql_emailverification_verified_emails_table_name = null;
 
+    @EnvName("POSTGRESQL_THIRDPARTY_USERS_TABLE_NAME")
     @JsonProperty
     @NotConflictingWithinUserPool
     @DashboardInfo(description = "Specify the name of the table that will store the thirdparty recipe users.",
             defaultValue = "\"thirdparty_users\"", isOptional = true)
     private String postgresql_thirdparty_users_table_name = null;
 
+    @EnvName("POSTGRESQL_TABLE_SCHEMA")
     @JsonProperty
     @UserPoolProperty
     @DashboardInfo(description = "The schema for tables.", defaultValue = "\"public\"", isOptional = true)
     private String postgresql_table_schema = "public";
 
+    @EnvName("POSTGRESQL_CONNECTION_URI")
     @JsonProperty
     @IgnoreForAnnotationCheck
     @DashboardInfo(
@@ -154,22 +170,26 @@ public class PostgreSQLConfig {
             defaultValue = "null", isOptional = true)
     private String postgresql_connection_uri = null;
 
+    @EnvName("POSTGRESQL_CONNECTION_ATTRIBUTES")
     @ConnectionPoolProperty
     @DashboardInfo(description = "The connection attributes of the PostgreSQL database.",
             defaultValue = "\"allowPublicKeyRetrieval=true\"", isOptional = true)
     private String postgresql_connection_attributes = "allowPublicKeyRetrieval=true";
 
+    @EnvName("POSTGRESQL_CONNECTION_SCHEME")
     @ConnectionPoolProperty
     @DashboardInfo(description = "The scheme of the PostgreSQL database.", defaultValue = "\"postgresql\"",
             isOptional = true)
     private String postgresql_connection_scheme = "postgresql";
 
+    @EnvName("POSTGRESQL_IDLE_CONNECTION_TIMEOUT")
     @JsonProperty
     @ConnectionPoolProperty
     @DashboardInfo(description = "Timeout in milliseconds for the idle connections to be closed.",
             defaultValue = "60000", isOptional = true, isEditable = true)
     private long postgresql_idle_connection_timeout = 60000;
 
+    @EnvName("POSTGRESQL_MINIMUM_IDLE_CONNECTIONS")
     @JsonProperty
     @ConnectionPoolProperty
     @DashboardInfo(
@@ -180,6 +200,9 @@ public class PostgreSQLConfig {
 
     @IgnoreForAnnotationCheck
     boolean isValidAndNormalised = false;
+
+    public PostgreSQLConfig() {
+    }
 
     public static Set<String> getValidFields() {
         PostgreSQLConfig config = new PostgreSQLConfig();

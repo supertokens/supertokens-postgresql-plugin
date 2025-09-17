@@ -7,9 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.1.1]
+
+- Adds otel tracing for db layer
+
 ## [9.1.0]
 
 - Sends hikari logs to opentelemetry
+- Updates config json from env
 
 ## [9.0.4]
 
