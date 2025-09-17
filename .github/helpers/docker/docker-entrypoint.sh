@@ -36,7 +36,7 @@ TEMP_LOCATION_WHEN_READONLY=/lib/supertokens/temp/
 mkdir -p $TEMP_LOCATION_WHEN_READONLY
 
 #required by JNA
-export _JAVA_OPTIONS=-Djava.io.tmpdir=$TEMP_LOCATION_WHEN_READONLY
+export _JAVA_OPTIONS=$_JAVA_OPTIONS:-Djava.io.tmpdir=$TEMP_LOCATION_WHEN_READONLY
 #make sure the CLI knows which config file to pass to the core
 set -- "$@" --with-config="$CONFIG_FILE" --with-temp-dir="$TEMP_LOCATION_WHEN_READONLY" --foreground
 
