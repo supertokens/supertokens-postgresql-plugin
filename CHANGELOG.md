@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.1.1]
+
+- Adds docker support for opentelemetry javaagent
+
 ## [9.1.0]
 
 - Sends hikari logs to opentelemetry
