@@ -4,14 +4,14 @@ RUN apt-get update && apt-get install -y curl wget zip
 
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then \
-        wget -O jre.zip https://builds.openlogic.com/downloadJDK/openlogic-openjdk/21.0.8+9/openlogic-openjdk-21.0.8+9-linux-x64.zip; \
+        wget -O jre.tar.gz https://builds.openlogic.com/downloadJDK/openlogic-openjdk/21.0.8+9/openlogic-openjdk-21.0.8+9-linux-x64.tar.gz; \
     elif [ "$ARCH" = "arm64" ]; then \
         wget -O jre.zip https://builds.openlogic.com/downloadJDK/openlogic-openjdk/21.0.8+9/openlogic-openjdk-21.0.8+9-mac-x64.zip; \
     else \
         echo "Unsupported architecture: $ARCH" && exit 1; \
     fi
-RUN unzip jre.zip
-RUN mv jdk-openlogic-openjdk-21.0.8+9-linux-x64 jre || mv openlogic-openjdk-21.0.8+9-mac-x64/jdk-21.0.8.jdk jre
+RUN unzip jre.zip || tar xvfz jre.tar.gz
+RUN mv openlogic-openjdk-21.0.8+9-linux-x64 jre || mv openlogic-openjdk-21.0.8+9-mac-x64/jdk-21.0.8.jdk jre
 ADD ./cli ./cli
 ADD ./core ./core
 ADD ./plugin-interface ./plugin-interface
