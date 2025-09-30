@@ -11,7 +11,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
         echo "Unsupported architecture: $ARCH" && exit 1; \
     fi
 RUN unzip jre.zip || tar xvfz jre.tar.gz
-RUN mv openlogic-openjdk-21.0.8+9-linux-x64 jre || mv openlogic-openjdk-21.0.8+9-mac-x64/jdk-21.0.8.jdk jre
+RUN mv openlogic-openjdk-21.0.8+9-linux-x64 jre && ls jre || mv openlogic-openjdk-21.0.8+9-mac-x64/jdk-21.0.8.jdk jre && ls jre
 ADD ./cli ./cli
 ADD ./core ./core
 ADD ./plugin-interface ./plugin-interface
