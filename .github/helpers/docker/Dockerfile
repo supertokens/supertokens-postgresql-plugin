@@ -4,14 +4,14 @@ RUN apt-get update && apt-get install -y curl wget zip
 
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then \
-        wget -O jre.tar.gz https://builds.openlogic.com/downloadJDK/openlogic-openjdk/21.0.8+9/openlogic-openjdk-21.0.8+9-linux-x64.tar.gz; \
+        wget -O jre.tar.gz https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8+9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz; \
     elif [ "$ARCH" = "arm64" ]; then \
-        wget -O jre.zip https://builds.openlogic.com/downloadJDK/openlogic-openjdk/21.0.8+9/openlogic-openjdk-21.0.8+9-mac-x64.zip; \
+        wget -O jre.tar.gz https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8+9/OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.8_9.tar.gz; \
     else \
         echo "Unsupported architecture: $ARCH" && exit 1; \
     fi
-RUN unzip jre.zip || tar xvfz jre.tar.gz
-RUN mv openlogic-openjdk-21.0.8+9-linux-x64 jre && ls jre || mv openlogic-openjdk-21.0.8+9-mac-x64/jdk-21.0.8.jdk jre && ls jre
+RUN tar xvfz jre.tar.gz
+RUN mv jdk-21.0.8+9 jre
 ADD ./cli ./cli
 ADD ./core ./core
 ADD ./plugin-interface ./plugin-interface
