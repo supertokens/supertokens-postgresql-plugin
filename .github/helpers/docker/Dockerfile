@@ -4,14 +4,14 @@ RUN apt-get update && apt-get install -y curl wget zip
 
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then \
-        wget -O jre.zip https://github.com/supertokens/jre/raw/refs/heads/master/jre-21.0.7-linux.zip; \
+        wget -O jre.tar.gz https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8+9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz; \
     elif [ "$ARCH" = "arm64" ]; then \
-        wget -O jre.zip https://github.com/supertokens/jre/raw/refs/heads/master/jre-21.0.7-linux-aarch.zip; \
+        wget -O jre.tar.gz https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8+9/OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.8_9.tar.gz; \
     else \
         echo "Unsupported architecture: $ARCH" && exit 1; \
     fi
-RUN unzip jre.zip
-RUN mv jre-21.0.7 jre || mv jre-21.0.7-linux-aarch/jre-21.0.7 jre
+RUN tar xvfz jre.tar.gz
+RUN mv jdk-21.0.8+9 jre
 ADD ./cli ./cli
 ADD ./core ./core
 ADD ./plugin-interface ./plugin-interface
