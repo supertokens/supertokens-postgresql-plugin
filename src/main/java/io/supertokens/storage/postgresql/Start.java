@@ -1074,6 +1074,8 @@ public class Start
             //ignore
         } else if (className.equals(OAuthStorage.class.getName())) {
             /* Since OAuth recipe tables do not store userId we do not add any data to them */
+        } else if (className.equals(SAMLStorage.class.getName())) {
+            //ignore
         } else if (className.equals(ActiveUsersStorage.class.getName())) {
             try {
                 ActiveUsersQueries.updateUserLastActive(this, tenantIdentifier.toAppIdentifier(), userId);
@@ -4441,7 +4443,7 @@ public class Start
         try {
             return SAMLQueries.createOrUpdateSAMLClient(this, tenantIdentifier, samlClient.clientId, samlClient.clientSecret,
                     samlClient.ssoLoginURL, samlClient.redirectURIs.toString(), samlClient.defaultRedirectURI,
-                    samlClient.spEntityId, samlClient.idpEntityId, samlClient.idpSigningCertificate,
+                    samlClient.idpEntityId, samlClient.idpSigningCertificate,
                     samlClient.allowIDPInitiatedLogin, samlClient.enableRequestSigning);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
