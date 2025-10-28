@@ -42,6 +42,7 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.opentelemetry.WithinOtelSpan;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
@@ -850,6 +851,7 @@ public class GeneralQueries {
         }
     }
 
+    @WithinOtelSpan
     public static KeyValueInfo getKeyValue(Start start, TenantIdentifier tenantIdentifier, String key)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT value, created_at_time FROM " + getConfig(start).getKeyValueTable()

@@ -97,6 +97,7 @@ import io.supertokens.pluginInterface.oauth.OAuthStorage;
 import io.supertokens.pluginInterface.oauth.exception.DuplicateOAuthLogoutChallengeException;
 import io.supertokens.pluginInterface.oauth.exception.OAuthClientNotFoundException;
 import io.supertokens.pluginInterface.opentelemetry.OtelProvider;
+import io.supertokens.pluginInterface.opentelemetry.WithinOtelSpan;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.PasswordlessImportUser;
@@ -169,6 +170,7 @@ import io.supertokens.storage.postgresql.queries.UserMetadataQueries;
 import io.supertokens.storage.postgresql.queries.UserRolesQueries;
 import io.supertokens.storage.postgresql.queries.WebAuthNQueries;
 
+@WithinOtelSpan
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
