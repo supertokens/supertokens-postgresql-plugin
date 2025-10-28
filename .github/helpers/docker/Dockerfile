@@ -14,6 +14,7 @@ RUN unzip jre.zip
 RUN mv jre-21.0.7 jre || mv jre-21.0.7-linux-aarch/jre-21.0.7 jre
 ADD ./cli ./cli
 ADD ./core ./core
+ADD ./agent ./agent
 ADD ./plugin-interface ./plugin-interface
 ADD ./plugin ./plugin
 ADD ./ee ./ee
