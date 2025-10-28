@@ -16,6 +16,22 @@
 
 package io.supertokens.storage.postgresql.queries;
 
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
+
 import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.RECIPE_ID;
 import io.supertokens.pluginInterface.RowMapper;
@@ -28,32 +44,42 @@ import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
-import io.supertokens.storage.postgresql.Start;
-import io.supertokens.storage.postgresql.config.Config;
-import io.supertokens.storage.postgresql.utils.Utils;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-import org.jetbrains.annotations.TestOnly;
-
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.*;
-import java.util.stream.Collectors;
-
 import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
 import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.CREATING_NEW_TABLE;
 import static io.supertokens.storage.postgresql.ProcessState.getInstance;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.executeBatch;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
-import static io.supertokens.storage.postgresql.queries.EmailPasswordQueries.*;
-import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.*;
+import static io.supertokens.storage.postgresql.queries.EmailPasswordQueries.getQueryToCreatePasswordResetTokenExpiryIndex;
+import static io.supertokens.storage.postgresql.queries.EmailPasswordQueries.getQueryToCreatePasswordResetTokensTable;
+import static io.supertokens.storage.postgresql.queries.EmailPasswordQueries.getQueryToCreateUserIdIndexForPasswordResetTokensTable;
+import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.getQueryToCreateAppIdEmailIndexForEmailVerificationTable;
+import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.getQueryToCreateAppIdIndexForEmailVerificationTable;
+import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.getQueryToCreateEmailVerificationTable;
+import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.getQueryToCreateEmailVerificationTokenExpiryIndex;
+import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.getQueryToCreateEmailVerificationTokensTable;
+import static io.supertokens.storage.postgresql.queries.EmailVerificationQueries.getQueryToCreateTenantIdIndexForEmailVerificationTokensTable;
 import static io.supertokens.storage.postgresql.queries.JWTSigningQueries.getQueryToCreateAppIdIndexForJWTSigningTable;
 import static io.supertokens.storage.postgresql.queries.JWTSigningQueries.getQueryToCreateJWTSigningTable;
-import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.*;
-import static io.supertokens.storage.postgresql.queries.SessionQueries.*;
+import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateCodeCreatedAtIndex;
+import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateCodeDeviceIdHashIndex;
+import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateCodesTable;
+import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateDeviceEmailIndex;
+import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateDevicePhoneNumberIndex;
+import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateDevicesTable;
+import static io.supertokens.storage.postgresql.queries.PasswordlessQueries.getQueryToCreateTenantIdIndexForDevicesTable;
+import static io.supertokens.storage.postgresql.queries.SessionQueries.getQueryToCreateAccessTokenSigningKeysTable;
+import static io.supertokens.storage.postgresql.queries.SessionQueries.getQueryToCreateAppIdIndexForAccessTokenSigningKeysTable;
+import static io.supertokens.storage.postgresql.queries.SessionQueries.getQueryToCreateSessionAppIdUserIdIndex;
+import static io.supertokens.storage.postgresql.queries.SessionQueries.getQueryToCreateSessionExpiryIndex;
+import static io.supertokens.storage.postgresql.queries.SessionQueries.getQueryToCreateSessionInfoTable;
+import static io.supertokens.storage.postgresql.queries.SessionQueries.getQueryToCreateTenantIdIndexForSessionInfoTable;
 import static io.supertokens.storage.postgresql.queries.UserMetadataQueries.getQueryToCreateAppIdIndexForUserMetadataTable;
 import static io.supertokens.storage.postgresql.queries.UserMetadataQueries.getQueryToCreateUserMetadataTable;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 public class GeneralQueries {
 
@@ -669,6 +695,31 @@ public class GeneralQueries {
                     update(start, WebAuthNQueries.getQueryToCreateWebAuthNAccountRecoveryTokenExpiresAtIndex(start), NO_OP_SETTER);
                 }
 
+                // SAML tables
+                if (!doesTableExists(start, con, Config.getConfig(start).getSAMLClientsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, SAMLQueries.getQueryToCreateSAMLClientsTable(start), NO_OP_SETTER);
+
+                    // indexes
+                    update(con, SAMLQueries.getQueryToCreateSAMLClientsAppIdTenantIdIndex(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, con, Config.getConfig(start).getSAMLRelayStateTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, SAMLQueries.getQueryToCreateSAMLRelayStateTable(start), NO_OP_SETTER);
+
+                    // indexes
+                    update(con, SAMLQueries.getQueryToCreateSAMLRelayStateAppIdTenantIdIndex(start), NO_OP_SETTER);
+                }
+
+                if (!doesTableExists(start, con, Config.getConfig(start).getSAMLClaimsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, SAMLQueries.getQueryToCreateSAMLClaimsTable(start), NO_OP_SETTER);
+
+                    // indexes
+                    update(con, SAMLQueries.getQueryToCreateSAMLClaimsAppIdTenantIdIndex(start), NO_OP_SETTER);
+                }
+
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
@@ -765,7 +816,10 @@ public class GeneralQueries {
                     + getConfig(start).getWebAuthNGeneratedOptionsTable() + ","
                     + getConfig(start).getWebAuthNUserToTenantTable() + ","
                     + getConfig(start).getWebAuthNUsersTable() + ","
-                    + getConfig(start).getWebAuthNAccountRecoveryTokenTable();
+                    + getConfig(start).getWebAuthNAccountRecoveryTokenTable() + ","
+                    + getConfig(start).getSAMLClaimsTable() + ","
+                    + getConfig(start).getSAMLRelayStateTable() + ","
+                    + getConfig(start).getSAMLClientsTable();
 
             update(start, DROP_QUERY, NO_OP_SETTER);
         }

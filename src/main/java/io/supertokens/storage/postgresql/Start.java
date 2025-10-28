@@ -17,11 +17,39 @@
 
 package io.supertokens.storage.postgresql;
 
-import ch.qos.logback.classic.Logger;
+import java.lang.reflect.Field;
+import java.sql.BatchUpdateException;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.SQLTransactionRollbackException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import javax.annotation.Nonnull;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.ServerErrorMessage;
+import org.slf4j.LoggerFactory;
+
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.zaxxer.hikari.pool.HikariPool;
-import io.supertokens.pluginInterface.*;
+
+import ch.qos.logback.classic.Logger;
+import io.supertokens.pluginInterface.ActiveUsersSQLStorage;
+import io.supertokens.pluginInterface.ActiveUsersStorage;
+import io.supertokens.pluginInterface.ConfigFieldInfo;
+import io.supertokens.pluginInterface.KeyValueInfo;
+import io.supertokens.pluginInterface.LOG_LEVEL;
+import io.supertokens.pluginInterface.RECIPE_ID;
+import io.supertokens.pluginInterface.STORAGE_TYPE;
+import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
 import io.supertokens.pluginInterface.authRecipe.sqlStorage.AuthRecipeSQLStorage;
@@ -72,8 +100,16 @@ import io.supertokens.pluginInterface.opentelemetry.OtelProvider;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.PasswordlessImportUser;
-import io.supertokens.pluginInterface.passwordless.exception.*;
+import io.supertokens.pluginInterface.passwordless.exception.DuplicateCodeIdException;
+import io.supertokens.pluginInterface.passwordless.exception.DuplicateDeviceIdHashException;
+import io.supertokens.pluginInterface.passwordless.exception.DuplicateLinkCodeHashException;
+import io.supertokens.pluginInterface.passwordless.exception.DuplicatePhoneNumberException;
+import io.supertokens.pluginInterface.passwordless.exception.UnknownDeviceIdHash;
 import io.supertokens.pluginInterface.passwordless.sqlStorage.PasswordlessSQLStorage;
+import io.supertokens.pluginInterface.saml.SAMLClaimsInfo;
+import io.supertokens.pluginInterface.saml.SAMLClient;
+import io.supertokens.pluginInterface.saml.SAMLRelayStateInfo;
+import io.supertokens.pluginInterface.saml.SAMLStorage;
 import io.supertokens.pluginInterface.session.SessionInfo;
 import io.supertokens.pluginInterface.session.SessionStorage;
 import io.supertokens.pluginInterface.session.sqlStorage.SessionSQLStorage;
@@ -103,36 +139,42 @@ import io.supertokens.pluginInterface.userroles.sqlStorage.UserRolesSQLStorage;
 import io.supertokens.pluginInterface.webauthn.AccountRecoveryTokenInfo;
 import io.supertokens.pluginInterface.webauthn.WebAuthNOptions;
 import io.supertokens.pluginInterface.webauthn.WebAuthNStoredCredential;
-import io.supertokens.pluginInterface.webauthn.exceptions.*;
+import io.supertokens.pluginInterface.webauthn.exceptions.DuplicateOptionsIdException;
+import io.supertokens.pluginInterface.webauthn.exceptions.DuplicateRecoverAccountTokenException;
+import io.supertokens.pluginInterface.webauthn.exceptions.DuplicateUserEmailException;
+import io.supertokens.pluginInterface.webauthn.exceptions.WebauthNCredentialNotExistsException;
+import io.supertokens.pluginInterface.webauthn.exceptions.WebauthNOptionsNotExistsException;
 import io.supertokens.pluginInterface.webauthn.slqStorage.WebAuthNSQLStorage;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import io.supertokens.storage.postgresql.annotations.EnvName;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storage.postgresql.output.Logging;
-import io.supertokens.storage.postgresql.queries.*;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-import org.jetbrains.annotations.TestOnly;
-import org.postgresql.util.PSQLException;
-import org.postgresql.util.ServerErrorMessage;
-import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nonnull;
-import java.lang.reflect.Field;
-import java.sql.BatchUpdateException;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.sql.SQLTransactionRollbackException;
-import java.util.*;
-
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+import io.supertokens.storage.postgresql.queries.ActiveUsersQueries;
+import io.supertokens.storage.postgresql.queries.BulkImportQueries;
+import io.supertokens.storage.postgresql.queries.DashboardQueries;
+import io.supertokens.storage.postgresql.queries.EmailPasswordQueries;
+import io.supertokens.storage.postgresql.queries.EmailVerificationQueries;
+import io.supertokens.storage.postgresql.queries.GeneralQueries;
+import io.supertokens.storage.postgresql.queries.JWTSigningQueries;
+import io.supertokens.storage.postgresql.queries.MultitenancyQueries;
+import io.supertokens.storage.postgresql.queries.OAuthQueries;
+import io.supertokens.storage.postgresql.queries.PasswordlessQueries;
+import io.supertokens.storage.postgresql.queries.SAMLQueries;
+import io.supertokens.storage.postgresql.queries.SessionQueries;
+import io.supertokens.storage.postgresql.queries.TOTPQueries;
+import io.supertokens.storage.postgresql.queries.ThirdPartyQueries;
+import io.supertokens.storage.postgresql.queries.UserIdMappingQueries;
+import io.supertokens.storage.postgresql.queries.UserMetadataQueries;
+import io.supertokens.storage.postgresql.queries.UserRolesQueries;
+import io.supertokens.storage.postgresql.queries.WebAuthNQueries;
 
 public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
         UserIdMappingSQLStorage, MultitenancyStorage, MultitenancySQLStorage, DashboardSQLStorage, TOTPSQLStorage,
         ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage, OAuthStorage, BulkImportSQLStorage,
-        WebAuthNSQLStorage {
+        WebAuthNSQLStorage, SAMLStorage {
 
     // these configs are protected from being modified / viewed by the dev using the SuperTokens
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
@@ -4386,6 +4428,100 @@ public class Start
     public void deleteExpiredGeneratedOptions() throws StorageQueryException {
         try {
             WebAuthNQueries.deleteExpiredGeneratedOptions(this);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public SAMLClient createOrUpdateSAMLClient(TenantIdentifier tenantIdentifier, SAMLClient samlClient)
+            throws StorageQueryException {
+        try {
+            return SAMLQueries.createOrUpdateSAMLClient(this, tenantIdentifier, samlClient.clientId, samlClient.clientSecret,
+                    samlClient.ssoLoginURL, samlClient.redirectURIs.toString(), samlClient.defaultRedirectURI,
+                    samlClient.spEntityId, samlClient.idpEntityId, samlClient.idpSigningCertificate,
+                    samlClient.allowIDPInitiatedLogin, samlClient.enableRequestSigning);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean removeSAMLClient(TenantIdentifier tenantIdentifier, String clientId) throws StorageQueryException {
+        try {
+            return SAMLQueries.removeSAMLClient(this, tenantIdentifier, clientId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public SAMLClient getSAMLClient(TenantIdentifier tenantIdentifier, String clientId) throws StorageQueryException {
+        try {
+            return SAMLQueries.getSAMLClient(this, tenantIdentifier, clientId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public SAMLClient getSAMLClientByIDPEntityId(TenantIdentifier tenantIdentifier, String idpEntityId) throws StorageQueryException {
+        try {
+            return SAMLQueries.getSAMLClientByIDPEntityId(this, tenantIdentifier, idpEntityId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public List<SAMLClient> getSAMLClients(TenantIdentifier tenantIdentifier) throws StorageQueryException {
+        try {
+            return SAMLQueries.getSAMLClients(this, tenantIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void saveRelayStateInfo(TenantIdentifier tenantIdentifier, SAMLRelayStateInfo relayStateInfo) throws StorageQueryException {
+        try {
+            SAMLQueries.saveRelayStateInfo(this, tenantIdentifier, relayStateInfo.relayState, relayStateInfo.clientId, relayStateInfo.state, relayStateInfo.redirectURI);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public SAMLRelayStateInfo getRelayStateInfo(TenantIdentifier tenantIdentifier, String relayState) throws StorageQueryException {
+        try {
+            return SAMLQueries.getRelayStateInfo(this, tenantIdentifier, relayState);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void saveSAMLClaims(TenantIdentifier tenantIdentifier, String clientId, String code, JsonObject claims) throws StorageQueryException {
+        try {
+            SAMLQueries.saveSAMLClaims(this, tenantIdentifier, clientId, code, claims.toString());
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public SAMLClaimsInfo getSAMLClaimsAndRemoveCode(TenantIdentifier tenantIdentifier, String code) throws StorageQueryException {
+        try {
+            return SAMLQueries.getSAMLClaimsAndRemoveCode(this, tenantIdentifier, code);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void removeExpiredSAMLCodesAndRelayStates() throws StorageQueryException {
+        try {
+            SAMLQueries.removeExpiredSAMLCodesAndRelayStates(this);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
