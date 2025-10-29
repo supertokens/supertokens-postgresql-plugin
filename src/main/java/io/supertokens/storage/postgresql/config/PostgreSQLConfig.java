@@ -496,6 +496,12 @@ public class PostgreSQLConfig {
 
     public String getWebAuthNAccountRecoveryTokenTable() { return   addSchemaAndPrefixToTableName("webauthn_account_recovery_tokens"); }
 
+    public String getSAMLClientsTable() { return addSchemaAndPrefixToTableName("saml_clients"); }
+
+    public String getSAMLRelayStateTable() { return addSchemaAndPrefixToTableName("saml_relay_state"); }
+
+    public String getSAMLClaimsTable() { return addSchemaAndPrefixToTableName("saml_claims"); }
+
     public String getBulkImportUsersTable() {
         return addSchemaAndPrefixToTableName("bulk_import_users");
     }
