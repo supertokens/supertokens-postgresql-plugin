@@ -57,6 +57,8 @@ public class SAMLQueries {
                 + "updated_at BIGINT NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
                 + " PRIMARY KEY(app_id, tenant_id, client_id),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "idp_entity_id", "key")
+                + " UNIQUE (app_id, tenant_id, idp_entity_id),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "app_id", "fkey") + " "
                 + "FOREIGN KEY(app_id) "
                 + "REFERENCES " + Config.getConfig(start).getAppsTable() + " (app_id) ON DELETE CASCADE,"

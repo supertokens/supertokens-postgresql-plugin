@@ -4439,13 +4439,21 @@ public class Start
 
     @Override
     public SAMLClient createOrUpdateSAMLClient(TenantIdentifier tenantIdentifier, SAMLClient samlClient)
-            throws StorageQueryException {
+            throws StorageQueryException, io.supertokens.pluginInterface.saml.exception.DuplicateEntityIdException {
         try {
             return SAMLQueries.createOrUpdateSAMLClient(this, tenantIdentifier, samlClient.clientId, samlClient.clientSecret,
                     samlClient.ssoLoginURL, samlClient.redirectURIs.toString(), samlClient.defaultRedirectURI,
                     samlClient.idpEntityId, samlClient.idpSigningCertificate,
                     samlClient.allowIDPInitiatedLogin, samlClient.enableRequestSigning);
         } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isUniqueConstraintError(serverMessage, config.getSAMLClientsTable(), "idp_entity_id")) {
+                    throw new io.supertokens.pluginInterface.saml.exception.DuplicateEntityIdException();
+                }
+            }
             throw new StorageQueryException(e);
         }
     }
