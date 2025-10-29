@@ -4538,4 +4538,13 @@ public class Start
             throw new StorageQueryException(e);
         }
     }
+
+    @Override
+    public int countSAMLClients(TenantIdentifier tenantIdentifier) throws StorageQueryException {
+        try {
+            return SAMLQueries.countSAMLClients(this, tenantIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
 }
