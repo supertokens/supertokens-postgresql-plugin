@@ -516,7 +516,7 @@ public class DeadlockTest {
                     t1Failed.set(false);
 
                     return null;
-                }, TransactionIsolationLevel.SERIALIZABLE);
+                }, TransactionIsolationLevel.READ_COMMITTED);
             } catch (StorageQueryException | StorageTransactionLogicException e) {
                 // This is expected because of "could not serialize access"
                 t1Failed.set(true);
