@@ -6,6 +6,8 @@ version = "9.3.0"
 
 repositories {
     mavenCentral()
+
+    maven { url 'https://build.shibboleth.net/nexus/content/repositories/releases/' }
 }
 
 dependencies {
