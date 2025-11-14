@@ -44,6 +44,7 @@ public class BulkImportProxyStorage extends Start {
         if (this.connection == null) {
             Connection con = ConnectionPool.getConnectionForProxyStorage(this);
             this.connection = new BulkImportProxyConnection(con);
+            connection.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
             connection.setAutoCommit(false);
         }
         return this.connection;
