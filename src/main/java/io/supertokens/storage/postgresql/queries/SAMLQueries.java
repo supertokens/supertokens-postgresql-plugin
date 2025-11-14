@@ -139,7 +139,7 @@ public class SAMLQueries {
     }
 
     public static void saveRelayStateInfo(Start start, TenantIdentifier tenantIdentifier,
-                                          String relayState, String clientId, String state, String redirectURI)
+                                          String relayState, String clientId, String state, String redirectURI, long relayStateValidity)
             throws StorageQueryException, SQLException {
         String QUERY = "INSERT INTO " + getConfig(start).getSAMLRelayStateTable()
                 + "(app_id, tenant_id, relay_state, client_id, state, redirect_uri, created_at, expires_at)"
@@ -154,7 +154,7 @@ public class SAMLQueries {
             pst.setString(6, redirectURI);
             long now = System.currentTimeMillis();
             pst.setLong(7, now);
-            pst.setLong(8, now + 300000);
+            pst.setLong(8, now + relayStateValidity);
         });
     }
 
@@ -181,7 +181,7 @@ public class SAMLQueries {
         });
     }
 
-    public static void saveSAMLClaims(Start start, TenantIdentifier tenantIdentifier, String clientId, String code, String claimsJson)
+    public static void saveSAMLClaims(Start start, TenantIdentifier tenantIdentifier, String clientId, String code, String claimsJson, long claimsValidity)
             throws StorageQueryException, SQLException {
         String QUERY = "INSERT INTO " + getConfig(start).getSAMLClaimsTable()
                 + "(app_id, tenant_id, client_id, code, claims, created_at, expires_at)"
@@ -195,7 +195,7 @@ public class SAMLQueries {
             pst.setString(5, claimsJson);
             long now = System.currentTimeMillis();
             pst.setLong(6, now);
-            pst.setLong(7, now + 300000);
+            pst.setLong(7, now + claimsValidity);
         });
     }
 
