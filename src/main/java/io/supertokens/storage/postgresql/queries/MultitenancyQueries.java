@@ -22,6 +22,7 @@ import io.supertokens.pluginInterface.multitenancy.TenantConfig;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.multitenancy.ThirdPartyConfig;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
+import io.supertokens.pluginInterface.sqlStorage.SQLStorage;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.queries.multitenancy.MfaSqlHelper;
@@ -269,7 +270,7 @@ public class MultitenancyQueries {
             }
 
             return null;
-        });
+        }, SQLStorage.TransactionIsolationLevel.SERIALIZABLE);
     }
 
     public static TenantConfig[] getAllTenants(Start start) throws StorageQueryException {
