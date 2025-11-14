@@ -265,7 +265,9 @@ public class DeadlockTest {
         assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
-        assertNotNull(process
+
+        // Deadlock doesn't occur with READ_COMMITTED
+        assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
@@ -430,7 +432,9 @@ public class DeadlockTest {
         // but t2 (update) should fail because of "could not serialize access"
         assertTrue(!t1Failed.get() && !t2Failed.get());
         assert (t1State.get().equals("commit") && t2State.get().equals("commit"));
-        assertNotNull(process.checkOrWaitForEventInPlugin(
+
+        // Deadlock doesn't occur with READ_COMMITTED
+        assertNull(process.checkOrWaitForEventInPlugin(
                 io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
         process.kill();
@@ -597,7 +601,9 @@ public class DeadlockTest {
         // but t2 (insert) should fail because of "could not serialize access"
         assertTrue(!t1Failed.get() && t2Failed.get());
         assert (t1State.get().equals("commit") && t2State.get().equals("query"));
-        assertNotNull(process
+
+        // Deadlock doesn't occur anymore with READ_COMMITTED
+        assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND,
                         1000));
@@ -647,7 +653,9 @@ public class DeadlockTest {
         assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
-        assertNotNull(process
+
+        // Deadlock doesn't occur with READ_COMMITTED
+        assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
@@ -692,7 +700,8 @@ public class DeadlockTest {
         assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
-        assertNotNull(process
+        // No deadlock happens now with READ_COMMITTED
+        assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
