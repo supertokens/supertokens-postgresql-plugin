@@ -459,6 +459,10 @@ public class Start
             throw e;
         } finally {
             if (con != null) {
+                con.setAutoCommit(true);
+                if (defaultTransactionIsolation != null) {
+                    con.setTransactionIsolation(defaultTransactionIsolation);
+                }
                 con.close();
             }
         }

@@ -54,7 +54,6 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         HikariConfig config = new HikariConfig();
         PostgreSQLConfig userConfig = Config.getConfig(start);
         config.setDriverClassName("org.postgresql.Driver");
-        config.setTransactionIsolation("TRANSACTION_SERIALIZABLE");
 
         String scheme = userConfig.getConnectionScheme();
 
