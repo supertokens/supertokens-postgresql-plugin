@@ -130,9 +130,7 @@ public class BulkImportProxyConnection implements Connection {
 
     @Override
     public void setTransactionIsolation(int level) throws SQLException {
-        if (level != Connection.TRANSACTION_READ_COMMITTED) {
-            this.con.setTransactionIsolation(level);
-        }
+        this.con.setTransactionIsolation(level);
     }
 
     @Override

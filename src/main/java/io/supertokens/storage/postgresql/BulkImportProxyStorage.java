@@ -16,16 +16,16 @@
 
 package io.supertokens.storage.postgresql;
 
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.List;
+
 import io.supertokens.pluginInterface.exceptions.DbInitException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
-
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.List;
 
 
 /**

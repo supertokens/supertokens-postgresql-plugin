@@ -342,7 +342,7 @@ public class Start
     @Override
     public <T> T startTransaction(TransactionLogic<T> logic)
             throws StorageTransactionLogicException, StorageQueryException {
-        return startTransaction(logic, TransactionIsolationLevel.READ_COMMITTED);
+        return startTransaction(logic, TransactionIsolationLevel.SERIALIZABLE);
     }
 
     @Override
@@ -431,7 +431,7 @@ public class Start
         try {
             con = ConnectionPool.getConnection(this);
             defaultTransactionIsolation = con.getTransactionIsolation();
-            int libIsolationLevel = Connection.TRANSACTION_READ_COMMITTED;
+            int libIsolationLevel = Connection.TRANSACTION_SERIALIZABLE;
             switch (isolationLevel) {
                 case SERIALIZABLE:
                     libIsolationLevel = Connection.TRANSACTION_SERIALIZABLE;
@@ -449,9 +449,7 @@ public class Start
                     libIsolationLevel = Connection.TRANSACTION_NONE;
                     break;
             }
-            if (libIsolationLevel != Connection.TRANSACTION_READ_COMMITTED) {
-                con.setTransactionIsolation(libIsolationLevel);
-            }
+            con.setTransactionIsolation(libIsolationLevel);
             con.setAutoCommit(false);
             return logic.mainLogicAndCommit(new TransactionConnection(con));
         } catch (Exception e) {
