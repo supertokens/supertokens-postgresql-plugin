@@ -519,7 +519,7 @@ public class DeadlockTest {
                     t1Failed.set(false);
 
                     return null;
-                }/*, TransactionIsolationLevel.READ_COMMITTED */);
+                }, SQLStorage.TransactionIsolationLevel.SERIALIZABLE);
             } catch (StorageQueryException | StorageTransactionLogicException e) {
                 // This is expected because of "could not serialize access"
                 t1Failed.set(true);
@@ -652,7 +652,7 @@ public class DeadlockTest {
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
 
-        assertNull(process
+        assertNotNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
