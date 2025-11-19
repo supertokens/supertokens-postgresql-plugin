@@ -17,6 +17,25 @@
 
 package io.supertokens.storage.postgresql.test;
 
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicLongArray;
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.AfterClass;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TestRule;
+
 import io.supertokens.ProcessState;
 import io.supertokens.authRecipe.AuthRecipe;
 import io.supertokens.emailpassword.EmailPassword;
@@ -32,31 +51,13 @@ import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.pluginInterface.sqlStorage.SQLStorage;
-import io.supertokens.pluginInterface.sqlStorage.SQLStorage.TransactionIsolationLevel;
 import io.supertokens.pluginInterface.totp.TOTPDevice;
 import io.supertokens.pluginInterface.totp.TOTPUsedCode;
 import io.supertokens.pluginInterface.totp.exception.UnknownTotpUserIdException;
 import io.supertokens.pluginInterface.totp.exception.UsedCodeAlreadyExistsException;
 import io.supertokens.pluginInterface.totp.sqlStorage.TOTPSQLStorage;
-import io.supertokens.storageLayer.StorageLayer;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TestRule;
-
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicLongArray;
-import java.util.concurrent.atomic.AtomicReference;
-
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
-import static org.junit.Assert.*;
+import io.supertokens.storageLayer.StorageLayer;
 
 public class DeadlockTest {
     @Rule
@@ -265,6 +266,7 @@ public class DeadlockTest {
         assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
+
         assertNotNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
@@ -430,6 +432,7 @@ public class DeadlockTest {
         // but t2 (update) should fail because of "could not serialize access"
         assertTrue(!t1Failed.get() && !t2Failed.get());
         assert (t1State.get().equals("commit") && t2State.get().equals("commit"));
+
         assertNotNull(process.checkOrWaitForEventInPlugin(
                 io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
@@ -516,7 +519,7 @@ public class DeadlockTest {
                     t1Failed.set(false);
 
                     return null;
-                }, TransactionIsolationLevel.SERIALIZABLE);
+                }, SQLStorage.TransactionIsolationLevel.SERIALIZABLE);
             } catch (StorageQueryException | StorageTransactionLogicException e) {
                 // This is expected because of "could not serialize access"
                 t1Failed.set(true);
@@ -597,6 +600,7 @@ public class DeadlockTest {
         // but t2 (insert) should fail because of "could not serialize access"
         assertTrue(!t1Failed.get() && t2Failed.get());
         assert (t1State.get().equals("commit") && t2State.get().equals("query"));
+
         assertNotNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND,
@@ -647,6 +651,7 @@ public class DeadlockTest {
         assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
+
         assertNotNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
