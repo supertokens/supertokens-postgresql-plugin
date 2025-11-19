@@ -55,7 +55,6 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         PostgreSQLConfig userConfig = Config.getConfig(start);
         config.setDriverClassName("org.postgresql.Driver");
         config.setTransactionIsolation("TRANSACTION_SERIALIZABLE");
-        config.setAutoCommit(false);
 
         String scheme = userConfig.getConnectionScheme();
 

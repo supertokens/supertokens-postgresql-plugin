@@ -620,11 +620,12 @@ public class GeneralQueries {
 
                 if (!doesTableExists(start, con, Config.getConfig(start).getBulkImportUsersTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, BulkImportQueries.getQueryToCreateBulkImportUsersTable(start), NO_OP_SETTER);
+                    update(con, BulkImportQueries.getQueryToCreateBulkImportUsersTable(start), NO_OP_SETTER);
+
                     // index:
-                    update(start, BulkImportQueries.getQueryToCreateStatusUpdatedAtIndex(start), NO_OP_SETTER);
-                    update(start, BulkImportQueries.getQueryToCreatePaginationIndex1(start), NO_OP_SETTER);
-                    update(start, BulkImportQueries.getQueryToCreatePaginationIndex2(start), NO_OP_SETTER);
+                    update(con, BulkImportQueries.getQueryToCreateStatusUpdatedAtIndex(start), NO_OP_SETTER);
+                    update(con, BulkImportQueries.getQueryToCreatePaginationIndex1(start), NO_OP_SETTER);
+                    update(con, BulkImportQueries.getQueryToCreatePaginationIndex2(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, con, Config.getConfig(start).getOAuthClientsTable())) {
@@ -688,12 +689,12 @@ public class GeneralQueries {
 
                 if(!doesTableExists(start, con, Config.getConfig(start).getWebAuthNAccountRecoveryTokenTable())){
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(start, WebAuthNQueries.getQueryToCreateWebAuthNAccountRecoveryTokenTable(start), NO_OP_SETTER);
+                    update(con, WebAuthNQueries.getQueryToCreateWebAuthNAccountRecoveryTokenTable(start), NO_OP_SETTER);
 
                     //index
-                    update(start, WebAuthNQueries.getQueryToCreateWebAuthNAccountRecoveryTokenTokenIndex(start), NO_OP_SETTER);
-                    update(start, WebAuthNQueries.getQueryToCreateWebAuthNAccountRecoveryTokenEmailIndex(start), NO_OP_SETTER);
-                    update(start, WebAuthNQueries.getQueryToCreateWebAuthNAccountRecoveryTokenExpiresAtIndex(start), NO_OP_SETTER);
+                    update(con, WebAuthNQueries.getQueryToCreateWebAuthNAccountRecoveryTokenTokenIndex(start), NO_OP_SETTER);
+                    update(con, WebAuthNQueries.getQueryToCreateWebAuthNAccountRecoveryTokenEmailIndex(start), NO_OP_SETTER);
+                    update(con, WebAuthNQueries.getQueryToCreateWebAuthNAccountRecoveryTokenExpiresAtIndex(start), NO_OP_SETTER);
                 }
 
                 // SAML tables
