@@ -875,8 +875,12 @@ public class GeneralQueries {
     public static KeyValueInfo getKeyValue_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier,
                                                        String key)
             throws SQLException, StorageQueryException {
+
+        io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(
+                con, tenantIdentifier.getAppId() + "~" + tenantIdentifier.getTenantId() + "~" + key);
+
         String QUERY = "SELECT value, created_at_time FROM " + getConfig(start).getKeyValueTable()
-                + " WHERE app_id = ? AND tenant_id = ? AND name = ? FOR UPDATE";
+                + " WHERE app_id = ? AND tenant_id = ? AND name = ?";
 
         return execute(con, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());

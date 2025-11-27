@@ -342,7 +342,7 @@ public class Start
     @Override
     public <T> T startTransaction(TransactionLogic<T> logic)
             throws StorageTransactionLogicException, StorageQueryException {
-        return startTransaction(logic, TransactionIsolationLevel.SERIALIZABLE);
+        return startTransaction(logic, TransactionIsolationLevel.READ_COMMITTED);
     }
 
     @Override
@@ -384,6 +384,7 @@ public class Start
                 // We could get here if the new logic hits a false negative,
                 // e.g., in case someone renamed constraints/tables
                 boolean isDeadlockException = actualException instanceof SQLTransactionRollbackException
+                        || actualException instanceof LockFailure
                         || exceptionMessage.toLowerCase().contains("concurrent update")
                         || exceptionMessage.toLowerCase().contains("concurrent delete")
                         || exceptionMessage.toLowerCase().contains("the transaction might succeed if retried") ||
