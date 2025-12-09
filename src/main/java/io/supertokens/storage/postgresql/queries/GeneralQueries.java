@@ -299,8 +299,10 @@ public class GeneralQueries {
                 + "recipe_id VARCHAR(128) NOT NULL,"
                 + "account_info_type VARCHAR(8) NOT NULL,"
                 + "account_info_value TEXT NOT NULL,"
+                + "third_party_id VARCHAR(28),"
+                + "third_party_user_id VARCHAR(256),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
-                + " PRIMARY KEY (app_id, recipe_user_id, tenant_id),"
+                + " PRIMARY KEY (app_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "tenant_id", "fkey")
                 + " FOREIGN KEY(app_id, tenant_id)"
                 + " REFERENCES " + Config.getConfig(start).getTenantsTable() + " (app_id, tenant_id) ON DELETE CASCADE"
@@ -331,7 +333,8 @@ public class GeneralQueries {
 
     static String getQueryToCreateAccountInfoIndexForRecipeUserTenantsTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_account_info ON "
-                + Config.getConfig(start).getRecipeUserTenantsTable() + "(app_id, tenant_id, account_info_type, account_info_value);";
+                + Config.getConfig(start).getRecipeUserTenantsTable()
+                + "(app_id, tenant_id, account_info_type, third_party_id, account_info_value);";
     }
 
     static String getQueryToCreatePrimaryUserIndexForPrimaryUserTenantsTable(Start start) {
@@ -847,7 +850,9 @@ public class GeneralQueries {
                     + getConfig(start).getKeyValueTable() + ","
                     + getConfig(start).getAppIdToUserIdTable() + ","
                     + getConfig(start).getUserIdMappingTable() + ","
+                    + getConfig(start).getRecipeUserTenantsTable() + ","
                     + getConfig(start).getUsersTable() + ","
+                    + getConfig(start).getPrimaryUserTenantsTable() + ","
                     + getConfig(start).getAccessTokenSigningKeysTable() + ","
                     + getConfig(start).getTenantFirstFactorsTable() + ","
                     + getConfig(start).getTenantRequiredSecondaryFactorsTable() + ","

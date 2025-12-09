@@ -17,6 +17,21 @@
 package io.supertokens.storage.postgresql.queries;
 
 
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.jetbrains.annotations.Nullable;
+
+import io.supertokens.pluginInterface.ACCOUNT_INFO_TYPE;
+import static io.supertokens.pluginInterface.RECIPE_ID.WEBAUTHN;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
@@ -27,19 +42,11 @@ import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.webauthn.AccountRecoveryTokenInfo;
 import io.supertokens.pluginInterface.webauthn.WebAuthNOptions;
 import io.supertokens.pluginInterface.webauthn.WebAuthNStoredCredential;
-import io.supertokens.storage.postgresql.Start;
-import io.supertokens.storage.postgresql.utils.Utils;
-import org.jetbrains.annotations.Nullable;
-
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.*;
-
-import static io.supertokens.pluginInterface.RECIPE_ID.WEBAUTHN;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import io.supertokens.storage.postgresql.Start;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 public class WebAuthNQueries {
 
@@ -342,6 +349,22 @@ public class WebAuthNQueries {
                 pst.setString(3, email);
                 pst.setString(4, relyingPartyId);
                 pst.setLong(5, timeJoined);
+            });
+
+            // recipe_user_tenants
+            String insertRecipeUserTenants = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
+                    + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value)"
+                    + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
+
+            update(sqlCon, insertRecipeUserTenants, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, userId);
+                pst.setString(3, tenantIdentifier.getTenantId());
+                pst.setString(4, WEBAUTHN.toString());
+                pst.setString(5, ACCOUNT_INFO_TYPE.EMAIL.toString());
+                pst.setString(6, "");
+                pst.setString(7, "");
+                pst.setString(8, email);
             });
 
         } catch (SQLException throwables) {

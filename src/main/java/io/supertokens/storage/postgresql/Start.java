@@ -1113,6 +1113,8 @@ public class Start
 
                 if (isUniqueConstraintError(serverMessage, config.getEmailPasswordUserToTenantTable(), "email")) {
                     throw new DuplicateEmailException();
+                } else if (isPrimaryKeyError(serverMessage, config.getRecipeUserTenantsTable())) {
+                    throw new DuplicateEmailException();
                 } else if (isPrimaryKeyError(serverMessage, config.getEmailPasswordUsersTable())
                         || isPrimaryKeyError(serverMessage, config.getUsersTable())
                         || isPrimaryKeyError(serverMessage, config.getEmailPasswordUserToTenantTable())
@@ -1564,6 +1566,9 @@ public class Start
 
                 if (isUniqueConstraintError(serverMessage, config.getThirdPartyUserToTenantTable(),
                         "third_party_user_id")) {
+                    throw new DuplicateThirdPartyUserException();
+
+                } else if (isPrimaryKeyError(serverMessage, config.getRecipeUserTenantsTable())) {
                     throw new DuplicateThirdPartyUserException();
 
                 } else if (isPrimaryKeyError(serverMessage, config.getThirdPartyUsersTable())
@@ -2159,6 +2164,16 @@ public class Start
             if (actualException instanceof PSQLException) {
                 PostgreSQLConfig config = Config.getConfig(this);
                 ServerErrorMessage serverMessage = ((PSQLException) actualException).getServerErrorMessage();
+
+                if (isPrimaryKeyError(serverMessage, config.getRecipeUserTenantsTable())) {
+                    // For passwordless, recipe_user_tenants primary key error means duplicate email or phone number
+                    // Determine which one based on what was provided
+                    if (email != null) {
+                        throw new DuplicateEmailException();
+                    } else {
+                        throw new DuplicatePhoneNumberException();
+                    }
+                }
 
                 if (isPrimaryKeyError(serverMessage, config.getPasswordlessUsersTable())
                         || isPrimaryKeyError(serverMessage, config.getUsersTable())
@@ -4215,6 +4230,8 @@ public class Start
                     Logging.error(this, errorMessage.getMessage(), true);
                     Logging.error(this, email, true);
                     throw new DuplicateUserEmailException();
+                } else if (isPrimaryKeyError(errorMessage, config.getRecipeUserTenantsTable())) {
+                    throw new DuplicateUserEmailException();
                 } else if (isPrimaryKeyError(errorMessage, config.getWebAuthNUsersTable())
                         || isPrimaryKeyError(errorMessage, config.getUsersTable())
                         || isPrimaryKeyError(errorMessage, config.getWebAuthNUserToTenantTable())
@@ -4253,6 +4270,8 @@ public class Start
                 PostgreSQLConfig config = Config.getConfig(this);
 
                 if (isUniqueConstraintError(errorMessage, config.getWebAuthNUserToTenantTable(),"email")) {
+                    throw new DuplicateUserEmailException();
+                } else if (isPrimaryKeyError(errorMessage, config.getRecipeUserTenantsTable())) {
                     throw new DuplicateUserEmailException();
                 } else if (isPrimaryKeyError(errorMessage, config.getWebAuthNUsersTable())
                         || isPrimaryKeyError(errorMessage, config.getUsersTable())

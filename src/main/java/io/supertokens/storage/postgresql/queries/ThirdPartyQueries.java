@@ -16,6 +16,20 @@
 
 package io.supertokens.storage.postgresql.queries;
 
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import io.supertokens.pluginInterface.ACCOUNT_INFO_TYPE;
+import static io.supertokens.pluginInterface.RECIPE_ID.THIRD_PARTY;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
@@ -27,19 +41,13 @@ import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.thirdparty.ThirdPartyImportUser;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.executeBatch;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
-import io.supertokens.storage.postgresql.utils.Utils;
-
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.*;
-import java.util.stream.Collectors;
-
-import static io.supertokens.pluginInterface.RECIPE_ID.THIRD_PARTY;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 public class ThirdPartyQueries {
 
@@ -160,6 +168,35 @@ public class ThirdPartyQueries {
                         pst.setString(3, id);
                         pst.setString(4, thirdParty.id);
                         pst.setString(5, thirdParty.userId);
+                    });
+                }
+
+                { // recipe_user_tenants
+                    // Insert row for email
+                    String QUERY = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
+                            + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value)"
+                            + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
+                    update(sqlCon, QUERY, pst -> {
+                        pst.setString(1, tenantIdentifier.getAppId());
+                        pst.setString(2, id);
+                        pst.setString(3, tenantIdentifier.getTenantId());
+                        pst.setString(4, THIRD_PARTY.toString());
+                        pst.setString(5, ACCOUNT_INFO_TYPE.EMAIL.toString());
+                        pst.setString(6, thirdParty.id);
+                        pst.setString(7, thirdParty.userId);
+                        pst.setString(8, email);
+                    });
+
+                    // Insert row for third party id
+                    update(sqlCon, QUERY, pst -> {
+                        pst.setString(1, tenantIdentifier.getAppId());
+                        pst.setString(2, id);
+                        pst.setString(3, tenantIdentifier.getTenantId());
+                        pst.setString(4, THIRD_PARTY.toString());
+                        pst.setString(5, ACCOUNT_INFO_TYPE.THIRD_PARTY.toString());
+                        pst.setString(6, thirdParty.id);
+                        pst.setString(7, thirdParty.userId);
+                        pst.setString(8, thirdParty.userId);
                     });
                 }
 

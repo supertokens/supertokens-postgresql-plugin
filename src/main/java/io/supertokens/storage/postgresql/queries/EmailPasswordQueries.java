@@ -16,6 +16,21 @@
 
 package io.supertokens.storage.postgresql.queries;
 
+import static java.lang.System.currentTimeMillis;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import io.supertokens.pluginInterface.ACCOUNT_INFO_TYPE;
+import static io.supertokens.pluginInterface.RECIPE_ID.EMAIL_PASSWORD;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
@@ -27,20 +42,13 @@ import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicExceptio
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.executeBatch;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
-import io.supertokens.storage.postgresql.utils.Utils;
-
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.*;
-import java.util.stream.Collectors;
-
-import static io.supertokens.pluginInterface.RECIPE_ID.EMAIL_PASSWORD;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
-import static java.lang.System.currentTimeMillis;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 public class EmailPasswordQueries {
     static String getQueryToCreateUsersTable(Start start) {
@@ -331,6 +339,23 @@ public class EmailPasswordQueries {
                         pst.setString(2, tenantIdentifier.getTenantId());
                         pst.setString(3, userId);
                         pst.setString(4, email);
+                    });
+                }
+
+                { // recipe_user_tenants
+                    String QUERY = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
+                            + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value)"
+                            + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
+
+                    update(sqlCon, QUERY, pst -> {
+                        pst.setString(1, tenantIdentifier.getAppId());
+                        pst.setString(2, userId);
+                        pst.setString(3, tenantIdentifier.getTenantId());
+                        pst.setString(4, EMAIL_PASSWORD.toString());
+                        pst.setString(5, ACCOUNT_INFO_TYPE.EMAIL.toString());
+                        pst.setString(6, "");
+                        pst.setString(7, "");
+                        pst.setString(8, email);
                     });
                 }
 

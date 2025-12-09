@@ -16,6 +16,23 @@
 
 package io.supertokens.storage.postgresql.queries;
 
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+
+import io.supertokens.pluginInterface.ACCOUNT_INFO_TYPE;
+import static io.supertokens.pluginInterface.RECIPE_ID.PASSWORDLESS;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
@@ -30,21 +47,13 @@ import io.supertokens.pluginInterface.passwordless.PasswordlessImportUser;
 import io.supertokens.pluginInterface.sqlStorage.SQLStorage.TransactionIsolationLevel;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.executeBatch;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
-import io.supertokens.storage.postgresql.utils.Utils;
-
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.*;
-import java.util.stream.Collectors;
-
-import static io.supertokens.pluginInterface.RECIPE_ID.PASSWORDLESS;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 public class PasswordlessQueries {
     public static String getQueryToCreateUsersTable(Start start) {
@@ -466,6 +475,36 @@ public class PasswordlessQueries {
                         pst.setString(3, id);
                         pst.setString(4, email);
                         pst.setString(5, phoneNumber);
+                    });
+                }
+
+                { // recipe_user_tenants
+                    String accountInfoType;
+                    String accountInfoValue;
+
+                    if (email != null) {
+                        accountInfoType = ACCOUNT_INFO_TYPE.EMAIL.toString();
+                        accountInfoValue = email;
+                    } else if (phoneNumber != null) {
+                        accountInfoType = ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString();
+                        accountInfoValue = phoneNumber;
+                    } else {
+                        throw new IllegalArgumentException("Either email or phoneNumber must be provided");
+                    }
+
+                    String QUERY = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
+                            + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value)"
+                            + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
+
+                    update(sqlCon, QUERY, pst -> {
+                        pst.setString(1, tenantIdentifier.getAppId());
+                        pst.setString(2, id);
+                        pst.setString(3, tenantIdentifier.getTenantId());
+                        pst.setString(4, PASSWORDLESS.toString());
+                        pst.setString(5, accountInfoType);
+                        pst.setString(6, "");
+                        pst.setString(7, "");
+                        pst.setString(8, accountInfoValue);
                     });
                 }
                 UserInfoPartial userInfo = new UserInfoPartial(id, email, phoneNumber, timeJoined);
