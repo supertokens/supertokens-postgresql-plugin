@@ -299,6 +299,10 @@ public class WebAuthNQueries {
         long timeJoined = System.currentTimeMillis();
 
         try {
+            // recipe_user_tenants
+            AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, userId,
+                    WEBAUTHN.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", email);
+
             // app_id_to_user_id
             String insertAppIdToUserId = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
                     + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
@@ -349,22 +353,6 @@ public class WebAuthNQueries {
                 pst.setString(3, email);
                 pst.setString(4, relyingPartyId);
                 pst.setLong(5, timeJoined);
-            });
-
-            // recipe_user_tenants
-            String insertRecipeUserTenants = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
-                    + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value)"
-                    + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
-
-            update(sqlCon, insertRecipeUserTenants, pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, userId);
-                pst.setString(3, tenantIdentifier.getTenantId());
-                pst.setString(4, WEBAUTHN.toString());
-                pst.setString(5, ACCOUNT_INFO_TYPE.EMAIL.toString());
-                pst.setString(6, "");
-                pst.setString(7, "");
-                pst.setString(8, email);
             });
 
         } catch (SQLException throwables) {
