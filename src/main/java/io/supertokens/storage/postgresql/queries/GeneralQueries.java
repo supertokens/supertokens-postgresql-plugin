@@ -288,60 +288,6 @@ public class GeneralQueries {
                 + Config.getConfig(start).getAppIdToUserIdTable() + "(user_id, app_id);";
     }
 
-    static String getQueryToCreateRecipeUserTenantsTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String tableName = Config.getConfig(start).getRecipeUserTenantsTable();
-        // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
-                + "app_id VARCHAR(64) NOT NULL,"
-                + "recipe_user_id CHAR(36) NOT NULL,"
-                + "tenant_id VARCHAR(64) NOT NULL,"
-                + "recipe_id VARCHAR(128) NOT NULL,"
-                + "account_info_type VARCHAR(8) NOT NULL,"
-                + "account_info_value TEXT NOT NULL,"
-                + "third_party_id VARCHAR(28),"
-                + "third_party_user_id VARCHAR(256),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
-                + " PRIMARY KEY (app_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "tenant_id", "fkey")
-                + " FOREIGN KEY(app_id, tenant_id)"
-                + " REFERENCES " + Config.getConfig(start).getTenantsTable() + " (app_id, tenant_id) ON DELETE CASCADE"
-                + ");";
-        // @formatter:on
-    }
-
-    static String getQueryToCreatePrimaryUserTenantsTable(Start start) {
-        String schema = Config.getConfig(start).getTableSchema();
-        String tableName = Config.getConfig(start).getPrimaryUserTenantsTable();
-        // @formatter:off
-        return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
-                + "app_id VARCHAR(64) NOT NULL,"
-                + "tenant_id VARCHAR(64) NOT NULL,"
-                + "account_info_type VARCHAR(8) NOT NULL,"
-                + "account_info_value TEXT NOT NULL,"
-                + "primary_user_id CHAR(36) NOT NULL,"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
-                + " PRIMARY KEY (app_id, tenant_id, account_info_type, account_info_value)"
-                + ");";
-        // @formatter:on
-    }
-
-    static String getQueryToCreateTenantIndexForRecipeUserTenantsTable(Start start) {
-        return "CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_tenant ON "
-                + Config.getConfig(start).getRecipeUserTenantsTable() + "(app_id, tenant_id);";
-    }
-
-    static String getQueryToCreateAccountInfoIndexForRecipeUserTenantsTable(Start start) {
-        return "CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_account_info ON "
-                + Config.getConfig(start).getRecipeUserTenantsTable()
-                + "(app_id, tenant_id, account_info_type, third_party_id, account_info_value);";
-    }
-
-    static String getQueryToCreatePrimaryUserIndexForPrimaryUserTenantsTable(Start start) {
-        return "CREATE INDEX IF NOT EXISTS idx_primary_user_tenants_primary ON "
-                + Config.getConfig(start).getPrimaryUserTenantsTable() + "(app_id, primary_user_id);";
-    }
-
     public static void createTablesIfNotExists(Start start, Connection con) throws SQLException, StorageQueryException {
         int numberOfRetries = 0;
         boolean retry = true;
@@ -780,19 +726,19 @@ public class GeneralQueries {
 
                 if (!doesTableExists(start, con, Config.getConfig(start).getRecipeUserTenantsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(con, getQueryToCreateRecipeUserTenantsTable(start), NO_OP_SETTER);
+                    update(con, AccountInfoQueries.getQueryToCreateRecipeUserTenantsTable(start), NO_OP_SETTER);
 
                     // indexes
-                    update(con, getQueryToCreateTenantIndexForRecipeUserTenantsTable(start), NO_OP_SETTER);
-                    update(con, getQueryToCreateAccountInfoIndexForRecipeUserTenantsTable(start), NO_OP_SETTER);
+                    update(con, AccountInfoQueries.getQueryToCreateTenantIndexForRecipeUserTenantsTable(start), NO_OP_SETTER);
+                    update(con, AccountInfoQueries.getQueryToCreateAccountInfoIndexForRecipeUserTenantsTable(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, con, Config.getConfig(start).getPrimaryUserTenantsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
-                    update(con, getQueryToCreatePrimaryUserTenantsTable(start), NO_OP_SETTER);
+                    update(con, AccountInfoQueries.getQueryToCreatePrimaryUserTenantsTable(start), NO_OP_SETTER);
 
                     // indexes
-                    update(con, getQueryToCreatePrimaryUserIndexForPrimaryUserTenantsTable(start), NO_OP_SETTER);
+                    update(con, AccountInfoQueries.getQueryToCreatePrimaryUserIndexForPrimaryUserTenantsTable(start), NO_OP_SETTER);
                 }
 
             } catch (Exception e) {
@@ -2006,7 +1952,6 @@ public class GeneralQueries {
             // for app_id
             pst.setString(index, appIdentifier.getAppId());
             pst.setString(index+1, appIdentifier.getAppId());
-//            System.out.println(pst);
         }, result -> {
             List<AllAuthRecipeUsersResultHolder> parsedResult = new ArrayList<>();
             while (result.next()) {

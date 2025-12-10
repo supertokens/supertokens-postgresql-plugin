@@ -425,6 +425,24 @@ public class PasswordlessQueries {
         return start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try {
+                { // recipe_user_tenants
+                    ACCOUNT_INFO_TYPE accountInfoType;
+                    String accountInfoValue;
+
+                    if (email != null) {
+                        accountInfoType = ACCOUNT_INFO_TYPE.EMAIL;
+                        accountInfoValue = email;
+                    } else if (phoneNumber != null) {
+                        accountInfoType = ACCOUNT_INFO_TYPE.PHONE_NUMBER;
+                        accountInfoValue = phoneNumber;
+                    } else {
+                        throw new IllegalArgumentException("Either email or phoneNumber must be provided");
+                    }
+
+                    AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
+                            PASSWORDLESS.toString(), accountInfoType, "", "", accountInfoValue);
+                }
+
                 { // app_id_to_user_id
                     String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
                             + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
@@ -478,35 +496,6 @@ public class PasswordlessQueries {
                     });
                 }
 
-                { // recipe_user_tenants
-                    String accountInfoType;
-                    String accountInfoValue;
-
-                    if (email != null) {
-                        accountInfoType = ACCOUNT_INFO_TYPE.EMAIL.toString();
-                        accountInfoValue = email;
-                    } else if (phoneNumber != null) {
-                        accountInfoType = ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString();
-                        accountInfoValue = phoneNumber;
-                    } else {
-                        throw new IllegalArgumentException("Either email or phoneNumber must be provided");
-                    }
-
-                    String QUERY = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
-                            + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value)"
-                            + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
-
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, id);
-                        pst.setString(3, tenantIdentifier.getTenantId());
-                        pst.setString(4, PASSWORDLESS.toString());
-                        pst.setString(5, accountInfoType);
-                        pst.setString(6, "");
-                        pst.setString(7, "");
-                        pst.setString(8, accountInfoValue);
-                    });
-                }
                 UserInfoPartial userInfo = new UserInfoPartial(id, email, phoneNumber, timeJoined);
                 fillUserInfoWithTenantIds_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
                 fillUserInfoWithVerified_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);

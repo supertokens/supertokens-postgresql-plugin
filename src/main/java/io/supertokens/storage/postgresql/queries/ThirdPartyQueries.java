@@ -116,6 +116,17 @@ public class ThirdPartyQueries {
         return start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try {
+                { // recipe_user_tenants
+                    // Insert row for email
+                    AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
+                            THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.EMAIL, thirdParty.id, thirdParty.userId, email);
+
+                    // Insert row for third party id
+                    AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
+                            THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.THIRD_PARTY, thirdParty.id, thirdParty.userId,
+                            thirdParty.userId);
+                }
+
                 { // app_id_to_user_id
                     String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
                             + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
@@ -168,35 +179,6 @@ public class ThirdPartyQueries {
                         pst.setString(3, id);
                         pst.setString(4, thirdParty.id);
                         pst.setString(5, thirdParty.userId);
-                    });
-                }
-
-                { // recipe_user_tenants
-                    // Insert row for email
-                    String QUERY = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
-                            + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value)"
-                            + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, id);
-                        pst.setString(3, tenantIdentifier.getTenantId());
-                        pst.setString(4, THIRD_PARTY.toString());
-                        pst.setString(5, ACCOUNT_INFO_TYPE.EMAIL.toString());
-                        pst.setString(6, thirdParty.id);
-                        pst.setString(7, thirdParty.userId);
-                        pst.setString(8, email);
-                    });
-
-                    // Insert row for third party id
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, id);
-                        pst.setString(3, tenantIdentifier.getTenantId());
-                        pst.setString(4, THIRD_PARTY.toString());
-                        pst.setString(5, ACCOUNT_INFO_TYPE.THIRD_PARTY.toString());
-                        pst.setString(6, thirdParty.id);
-                        pst.setString(7, thirdParty.userId);
-                        pst.setString(8, thirdParty.userId);
                     });
                 }
 

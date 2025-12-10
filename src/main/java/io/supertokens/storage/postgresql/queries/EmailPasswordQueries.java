@@ -289,6 +289,11 @@ public class EmailPasswordQueries {
         return start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try {
+                { // recipe_user_tenants
+                    AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, userId,
+                            EMAIL_PASSWORD.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", email);
+                }
+
                 { // app_id_to_user_id
                     String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
                             + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
@@ -339,23 +344,6 @@ public class EmailPasswordQueries {
                         pst.setString(2, tenantIdentifier.getTenantId());
                         pst.setString(3, userId);
                         pst.setString(4, email);
-                    });
-                }
-
-                { // recipe_user_tenants
-                    String QUERY = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
-                            + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value)"
-                            + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
-
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, userId);
-                        pst.setString(3, tenantIdentifier.getTenantId());
-                        pst.setString(4, EMAIL_PASSWORD.toString());
-                        pst.setString(5, ACCOUNT_INFO_TYPE.EMAIL.toString());
-                        pst.setString(6, "");
-                        pst.setString(7, "");
-                        pst.setString(8, email);
                     });
                 }
 
