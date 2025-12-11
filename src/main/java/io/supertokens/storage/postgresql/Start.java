@@ -30,6 +30,8 @@ import java.util.Set;
 
 import javax.annotation.Nonnull;
 
+import io.supertokens.pluginInterface.authRecipe.exceptions.AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException;
+import io.supertokens.storage.postgresql.queries.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -151,24 +153,6 @@ import io.supertokens.storage.postgresql.annotations.EnvName;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storage.postgresql.output.Logging;
-import io.supertokens.storage.postgresql.queries.ActiveUsersQueries;
-import io.supertokens.storage.postgresql.queries.BulkImportQueries;
-import io.supertokens.storage.postgresql.queries.DashboardQueries;
-import io.supertokens.storage.postgresql.queries.EmailPasswordQueries;
-import io.supertokens.storage.postgresql.queries.EmailVerificationQueries;
-import io.supertokens.storage.postgresql.queries.GeneralQueries;
-import io.supertokens.storage.postgresql.queries.JWTSigningQueries;
-import io.supertokens.storage.postgresql.queries.MultitenancyQueries;
-import io.supertokens.storage.postgresql.queries.OAuthQueries;
-import io.supertokens.storage.postgresql.queries.PasswordlessQueries;
-import io.supertokens.storage.postgresql.queries.SAMLQueries;
-import io.supertokens.storage.postgresql.queries.SessionQueries;
-import io.supertokens.storage.postgresql.queries.TOTPQueries;
-import io.supertokens.storage.postgresql.queries.ThirdPartyQueries;
-import io.supertokens.storage.postgresql.queries.UserIdMappingQueries;
-import io.supertokens.storage.postgresql.queries.UserMetadataQueries;
-import io.supertokens.storage.postgresql.queries.UserRolesQueries;
-import io.supertokens.storage.postgresql.queries.WebAuthNQueries;
 
 @WithinOtelSpan
 public class Start
@@ -3545,6 +3529,7 @@ public class Start
             // we do not bother returning if a row was updated here or not, cause it's happening
             // in a transaction anyway.
             GeneralQueries.makePrimaryUser_Transaction(this, sqlCon, appIdentifier, userId);
+            AccountInfoQueries.addPrimaryUserAccountInfo_Transaction(this, sqlCon, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -3607,6 +3592,17 @@ public class Start
         try {
             Connection sqlCon = (Connection) con.getConnection();
             return GeneralQueries.doesUserIdExist_Transaction(this, sqlCon, appIdentifier, externalUserId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void checkIfLoginMethodCanBecomePrimary_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                               LoginMethod loginMethod)
+            throws AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException, StorageQueryException {
+        try {
+            AccountInfoQueries.checkIfLoginMethodCanBecomePrimary_Transaction(this, con, appIdentifier, loginMethod);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

@@ -18,9 +18,17 @@ package io.supertokens.storage.postgresql.queries;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
 import io.supertokens.pluginInterface.ACCOUNT_INFO_TYPE;
+import io.supertokens.pluginInterface.authRecipe.LoginMethod;
+import io.supertokens.pluginInterface.authRecipe.exceptions.AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException;
+import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -102,5 +110,122 @@ public class AccountInfoQueries {
     static String getQueryToCreatePrimaryUserIndexForPrimaryUserTenantsTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS idx_primary_user_tenants_primary ON "
                 + Config.getConfig(start).getPrimaryUserTenantsTable() + "(app_id, primary_user_id);";
+    }
+
+    public static void addPrimaryUserAccountInfo_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier, String userId) throws
+            StorageQueryException {
+        try {
+            String QUERY = "INSERT INTO " + getConfig(start).getPrimaryUserTenantsTable()
+                    + " (app_id, tenant_id, account_info_type, account_info_value, primary_user_id)"
+                    + " SELECT app_id, tenant_id, account_info_type, account_info_value, ?"
+                    + " FROM " + getConfig(start).getRecipeUserTenantsTable()
+                    + " WHERE app_id = ? AND recipe_user_id = ?";
+
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, userId); // primary_user_id
+                pst.setString(2, appIdentifier.getAppId());
+                pst.setString(3, userId); // recipe_user_id
+            });
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    public static void checkIfLoginMethodCanBecomePrimary_Transaction(Start start, TransactionConnection con, AppIdentifier appIdentifier, LoginMethod loginMethod)
+            throws AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException, StorageQueryException, SQLException {
+        Connection sqlCon = (Connection) con.getConnection();
+        
+        // Build the query dynamically based on which values are not null
+        StringBuilder QUERY = new StringBuilder("SELECT primary_user_id, account_info_type FROM " + getConfig(start).getPrimaryUserTenantsTable());
+        QUERY.append(" WHERE app_id = ? AND tenant_id IN (");
+        
+        // Add placeholders for tenant IDs
+        List<String> tenantIds = new ArrayList<>(loginMethod.tenantIds);
+        for (int i = 0; i < tenantIds.size(); i++) {
+            QUERY.append("?");
+            if (i != tenantIds.size() - 1) {
+                QUERY.append(",");
+            }
+        }
+        QUERY.append(") AND (");
+        
+        // Build OR conditions for account info types
+        List<String> orConditions = new ArrayList<>();
+        List<Object> parameters = new ArrayList<>();
+        
+        // Add app_id parameter
+        parameters.add(appIdentifier.getAppId());
+        
+        // Add tenant_id parameters
+        parameters.addAll(tenantIds);
+        
+        // Email condition
+        if (loginMethod.email != null) {
+            orConditions.add("(account_info_type = ? AND account_info_value = ?)");
+            parameters.add(ACCOUNT_INFO_TYPE.EMAIL.toString());
+            parameters.add(loginMethod.email);
+        }
+        
+        // Phone condition
+        if (loginMethod.phoneNumber != null) {
+            orConditions.add("(account_info_type = ? AND account_info_value = ?)");
+            parameters.add(ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString());
+            parameters.add(loginMethod.phoneNumber);
+        }
+        
+        // Third party condition
+        if (loginMethod.thirdParty != null) {
+            String thirdPartyAccountInfoValue = loginMethod.thirdParty.id + "::" + loginMethod.thirdParty.userId;
+            orConditions.add("(account_info_type = ? AND account_info_value = ?)");
+            parameters.add(ACCOUNT_INFO_TYPE.THIRD_PARTY.toString());
+            parameters.add(thirdPartyAccountInfoValue);
+        }
+        
+        // If no OR conditions, return early (nothing to check)
+        if (orConditions.isEmpty()) {
+            return;
+        }
+        
+        // Join OR conditions
+        for (int i = 0; i < orConditions.size(); i++) {
+            QUERY.append(orConditions.get(i));
+            if (i != orConditions.size() - 1) {
+                QUERY.append(" OR ");
+            }
+        }
+        
+        QUERY.append(") LIMIT 1");
+        
+        String finalQuery = QUERY.toString();
+        
+        // Execute query and check for results
+        String[] result = execute(sqlCon, finalQuery, pst -> {
+            for (int i = 0; i < parameters.size(); i++) {
+                pst.setObject(i + 1, parameters.get(i));
+            }
+        }, rs -> {
+            if (rs.next()) {
+                return new String[]{rs.getString("primary_user_id"), rs.getString("account_info_type")};
+            }
+            return null;
+        });
+        
+        if (result != null) {
+            String primaryUserId = result[0];
+            String accountInfoType = result[1];
+            
+            String message;
+            if (ACCOUNT_INFO_TYPE.EMAIL.toString().equals(accountInfoType)) {
+                message = "This user's email is already associated with another user ID";
+            } else if (ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString().equals(accountInfoType)) {
+                message = "This user's phone number is already associated with another user ID";
+            } else if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(accountInfoType)) {
+                message = "This user's third party login is already associated with another user ID";
+            } else {
+                message = "Account info is already associated with another primary user";
+            }
+            
+            throw new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(primaryUserId, message);
+        }
     }
 }

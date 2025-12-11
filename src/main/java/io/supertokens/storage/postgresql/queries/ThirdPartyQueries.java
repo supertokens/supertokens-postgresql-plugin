@@ -123,8 +123,8 @@ public class ThirdPartyQueries {
 
                     // Insert row for third party id
                     AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
-                            THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.THIRD_PARTY, thirdParty.id, thirdParty.userId,
-                            thirdParty.userId);
+                            THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.THIRD_PARTY, "", "",
+                            thirdParty.id + "::" + thirdParty.userId);
                 }
 
                 { // app_id_to_user_id
