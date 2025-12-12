@@ -3554,6 +3554,7 @@ public class Start
             // we do not bother returning if a row was updated here or not, cause it's happening
             // in a transaction anyway.
             GeneralQueries.linkAccounts_Transaction(this, sqlCon, appIdentifier, recipeUserId, primaryUserId);
+            AccountInfoQueries.reserveAccountInfoForLinking_Transaction(this, sqlCon, appIdentifier, recipeUserId, primaryUserId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -3603,6 +3604,20 @@ public class Start
             throws AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException, StorageQueryException {
         try {
             AccountInfoQueries.checkIfLoginMethodCanBecomePrimary_Transaction(this, con, appIdentifier, loginMethod);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void checkIfLoginMethodsCanBeLinked_Transaction(TransactionConnection con, AppIdentifier appIdentifier,
+                                                           Set<String> tenantIds, Set<String> emails,
+                                                           Set<String> phoneNumbers,
+                                                           Set<LoginMethod.ThirdParty> thirdParties,
+                                                           String primaryUserId)
+            throws AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException, StorageQueryException {
+        try {
+            AccountInfoQueries.checkIfLoginMethodsCanBeLinked_Transaction(this, con, appIdentifier, tenantIds, emails, phoneNumbers, thirdParties, primaryUserId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

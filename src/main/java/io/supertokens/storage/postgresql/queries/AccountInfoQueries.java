@@ -20,6 +20,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import io.supertokens.pluginInterface.ACCOUNT_INFO_TYPE;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
@@ -227,5 +228,224 @@ public class AccountInfoQueries {
             
             throw new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(primaryUserId, message);
         }
+    }
+
+    public static void checkIfLoginMethodsCanBeLinked_Transaction(Start start, TransactionConnection con, AppIdentifier appIdentifier, Set<String> tenantIds, Set<String> emails,
+                                                                  Set<String> phoneNumbers, Set<LoginMethod.ThirdParty> thirdParties, String primaryUserId) throws AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException, StorageQueryException, SQLException {
+        Connection sqlCon = (Connection) con.getConnection();
+        
+        // If no account info to check, return early
+        if ((emails == null || emails.isEmpty()) && 
+            (phoneNumbers == null || phoneNumbers.isEmpty()) && 
+            (thirdParties == null || thirdParties.isEmpty())) {
+            return;
+        }
+        
+        // If no tenant IDs, return early
+        if (tenantIds == null || tenantIds.isEmpty()) {
+            return;
+        }
+        
+        // Build OR conditions for account info types
+        List<String> orConditions = new ArrayList<>();
+        List<Object> parameters = new ArrayList<>();
+        
+        // Add app_id parameter
+        parameters.add(appIdentifier.getAppId());
+        
+        // Add tenant_id parameters
+        List<String> tenantIdsList = new ArrayList<>(tenantIds);
+        parameters.addAll(tenantIdsList);
+        
+        // Add primary_user_id parameter (to exclude)
+        parameters.add(primaryUserId);
+        
+        // Email conditions
+        if (emails != null && !emails.isEmpty()) {
+            StringBuilder emailCondition = new StringBuilder("(account_info_type = ? AND account_info_value IN (");
+            for (int i = 0; i < emails.size(); i++) {
+                emailCondition.append("?");
+                if (i != emails.size() - 1) {
+                    emailCondition.append(",");
+                }
+            }
+            emailCondition.append("))");
+            orConditions.add(emailCondition.toString());
+            parameters.add(ACCOUNT_INFO_TYPE.EMAIL.toString());
+            parameters.addAll(emails);
+        }
+        
+        // Phone number conditions
+        if (phoneNumbers != null && !phoneNumbers.isEmpty()) {
+            StringBuilder phoneCondition = new StringBuilder("(account_info_type = ? AND account_info_value IN (");
+            for (int i = 0; i < phoneNumbers.size(); i++) {
+                phoneCondition.append("?");
+                if (i != phoneNumbers.size() - 1) {
+                    phoneCondition.append(",");
+                }
+            }
+            phoneCondition.append("))");
+            orConditions.add(phoneCondition.toString());
+            parameters.add(ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString());
+            parameters.addAll(phoneNumbers);
+        }
+        
+        // Third party conditions
+        if (thirdParties != null && !thirdParties.isEmpty()) {
+            List<String> thirdPartyValues = new ArrayList<>();
+            for (LoginMethod.ThirdParty tp : thirdParties) {
+                thirdPartyValues.add(tp.id + "::" + tp.userId);
+            }
+            
+            StringBuilder thirdPartyCondition = new StringBuilder("(account_info_type = ? AND account_info_value IN (");
+            for (int i = 0; i < thirdPartyValues.size(); i++) {
+                thirdPartyCondition.append("?");
+                if (i != thirdPartyValues.size() - 1) {
+                    thirdPartyCondition.append(",");
+                }
+            }
+            thirdPartyCondition.append("))");
+            orConditions.add(thirdPartyCondition.toString());
+            parameters.add(ACCOUNT_INFO_TYPE.THIRD_PARTY.toString());
+            parameters.addAll(thirdPartyValues);
+        }
+        
+        // If no OR conditions, return early (shouldn't happen due to early return above)
+        if (orConditions.isEmpty()) {
+            return;
+        }
+        
+        // Build the full query
+        StringBuilder QUERY = new StringBuilder("SELECT primary_user_id, account_info_type, account_info_value FROM ");
+        QUERY.append(getConfig(start).getPrimaryUserTenantsTable());
+        QUERY.append(" WHERE app_id = ? AND tenant_id IN (");
+        for (int i = 0; i < tenantIdsList.size(); i++) {
+            QUERY.append("?");
+            if (i != tenantIdsList.size() - 1) {
+                QUERY.append(",");
+            }
+        }
+        QUERY.append(") AND primary_user_id != ? AND (");
+        
+        // Join OR conditions
+        for (int i = 0; i < orConditions.size(); i++) {
+            QUERY.append(orConditions.get(i));
+            if (i != orConditions.size() - 1) {
+                QUERY.append(" OR ");
+            }
+        }
+        
+        QUERY.append(") LIMIT 1");
+        
+        String finalQuery = QUERY.toString();
+        
+        // Execute query and check for results
+        String[] result = execute(sqlCon, finalQuery, pst -> {
+            for (int i = 0; i < parameters.size(); i++) {
+                pst.setObject(i + 1, parameters.get(i));
+            }
+        }, rs -> {
+            if (rs.next()) {
+                return new String[]{rs.getString("primary_user_id"), rs.getString("account_info_type"), rs.getString("account_info_value")};
+            }
+            return null;
+        });
+        
+        if (result != null) {
+            String conflictingPrimaryUserId = result[0];
+            String accountInfoType = result[1];
+            
+            String message;
+            if (ACCOUNT_INFO_TYPE.EMAIL.toString().equals(accountInfoType)) {
+                message = "This user's email is already associated with another user ID";
+            } else if (ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString().equals(accountInfoType)) {
+                message = "This user's phone number is already associated with another user ID";
+            } else if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(accountInfoType)) {
+                message = "This user's third party login is already associated with another user ID";
+            } else {
+                message = "Account info is already associated with another primary user";
+            }
+            
+            throw new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(conflictingPrimaryUserId, message);
+        }
+    }
+
+    public static void reserveAccountInfoForLinking_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
+                                                                String recipeUserId, String primaryUserId)
+            throws SQLException {
+        /*
+         * When linking, the primary user's tenant set becomes the union of:
+         * - tenants currently associated with the primary user (via primary_user_tenants)
+         * - tenants currently associated with the recipe user (via recipe_user_tenants)
+         *
+         * We reserve account info in primary_user_tenants for the union tenant set by doing two passes:
+         * 1) recipe user's distinct account info x primary user's distinct tenants
+         * 2) primary user's distinct account info x recipe user's distinct tenants
+         *
+         * We must not use ON CONFLICT DO NOTHING. Use INSERT ... SELECT ... WHERE NOT EXISTS.
+         */
+
+        String primaryUserTenantsTable = getConfig(start).getPrimaryUserTenantsTable();
+        String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
+
+        // 1) recipe user's account info -> all tenants of primary user
+        String QUERY_1 = "INSERT INTO " + primaryUserTenantsTable
+                + " (app_id, tenant_id, account_info_type, account_info_value, primary_user_id)"
+                + " SELECT ?, primary_tenants.tenant_id, recipe_ai.account_info_type, recipe_ai.account_info_value, ?"
+                + " FROM ("
+                + "   SELECT DISTINCT tenant_id FROM " + primaryUserTenantsTable
+                + "   WHERE app_id = ? AND primary_user_id = ?"
+                + " ) primary_tenants,"
+                + " ("
+                + "   SELECT DISTINCT account_info_type, account_info_value FROM " + recipeUserTenantsTable
+                + "   WHERE app_id = ? AND recipe_user_id = ?"
+                + " ) recipe_ai"
+                + " WHERE NOT EXISTS ("
+                + "   SELECT 1 FROM " + primaryUserTenantsTable + " p"
+                + "   WHERE p.app_id = ?"
+                + "     AND p.tenant_id = primary_tenants.tenant_id"
+                + "     AND p.account_info_type = recipe_ai.account_info_type"
+                + "     AND p.account_info_value = recipe_ai.account_info_value"
+                + " )";
+
+        update(sqlCon, QUERY_1, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, primaryUserId);
+            pst.setString(3, appIdentifier.getAppId());
+            pst.setString(4, primaryUserId);
+            pst.setString(5, appIdentifier.getAppId());
+            pst.setString(6, recipeUserId);
+            pst.setString(7, appIdentifier.getAppId());
+        });
+
+        // 2) primary user's account info -> all tenants of recipe user
+        String QUERY_2 = "INSERT INTO " + primaryUserTenantsTable
+                + " (app_id, tenant_id, account_info_type, account_info_value, primary_user_id)"
+                + " SELECT ?, recipe_tenants.tenant_id, primary_ai.account_info_type, primary_ai.account_info_value, ?"
+                + " FROM ("
+                + "   SELECT DISTINCT tenant_id FROM " + recipeUserTenantsTable
+                + "   WHERE app_id = ? AND recipe_user_id = ?"
+                + " ) recipe_tenants,"
+                + " ("
+                + "   SELECT DISTINCT account_info_type, account_info_value FROM " + primaryUserTenantsTable
+                + "   WHERE app_id = ? AND primary_user_id = ?"
+                + " ) primary_ai"
+                + " WHERE NOT EXISTS ("
+                + "   SELECT 1 FROM " + primaryUserTenantsTable + " p"
+                + "   WHERE p.app_id = ?"
+                + "     AND p.tenant_id = recipe_tenants.tenant_id"
+                + "     AND p.account_info_type = primary_ai.account_info_type"
+                + "     AND p.account_info_value = primary_ai.account_info_value"
+                + " )";
+
+        update(sqlCon, QUERY_2, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, primaryUserId);
+            pst.setString(3, appIdentifier.getAppId());
+            pst.setString(4, recipeUserId);
+            pst.setString(5, appIdentifier.getAppId());
+            pst.setString(6, primaryUserId);
+            pst.setString(7, appIdentifier.getAppId());
+        });
     }
 }
