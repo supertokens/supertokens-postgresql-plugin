@@ -2913,6 +2913,8 @@ public class Start
                 throw new UnknownUserIdException();
             }
 
+            AccountInfoQueries.addTenantIdToRecipeUser_Transaction(this, sqlCon, tenantIdentifier, userId);
+
             boolean added;
             if (recipeId.equals("emailpassword")) {
                 added = EmailPasswordQueries.addUserIdToTenant_Transaction(this, sqlCon, tenantIdentifier,
@@ -3621,6 +3623,12 @@ public class Start
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
+    }
+
+    @Override
+    public void addTenantIdToPrimaryUser_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
+                                                     String supertokensUserId) throws StorageQueryException {
+        AccountInfoQueries.addTenantIdToPrimaryUser_Transaction(this, con, tenantIdentifier, supertokensUserId);
     }
 
     @Override

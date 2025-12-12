@@ -448,4 +448,80 @@ public class AccountInfoQueries {
             pst.setString(7, appIdentifier.getAppId());
         });
     }
+
+    public static void addTenantIdToRecipeUser_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId) throws StorageQueryException {
+        try {
+            String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
+
+            /*
+             * Duplicate all existing recipe_user_tenants rows for this recipe user into the new tenant.
+             *
+             * If the recipe user is already associated with this tenant (i.e. any row exists for (app_id, tenant_id, recipe_user_id)),
+             * then do nothing.
+             *
+             * NOTE: We intentionally do NOT use "ON CONFLICT DO NOTHING" here because the table's primary key does not include
+             * recipe_user_id, so ON CONFLICT could hide genuine collisions (e.g. account info already belongs to another user).
+             */
+            String QUERY = "INSERT INTO " + recipeUserTenantsTable
+                    + " (app_id, recipe_user_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value)"
+                    + " SELECT DISTINCT r.app_id, r.recipe_user_id, ?, r.recipe_id, r.account_info_type, r.third_party_id, r.third_party_user_id, r.account_info_value"
+                    + " FROM " + recipeUserTenantsTable + " r"
+                    + " WHERE r.app_id = ? AND r.recipe_user_id = ? AND r.tenant_id <> ?"
+                    + "   AND NOT EXISTS ("
+                    + "     SELECT 1 FROM " + recipeUserTenantsTable + " e"
+                    + "     WHERE e.app_id = ? AND e.recipe_user_id = ? AND e.tenant_id = ?"
+                    + "   )";
+
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getTenantId());
+                pst.setString(2, tenantIdentifier.getAppId());
+                pst.setString(3, userId);
+                pst.setString(4, tenantIdentifier.getTenantId());
+                pst.setString(5, tenantIdentifier.getAppId());
+                pst.setString(6, userId);
+                pst.setString(7, tenantIdentifier.getTenantId());
+            });
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    public static void addTenantIdToPrimaryUser_Transaction(Start start, TransactionConnection con, TenantIdentifier tenantIdentifier, String supertokensUserId) throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            String primaryUserTenantsTable = getConfig(start).getPrimaryUserTenantsTable();
+
+            /*
+             * Duplicate all existing primary_user_tenants rows for this primary user into the new tenant.
+             *
+             * If the primary user is already associated with this tenant (i.e. any row exists for (app_id, tenant_id, primary_user_id)),
+             * then do nothing.
+             *
+             * NOTE: We intentionally do NOT use "ON CONFLICT DO NOTHING" here because the table's primary key does not include
+             * primary_user_id, so ON CONFLICT could hide genuine collisions (e.g. account info already belongs to another primary user).
+             */
+            String QUERY = "INSERT INTO " + primaryUserTenantsTable
+                    + " (app_id, tenant_id, account_info_type, account_info_value, primary_user_id)"
+                    + " SELECT DISTINCT p.app_id, ?, p.account_info_type, p.account_info_value, ?"
+                    + " FROM " + primaryUserTenantsTable + " p"
+                    + " WHERE p.app_id = ? AND p.primary_user_id = ? AND p.tenant_id <> ?"
+                    + "   AND NOT EXISTS ("
+                    + "     SELECT 1 FROM " + primaryUserTenantsTable + " e"
+                    + "     WHERE e.app_id = ? AND e.primary_user_id = ? AND e.tenant_id = ?"
+                    + "   )";
+
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getTenantId());
+                pst.setString(2, supertokensUserId);
+                pst.setString(3, tenantIdentifier.getAppId());
+                pst.setString(4, supertokensUserId);
+                pst.setString(5, tenantIdentifier.getTenantId());
+                pst.setString(6, tenantIdentifier.getAppId());
+                pst.setString(7, supertokensUserId);
+                pst.setString(8, tenantIdentifier.getTenantId());
+            });
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
 }
