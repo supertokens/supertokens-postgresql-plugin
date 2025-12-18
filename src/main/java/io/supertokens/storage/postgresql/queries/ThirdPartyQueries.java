@@ -116,17 +116,6 @@ public class ThirdPartyQueries {
         return start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try {
-                { // recipe_user_tenants
-                    // Insert row for email
-                    AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
-                            THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.EMAIL, thirdParty.id, thirdParty.userId, email);
-
-                    // Insert row for third party id
-                    AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
-                            THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.THIRD_PARTY, "", "",
-                            thirdParty.id + "::" + thirdParty.userId);
-                }
-
                 { // app_id_to_user_id
                     String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
                             + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
@@ -153,6 +142,17 @@ public class ThirdPartyQueries {
                         pst.setLong(6, timeJoined);
                         pst.setLong(7, timeJoined);
                     });
+                }
+
+                { // recipe_user_tenants
+                    // Insert row for email
+                    AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
+                            THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.EMAIL, thirdParty.id, thirdParty.userId, email);
+
+                    // Insert row for third party id
+                    AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
+                            THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.THIRD_PARTY, "", "",
+                            thirdParty.id + "::" + thirdParty.userId);
                 }
 
                 { // thirdparty_users

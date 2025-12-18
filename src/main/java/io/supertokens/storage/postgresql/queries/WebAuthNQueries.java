@@ -299,10 +299,6 @@ public class WebAuthNQueries {
         long timeJoined = System.currentTimeMillis();
 
         try {
-            // recipe_user_tenants
-            AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, userId,
-                    WEBAUTHN.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", email);
-
             // app_id_to_user_id
             String insertAppIdToUserId = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
                     + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
@@ -328,6 +324,10 @@ public class WebAuthNQueries {
                 pst.setLong(6, timeJoined);
                 pst.setLong(7, timeJoined);
             });
+
+            // recipe_user_tenants
+            AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, userId,
+                    WEBAUTHN.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", email);
 
             // webauthn_user_to_tenant
             String insertWebauthNUsersToTenant =

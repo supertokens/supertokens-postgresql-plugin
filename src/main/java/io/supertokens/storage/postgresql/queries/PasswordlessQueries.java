@@ -425,24 +425,6 @@ public class PasswordlessQueries {
         return start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try {
-                { // recipe_user_tenants
-                    ACCOUNT_INFO_TYPE accountInfoType;
-                    String accountInfoValue;
-
-                    if (email != null) {
-                        accountInfoType = ACCOUNT_INFO_TYPE.EMAIL;
-                        accountInfoValue = email;
-                    } else if (phoneNumber != null) {
-                        accountInfoType = ACCOUNT_INFO_TYPE.PHONE_NUMBER;
-                        accountInfoValue = phoneNumber;
-                    } else {
-                        throw new IllegalArgumentException("Either email or phoneNumber must be provided");
-                    }
-
-                    AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
-                            PASSWORDLESS.toString(), accountInfoType, "", "", accountInfoValue);
-                }
-
                 { // app_id_to_user_id
                     String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
                             + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
@@ -469,6 +451,24 @@ public class PasswordlessQueries {
                         pst.setLong(6, timeJoined);
                         pst.setLong(7, timeJoined);
                     });
+                }
+
+                { // recipe_user_tenants
+                    ACCOUNT_INFO_TYPE accountInfoType;
+                    String accountInfoValue;
+
+                    if (email != null) {
+                        accountInfoType = ACCOUNT_INFO_TYPE.EMAIL;
+                        accountInfoValue = email;
+                    } else if (phoneNumber != null) {
+                        accountInfoType = ACCOUNT_INFO_TYPE.PHONE_NUMBER;
+                        accountInfoValue = phoneNumber;
+                    } else {
+                        throw new IllegalArgumentException("Either email or phoneNumber must be provided");
+                    }
+
+                    AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
+                            PASSWORDLESS.toString(), accountInfoType, "", "", accountInfoValue);
                 }
 
                 { // passwordless_users

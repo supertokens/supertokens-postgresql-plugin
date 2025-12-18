@@ -524,4 +524,84 @@ public class AccountInfoQueries {
             throw new StorageQueryException(e);
         }
     }
+
+    public static void removeAccountInfoForRecipeUser_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId) throws StorageQueryException {
+        try {
+            String QUERY = "DELETE FROM " + getConfig(start).getRecipeUserTenantsTable()
+                    + " WHERE app_id = ? AND tenant_id = ? AND recipe_user_id = ?";
+
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, userId);
+            });
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    public static void removeAccountInfoForPrimaryUserIfNecessary_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId) throws StorageQueryException {
+        try {
+            // If this recipe user is not linked / not a primary user, there is no entry in primary_user_tenants to clean up.
+            String appIdToUserIdTable = getConfig(start).getAppIdToUserIdTable();
+            String[] linkingInfo = execute(sqlCon,
+                    "SELECT primary_or_recipe_user_id, is_linked_or_is_a_primary_user FROM " + appIdToUserIdTable
+                            + " WHERE app_id = ? AND user_id = ?",
+                    pst -> {
+                        pst.setString(1, tenantIdentifier.getAppId());
+                        pst.setString(2, userId);
+                    },
+                    rs -> {
+                        if (!rs.next()) {
+                            return null;
+                        }
+                        return new String[]{
+                                rs.getString("primary_or_recipe_user_id"),
+                                String.valueOf(rs.getBoolean("is_linked_or_is_a_primary_user"))
+                        };
+                    });
+
+            if (linkingInfo == null) {
+                return;
+            }
+
+            String primaryUserId = linkingInfo[0];
+            boolean isLinkedOrPrimary = Boolean.parseBoolean(linkingInfo[1]);
+            if (!isLinkedOrPrimary) {
+                return;
+            }
+
+            /*
+             * Remove account info rows for this primary user in the tenant if (and only if) there is no
+             * linked recipe user (including the primary user itself) that still has the same account info in
+             * recipe_user_tenants for this tenant.
+             */
+            String primaryUserTenantsTable = getConfig(start).getPrimaryUserTenantsTable();
+            String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
+
+            String QUERY = "DELETE FROM " + primaryUserTenantsTable + " p"
+                    + " WHERE p.app_id = ? AND p.tenant_id = ? AND p.primary_user_id = ?"
+                    + "   AND NOT EXISTS ("
+                    + "     SELECT 1"
+                    + "     FROM " + recipeUserTenantsTable + " r"
+                    + "     JOIN " + appIdToUserIdTable + " a"
+                    + "       ON a.app_id = r.app_id AND a.user_id = r.recipe_user_id"
+                    + "     WHERE r.app_id = p.app_id"
+                    + "       AND r.tenant_id = p.tenant_id"
+                    + "       AND r.account_info_type = p.account_info_type"
+                    + "       AND r.account_info_value = p.account_info_value"
+                    + "       AND a.primary_or_recipe_user_id = ?"
+                    + "       AND a.is_linked_or_is_a_primary_user = true"
+                    + "   )";
+
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, primaryUserId);
+                pst.setString(4, primaryUserId);
+            });
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
 }

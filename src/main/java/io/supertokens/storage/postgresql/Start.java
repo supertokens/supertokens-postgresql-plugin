@@ -2985,6 +2985,8 @@ public class Start
                     } else {
                         throw new IllegalStateException("Should never come here!");
                     }
+                    AccountInfoQueries.removeAccountInfoForPrimaryUserIfNecessary_Transaction(this, sqlCon, tenantIdentifier, userId);
+                    AccountInfoQueries.removeAccountInfoForRecipeUser_Transaction(this, sqlCon, tenantIdentifier, userId);
 
                     sqlCon.commit();
                     return removed;
