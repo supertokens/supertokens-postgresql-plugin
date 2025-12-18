@@ -57,8 +57,7 @@ public class AccountInfoQueries {
                         + "   AND NOT EXISTS ("
                         + "     SELECT 1 FROM " + primaryUserTenantsTable + " already"
                         + "     WHERE already.app_id = ? AND already.primary_user_id = ? AND already.tenant_id = ?"
-                        + "   )"
-                        + " LIMIT 1",
+                        + "   )",
                 pst -> {
                     pst.setString(1, tenantIdentifier.getAppId());
                     pst.setString(2, tenantIdentifier.getTenantId());
@@ -71,10 +70,17 @@ public class AccountInfoQueries {
                     pst.setString(9, tenantIdentifier.getTenantId());
                 },
                 rs -> {
-                    if (!rs.next()) {
-                        return null;
+                    String[] firstConflict = null;
+                    while (rs.next()) {
+                        String[] conflict = new String[]{rs.getString("primary_user_id"), rs.getString("account_info_type")};
+                        if (firstConflict == null) {
+                            firstConflict = conflict;
+                        }
+                        if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(conflict[1])) {
+                            return conflict;
+                        }
                     }
-                    return new String[]{rs.getString("primary_user_id"), rs.getString("account_info_type")};
+                    return firstConflict;
                 });
     }
 
@@ -96,8 +102,7 @@ public class AccountInfoQueries {
                         + "   AND NOT EXISTS ("
                         + "     SELECT 1 FROM " + recipeUserTenantsTable + " already"
                         + "     WHERE already.app_id = ? AND already.recipe_user_id = ? AND already.tenant_id = ?"
-                        + "   )"
-                        + " LIMIT 1",
+                        + "   )",
                 pst -> {
                     pst.setString(1, tenantIdentifier.getAppId());
                     pst.setString(2, tenantIdentifier.getTenantId());
@@ -109,7 +114,19 @@ public class AccountInfoQueries {
                     pst.setString(8, userId);
                     pst.setString(9, tenantIdentifier.getTenantId());
                 },
-                rs -> rs.next() ? rs.getString("account_info_type") : null);
+                rs -> {
+                    String firstConflictType = null;
+                    while (rs.next()) {
+                        String conflictType = rs.getString("account_info_type");
+                        if (firstConflictType == null) {
+                            firstConflictType = conflictType;
+                        }
+                        if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(conflictType)) {
+                            return conflictType;
+                        }
+                    }
+                    return firstConflictType;
+                });
     }
 
     private static void throwPrimaryUserTenantsConflict(String[] conflict)
@@ -122,6 +139,10 @@ public class AccountInfoQueries {
         String conflictingPrimaryUserId = conflict[0];
         String accountInfoType = conflict[1];
 
+        if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(accountInfoType)) {
+            throw new AnotherPrimaryUserWithThirdPartyInfoAlreadyExistsException(conflictingPrimaryUserId);
+        }
+
         if (ACCOUNT_INFO_TYPE.EMAIL.toString().equals(accountInfoType)) {
             throw new AnotherPrimaryUserWithEmailAlreadyExistsException(conflictingPrimaryUserId);
         }
@@ -129,24 +150,24 @@ public class AccountInfoQueries {
         if (ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString().equals(accountInfoType)) {
             throw new AnotherPrimaryUserWithPhoneNumberAlreadyExistsException(conflictingPrimaryUserId);
         }
-
-        if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(accountInfoType)) {
-            throw new AnotherPrimaryUserWithThirdPartyInfoAlreadyExistsException(conflictingPrimaryUserId);
-        }
     }
 
     private static void throwRecipeUserTenantsConflict(String accountInfoType)
             throws DuplicateEmailException, DuplicatePhoneNumberException, DuplicateThirdPartyUserException {
+        if (accountInfoType == null) {
+            return;
+        }
+        if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(accountInfoType)) {
+            throw new DuplicateThirdPartyUserException();
+        }
         if (ACCOUNT_INFO_TYPE.EMAIL.toString().equals(accountInfoType)) {
             throw new DuplicateEmailException();
         }
         if (ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString().equals(accountInfoType)) {
             throw new DuplicatePhoneNumberException();
         }
-        if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(accountInfoType)) {
-            throw new DuplicateThirdPartyUserException();
-        }
     }
+
     public static void addRecipeUserAccountInfo_Transaction(Start start, Connection sqlCon,
                                                             TenantIdentifier tenantIdentifier, String userId,
                                                             String recipeId, ACCOUNT_INFO_TYPE accountInfoType,
