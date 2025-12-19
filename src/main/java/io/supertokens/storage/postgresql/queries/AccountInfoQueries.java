@@ -223,7 +223,10 @@ public class AccountInfoQueries {
                 + "account_info_value TEXT NOT NULL,"
                 + "primary_user_id CHAR(36) NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
-                + " PRIMARY KEY (app_id, tenant_id, account_info_type, account_info_value)"
+                + " PRIMARY KEY (app_id, tenant_id, account_info_type, account_info_value),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "app_id", "fkey")
+                + " FOREIGN KEY(app_id)"
+                + " REFERENCES " + Config.getConfig(start).getAppsTable() + " (app_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
     }
