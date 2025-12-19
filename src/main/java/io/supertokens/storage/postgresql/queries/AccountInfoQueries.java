@@ -272,17 +272,21 @@ public class AccountInfoQueries {
         
         // Build the query dynamically based on which values are not null
         StringBuilder QUERY = new StringBuilder("SELECT primary_user_id, account_info_type FROM " + getConfig(start).getPrimaryUserTenantsTable());
-        QUERY.append(" WHERE app_id = ? AND tenant_id IN (");
+        QUERY.append(" WHERE app_id = ?");
         
-        // Add placeholders for tenant IDs
+        // Add placeholders for tenant IDs only if present
         List<String> tenantIds = new ArrayList<>(loginMethod.tenantIds);
-        for (int i = 0; i < tenantIds.size(); i++) {
-            QUERY.append("?");
-            if (i != tenantIds.size() - 1) {
-                QUERY.append(",");
+        if (!tenantIds.isEmpty()) {
+            QUERY.append(" AND tenant_id IN (");
+            for (int i = 0; i < tenantIds.size(); i++) {
+                QUERY.append("?");
+                if (i != tenantIds.size() - 1) {
+                    QUERY.append(",");
+                }
             }
+            QUERY.append(")");
         }
-        QUERY.append(") AND (");
+        QUERY.append(" AND (");
         
         // Build OR conditions for account info types
         List<String> orConditions = new ArrayList<>();
@@ -291,8 +295,10 @@ public class AccountInfoQueries {
         // Add app_id parameter
         parameters.add(appIdentifier.getAppId());
         
-        // Add tenant_id parameters
-        parameters.addAll(tenantIds);
+        // Add tenant_id parameters only if we add tenant_id filter to the query
+        if (!tenantIds.isEmpty()) {
+            parameters.addAll(tenantIds);
+        }
         
         // Email condition
         if (loginMethod.email != null) {
@@ -375,11 +381,6 @@ public class AccountInfoQueries {
             return;
         }
         
-        // If no tenant IDs, return early
-        if (tenantIds == null || tenantIds.isEmpty()) {
-            return;
-        }
-        
         // Build OR conditions for account info types
         List<String> orConditions = new ArrayList<>();
         List<Object> parameters = new ArrayList<>();
@@ -387,9 +388,11 @@ public class AccountInfoQueries {
         // Add app_id parameter
         parameters.add(appIdentifier.getAppId());
         
-        // Add tenant_id parameters
-        List<String> tenantIdsList = new ArrayList<>(tenantIds);
-        parameters.addAll(tenantIdsList);
+        List<String> tenantIdsList = tenantIds == null ? new ArrayList<>() : new ArrayList<>(tenantIds);
+        // Add tenant_id parameters only if we add tenant_id filter to the query
+        if (!tenantIdsList.isEmpty()) {
+            parameters.addAll(tenantIdsList);
+        }
         
         // Add primary_user_id parameter (to exclude)
         parameters.add(primaryUserId);
@@ -452,14 +455,18 @@ public class AccountInfoQueries {
         // Build the full query
         StringBuilder QUERY = new StringBuilder("SELECT primary_user_id, account_info_type, account_info_value FROM ");
         QUERY.append(getConfig(start).getPrimaryUserTenantsTable());
-        QUERY.append(" WHERE app_id = ? AND tenant_id IN (");
-        for (int i = 0; i < tenantIdsList.size(); i++) {
-            QUERY.append("?");
-            if (i != tenantIdsList.size() - 1) {
-                QUERY.append(",");
+        QUERY.append(" WHERE app_id = ?");
+        if (!tenantIdsList.isEmpty()) {
+            QUERY.append(" AND tenant_id IN (");
+            for (int i = 0; i < tenantIdsList.size(); i++) {
+                QUERY.append("?");
+                if (i != tenantIdsList.size() - 1) {
+                    QUERY.append(",");
+                }
             }
+            QUERY.append(")");
         }
-        QUERY.append(") AND primary_user_id != ? AND (");
+        QUERY.append(" AND primary_user_id != ? AND (");
         
         // Join OR conditions
         for (int i = 0; i < orConditions.size(); i++) {
@@ -735,7 +742,8 @@ public class AccountInfoQueries {
             String primaryUserTenantsTable = getConfig(start).getPrimaryUserTenantsTable();
             String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
 
-            String QUERY = "DELETE FROM " + primaryUserTenantsTable + " p"
+            // 1. Remove account info that is not contributed by any other linked user.
+            String QUERY_1 = "DELETE FROM " + primaryUserTenantsTable + " p"
                     + " WHERE p.app_id = ? AND p.tenant_id = ? AND p.primary_user_id = ?"
                     + "   AND NOT EXISTS ("
                     + "     SELECT 1"
@@ -748,13 +756,130 @@ public class AccountInfoQueries {
                     + "       AND r.account_info_value = p.account_info_value"
                     + "       AND a.primary_or_recipe_user_id = ?"
                     + "       AND a.is_linked_or_is_a_primary_user = true"
+                    + "       AND r.recipe_user_id <> ?"
                     + "   )";
 
-            update(sqlCon, QUERY, pst -> {
+            update(sqlCon, QUERY_1, pst -> {
                 pst.setString(1, tenantIdentifier.getAppId());
                 pst.setString(2, tenantIdentifier.getTenantId());
                 pst.setString(3, primaryUserId);
                 pst.setString(4, primaryUserId);
+                pst.setString(5, userId);
+            });
+
+            // 2. Remove tenant id that is not contributed by any other linked user.
+            String QUERY_2 = "DELETE FROM " + primaryUserTenantsTable + " p"
+                    + " WHERE p.app_id = ? AND p.tenant_id = ? AND p.primary_user_id = ?"
+                    + "   AND NOT EXISTS ("
+                    + "     SELECT 1"
+                    + "     FROM " + recipeUserTenantsTable + " r"
+                    + "     JOIN " + appIdToUserIdTable + " a"
+                    + "       ON a.app_id = r.app_id AND a.user_id = r.recipe_user_id"
+                    + "     WHERE r.app_id = p.app_id"
+                    + "       AND r.tenant_id = p.tenant_id"
+                    + "       AND a.primary_or_recipe_user_id = ?"
+                    + "       AND a.is_linked_or_is_a_primary_user = true"
+                    + "       AND r.recipe_user_id <> ?"
+                    + "   )";
+
+            update(sqlCon, QUERY_2, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, primaryUserId);
+                pst.setString(4, primaryUserId);
+                pst.setString(5, userId);
+            });
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    public static void removeAccountInfoForPrimaryUserIfNecessary_Transaction(Start start, Connection sqlCon, AppIdentifier tenantIdentifier, String userId) throws StorageQueryException {
+        try {
+            // If this recipe user is not linked / not a primary user, there is no entry in primary_user_tenants to clean up.
+            String appIdToUserIdTable = getConfig(start).getAppIdToUserIdTable();
+            String[] linkingInfo = execute(sqlCon,
+                    "SELECT primary_or_recipe_user_id, is_linked_or_is_a_primary_user FROM " + appIdToUserIdTable
+                            + " WHERE app_id = ? AND user_id = ?",
+                    pst -> {
+                        pst.setString(1, tenantIdentifier.getAppId());
+                        pst.setString(2, userId);
+                    },
+                    rs -> {
+                        if (!rs.next()) {
+                            return null;
+                        }
+                        return new String[]{
+                                rs.getString("primary_or_recipe_user_id"),
+                                String.valueOf(rs.getBoolean("is_linked_or_is_a_primary_user"))
+                        };
+                    });
+
+            if (linkingInfo == null) {
+                return;
+            }
+
+            String primaryUserId = linkingInfo[0];
+            boolean isLinkedOrPrimary = Boolean.parseBoolean(linkingInfo[1]);
+            if (!isLinkedOrPrimary) {
+                return;
+            }
+
+            /*
+             * App-scoped cleanup (across all tenants):
+             *
+             * 1) Remove account info rows for this primary user for which there is no other linked recipe user
+             *    that still has the same account info in that tenant.
+             * 2) Remove tenant associations (i.e. all rows for that tenant) for which there is no other linked
+             *    recipe user that has any account info in that tenant.
+             */
+            String primaryUserTenantsTable = getConfig(start).getPrimaryUserTenantsTable();
+            String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
+
+            // 1. Remove account info that is not contributed by any other linked user.
+            String QUERY_1 = "DELETE FROM " + primaryUserTenantsTable + " p"
+                    + " WHERE p.app_id = ? AND p.primary_user_id = ?"
+                    + "   AND NOT EXISTS ("
+                    + "     SELECT 1"
+                    + "     FROM " + recipeUserTenantsTable + " r"
+                    + "     JOIN " + appIdToUserIdTable + " a"
+                    + "       ON a.app_id = r.app_id AND a.user_id = r.recipe_user_id"
+                    + "     WHERE r.app_id = p.app_id"
+                    + "       AND r.tenant_id = p.tenant_id"
+                    + "       AND r.account_info_type = p.account_info_type"
+                    + "       AND r.account_info_value = p.account_info_value"
+                    + "       AND a.primary_or_recipe_user_id = ?"
+                    + "       AND a.is_linked_or_is_a_primary_user = true"
+                    + "       AND r.recipe_user_id <> ?"
+                    + "   )";
+
+            update(sqlCon, QUERY_1, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, primaryUserId);
+                pst.setString(3, primaryUserId);
+                pst.setString(4, userId);
+            });
+
+            // 2. Remove tenant id that is not contributed by any other linked user.
+            String QUERY_2 = "DELETE FROM " + primaryUserTenantsTable + " p"
+                    + " WHERE p.app_id = ? AND p.primary_user_id = ?"
+                    + "   AND NOT EXISTS ("
+                    + "     SELECT 1"
+                    + "     FROM " + recipeUserTenantsTable + " r"
+                    + "     JOIN " + appIdToUserIdTable + " a"
+                    + "       ON a.app_id = r.app_id AND a.user_id = r.recipe_user_id"
+                    + "     WHERE r.app_id = p.app_id"
+                    + "       AND r.tenant_id = p.tenant_id"
+                    + "       AND a.primary_or_recipe_user_id = ?"
+                    + "       AND a.is_linked_or_is_a_primary_user = true"
+                    + "       AND r.recipe_user_id <> ?"
+                    + "   )";
+
+            update(sqlCon, QUERY_2, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, primaryUserId);
+                pst.setString(3, primaryUserId);
+                pst.setString(4, userId);
             });
         } catch (SQLException e) {
             throw new StorageQueryException(e);
