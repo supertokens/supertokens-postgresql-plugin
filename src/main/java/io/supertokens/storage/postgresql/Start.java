@@ -30,10 +30,8 @@ import java.util.Set;
 
 import javax.annotation.Nonnull;
 
-import io.supertokens.pluginInterface.authRecipe.exceptions.AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException;
-import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithEmailAlreadyExistsException;
-import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithPhoneNumberAlreadyExistsException;
-import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithThirdPartyInfoAlreadyExistsException;
+import io.supertokens.pluginInterface.*;
+import io.supertokens.pluginInterface.authRecipe.exceptions.*;
 import io.supertokens.storage.postgresql.queries.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -47,14 +45,6 @@ import com.google.gson.JsonPrimitive;
 import com.zaxxer.hikari.pool.HikariPool;
 
 import ch.qos.logback.classic.Logger;
-import io.supertokens.pluginInterface.ActiveUsersSQLStorage;
-import io.supertokens.pluginInterface.ActiveUsersStorage;
-import io.supertokens.pluginInterface.ConfigFieldInfo;
-import io.supertokens.pluginInterface.KeyValueInfo;
-import io.supertokens.pluginInterface.LOG_LEVEL;
-import io.supertokens.pluginInterface.RECIPE_ID;
-import io.supertokens.pluginInterface.STORAGE_TYPE;
-import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
 import io.supertokens.pluginInterface.authRecipe.sqlStorage.AuthRecipeSQLStorage;
@@ -147,7 +137,6 @@ import io.supertokens.pluginInterface.webauthn.WebAuthNOptions;
 import io.supertokens.pluginInterface.webauthn.WebAuthNStoredCredential;
 import io.supertokens.pluginInterface.webauthn.exceptions.DuplicateOptionsIdException;
 import io.supertokens.pluginInterface.webauthn.exceptions.DuplicateRecoverAccountTokenException;
-import io.supertokens.pluginInterface.webauthn.exceptions.DuplicateUserEmailException;
 import io.supertokens.pluginInterface.webauthn.exceptions.WebauthNCredentialNotExistsException;
 import io.supertokens.pluginInterface.webauthn.exceptions.WebauthNOptionsNotExistsException;
 import io.supertokens.pluginInterface.webauthn.slqStorage.WebAuthNSQLStorage;
@@ -1269,9 +1258,11 @@ public class Start
     @Override
     public void updateUsersEmail_Transaction(AppIdentifier appIdentifier, TransactionConnection conn, String userId,
                                              String email)
-            throws StorageQueryException, DuplicateEmailException {
+            throws StorageQueryException, DuplicateEmailException, EmailChangeNotAllowedException, PhoneNumberChangeNotAllowedException {
         Connection sqlCon = (Connection) conn.getConnection();
         try {
+            AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, userId,
+                    ACCOUNT_INFO_TYPE.EMAIL, email);
             EmailPasswordQueries.updateUsersEmail_Transaction(this, sqlCon, appIdentifier, userId, email);
         } catch (SQLException e) {
             if (e instanceof PSQLException && isUniqueConstraintError(((PSQLException) e).getServerErrorMessage(),
@@ -1280,6 +1271,8 @@ public class Start
             }
 
             throw new StorageQueryException(e);
+        } catch (DuplicatePhoneNumberException | DuplicateThirdPartyUserException e) {
+            throw new IllegalStateException("should never happen");
         }
     }
 
@@ -1525,13 +1518,18 @@ public class Start
     }
 
     @Override
-    public void updateUserEmail_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+    public void updateUserEmail_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String userId,
                                             String thirdPartyId, String thirdPartyUserId,
-                                            String newEmail) throws StorageQueryException {
+                                            String newEmail)
+            throws StorageQueryException, EmailChangeNotAllowedException, DuplicateEmailException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
+            AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, userId,
+                    ACCOUNT_INFO_TYPE.EMAIL, newEmail);
             ThirdPartyQueries.updateUserEmail_Transaction(this, sqlCon, appIdentifier, thirdPartyId,
                     thirdPartyUserId, newEmail);
+        } catch (PhoneNumberChangeNotAllowedException | DuplicatePhoneNumberException | DuplicateThirdPartyUserException e) {
+            throw new IllegalStateException("should never happen");
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -2013,9 +2011,10 @@ public class Start
     @Override
     public void updateUserEmail_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String userId,
                                             String email)
-            throws StorageQueryException, UnknownUserIdException, DuplicateEmailException {
+            throws StorageQueryException, UnknownUserIdException, DuplicateEmailException, EmailChangeNotAllowedException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
+            AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, userId, ACCOUNT_INFO_TYPE.EMAIL, email);
             int updated_rows = PasswordlessQueries.updateUserEmail_Transaction(this, sqlCon, appIdentifier, userId,
                     email);
             if (updated_rows != 1) {
@@ -2032,6 +2031,8 @@ public class Start
             }
             throw new StorageQueryException(e);
 
+        } catch (PhoneNumberChangeNotAllowedException | DuplicatePhoneNumberException | DuplicateThirdPartyUserException e) {
+            throw new IllegalStateException("should never happen");
         }
     }
 
@@ -4252,7 +4253,7 @@ public class Start
     public AuthRecipeUserInfo signUpWithCredentialsRegister_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                                                         String userId, String email, String relyingPartyId, WebAuthNStoredCredential credential)
             throws StorageQueryException, io.supertokens.pluginInterface.webauthn.exceptions.DuplicateUserIdException, TenantOrAppNotFoundException,
-            DuplicateUserEmailException {
+            DuplicateEmailException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
             return WebAuthNQueries.signUpWithCredentialRegister_Transaction(this, sqlCon, tenantIdentifier, userId, email, relyingPartyId, credential);
@@ -4264,9 +4265,9 @@ public class Start
                 if (isUniqueConstraintError(errorMessage, config.getWebAuthNUserToTenantTable(),"email")) {
                     Logging.error(this, errorMessage.getMessage(), true);
                     Logging.error(this, email, true);
-                    throw new DuplicateUserEmailException();
+                    throw new DuplicateEmailException();
                 } else if (isPrimaryKeyError(errorMessage, config.getRecipeUserTenantsTable())) {
-                    throw new DuplicateUserEmailException();
+                    throw new DuplicateEmailException();
                 } else if (isPrimaryKeyError(errorMessage, config.getWebAuthNUsersTable())
                         || isPrimaryKeyError(errorMessage, config.getUsersTable())
                         || isPrimaryKeyError(errorMessage, config.getWebAuthNUserToTenantTable())
@@ -4294,7 +4295,7 @@ public class Start
     @Override
     public AuthRecipeUserInfo signUp_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                                  String userId, String email, String relyingPartyId)
-            throws StorageQueryException, TenantOrAppNotFoundException, DuplicateUserEmailException,
+            throws StorageQueryException, TenantOrAppNotFoundException, DuplicateEmailException,
             io.supertokens.pluginInterface.webauthn.exceptions.DuplicateUserIdException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
@@ -4305,9 +4306,9 @@ public class Start
                 PostgreSQLConfig config = Config.getConfig(this);
 
                 if (isUniqueConstraintError(errorMessage, config.getWebAuthNUserToTenantTable(),"email")) {
-                    throw new DuplicateUserEmailException();
+                    throw new DuplicateEmailException();
                 } else if (isPrimaryKeyError(errorMessage, config.getRecipeUserTenantsTable())) {
-                    throw new DuplicateUserEmailException();
+                    throw new DuplicateEmailException();
                 } else if (isPrimaryKeyError(errorMessage, config.getWebAuthNUsersTable())
                         || isPrimaryKeyError(errorMessage, config.getUsersTable())
                         || isPrimaryKeyError(errorMessage, config.getWebAuthNUserToTenantTable())
@@ -4405,7 +4406,7 @@ public class Start
     @Override
     public void updateUserEmail(TenantIdentifier tenantIdentifier, String userId, String newEmail)
             throws StorageQueryException, io.supertokens.pluginInterface.webauthn.exceptions.UserIdNotFoundException,
-            DuplicateUserEmailException {
+            DuplicateEmailException {
         try {
             WebAuthNQueries.updateUserEmail(this, tenantIdentifier, userId, newEmail);
         } catch (StorageQueryException e) {
@@ -4415,7 +4416,7 @@ public class Start
 
                 if (isUniqueConstraintError(errorMessage, config.getWebAuthNUserToTenantTable(),
                         "email")) {
-                    throw new DuplicateUserEmailException();
+                    throw new DuplicateEmailException();
                 } else if (isForeignKeyConstraintError(errorMessage,config.getWebAuthNUserToTenantTable(),"user_id")) {
                     throw new io.supertokens.pluginInterface.webauthn.exceptions.UserIdNotFoundException();
                 }
@@ -4428,9 +4429,10 @@ public class Start
     public void updateUserEmail_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con, String userId,
                                             String newEmail)
             throws StorageQueryException, io.supertokens.pluginInterface.webauthn.exceptions.UserIdNotFoundException,
-            DuplicateUserEmailException {
+            DuplicateEmailException, EmailChangeNotAllowedException {
         try {
             Connection sqlCon = (Connection) con.getConnection();
+            AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, tenantIdentifier.toAppIdentifier(), userId, ACCOUNT_INFO_TYPE.EMAIL, newEmail);
             WebAuthNQueries.updateUserEmail_Transaction(this, sqlCon, tenantIdentifier, userId, newEmail);
         } catch (StorageQueryException e) {
             if (e.getCause() instanceof SQLException){
@@ -4439,12 +4441,14 @@ public class Start
 
                 if (isUniqueConstraintError(errorMessage, config.getWebAuthNUserToTenantTable(),
                         "email")) {
-                    throw new DuplicateUserEmailException();
+                    throw new DuplicateEmailException();
                 } else if (isForeignKeyConstraintError(errorMessage,config.getWebAuthNUserToTenantTable(),"user_id")) {
                     throw new io.supertokens.pluginInterface.webauthn.exceptions.UserIdNotFoundException();
                 }
             }
             throw new StorageQueryException(e);
+        } catch (PhoneNumberChangeNotAllowedException | DuplicatePhoneNumberException | DuplicateThirdPartyUserException e) {
+            throw new IllegalStateException("should never happen");
         }
     }
 

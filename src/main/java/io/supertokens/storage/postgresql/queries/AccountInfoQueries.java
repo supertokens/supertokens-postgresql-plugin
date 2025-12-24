@@ -22,12 +22,17 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.ServerErrorMessage;
+
 import io.supertokens.pluginInterface.ACCOUNT_INFO_TYPE;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
 import io.supertokens.pluginInterface.authRecipe.exceptions.AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException;
 import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithEmailAlreadyExistsException;
 import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithPhoneNumberAlreadyExistsException;
 import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithThirdPartyInfoAlreadyExistsException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.EmailChangeNotAllowedException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.PhoneNumberChangeNotAllowedException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
@@ -43,6 +48,28 @@ import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import io.supertokens.storage.postgresql.utils.Utils;
 
 public class AccountInfoQueries {
+    private static boolean isPrimaryKeyError(ServerErrorMessage serverMessage, String tableName) {
+        if (serverMessage == null || tableName == null) {
+            return false;
+        }
+        String[] tableNameParts = tableName.split("\\.");
+        tableName = tableNameParts[tableNameParts.length - 1];
+        return "23505".equals(serverMessage.getSQLState()) && serverMessage.getConstraint() != null
+                && serverMessage.getConstraint().equals(tableName + "_pkey");
+    }
+
+    private static void throwAccountInfoChangeNotAllowed(ACCOUNT_INFO_TYPE accountInfoType)
+            throws EmailChangeNotAllowedException, PhoneNumberChangeNotAllowedException {
+        if (ACCOUNT_INFO_TYPE.EMAIL.equals(accountInfoType)) {
+            throw new EmailChangeNotAllowedException();
+        }
+        if (ACCOUNT_INFO_TYPE.PHONE_NUMBER.equals(accountInfoType)) {
+            throw new PhoneNumberChangeNotAllowedException();
+        }
+        throw new IllegalArgumentException(
+                "updateAccountInfo_Transaction should only be called with accountInfoType EMAIL or PHONE_NUMBER");
+    }
+
     private static String[] getPrimaryUserTenantsConflictForAddTenant(Connection sqlCon, String primaryUserTenantsTable,
                                                                       TenantIdentifier tenantIdentifier, String supertokensUserId) throws SQLException, StorageQueryException {
         return execute(sqlCon,
@@ -983,6 +1010,144 @@ public class AccountInfoQueries {
                 });
             }
         } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    public static void updateAccountInfo_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier, String userId, ACCOUNT_INFO_TYPE accountInfoType, String accountInfoValue)
+            throws
+            EmailChangeNotAllowedException, PhoneNumberChangeNotAllowedException, StorageQueryException,
+            DuplicateEmailException, DuplicatePhoneNumberException, DuplicateThirdPartyUserException {
+        if (!ACCOUNT_INFO_TYPE.EMAIL.equals(accountInfoType) && !ACCOUNT_INFO_TYPE.PHONE_NUMBER.equals(accountInfoType)) {
+            // Third party account info updates are not allowed via this function.
+            throw new IllegalArgumentException(
+                    "updateAccountInfo_Transaction should only be called with accountInfoType EMAIL or PHONE_NUMBER");
+        }
+
+        try {
+            String appIdToUserIdTable = getConfig(start).getAppIdToUserIdTable();
+            String primaryUserTenantsTable = getConfig(start).getPrimaryUserTenantsTable();
+            String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
+
+            // Find primary user ID and whether this recipe user is linked (or itself is a primary user).
+            String[] linkingInfo = execute(sqlCon,
+                    "SELECT primary_or_recipe_user_id, is_linked_or_is_a_primary_user FROM " + appIdToUserIdTable
+                            + " WHERE app_id = ? AND user_id = ?",
+                    pst -> {
+                        pst.setString(1, appIdentifier.getAppId());
+                        pst.setString(2, userId);
+                    },
+                    rs -> {
+                        if (!rs.next()) {
+                            return null;
+                        }
+                        return new String[]{
+                                rs.getString("primary_or_recipe_user_id"),
+                                String.valueOf(rs.getBoolean("is_linked_or_is_a_primary_user"))
+                        };
+                    });
+
+            boolean isLinkedOrPrimary = linkingInfo != null && Boolean.parseBoolean(linkingInfo[1]);
+            String primaryUserId = linkingInfo != null ? linkingInfo[0] : null;
+
+            // 1. Delete from primary_user_tenants to remove old account info if not contributed by any other linked user.
+            if (isLinkedOrPrimary) {
+                final String primaryUserIdFinal = primaryUserId;
+                String QUERY_1 = "DELETE FROM " + primaryUserTenantsTable + " p"
+                        + " WHERE p.app_id = ? AND p.primary_user_id = ?"
+                        + "   AND p.account_info_type = ?"
+                        + "   AND EXISTS ("
+                        + "     SELECT 1 FROM " + recipeUserTenantsTable + " r_me"
+                        + "     WHERE r_me.app_id = p.app_id"
+                        + "       AND r_me.recipe_user_id = ?"
+                        + "       AND r_me.tenant_id = p.tenant_id"
+                        + "       AND r_me.account_info_type = p.account_info_type"
+                        + "       AND r_me.account_info_value = p.account_info_value"
+                        + "   )"
+                        + "   AND NOT EXISTS ("
+                        + "     SELECT 1"
+                        + "     FROM " + recipeUserTenantsTable + " r"
+                        + "     JOIN " + appIdToUserIdTable + " a"
+                        + "       ON a.app_id = r.app_id AND a.user_id = r.recipe_user_id"
+                        + "     WHERE r.app_id = p.app_id"
+                        + "       AND r.tenant_id = p.tenant_id"
+                        + "       AND r.account_info_type = p.account_info_type"
+                        + "       AND r.account_info_value = p.account_info_value"
+                        + "       AND a.primary_or_recipe_user_id = ?"
+                        + "       AND a.is_linked_or_is_a_primary_user = true"
+                        + "       AND r.recipe_user_id <> ?"
+                        + "   )";
+
+                update(sqlCon, QUERY_1, pst -> {
+                    pst.setString(1, appIdentifier.getAppId());
+                    pst.setString(2, primaryUserIdFinal);
+                    pst.setString(3, accountInfoType.toString());
+                    pst.setString(4, userId);
+                    pst.setString(5, primaryUserIdFinal);
+                    pst.setString(6, userId);
+                });
+            }
+
+            // 2. Update account info value in recipe_user_tenants (across all tenants for this recipe user).
+            // If accountInfoValue is null, delete the rows instead.
+            if (accountInfoValue == null) {
+                String QUERY_2_DELETE = "DELETE FROM " + recipeUserTenantsTable
+                        + " WHERE app_id = ? AND recipe_user_id = ? AND account_info_type = ?";
+                update(sqlCon, QUERY_2_DELETE, pst -> {
+                    pst.setString(1, appIdentifier.getAppId());
+                    pst.setString(2, userId);
+                    pst.setString(3, accountInfoType.toString());
+                });
+            } else {
+                String QUERY_2 = "UPDATE " + recipeUserTenantsTable
+                        + " SET account_info_value = ?"
+                        + " WHERE app_id = ? AND recipe_user_id = ? AND account_info_type = ?";
+                update(sqlCon, QUERY_2, pst -> {
+                    pst.setString(1, accountInfoValue);
+                    pst.setString(2, appIdentifier.getAppId());
+                    pst.setString(3, userId);
+                    pst.setString(4, accountInfoType.toString());
+                });
+            }
+
+            // 3. Insert into primary_user_tenants to add new account info if not already reserved by same primary.
+            if (accountInfoValue != null && isLinkedOrPrimary) {
+                final String primaryUserIdFinal = primaryUserId;
+                String QUERY_3 = "INSERT INTO " + primaryUserTenantsTable
+                        + " (app_id, tenant_id, account_info_type, account_info_value, primary_user_id)"
+                        + " SELECT DISTINCT r.app_id, r.tenant_id, r.account_info_type, r.account_info_value, ?"
+                        + " FROM " + recipeUserTenantsTable + " r"
+                        + " WHERE r.app_id = ? AND r.recipe_user_id = ?"
+                        + "   AND r.account_info_type = ? AND r.account_info_value = ?"
+                        + "   AND NOT EXISTS ("
+                        + "     SELECT 1 FROM " + primaryUserTenantsTable + " p"
+                        + "     WHERE p.app_id = r.app_id"
+                        + "       AND p.tenant_id = r.tenant_id"
+                        + "       AND p.account_info_type = r.account_info_type"
+                        + "       AND p.account_info_value = r.account_info_value"
+                        + "       AND p.primary_user_id = ?"
+                        + "   )";
+
+                update(sqlCon, QUERY_3, pst -> {
+                    pst.setString(1, primaryUserIdFinal);
+                    pst.setString(2, appIdentifier.getAppId());
+                    pst.setString(3, userId);
+                    pst.setString(4, accountInfoType.toString());
+                    pst.setString(5, accountInfoValue);
+                    pst.setString(6, primaryUserIdFinal);
+                });
+            }
+        } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+                boolean isRecipeUserTenantsPk = isPrimaryKeyError(serverMessage, getConfig(start).getRecipeUserTenantsTable());
+                boolean isPrimaryUserTenantsPk = isPrimaryKeyError(serverMessage, getConfig(start).getPrimaryUserTenantsTable());
+                if (isPrimaryUserTenantsPk) {
+                    throwAccountInfoChangeNotAllowed(accountInfoType);
+                } else if (isRecipeUserTenantsPk) {
+                    throwRecipeUserTenantsConflict(accountInfoType.toString());
+                }
+            }
             throw new StorageQueryException(e);
         }
     }
