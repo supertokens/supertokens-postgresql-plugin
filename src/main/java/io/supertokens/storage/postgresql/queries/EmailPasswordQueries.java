@@ -369,6 +369,10 @@ public class EmailPasswordQueries {
                     "primary_or_recipe_user_time_joined)" +
                     " VALUES(?, ?, ?, ?, ?, ?, ?)";
 
+            String recipe_user_tenants_QUERY = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
+                    + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value)"
+                    + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
+
             String emailpassword_users_QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUsersTable()
                     + "(app_id, user_id, email, password_hash, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
 
@@ -378,6 +382,7 @@ public class EmailPasswordQueries {
 
             List<PreparedStatementValueSetter> appIdToUserIdSetters = new ArrayList<>();
             List<PreparedStatementValueSetter> allAuthRecipeUsersSetters = new ArrayList<>();
+            List<PreparedStatementValueSetter> recipeUserTenantsSetters = new ArrayList<>();
             List<PreparedStatementValueSetter> emailPasswordUsersSetters = new ArrayList<>();
             List<PreparedStatementValueSetter> emailPasswordUsersToTenantSetters = new ArrayList<>();
 
@@ -402,6 +407,17 @@ public class EmailPasswordQueries {
                     pst.setLong(7, user.timeJoinedMSSinceEpoch);
                 });
 
+                recipeUserTenantsSetters.add(pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, userId);
+                    pst.setString(3, tenantIdentifier.getTenantId());
+                    pst.setString(4, EMAIL_PASSWORD.toString());
+                    pst.setString(5, ACCOUNT_INFO_TYPE.EMAIL.toString());
+                    pst.setString(6, "");
+                    pst.setString(7, "");
+                    pst.setString(8, user.email);
+                });
+
                 emailPasswordUsersSetters.add(pst -> {
                     pst.setString(1, tenantIdentifier.getAppId());
                     pst.setString(2, userId);
@@ -420,6 +436,7 @@ public class EmailPasswordQueries {
 
             executeBatch(sqlCon, app_id_to_user_id_QUERY, appIdToUserIdSetters);
             executeBatch(sqlCon, all_auth_recipe_users_QUERY, allAuthRecipeUsersSetters);
+            executeBatch(sqlCon, recipe_user_tenants_QUERY, recipeUserTenantsSetters);
             executeBatch(sqlCon, emailpassword_users_QUERY, emailPasswordUsersSetters);
             executeBatch(sqlCon, emailpassword_users_to_tenant_QUERY, emailPasswordUsersToTenantSetters);
             sqlCon.commit();

@@ -680,6 +680,10 @@ public class ThirdPartyQueries {
                 "primary_or_recipe_user_time_joined)" +
                 " VALUES(?, ?, ?, ?, ?, ?, ?)";
 
+        String recipe_user_tenants_QUERY = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
+                + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value)"
+                + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
+
         String thirdparty_users_QUERY = "INSERT INTO " + getConfig(start).getThirdPartyUsersTable()
                 + "(app_id, third_party_id, third_party_user_id, user_id, email, time_joined)"
                 + " VALUES(?, ?, ?, ?, ?, ?)";
@@ -690,6 +694,7 @@ public class ThirdPartyQueries {
 
         List<PreparedStatementValueSetter> appIdToUserIdBatch = new ArrayList<>();
         List<PreparedStatementValueSetter> allAuthRecipeUsersBatch = new ArrayList<>();
+        List<PreparedStatementValueSetter> recipeUserTenantsBatch = new ArrayList<>();
         List<PreparedStatementValueSetter> thirdPartyUsersBatch = new ArrayList<>();
         List<PreparedStatementValueSetter> thirdPartyUsersToTenantBatch = new ArrayList<>();
 
@@ -712,6 +717,31 @@ public class ThirdPartyQueries {
                 pst.setLong(7, user.timeJoinedMSSinceEpoch);
             });
 
+            // recipe_user_tenants:
+            // - Insert row for email (uses third_party_id + third_party_user_id columns)
+            recipeUserTenantsBatch.add(pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, user.userId);
+                pst.setString(3, tenantIdentifier.getTenantId());
+                pst.setString(4, THIRD_PARTY.toString());
+                pst.setString(5, ACCOUNT_INFO_TYPE.EMAIL.toString());
+                pst.setString(6, user.thirdpartyId);
+                pst.setString(7, user.thirdpartyUserId);
+                pst.setString(8, user.email);
+            });
+
+            // - Insert row for third party id (stores thirdPartyId::thirdPartyUserId in account_info_value)
+            recipeUserTenantsBatch.add(pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, user.userId);
+                pst.setString(3, tenantIdentifier.getTenantId());
+                pst.setString(4, THIRD_PARTY.toString());
+                pst.setString(5, ACCOUNT_INFO_TYPE.THIRD_PARTY.toString());
+                pst.setString(6, "");
+                pst.setString(7, "");
+                pst.setString(8, user.thirdpartyId + "::" + user.thirdpartyUserId);
+            });
+
             thirdPartyUsersBatch.add(pst -> {
                 pst.setString(1, tenantIdentifier.getAppId());
                 pst.setString(2, user.thirdpartyId);
@@ -732,6 +762,7 @@ public class ThirdPartyQueries {
 
         executeBatch(sqlConnection, app_id_userid_QUERY, appIdToUserIdBatch);
         executeBatch(sqlConnection, all_auth_recipe_users_QUERY, allAuthRecipeUsersBatch);
+        executeBatch(sqlConnection, recipe_user_tenants_QUERY, recipeUserTenantsBatch);
         executeBatch(sqlConnection, thirdparty_users_QUERY, thirdPartyUsersBatch);
         executeBatch(sqlConnection, thirdparty_user_to_tenant_QUERY, thirdPartyUsersToTenantBatch);
     }

@@ -1273,6 +1273,10 @@ public class PasswordlessQueries {
                 "primary_or_recipe_user_time_joined)" +
                 " VALUES(?, ?, ?, ?, ?, ?, ?)";
 
+        String recipe_user_tenants_QUERY = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
+                + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value)"
+                + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
+
         String passwordless_users_QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUsersTable()
                 + "(app_id, user_id, email, phone_number, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
 
@@ -1281,6 +1285,7 @@ public class PasswordlessQueries {
 
         List<PreparedStatementValueSetter> appIdToUserIdBatch = new ArrayList<>();
         List<PreparedStatementValueSetter> allAuthRecipeUsersBatch = new ArrayList<>();
+        List<PreparedStatementValueSetter> recipeUserTenantsBatch = new ArrayList<>();
         List<PreparedStatementValueSetter> passwordlessUsersBatch = new ArrayList<>();
         List<PreparedStatementValueSetter> passwordlessUserToTenantBatch = new ArrayList<>();
 
@@ -1303,6 +1308,29 @@ public class PasswordlessQueries {
                 pst.setLong(7, user.timeJoinedMSSinceEpoch);
             });
 
+            ACCOUNT_INFO_TYPE accountInfoType;
+            String accountInfoValue;
+            if (user.email != null) {
+                accountInfoType = ACCOUNT_INFO_TYPE.EMAIL;
+                accountInfoValue = user.email;
+            } else if (user.phoneNumber != null) {
+                accountInfoType = ACCOUNT_INFO_TYPE.PHONE_NUMBER;
+                accountInfoValue = user.phoneNumber;
+            } else {
+                throw new IllegalArgumentException("Either email or phoneNumber must be provided");
+            }
+
+            recipeUserTenantsBatch.add(pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, user.userId);
+                pst.setString(3, tenantIdentifier.getTenantId());
+                pst.setString(4, PASSWORDLESS.toString());
+                pst.setString(5, accountInfoType.toString());
+                pst.setString(6, "");
+                pst.setString(7, "");
+                pst.setString(8, accountInfoValue);
+            });
+
             passwordlessUsersBatch.add(pst -> {
                        pst.setString(1, tenantIdentifier.getAppId());
                        pst.setString(2, user.userId);
@@ -1323,6 +1351,7 @@ public class PasswordlessQueries {
 
         executeBatch(sqlCon, app_id_to_user_id_QUERY, appIdToUserIdBatch);
         executeBatch(sqlCon, all_auth_recipe_users_QUERY, allAuthRecipeUsersBatch);
+        executeBatch(sqlCon, recipe_user_tenants_QUERY, recipeUserTenantsBatch);
         executeBatch(sqlCon, passwordless_users_QUERY, passwordlessUsersBatch);
         executeBatch(sqlCon, passwordless_user_to_tenant_QUERY, passwordlessUserToTenantBatch);
     }

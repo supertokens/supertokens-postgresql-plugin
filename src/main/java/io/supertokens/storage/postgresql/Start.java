@@ -30,9 +30,6 @@ import java.util.Set;
 
 import javax.annotation.Nonnull;
 
-import io.supertokens.pluginInterface.*;
-import io.supertokens.pluginInterface.authRecipe.exceptions.*;
-import io.supertokens.storage.postgresql.queries.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -45,8 +42,23 @@ import com.google.gson.JsonPrimitive;
 import com.zaxxer.hikari.pool.HikariPool;
 
 import ch.qos.logback.classic.Logger;
+import io.supertokens.pluginInterface.ACCOUNT_INFO_TYPE;
+import io.supertokens.pluginInterface.ActiveUsersSQLStorage;
+import io.supertokens.pluginInterface.ActiveUsersStorage;
+import io.supertokens.pluginInterface.ConfigFieldInfo;
+import io.supertokens.pluginInterface.KeyValueInfo;
+import io.supertokens.pluginInterface.LOG_LEVEL;
+import io.supertokens.pluginInterface.RECIPE_ID;
+import io.supertokens.pluginInterface.STORAGE_TYPE;
+import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
+import io.supertokens.pluginInterface.authRecipe.exceptions.AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithEmailAlreadyExistsException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithPhoneNumberAlreadyExistsException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithThirdPartyInfoAlreadyExistsException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.EmailChangeNotAllowedException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.PhoneNumberChangeNotAllowedException;
 import io.supertokens.pluginInterface.authRecipe.sqlStorage.AuthRecipeSQLStorage;
 import io.supertokens.pluginInterface.bulkimport.BulkImportStorage;
 import io.supertokens.pluginInterface.bulkimport.BulkImportUser;
@@ -145,6 +157,25 @@ import io.supertokens.storage.postgresql.annotations.EnvName;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storage.postgresql.output.Logging;
+import io.supertokens.storage.postgresql.queries.AccountInfoQueries;
+import io.supertokens.storage.postgresql.queries.ActiveUsersQueries;
+import io.supertokens.storage.postgresql.queries.BulkImportQueries;
+import io.supertokens.storage.postgresql.queries.DashboardQueries;
+import io.supertokens.storage.postgresql.queries.EmailPasswordQueries;
+import io.supertokens.storage.postgresql.queries.EmailVerificationQueries;
+import io.supertokens.storage.postgresql.queries.GeneralQueries;
+import io.supertokens.storage.postgresql.queries.JWTSigningQueries;
+import io.supertokens.storage.postgresql.queries.MultitenancyQueries;
+import io.supertokens.storage.postgresql.queries.OAuthQueries;
+import io.supertokens.storage.postgresql.queries.PasswordlessQueries;
+import io.supertokens.storage.postgresql.queries.SAMLQueries;
+import io.supertokens.storage.postgresql.queries.SessionQueries;
+import io.supertokens.storage.postgresql.queries.TOTPQueries;
+import io.supertokens.storage.postgresql.queries.ThirdPartyQueries;
+import io.supertokens.storage.postgresql.queries.UserIdMappingQueries;
+import io.supertokens.storage.postgresql.queries.UserMetadataQueries;
+import io.supertokens.storage.postgresql.queries.UserRolesQueries;
+import io.supertokens.storage.postgresql.queries.WebAuthNQueries;
 
 @WithinOtelSpan
 public class Start
@@ -1133,6 +1164,11 @@ public class Start
 
                             errorByPosition.put(users.get(position).userId, new DuplicateEmailException());
 
+                        } else if (isPrimaryKeyError(serverMessage, config.getRecipeUserTenantsTable())) {
+                            // Keep behaviour consistent with single-user signup: this primary key violation is treated
+                            // as a DuplicateEmailException for EmailPassword signup.
+                            errorByPosition.put(users.get(position).userId, new DuplicateEmailException());
+
                         } else if (isPrimaryKeyError(serverMessage, config.getThirdPartyUsersTable())
                                 || isPrimaryKeyError(serverMessage, config.getUsersTable())
                                 || isPrimaryKeyError(serverMessage, config.getThirdPartyUserToTenantTable())
@@ -1611,9 +1647,13 @@ public class Start
                             ServerErrorMessage serverMessage = ((PSQLException) nextException).getServerErrorMessage();
 
                             int position = getErroneousEntryPosition(batchUpdateException);
-                            if (isUniqueConstraintError(serverMessage, config.getEmailPasswordUserToTenantTable(),
+                            if (isUniqueConstraintError(serverMessage, config.getThirdPartyUserToTenantTable(),
                                     "third_party_user_id")) {
 
+                                errorByPosition.put(usersToImport.get(position).userId, new DuplicateThirdPartyUserException());
+
+                            } else if (isPrimaryKeyError(serverMessage, config.getRecipeUserTenantsTable())) {
+                                // Keep behaviour consistent with single-user thirdparty signup.
                                 errorByPosition.put(usersToImport.get(position).userId, new DuplicateThirdPartyUserException());
 
                             } else if (isPrimaryKeyError(serverMessage, config.getThirdPartyUsersTable())
@@ -2228,6 +2268,15 @@ public class Start
                         ServerErrorMessage serverMessage = ((PSQLException) nextException).getServerErrorMessage();
 
                         int position = getErroneousEntryPosition(batchUpdateException);
+
+                        if (isPrimaryKeyError(serverMessage, config.getRecipeUserTenantsTable())) {
+                            // Keep behaviour consistent with single-user passwordless createUser.
+                            if (users.get(position).email != null) {
+                                errorByPosition.put(users.get(position).userId, new DuplicateEmailException());
+                            } else {
+                                errorByPosition.put(users.get(position).userId, new DuplicatePhoneNumberException());
+                            }
+                        }
 
                         if (isPrimaryKeyError(serverMessage, config.getPasswordlessUsersTable())
                                 || isPrimaryKeyError(serverMessage, config.getUsersTable())
@@ -3549,6 +3598,7 @@ public class Start
         try {
             Connection sqlCon = (Connection) con.getConnection();
             GeneralQueries.makePrimaryUsers_Transaction(this, sqlCon, appIdentifier, userIds);
+            AccountInfoQueries.addPrimaryUserAccountInfoForUsers_Transaction(this, sqlCon, appIdentifier, userIds);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -3575,6 +3625,8 @@ public class Start
         try {
             Connection sqlCon = (Connection) con.getConnection();
             GeneralQueries.linkMultipleAccounts_Transaction(this, sqlCon, appIdentifier, recipeUserIdByPrimaryUserId);
+            AccountInfoQueries.reserveAccountInfoForLinkingMultiple_Transaction(this, sqlCon, appIdentifier,
+                    recipeUserIdByPrimaryUserId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

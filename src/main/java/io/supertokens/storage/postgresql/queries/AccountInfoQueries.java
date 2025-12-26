@@ -20,6 +20,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.postgresql.util.PSQLException;
@@ -40,7 +41,9 @@ import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.passwordless.exception.DuplicatePhoneNumberException;
 import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.executeBatch;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
@@ -287,6 +290,41 @@ public class AccountInfoQueries {
                 pst.setString(1, userId); // primary_user_id
                 pst.setString(2, appIdentifier.getAppId());
                 pst.setString(3, userId); // recipe_user_id
+            });
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    public static void addPrimaryUserAccountInfoForUsers_Transaction(Start start, Connection sqlCon,
+                                                                     AppIdentifier appIdentifier,
+                                                                     List<String> userIds)
+            throws StorageQueryException {
+        if (userIds == null || userIds.isEmpty()) {
+            return;
+        }
+
+        try {
+            // primary_user_id == recipe_user_id when making a recipe user primary
+            StringBuilder query = new StringBuilder("INSERT INTO " + getConfig(start).getPrimaryUserTenantsTable()
+                    + " (app_id, tenant_id, account_info_type, account_info_value, primary_user_id)"
+                    + " SELECT app_id, tenant_id, account_info_type, account_info_value, recipe_user_id"
+                    + " FROM " + getConfig(start).getRecipeUserTenantsTable()
+                    + " WHERE app_id = ? AND recipe_user_id IN (");
+
+            for (int i = 0; i < userIds.size(); i++) {
+                query.append("?");
+                if (i != userIds.size() - 1) {
+                    query.append(",");
+                }
+            }
+            query.append(")");
+
+            update(sqlCon, query.toString(), pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                for (int i = 0; i < userIds.size(); i++) {
+                    pst.setString(i + 2, userIds.get(i));
+                }
             });
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -615,6 +653,87 @@ public class AccountInfoQueries {
             pst.setString(6, primaryUserId);
             pst.setString(7, appIdentifier.getAppId());
         });
+    }
+
+    public static void reserveAccountInfoForLinkingMultiple_Transaction(Start start, Connection sqlCon,
+                                                                        AppIdentifier appIdentifier,
+                                                                        Map<String, String> recipeUserIdToPrimaryUserId)
+            throws SQLException, StorageQueryException {
+        if (recipeUserIdToPrimaryUserId == null || recipeUserIdToPrimaryUserId.isEmpty()) {
+            return;
+        }
+
+        String primaryUserTenantsTable = getConfig(start).getPrimaryUserTenantsTable();
+        String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
+
+        String QUERY_1 = "INSERT INTO " + primaryUserTenantsTable
+                + " (app_id, tenant_id, account_info_type, account_info_value, primary_user_id)"
+                + " SELECT ?, primary_tenants.tenant_id, recipe_ai.account_info_type, recipe_ai.account_info_value, ?"
+                + " FROM ("
+                + "   SELECT DISTINCT tenant_id FROM " + primaryUserTenantsTable
+                + "   WHERE app_id = ? AND primary_user_id = ?"
+                + " ) primary_tenants,"
+                + " ("
+                + "   SELECT DISTINCT account_info_type, account_info_value FROM " + recipeUserTenantsTable
+                + "   WHERE app_id = ? AND recipe_user_id = ?"
+                + " ) recipe_ai"
+                + " WHERE NOT EXISTS ("
+                + "   SELECT 1 FROM " + primaryUserTenantsTable + " p"
+                + "   WHERE p.app_id = ?"
+                + "     AND p.tenant_id = primary_tenants.tenant_id"
+                + "     AND p.account_info_type = recipe_ai.account_info_type"
+                + "     AND p.account_info_value = recipe_ai.account_info_value"
+                + " )";
+
+        String QUERY_2 = "INSERT INTO " + primaryUserTenantsTable
+                + " (app_id, tenant_id, account_info_type, account_info_value, primary_user_id)"
+                + " SELECT ?, recipe_tenants.tenant_id, primary_ai.account_info_type, primary_ai.account_info_value, ?"
+                + " FROM ("
+                + "   SELECT DISTINCT tenant_id FROM " + recipeUserTenantsTable
+                + "   WHERE app_id = ? AND recipe_user_id = ?"
+                + " ) recipe_tenants,"
+                + " ("
+                + "   SELECT DISTINCT account_info_type, account_info_value FROM " + primaryUserTenantsTable
+                + "   WHERE app_id = ? AND primary_user_id = ?"
+                + " ) primary_ai"
+                + " WHERE NOT EXISTS ("
+                + "   SELECT 1 FROM " + primaryUserTenantsTable + " p"
+                + "   WHERE p.app_id = ?"
+                + "     AND p.tenant_id = recipe_tenants.tenant_id"
+                + "     AND p.account_info_type = primary_ai.account_info_type"
+                + "     AND p.account_info_value = primary_ai.account_info_value"
+                + " )";
+
+        List<PreparedStatementValueSetter> query1Setters = new ArrayList<>();
+        List<PreparedStatementValueSetter> query2Setters = new ArrayList<>();
+
+        for (Map.Entry<String, String> entry : recipeUserIdToPrimaryUserId.entrySet()) {
+            String recipeUserId = entry.getKey();
+            String primaryUserId = entry.getValue();
+
+            query1Setters.add(pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, primaryUserId);
+                pst.setString(3, appIdentifier.getAppId());
+                pst.setString(4, primaryUserId);
+                pst.setString(5, appIdentifier.getAppId());
+                pst.setString(6, recipeUserId);
+                pst.setString(7, appIdentifier.getAppId());
+            });
+
+            query2Setters.add(pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, primaryUserId);
+                pst.setString(3, appIdentifier.getAppId());
+                pst.setString(4, recipeUserId);
+                pst.setString(5, appIdentifier.getAppId());
+                pst.setString(6, primaryUserId);
+                pst.setString(7, appIdentifier.getAppId());
+            });
+        }
+
+        executeBatch(sqlCon, QUERY_1, query1Setters);
+        executeBatch(sqlCon, QUERY_2, query2Setters);
     }
 
     public static void addTenantIdToRecipeUser_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId)
