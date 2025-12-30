@@ -266,6 +266,11 @@ public class AccountInfoQueries {
                 + Config.getConfig(start).getRecipeUserTenantsTable() + "(app_id, tenant_id);";
     }
 
+    static String getQueryToCreateRecipeUserIdIndexForRecipeUserTenantsTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_recipe_user_id ON "
+                + Config.getConfig(start).getRecipeUserTenantsTable() + "(recipe_user_id);";
+    }
+
     static String getQueryToCreateAccountInfoIndexForRecipeUserTenantsTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_account_info ON "
                 + Config.getConfig(start).getRecipeUserTenantsTable()
@@ -274,7 +279,7 @@ public class AccountInfoQueries {
 
     static String getQueryToCreatePrimaryUserIndexForPrimaryUserTenantsTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS idx_primary_user_tenants_primary ON "
-                + Config.getConfig(start).getPrimaryUserTenantsTable() + "(app_id, primary_user_id);";
+                + Config.getConfig(start).getPrimaryUserTenantsTable() + "(primary_user_id);";
     }
 
     public static void addPrimaryUserAccountInfo_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier, String userId) throws
@@ -609,6 +614,7 @@ public class AccountInfoQueries {
                 + " WHERE NOT EXISTS ("
                 + "   SELECT 1 FROM " + primaryUserTenantsTable + " p"
                 + "   WHERE p.app_id = ?"
+                + "     AND p.primary_user_id = ?"
                 + "     AND p.tenant_id = primary_tenants.tenant_id"
                 + "     AND p.account_info_type = recipe_ai.account_info_type"
                 + "     AND p.account_info_value = recipe_ai.account_info_value"
@@ -622,6 +628,7 @@ public class AccountInfoQueries {
             pst.setString(5, appIdentifier.getAppId());
             pst.setString(6, recipeUserId);
             pst.setString(7, appIdentifier.getAppId());
+            pst.setString(8, primaryUserId);
         });
 
         // 2) primary user's account info -> all tenants of recipe user
@@ -639,6 +646,7 @@ public class AccountInfoQueries {
                 + " WHERE NOT EXISTS ("
                 + "   SELECT 1 FROM " + primaryUserTenantsTable + " p"
                 + "   WHERE p.app_id = ?"
+                + "     AND p.primary_user_id = ?"
                 + "     AND p.tenant_id = recipe_tenants.tenant_id"
                 + "     AND p.account_info_type = primary_ai.account_info_type"
                 + "     AND p.account_info_value = primary_ai.account_info_value"
@@ -652,6 +660,7 @@ public class AccountInfoQueries {
             pst.setString(5, appIdentifier.getAppId());
             pst.setString(6, primaryUserId);
             pst.setString(7, appIdentifier.getAppId());
+            pst.setString(8, primaryUserId);
         });
     }
 
@@ -680,6 +689,7 @@ public class AccountInfoQueries {
                 + " WHERE NOT EXISTS ("
                 + "   SELECT 1 FROM " + primaryUserTenantsTable + " p"
                 + "   WHERE p.app_id = ?"
+                + "     AND p.primary_user_id = ?"
                 + "     AND p.tenant_id = primary_tenants.tenant_id"
                 + "     AND p.account_info_type = recipe_ai.account_info_type"
                 + "     AND p.account_info_value = recipe_ai.account_info_value"
@@ -699,6 +709,7 @@ public class AccountInfoQueries {
                 + " WHERE NOT EXISTS ("
                 + "   SELECT 1 FROM " + primaryUserTenantsTable + " p"
                 + "   WHERE p.app_id = ?"
+                + "     AND p.primary_user_id = ?"
                 + "     AND p.tenant_id = recipe_tenants.tenant_id"
                 + "     AND p.account_info_type = primary_ai.account_info_type"
                 + "     AND p.account_info_value = primary_ai.account_info_value"
@@ -719,6 +730,7 @@ public class AccountInfoQueries {
                 pst.setString(5, appIdentifier.getAppId());
                 pst.setString(6, recipeUserId);
                 pst.setString(7, appIdentifier.getAppId());
+                pst.setString(8, primaryUserId);
             });
 
             query2Setters.add(pst -> {
@@ -729,6 +741,7 @@ public class AccountInfoQueries {
                 pst.setString(5, appIdentifier.getAppId());
                 pst.setString(6, primaryUserId);
                 pst.setString(7, appIdentifier.getAppId());
+                pst.setString(8, primaryUserId);
             });
         }
 
