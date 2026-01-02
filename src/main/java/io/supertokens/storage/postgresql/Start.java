@@ -30,6 +30,7 @@ import java.util.Set;
 
 import javax.annotation.Nonnull;
 
+import io.supertokens.pluginInterface.authRecipe.CanBecomePrimaryResult;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -42,7 +43,7 @@ import com.google.gson.JsonPrimitive;
 import com.zaxxer.hikari.pool.HikariPool;
 
 import ch.qos.logback.classic.Logger;
-import io.supertokens.pluginInterface.ACCOUNT_INFO_TYPE;
+import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
 import io.supertokens.pluginInterface.ActiveUsersSQLStorage;
 import io.supertokens.pluginInterface.ActiveUsersStorage;
 import io.supertokens.pluginInterface.ConfigFieldInfo;
@@ -3660,25 +3661,26 @@ public class Start
     }
 
     @Override
-    public void checkIfLoginMethodCanBecomePrimary_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
-                                                               LoginMethod loginMethod)
-            throws AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException, StorageQueryException {
+    public CanBecomePrimaryResult checkIfLoginMethodCanBecomePrimary_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                                                 LoginMethod loginMethod)
+            throws StorageQueryException {
         try {
-            AccountInfoQueries.checkIfLoginMethodCanBecomePrimary_Transaction(this, con, appIdentifier, loginMethod);
+            return AccountInfoQueries.checkIfLoginMethodCanBecomePrimary_Transaction(this, con, appIdentifier, loginMethod);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
 
     @Override
-    public void checkIfLoginMethodsCanBeLinked_Transaction(TransactionConnection con, AppIdentifier appIdentifier,
-                                                           Set<String> tenantIds, Set<String> emails,
-                                                           Set<String> phoneNumbers,
-                                                           Set<LoginMethod.ThirdParty> thirdParties,
-                                                           String primaryUserId)
-            throws AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException, StorageQueryException {
+    public io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult checkIfLoginMethodsCanBeLinked_Transaction(
+            TransactionConnection con, AppIdentifier appIdentifier,
+            Set<String> tenantIds, Set<String> emails,
+            Set<String> phoneNumbers,
+            Set<LoginMethod.ThirdParty> thirdParties,
+            String primaryUserId) throws StorageQueryException {
         try {
-            AccountInfoQueries.checkIfLoginMethodsCanBeLinked_Transaction(this, con, appIdentifier, tenantIds, emails, phoneNumbers, thirdParties, primaryUserId);
+            return AccountInfoQueries.checkIfLoginMethodsCanBeLinked_Transaction(this, con, appIdentifier, tenantIds,
+                    emails, phoneNumbers, thirdParties, primaryUserId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

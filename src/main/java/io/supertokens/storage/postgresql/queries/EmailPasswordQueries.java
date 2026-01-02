@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import io.supertokens.pluginInterface.ACCOUNT_INFO_TYPE;
+import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
 import static io.supertokens.pluginInterface.RECIPE_ID.EMAIL_PASSWORD;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;

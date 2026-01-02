@@ -28,7 +28,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import io.supertokens.pluginInterface.ACCOUNT_INFO_TYPE;
+import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
 import static io.supertokens.pluginInterface.RECIPE_ID.THIRD_PARTY;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
@@ -152,7 +152,7 @@ public class ThirdPartyQueries {
                     // Insert row for third party id
                     AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
                             THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.THIRD_PARTY, "", "",
-                            thirdParty.id + "::" + thirdParty.userId);
+                            new LoginMethod.ThirdParty(thirdParty.id, thirdParty.userId).getAccountInfoValue());
                 }
 
                 { // thirdparty_users
@@ -739,7 +739,7 @@ public class ThirdPartyQueries {
                 pst.setString(5, ACCOUNT_INFO_TYPE.THIRD_PARTY.toString());
                 pst.setString(6, "");
                 pst.setString(7, "");
-                pst.setString(8, user.thirdpartyId + "::" + user.thirdpartyUserId);
+                pst.setString(8, new LoginMethod.ThirdParty(user.thirdpartyId, user.thirdpartyUserId).getAccountInfoValue());
             });
 
             thirdPartyUsersBatch.add(pst -> {

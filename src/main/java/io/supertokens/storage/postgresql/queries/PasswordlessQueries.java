@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-import io.supertokens.pluginInterface.ACCOUNT_INFO_TYPE;
+import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
 import static io.supertokens.pluginInterface.RECIPE_ID.PASSWORDLESS;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;

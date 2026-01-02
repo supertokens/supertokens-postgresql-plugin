@@ -26,9 +26,10 @@ import java.util.Set;
 import org.postgresql.util.PSQLException;
 import org.postgresql.util.ServerErrorMessage;
 
-import io.supertokens.pluginInterface.ACCOUNT_INFO_TYPE;
+import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
+import io.supertokens.pluginInterface.authRecipe.CanBecomePrimaryResult;
+import io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
-import io.supertokens.pluginInterface.authRecipe.exceptions.AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException;
 import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithEmailAlreadyExistsException;
 import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithPhoneNumberAlreadyExistsException;
 import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithThirdPartyInfoAlreadyExistsException;
@@ -336,8 +337,8 @@ public class AccountInfoQueries {
         }
     }
 
-    public static void checkIfLoginMethodCanBecomePrimary_Transaction(Start start, TransactionConnection con, AppIdentifier appIdentifier, LoginMethod loginMethod)
-            throws AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException, StorageQueryException, SQLException {
+    public static CanBecomePrimaryResult checkIfLoginMethodCanBecomePrimary_Transaction(Start start, TransactionConnection con, AppIdentifier appIdentifier, LoginMethod loginMethod)
+            throws StorageQueryException, SQLException {
         Connection sqlCon = (Connection) con.getConnection();
         
         // Build the query dynamically based on which values are not null
@@ -386,7 +387,7 @@ public class AccountInfoQueries {
         
         // Third party condition
         if (loginMethod.thirdParty != null) {
-            String thirdPartyAccountInfoValue = loginMethod.thirdParty.id + "::" + loginMethod.thirdParty.userId;
+            String thirdPartyAccountInfoValue = new LoginMethod.ThirdParty(loginMethod.thirdParty.id, loginMethod.thirdParty.userId).getAccountInfoValue();
             orConditions.add("(account_info_type = ? AND account_info_value = ?)");
             parameters.add(ACCOUNT_INFO_TYPE.THIRD_PARTY.toString());
             parameters.add(thirdPartyAccountInfoValue);
@@ -394,7 +395,7 @@ public class AccountInfoQueries {
         
         // If no OR conditions, return early (nothing to check)
         if (orConditions.isEmpty()) {
-            return;
+            return CanBecomePrimaryResult.okResult();
         }
         
         // Join OR conditions
@@ -410,45 +411,59 @@ public class AccountInfoQueries {
         String finalQuery = QUERY.toString();
         
         // Execute query and check for results
-        String[] result = execute(sqlCon, finalQuery, pst -> {
+        PrimaryUserIdAndAccountInfoType result = execute(sqlCon, finalQuery, pst -> {
             for (int i = 0; i < parameters.size(); i++) {
                 pst.setObject(i + 1, parameters.get(i));
             }
         }, rs -> {
             if (rs.next()) {
-                return new String[]{rs.getString("primary_user_id"), rs.getString("account_info_type")};
+                return new PrimaryUserIdAndAccountInfoType(rs.getString("primary_user_id"), ACCOUNT_INFO_TYPE.getEnumFromString(rs.getString("account_info_type")));
             }
             return null;
         });
         
         if (result != null) {
-            String primaryUserId = result[0];
-            String accountInfoType = result[1];
-            
             String message;
-            if (ACCOUNT_INFO_TYPE.EMAIL.toString().equals(accountInfoType)) {
+            if (ACCOUNT_INFO_TYPE.EMAIL.equals(result.accountInfoType)) {
                 message = "This user's email is already associated with another user ID";
-            } else if (ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString().equals(accountInfoType)) {
+            } else if (ACCOUNT_INFO_TYPE.PHONE_NUMBER.equals(result.accountInfoType)) {
                 message = "This user's phone number is already associated with another user ID";
-            } else if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(accountInfoType)) {
+            } else if (ACCOUNT_INFO_TYPE.THIRD_PARTY.equals(result.accountInfoType)) {
                 message = "This user's third party login is already associated with another user ID";
             } else {
                 message = "Account info is already associated with another primary user";
             }
-            
-            throw new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(primaryUserId, message);
+
+            return CanBecomePrimaryResult.notOkResult(result.primaryUserId, message);
+        }
+
+        return CanBecomePrimaryResult.okResult();
+    }
+
+    public static class PrimaryUserIdAndAccountInfoType {
+        public final String primaryUserId;
+        public final ACCOUNT_INFO_TYPE accountInfoType;
+
+        PrimaryUserIdAndAccountInfoType(String primaryUserId, ACCOUNT_INFO_TYPE accountInfoType) {
+            this.primaryUserId = primaryUserId;
+            this.accountInfoType = accountInfoType;
         }
     }
 
-    public static void checkIfLoginMethodsCanBeLinked_Transaction(Start start, TransactionConnection con, AppIdentifier appIdentifier, Set<String> tenantIds, Set<String> emails,
-                                                                  Set<String> phoneNumbers, Set<LoginMethod.ThirdParty> thirdParties, String primaryUserId) throws AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException, StorageQueryException, SQLException {
+    public static CanLinkAccountsResult checkIfLoginMethodsCanBeLinked_Transaction(Start start, TransactionConnection con,
+                                                                                   AppIdentifier appIdentifier,
+                                                                                   Set<String> tenantIds, Set<String> emails,
+                                                                                   Set<String> phoneNumbers,
+                                                                                   Set<LoginMethod.ThirdParty> thirdParties,
+                                                                                   String primaryUserId)
+            throws StorageQueryException, SQLException {
         Connection sqlCon = (Connection) con.getConnection();
         
         // If no account info to check, return early
         if ((emails == null || emails.isEmpty()) && 
             (phoneNumbers == null || phoneNumbers.isEmpty()) && 
             (thirdParties == null || thirdParties.isEmpty())) {
-            return;
+            return CanLinkAccountsResult.okResult();
         }
         
         // Build OR conditions for account info types
@@ -501,7 +516,7 @@ public class AccountInfoQueries {
         if (thirdParties != null && !thirdParties.isEmpty()) {
             List<String> thirdPartyValues = new ArrayList<>();
             for (LoginMethod.ThirdParty tp : thirdParties) {
-                thirdPartyValues.add(tp.id + "::" + tp.userId);
+                thirdPartyValues.add(tp.getAccountInfoValue());
             }
             
             StringBuilder thirdPartyCondition = new StringBuilder("(account_info_type = ? AND account_info_value IN (");
@@ -519,7 +534,7 @@ public class AccountInfoQueries {
         
         // If no OR conditions, return early (shouldn't happen due to early return above)
         if (orConditions.isEmpty()) {
-            return;
+            return CanLinkAccountsResult.okResult();
         }
         
         // Build the full query
@@ -576,9 +591,11 @@ public class AccountInfoQueries {
             } else {
                 message = "Account info is already associated with another primary user";
             }
-            
-            throw new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(conflictingPrimaryUserId, message);
+
+            return CanLinkAccountsResult.notOkResult(conflictingPrimaryUserId, message);
         }
+
+        return CanLinkAccountsResult.okResult();
     }
 
     public static void reserveAccountInfoForLinking_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
