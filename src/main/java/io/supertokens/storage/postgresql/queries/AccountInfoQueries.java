@@ -1300,4 +1300,111 @@ public class AccountInfoQueries {
             throw new StorageQueryException(e);
         }
     }
+
+    public static List<io.supertokens.pluginInterface.authRecipe.PrimaryUserIdByAccountInfo> getPrimaryUserIdsByAccountInfo_Transaction(
+            Start start, TransactionConnection con, AppIdentifier appIdentifier,
+            List<String> emails, List<String> phoneNumbers, Map<String, String> thirdPartyIdToThirdPartyUserId)
+            throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+
+            if ((emails == null || emails.isEmpty()) &&
+                    (phoneNumbers == null || phoneNumbers.isEmpty()) &&
+                    (thirdPartyIdToThirdPartyUserId == null || thirdPartyIdToThirdPartyUserId.isEmpty())) {
+                return new ArrayList<>();
+            }
+
+            String primaryUserTenantsTable = getConfig(start).getPrimaryUserTenantsTable();
+
+            List<String> orConditions = new ArrayList<>();
+            List<Object> parameters = new ArrayList<>();
+
+            parameters.add(appIdentifier.getAppId());
+
+            if (emails != null && !emails.isEmpty()) {
+                StringBuilder emailCondition = new StringBuilder("(account_info_type = ? AND account_info_value IN (");
+                for (int i = 0; i < emails.size(); i++) {
+                    emailCondition.append("?");
+                    if (i != emails.size() - 1) {
+                        emailCondition.append(",");
+                    }
+                }
+                emailCondition.append("))");
+                orConditions.add(emailCondition.toString());
+                parameters.add(ACCOUNT_INFO_TYPE.EMAIL.toString());
+                parameters.addAll(emails);
+            }
+
+            if (phoneNumbers != null && !phoneNumbers.isEmpty()) {
+                StringBuilder phoneCondition = new StringBuilder("(account_info_type = ? AND account_info_value IN (");
+                for (int i = 0; i < phoneNumbers.size(); i++) {
+                    phoneCondition.append("?");
+                    if (i != phoneNumbers.size() - 1) {
+                        phoneCondition.append(",");
+                    }
+                }
+                phoneCondition.append("))");
+                orConditions.add(phoneCondition.toString());
+                parameters.add(ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString());
+                parameters.addAll(phoneNumbers);
+            }
+
+            if (thirdPartyIdToThirdPartyUserId != null && !thirdPartyIdToThirdPartyUserId.isEmpty()) {
+                List<String> thirdPartyValues = new ArrayList<>();
+                for (Map.Entry<String, String> entry : thirdPartyIdToThirdPartyUserId.entrySet()) {
+                    thirdPartyValues.add(new LoginMethod.ThirdParty(entry.getValue(), entry.getKey()).getAccountInfoValue());
+                }
+
+                StringBuilder thirdPartyCondition = new StringBuilder("(account_info_type = ? AND account_info_value IN (");
+                for (int i = 0; i < thirdPartyValues.size(); i++) {
+                    thirdPartyCondition.append("?");
+                    if (i != thirdPartyValues.size() - 1) {
+                        thirdPartyCondition.append(",");
+                    }
+                }
+                thirdPartyCondition.append("))");
+                orConditions.add(thirdPartyCondition.toString());
+                parameters.add(ACCOUNT_INFO_TYPE.THIRD_PARTY.toString());
+                parameters.addAll(thirdPartyValues);
+            }
+
+            if (orConditions.isEmpty()) {
+                return new ArrayList<>();
+            }
+
+            StringBuilder QUERY = new StringBuilder("SELECT tenant_id, account_info_type, account_info_value, primary_user_id FROM ");
+            QUERY.append(primaryUserTenantsTable);
+            QUERY.append(" WHERE app_id = ? AND (");
+
+            for (int i = 0; i < orConditions.size(); i++) {
+                QUERY.append(orConditions.get(i));
+                if (i != orConditions.size() - 1) {
+                    QUERY.append(" OR ");
+                }
+            }
+
+            QUERY.append(")");
+
+            String finalQuery = QUERY.toString();
+
+            return execute(sqlCon, finalQuery, pst -> {
+                for (int i = 0; i < parameters.size(); i++) {
+                    pst.setObject(i + 1, parameters.get(i));
+                }
+            }, rs -> {
+                List<io.supertokens.pluginInterface.authRecipe.PrimaryUserIdByAccountInfo> results = new ArrayList<>();
+                while (rs.next()) {
+                    String tenantId = rs.getString("tenant_id");
+                    ACCOUNT_INFO_TYPE accountInfoType = ACCOUNT_INFO_TYPE.getEnumFromString(rs.getString("account_info_type"));
+                    String accountInfoValue = rs.getString("account_info_value");
+                    String primaryUserId = rs.getString("primary_user_id");
+                    results.add(new io.supertokens.pluginInterface.authRecipe.PrimaryUserIdByAccountInfo(
+                            tenantId, accountInfoType, accountInfoValue, primaryUserId));
+                }
+                return results;
+            });
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
 }

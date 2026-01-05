@@ -3687,6 +3687,15 @@ public class Start
     }
 
     @Override
+    public List<io.supertokens.pluginInterface.authRecipe.PrimaryUserIdByAccountInfo> getPrimaryUserIdsByAccountInfo_Transaction(
+            AppIdentifier appIdentifier, TransactionConnection con,
+            List<String> emails, List<String> phoneNumbers, Map<String, String> thirdPartyIdToThirdPartyUserId)
+            throws StorageQueryException {
+        return AccountInfoQueries.getPrimaryUserIdsByAccountInfo_Transaction(this, con, appIdentifier,
+                emails, phoneNumbers, thirdPartyIdToThirdPartyUserId);
+    }
+
+    @Override
     public void addTenantIdToPrimaryUser_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                                      String supertokensUserId)
             throws AnotherPrimaryUserWithPhoneNumberAlreadyExistsException,
