@@ -1295,7 +1295,7 @@ public class Start
     @Override
     public void updateUsersEmail_Transaction(AppIdentifier appIdentifier, TransactionConnection conn, String userId,
                                              String email)
-            throws StorageQueryException, DuplicateEmailException, EmailChangeNotAllowedException, PhoneNumberChangeNotAllowedException {
+            throws StorageQueryException, DuplicateEmailException, EmailChangeNotAllowedException {
         Connection sqlCon = (Connection) conn.getConnection();
         try {
             AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, userId,
@@ -1308,7 +1308,7 @@ public class Start
             }
 
             throw new StorageQueryException(e);
-        } catch (DuplicatePhoneNumberException | DuplicateThirdPartyUserException e) {
+        } catch (DuplicatePhoneNumberException | DuplicateThirdPartyUserException | PhoneNumberChangeNotAllowedException e) {
             throw new IllegalStateException("should never happen");
         }
     }
