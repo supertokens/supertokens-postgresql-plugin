@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import io.supertokens.pluginInterface.authRecipe.exceptions.*;
 import org.postgresql.util.PSQLException;
 import org.postgresql.util.ServerErrorMessage;
 
@@ -30,13 +31,9 @@ import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
 import io.supertokens.pluginInterface.authRecipe.CanBecomePrimaryResult;
 import io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
-import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithEmailAlreadyExistsException;
-import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithPhoneNumberAlreadyExistsException;
-import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithThirdPartyInfoAlreadyExistsException;
-import io.supertokens.pluginInterface.authRecipe.exceptions.EmailChangeNotAllowedException;
-import io.supertokens.pluginInterface.authRecipe.exceptions.PhoneNumberChangeNotAllowedException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.passwordless.exception.DuplicatePhoneNumberException;
@@ -72,92 +69,6 @@ public class AccountInfoQueries {
         }
         throw new IllegalArgumentException(
                 "updateAccountInfo_Transaction should only be called with accountInfoType EMAIL or PHONE_NUMBER");
-    }
-
-    private static String[] getPrimaryUserTenantsConflictForAddTenant(Connection sqlCon, String primaryUserTenantsTable,
-                                                                      TenantIdentifier tenantIdentifier, String supertokensUserId) throws SQLException, StorageQueryException {
-        return execute(sqlCon,
-                "SELECT e.primary_user_id, e.account_info_type FROM " + primaryUserTenantsTable + " e"
-                        + " WHERE e.app_id = ? AND e.tenant_id = ? AND e.primary_user_id <> ?"
-                        + "   AND EXISTS ("
-                        + "     SELECT 1 FROM " + primaryUserTenantsTable + " p"
-                        + "     WHERE p.app_id = ? AND p.primary_user_id = ? AND p.tenant_id <> ?"
-                        + "       AND p.account_info_type = e.account_info_type"
-                        + "       AND p.account_info_value = e.account_info_value"
-                        + "   )"
-                        + "   AND NOT EXISTS ("
-                        + "     SELECT 1 FROM " + primaryUserTenantsTable + " already"
-                        + "     WHERE already.app_id = ? AND already.primary_user_id = ? AND already.tenant_id = ?"
-                        + "   )",
-                pst -> {
-                    pst.setString(1, tenantIdentifier.getAppId());
-                    pst.setString(2, tenantIdentifier.getTenantId());
-                    pst.setString(3, supertokensUserId);
-                    pst.setString(4, tenantIdentifier.getAppId());
-                    pst.setString(5, supertokensUserId);
-                    pst.setString(6, tenantIdentifier.getTenantId());
-                    pst.setString(7, tenantIdentifier.getAppId());
-                    pst.setString(8, supertokensUserId);
-                    pst.setString(9, tenantIdentifier.getTenantId());
-                },
-                rs -> {
-                    String[] firstConflict = null;
-                    while (rs.next()) {
-                        String[] conflict = new String[]{rs.getString("primary_user_id"), rs.getString("account_info_type")};
-                        if (firstConflict == null) {
-                            firstConflict = conflict;
-                        }
-                        if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(conflict[1])) {
-                            return conflict;
-                        }
-                    }
-                    return firstConflict;
-                });
-    }
-
-    private static String getRecipeUserTenantsConflictTypeForAddTenant(Connection sqlCon, String recipeUserTenantsTable,
-                                                                       TenantIdentifier tenantIdentifier, String userId) throws SQLException, StorageQueryException {
-        return execute(sqlCon,
-                "SELECT e.account_info_type"
-                        + " FROM " + recipeUserTenantsTable + " e"
-                        + " WHERE e.app_id = ? AND e.tenant_id = ? AND e.recipe_user_id <> ?"
-                        + "   AND EXISTS ("
-                        + "     SELECT 1 FROM " + recipeUserTenantsTable + " r"
-                        + "     WHERE r.app_id = ? AND r.recipe_user_id = ? AND r.tenant_id <> ?"
-                        + "       AND r.recipe_id = e.recipe_id"
-                        + "       AND r.account_info_type = e.account_info_type"
-                        + "       AND r.account_info_value = e.account_info_value"
-                        + "       AND r.third_party_id IS NOT DISTINCT FROM e.third_party_id"
-                        + "       AND r.third_party_user_id IS NOT DISTINCT FROM e.third_party_user_id"
-                        + "   )"
-                        + "   AND NOT EXISTS ("
-                        + "     SELECT 1 FROM " + recipeUserTenantsTable + " already"
-                        + "     WHERE already.app_id = ? AND already.recipe_user_id = ? AND already.tenant_id = ?"
-                        + "   )",
-                pst -> {
-                    pst.setString(1, tenantIdentifier.getAppId());
-                    pst.setString(2, tenantIdentifier.getTenantId());
-                    pst.setString(3, userId);
-                    pst.setString(4, tenantIdentifier.getAppId());
-                    pst.setString(5, userId);
-                    pst.setString(6, tenantIdentifier.getTenantId());
-                    pst.setString(7, tenantIdentifier.getAppId());
-                    pst.setString(8, userId);
-                    pst.setString(9, tenantIdentifier.getTenantId());
-                },
-                rs -> {
-                    String firstConflictType = null;
-                    while (rs.next()) {
-                        String conflictType = rs.getString("account_info_type");
-                        if (firstConflictType == null) {
-                            firstConflictType = conflictType;
-                        }
-                        if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(conflictType)) {
-                            return conflictType;
-                        }
-                    }
-                    return firstConflictType;
-                });
     }
 
     private static void throwPrimaryUserTenantsConflict(String[] conflict)
@@ -285,30 +196,113 @@ public class AccountInfoQueries {
                 + Config.getConfig(start).getPrimaryUserTenantsTable() + "(primary_user_id);";
     }
 
-    public static void addPrimaryUserAccountInfo_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier, String userId) throws
-            StorageQueryException {
+    public static boolean addPrimaryUserAccountInfo_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier, String userId) throws
+            StorageQueryException, AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException,
+            CannotBecomePrimarySinceRecipeUserIdAlreadyLinkedWithPrimaryUserIdException, UnknownUserIdException {
         try {
-            // Update primary_user_id in recipe_user_tenants to recipe_user_id (making it primary)
-            String UPDATE_QUERY = "UPDATE " + getConfig(start).getRecipeUserTenantsTable()
-                    + " SET primary_user_id = recipe_user_id"
-                    + " WHERE app_id = ? AND recipe_user_id = ?";
+            String schema = Config.getConfig(start).getTableSchema();
+            String primaryUserTenantsTable = getConfig(start).getPrimaryUserTenantsTable();
+            String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
 
-            update(sqlCon, UPDATE_QUERY, pst -> {
-                pst.setString(1, appIdentifier.getAppId());
-                pst.setString(2, userId);
-            });
-
-            String QUERY = "INSERT INTO " + getConfig(start).getPrimaryUserTenantsTable()
+            // Insert with ON CONFLICT to catch primary key violations
+            String QUERY = "INSERT INTO " + primaryUserTenantsTable
                     + " (app_id, tenant_id, account_info_type, account_info_value, primary_user_id)"
                     + " SELECT app_id, tenant_id, account_info_type, account_info_value, ?"
-                    + " FROM " + getConfig(start).getRecipeUserTenantsTable()
-                    + " WHERE app_id = ? AND recipe_user_id = ?";
+                    + " FROM " + recipeUserTenantsTable
+                    + " WHERE app_id = ? AND recipe_user_id = ? AND primary_user_id IS NULL"
+                    + " ON CONFLICT ON CONSTRAINT " + Utils.getConstraintName(schema, primaryUserTenantsTable, null, "pkey")
+                    + " DO UPDATE SET account_info_type = EXCLUDED.account_info_type"
+                    + " RETURNING primary_user_id, account_info_type";
 
-            update(sqlCon, QUERY, pst -> {
+            String[] conflict = execute(sqlCon, QUERY, pst -> {
                 pst.setString(1, userId); // primary_user_id
                 pst.setString(2, appIdentifier.getAppId());
                 pst.setString(3, userId); // recipe_user_id
+            }, rs -> {
+                String[] firstConflict = null;
+                while (rs.next()) {
+                    String returnedPrimaryUserId = rs.getString("primary_user_id");
+                    String accountInfoType = rs.getString("account_info_type");
+                    
+                    // Check if the returned primary_user_id is different from the userId
+                    if (!userId.equals(returnedPrimaryUserId)) {
+                        if (firstConflict == null) {
+                            firstConflict = new String[]{returnedPrimaryUserId, accountInfoType};
+                        }
+                        // Prioritize THIRD_PARTY conflicts
+                        if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(accountInfoType)) {
+                            return new String[]{returnedPrimaryUserId, accountInfoType};
+                        }
+                    }
+                }
+                return firstConflict;
             });
+
+            // Throw conflict if any row had a different primary_user_id
+            if (conflict != null) {
+                assert conflict.length == 2;
+                String conflictingPrimaryUserId = conflict[0];
+                String accountInfoType = conflict[1];
+
+                String message;
+                if (ACCOUNT_INFO_TYPE.EMAIL.toString().equals(accountInfoType)) {
+                    message = "This user's email is already associated with another user ID";
+                } else if (ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString().equals(accountInfoType)) {
+                    message = "This user's phone number is already associated with another user ID";
+                } else if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(accountInfoType)) {
+                    message = "This user's third party login is already associated with another user ID";
+                } else {
+                    message = "Account info is already associated with another user ID";
+                }
+                
+                throw new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(conflictingPrimaryUserId, message);
+            }
+
+            // Update primary_user_id in recipe_user_tenants to recipe_user_id (making it primary)
+            // Return both old and new primary_user_id values
+            String UPDATE_QUERY = "WITH old_values AS ("
+                    + " SELECT primary_user_id FROM " + recipeUserTenantsTable
+                    + " WHERE app_id = ? AND recipe_user_id = ?"
+                    + " LIMIT 1"
+                    + ")"
+                    + " UPDATE " + recipeUserTenantsTable
+                    + " SET primary_user_id = recipe_user_id"
+                    + " WHERE app_id = ? AND recipe_user_id = ?"
+                    + " RETURNING (SELECT primary_user_id FROM old_values) AS old_primary_user_id, primary_user_id AS new_primary_user_id";
+
+            String[] result = execute(sqlCon, UPDATE_QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, userId);
+                pst.setString(3, appIdentifier.getAppId());
+                pst.setString(4, userId);
+            }, rs -> {
+                String[] res = null;
+                while (rs.next()) {
+                    String oldPrimaryUserId = rs.getString("old_primary_user_id");
+                    String newPrimaryUserId = rs.getString("new_primary_user_id");
+                    res = new String[]{oldPrimaryUserId, newPrimaryUserId};
+                }
+                return res;
+            });
+
+            if (result == null) {
+                // TODO Possibly user does not belong to any tenant
+                throw new UnknownUserIdException();
+            }
+            {
+                String oldPrimaryUserId = result[0];
+                String newPrimaryUserId = result[1];
+
+                if (oldPrimaryUserId != null) {
+                    if (oldPrimaryUserId.equals(newPrimaryUserId)) {
+                        return false;
+                    } else {
+                        throw new CannotBecomePrimarySinceRecipeUserIdAlreadyLinkedWithPrimaryUserIdException(oldPrimaryUserId, "This user ID is already linked to another user ID");
+                    }
+                }
+            }
+            // all okay
+            return true;
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -369,107 +363,99 @@ public class AccountInfoQueries {
         }
     }
 
-    public static CanBecomePrimaryResult checkIfLoginMethodCanBecomePrimary_Transaction(Start start, TransactionConnection con, AppIdentifier appIdentifier, LoginMethod loginMethod)
-            throws StorageQueryException, SQLException {
-        Connection sqlCon = (Connection) con.getConnection();
-        
-        // Build the query dynamically based on which values are not null
-        StringBuilder QUERY = new StringBuilder("SELECT primary_user_id, account_info_type FROM " + getConfig(start).getPrimaryUserTenantsTable());
-        QUERY.append(" WHERE app_id = ?");
-        
-        // Add placeholders for tenant IDs only if present
-        List<String> tenantIds = new ArrayList<>(loginMethod.tenantIds);
-        if (!tenantIds.isEmpty()) {
-            QUERY.append(" AND tenant_id IN (");
-            for (int i = 0; i < tenantIds.size(); i++) {
-                QUERY.append("?");
-                if (i != tenantIds.size() - 1) {
-                    QUERY.append(",");
+    public static CanBecomePrimaryResult checkIfLoginMethodCanBecomePrimary(Start start, AppIdentifier appIdentifier, String recipeUserId)
+            throws StorageQueryException, UnknownUserIdException {
+        try {
+            return start.startTransaction(con -> {
+                Connection sqlCon = (Connection) con.getConnection();
+                
+                String QUERY = "SELECT primary_user_id FROM " + getConfig(start).getRecipeUserTenantsTable()
+                        + " WHERE app_id = ? AND recipe_user_id = ? LIMIT 1";
+
+                String[] primaryUserId = execute(sqlCon, QUERY, pst -> {
+                    pst.setString(1, appIdentifier.getAppId());
+                    pst.setString(2, recipeUserId);
+                }, rs -> {
+                    if (!rs.next()) {
+                        return new String[]{};
+                    }
+                    return new String[]{rs.getString("primary_user_id")};
+                });
+
+                if (primaryUserId.length == 0) {
+                    throw new StorageTransactionLogicException(new UnknownUserIdException());
                 }
-            }
-            QUERY.append(")");
-        }
-        QUERY.append(" AND (");
-        
-        // Build OR conditions for account info types
-        List<String> orConditions = new ArrayList<>();
-        List<Object> parameters = new ArrayList<>();
-        
-        // Add app_id parameter
-        parameters.add(appIdentifier.getAppId());
-        
-        // Add tenant_id parameters only if we add tenant_id filter to the query
-        if (!tenantIds.isEmpty()) {
-            parameters.addAll(tenantIds);
-        }
-        
-        // Email condition
-        if (loginMethod.email != null) {
-            orConditions.add("(account_info_type = ? AND account_info_value = ?)");
-            parameters.add(ACCOUNT_INFO_TYPE.EMAIL.toString());
-            parameters.add(loginMethod.email);
-        }
-        
-        // Phone condition
-        if (loginMethod.phoneNumber != null) {
-            orConditions.add("(account_info_type = ? AND account_info_value = ?)");
-            parameters.add(ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString());
-            parameters.add(loginMethod.phoneNumber);
-        }
-        
-        // Third party condition
-        if (loginMethod.thirdParty != null) {
-            String thirdPartyAccountInfoValue = new LoginMethod.ThirdParty(loginMethod.thirdParty.id, loginMethod.thirdParty.userId).getAccountInfoValue();
-            orConditions.add("(account_info_type = ? AND account_info_value = ?)");
-            parameters.add(ACCOUNT_INFO_TYPE.THIRD_PARTY.toString());
-            parameters.add(thirdPartyAccountInfoValue);
-        }
-        
-        // If no OR conditions, return early (nothing to check)
-        if (orConditions.isEmpty()) {
-            return CanBecomePrimaryResult.okResult();
-        }
-        
-        // Join OR conditions
-        for (int i = 0; i < orConditions.size(); i++) {
-            QUERY.append(orConditions.get(i));
-            if (i != orConditions.size() - 1) {
-                QUERY.append(" OR ");
-            }
-        }
-        
-        QUERY.append(") LIMIT 1");
-        
-        String finalQuery = QUERY.toString();
-        
-        // Execute query and check for results
-        PrimaryUserIdAndAccountInfoType result = execute(sqlCon, finalQuery, pst -> {
-            for (int i = 0; i < parameters.size(); i++) {
-                pst.setObject(i + 1, parameters.get(i));
-            }
-        }, rs -> {
-            if (rs.next()) {
-                return new PrimaryUserIdAndAccountInfoType(rs.getString("primary_user_id"), ACCOUNT_INFO_TYPE.getEnumFromString(rs.getString("account_info_type")));
-            }
-            return null;
-        });
-        
-        if (result != null) {
-            String message;
-            if (ACCOUNT_INFO_TYPE.EMAIL.equals(result.accountInfoType)) {
-                message = "This user's email is already associated with another user ID";
-            } else if (ACCOUNT_INFO_TYPE.PHONE_NUMBER.equals(result.accountInfoType)) {
-                message = "This user's phone number is already associated with another user ID";
-            } else if (ACCOUNT_INFO_TYPE.THIRD_PARTY.equals(result.accountInfoType)) {
-                message = "This user's third party login is already associated with another user ID";
-            } else {
-                message = "Account info is already associated with another primary user";
-            }
 
-            return CanBecomePrimaryResult.notOkResult(result.primaryUserId, message);
-        }
+                assert primaryUserId.length == 1;
 
-        return CanBecomePrimaryResult.okResult();
+                if (primaryUserId[0] != null) {
+                    if (primaryUserId[0].equals(recipeUserId)) {
+                        return CanBecomePrimaryResult.wasAlreadyAPrimeryUserResult();
+                    } else {
+                        return CanBecomePrimaryResult.linkedWithAnotherPrimaryUserResult(primaryUserId[0]);
+                    }
+                }
+
+                // now we need to check if the user can become primary by checking if there are conflicting account info
+                // Get all tenant IDs and account info for this recipe user
+                String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
+                String primaryUserTenantsTable = getConfig(start).getPrimaryUserTenantsTable();
+                
+                // Query to find conflicts: check if any account info of this recipe user
+                // is already associated with a different primary_user_id in primary_user_tenants
+                String CONFLICT_QUERY = "SELECT p.primary_user_id, p.account_info_type"
+                        + " FROM " + primaryUserTenantsTable + " p"
+                        + " INNER JOIN " + recipeUserTenantsTable + " r"
+                        + "   ON p.app_id = r.app_id"
+                        + "   AND p.tenant_id = r.tenant_id"
+                        + "   AND p.account_info_type = r.account_info_type"
+                        + "   AND p.account_info_value = r.account_info_value"
+                        + " WHERE r.app_id = ?"
+                        + "   AND r.recipe_user_id = ?"
+                        + "   AND p.primary_user_id != ?"
+                        + " LIMIT 1";
+                
+                String[] conflict = execute(sqlCon, CONFLICT_QUERY, pst -> {
+                    pst.setString(1, appIdentifier.getAppId());
+                    pst.setString(2, recipeUserId);
+                    pst.setString(3, recipeUserId);
+                }, rs -> {
+                    if (rs.next()) {
+                        return new String[]{
+                            rs.getString("primary_user_id"),
+                            rs.getString("account_info_type")
+                        };
+                    }
+                    return null;
+                });
+                
+                if (conflict != null) {
+                    String conflictingPrimaryUserId = conflict[0];
+                    String accountInfoType = conflict[1];
+                    
+                    String message;
+                    if (ACCOUNT_INFO_TYPE.EMAIL.toString().equals(accountInfoType)) {
+                        message = "This user's email is already associated with another user ID";
+                    } else if (ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString().equals(accountInfoType)) {
+                        message = "This user's phone number is already associated with another user ID";
+                    } else if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(accountInfoType)) {
+                        message = "This user's third party login is already associated with another user ID";
+                    } else {
+                        message = "Account info is already associated with another primary user";
+                    }
+                    
+                    return CanBecomePrimaryResult.conflictingAccountInfoResult(conflictingPrimaryUserId, message);
+                }
+
+                return CanBecomePrimaryResult.okResult();
+            });
+        } catch (StorageTransactionLogicException e) {
+            Exception cause = e.actualException;
+            if (cause instanceof UnknownUserIdException) {
+                throw (UnknownUserIdException) cause;
+            }
+            throw new StorageQueryException(cause);
+        }
     }
 
     public static class PrimaryUserIdAndAccountInfoType {
