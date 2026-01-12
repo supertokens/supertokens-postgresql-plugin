@@ -724,6 +724,14 @@ public class GeneralQueries {
                     update(con, SAMLQueries.getQueryToCreateSAMLClaimsExpiresAtIndex(start), NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, con, Config.getConfig(start).getRecipeUserAccountInfosTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, AccountInfoQueries.getQueryToCreateRecipeUserAccountInfosTable(start), NO_OP_SETTER);
+
+                    // indexes
+                    // TODO
+                }
+
                 if (!doesTableExists(start, con, Config.getConfig(start).getRecipeUserTenantsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(con, AccountInfoQueries.getQueryToCreateRecipeUserTenantsTable(start), NO_OP_SETTER);
@@ -798,6 +806,7 @@ public class GeneralQueries {
                     + getConfig(start).getAppIdToUserIdTable() + ","
                     + getConfig(start).getUserIdMappingTable() + ","
                     + getConfig(start).getRecipeUserTenantsTable() + ","
+                    + getConfig(start).getRecipeUserAccountInfosTable() + ","
                     + getConfig(start).getUsersTable() + ","
                     + getConfig(start).getPrimaryUserTenantsTable() + ","
                     + getConfig(start).getAccessTokenSigningKeysTable() + ","
@@ -1422,13 +1431,16 @@ public class GeneralQueries {
             throws SQLException, StorageQueryException {
         {
             String QUERY = "UPDATE " + getConfig(start).getUsersTable() +
-                    " SET is_linked_or_is_a_primary_user = true, primary_or_recipe_user_id = ? WHERE app_id = ? AND " +
-                    "user_id = ?";
+                    " SET is_linked_or_is_a_primary_user = true, primary_or_recipe_user_id = (" +
+                    "   SELECT primary_user_id FROM " + getConfig(start).getRecipeUserAccountInfosTable() +
+                    "   WHERE app_id = ? AND recipe_user_id = ? LIMIT 1" +
+                    ") WHERE app_id = ? AND user_id = ?";
 
             update(sqlCon, QUERY, pst -> {
-                pst.setString(1, primaryUserId);
-                pst.setString(2, appIdentifier.getAppId());
-                pst.setString(3, recipeUserId);
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, primaryUserId);
+                pst.setString(3, appIdentifier.getAppId());
+                pst.setString(4, recipeUserId);
             });
         }
 
@@ -1436,13 +1448,16 @@ public class GeneralQueries {
 
         {
             String QUERY = "UPDATE " + getConfig(start).getAppIdToUserIdTable() +
-                    " SET is_linked_or_is_a_primary_user = true, primary_or_recipe_user_id = ? WHERE app_id = ? AND " +
-                    "user_id = ?";
+                    " SET is_linked_or_is_a_primary_user = true, primary_or_recipe_user_id = (" +
+                    "   SELECT primary_user_id FROM " + getConfig(start).getRecipeUserAccountInfosTable() +
+                    "   WHERE app_id = ? AND recipe_user_id = ? LIMIT 1" +
+                    ") WHERE app_id = ? AND user_id = ?";
 
             update(sqlCon, QUERY, pst -> {
-                pst.setString(1, primaryUserId);
-                pst.setString(2, appIdentifier.getAppId());
-                pst.setString(3, recipeUserId);
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, primaryUserId);
+                pst.setString(3, appIdentifier.getAppId());
+                pst.setString(4, recipeUserId);
             });
         }
     }
