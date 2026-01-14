@@ -29,14 +29,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
 import static io.supertokens.pluginInterface.RECIPE_ID.EMAIL_PASSWORD;
 import io.supertokens.pluginInterface.RowMapper;
+import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
+import io.supertokens.pluginInterface.authRecipe.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.emailpassword.EmailPasswordImportUser;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
-import io.supertokens.pluginInterface.authRecipe.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
@@ -358,20 +358,16 @@ public class EmailPasswordQueries {
         });
     }
 
-    public static void signUpMultipleForBulkImport_Transaction(Start start, Connection sqlCon, List<EmailPasswordImportUser> usersToSignUp)
+    public static void importUsers_Transaction(Start start, Connection sqlCon, List<EmailPasswordImportUser> usersToSignUp)
             throws StorageQueryException, StorageTransactionLogicException {
         try {
             String app_id_to_user_id_QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                    + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
+                    + "(app_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id)" + " VALUES(?, ?, ?, ?, ?)";
 
             String all_auth_recipe_users_QUERY = "INSERT INTO " + getConfig(start).getUsersTable() +
-                    "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, " +
+                    "(app_id, tenant_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id, time_joined, " +
                     "primary_or_recipe_user_time_joined)" +
-                    " VALUES(?, ?, ?, ?, ?, ?, ?)";
-
-            String recipe_user_tenants_QUERY = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
-                    + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value)"
-                    + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
+                    " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
 
             String emailpassword_users_QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUsersTable()
                     + "(app_id, user_id, email, password_hash, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
@@ -380,63 +376,70 @@ public class EmailPasswordQueries {
                     "INSERT INTO " + getConfig(start).getEmailPasswordUserToTenantTable()
                             + "(app_id, tenant_id, user_id, email)" + " VALUES(?, ?, ?, ?)";
 
+            List<PreparedStatementValueSetter> recipeUserAccountInfoBatch = new ArrayList<>();
+            List<PreparedStatementValueSetter> recipeUserTenantsBatch = new ArrayList<>();
+
             List<PreparedStatementValueSetter> appIdToUserIdSetters = new ArrayList<>();
             List<PreparedStatementValueSetter> allAuthRecipeUsersSetters = new ArrayList<>();
-            List<PreparedStatementValueSetter> recipeUserTenantsSetters = new ArrayList<>();
             List<PreparedStatementValueSetter> emailPasswordUsersSetters = new ArrayList<>();
             List<PreparedStatementValueSetter> emailPasswordUsersToTenantSetters = new ArrayList<>();
 
             for (EmailPasswordImportUser user : usersToSignUp) {
                 String userId = user.userId;
-                TenantIdentifier tenantIdentifier = user.tenantIdentifier;
+                String appId = user.appIdentifier.getAppId();
+                String primaryOrRecipeUserId = user.primaryUserId != null ? user.primaryUserId : user.userId;
+                boolean isLinkedOrIsPrimaryUser = user.primaryUserId != null;
+
+                // Recipe Account Info
+                AccountInfoQueries.addRecipeUserAccountInfoToBatch(recipeUserAccountInfoBatch, user.appIdentifier, user.userId, EMAIL_PASSWORD.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", user.email, isLinkedOrIsPrimaryUser ? primaryOrRecipeUserId : null);
+
+                // Recipe User Tenants
+                AccountInfoQueries.addRecipeUserTenantsToBatch(recipeUserTenantsBatch, user.appIdentifier, user.userId, EMAIL_PASSWORD.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", user.email, user.recipeUserTenantIds);
+
 
                 appIdToUserIdSetters.add(pst -> {
-                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(1, appId);
                     pst.setString(2, userId);
-                    pst.setString(3, userId);
-                    pst.setString(4, EMAIL_PASSWORD.toString());
-                });
-
-                allAuthRecipeUsersSetters.add(pst -> {
-                    pst.setString(1, tenantIdentifier.getAppId());
-                    pst.setString(2, tenantIdentifier.getTenantId());
-                    pst.setString(3, userId);
-                    pst.setString(4, userId);
+                    pst.setString(3, primaryOrRecipeUserId);
+                    pst.setBoolean(4, isLinkedOrIsPrimaryUser);
                     pst.setString(5, EMAIL_PASSWORD.toString());
-                    pst.setLong(6, user.timeJoinedMSSinceEpoch);
-                    pst.setLong(7, user.timeJoinedMSSinceEpoch);
-                });
-
-                recipeUserTenantsSetters.add(pst -> {
-                    pst.setString(1, tenantIdentifier.getAppId());
-                    pst.setString(2, userId);
-                    pst.setString(3, tenantIdentifier.getTenantId());
-                    pst.setString(4, EMAIL_PASSWORD.toString());
-                    pst.setString(5, ACCOUNT_INFO_TYPE.EMAIL.toString());
-                    pst.setString(6, "");
-                    pst.setString(7, "");
-                    pst.setString(8, user.email);
                 });
 
                 emailPasswordUsersSetters.add(pst -> {
-                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(1, appId);
                     pst.setString(2, userId);
                     pst.setString(3, user.email);
                     pst.setString(4, user.passwordHash);
                     pst.setLong(5, user.timeJoinedMSSinceEpoch);
                 });
 
-                emailPasswordUsersToTenantSetters.add(pst -> {
-                    pst.setString(1, tenantIdentifier.getAppId());
-                    pst.setString(2, tenantIdentifier.getTenantId());
-                    pst.setString(3, userId);
-                    pst.setString(4, user.email);
-                });
+                // Generate entries for all recipe user tenant IDs
+                for (String tenantId : user.recipeUserTenantIds) {
+                    allAuthRecipeUsersSetters.add(pst -> {
+                        pst.setString(1, appId);
+                        pst.setString(2, tenantId);
+                        pst.setString(3, userId);
+                        pst.setString(4, primaryOrRecipeUserId);
+                        pst.setBoolean(5, isLinkedOrIsPrimaryUser);
+                        pst.setString(6, EMAIL_PASSWORD.toString());
+                        pst.setLong(7, user.timeJoinedMSSinceEpoch);
+                        pst.setLong(8, user.timeJoinedMSSinceEpoch);
+                    });
+
+                    emailPasswordUsersToTenantSetters.add(pst -> {
+                        pst.setString(1, appId);
+                        pst.setString(2, tenantId);
+                        pst.setString(3, userId);
+                        pst.setString(4, user.email);
+                    });
+                }
             }
+
+            executeBatch(sqlCon, AccountInfoQueries.getRecipeUserAccountInfoBatchQuery(start), recipeUserAccountInfoBatch);
+            executeBatch(sqlCon, AccountInfoQueries.getRecipeUserTenantBatchQuery(start), recipeUserTenantsBatch);
 
             executeBatch(sqlCon, app_id_to_user_id_QUERY, appIdToUserIdSetters);
             executeBatch(sqlCon, all_auth_recipe_users_QUERY, allAuthRecipeUsersSetters);
-            executeBatch(sqlCon, recipe_user_tenants_QUERY, recipeUserTenantsSetters);
             executeBatch(sqlCon, emailpassword_users_QUERY, emailPasswordUsersSetters);
             executeBatch(sqlCon, emailpassword_users_to_tenant_QUERY, emailPasswordUsersToTenantSetters);
             sqlCon.commit();

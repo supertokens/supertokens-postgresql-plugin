@@ -18,8 +18,8 @@ package io.supertokens.storage.postgresql.queries;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import org.postgresql.util.PSQLException;
 import org.postgresql.util.ServerErrorMessage;
@@ -38,6 +38,7 @@ import io.supertokens.pluginInterface.authRecipe.exceptions.EmailChangeNotAllowe
 import io.supertokens.pluginInterface.authRecipe.exceptions.InputUserIdIsNotAPrimaryUserException;
 import io.supertokens.pluginInterface.authRecipe.exceptions.PhoneNumberChangeNotAllowedException;
 import io.supertokens.pluginInterface.authRecipe.exceptions.UnknownUserIdException;
+import io.supertokens.pluginInterface.bulkimport.PrimaryUser;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
@@ -46,10 +47,11 @@ import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.passwordless.exception.DuplicatePhoneNumberException;
 import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
+
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import io.supertokens.storage.postgresql.utils.Utils;
 
@@ -1227,18 +1229,77 @@ public class AccountInfoQueries {
         }
     }
 
-    public static void addPrimaryUserAccountInfoForUsers_Transaction(Start start, Connection sqlCon,
-                                                                     AppIdentifier appIdentifier,
-                                                                     List<String> userIds)
-            throws StorageQueryException {
-        // TODO
+    public static void addRecipeUserAccountInfoToBatch(List<PreparedStatementValueSetter> recipeUserAccountInfoBatch, AppIdentifier appIdentifier, String recipeUserId, String recipeId, ACCOUNT_INFO_TYPE accountInfoType, String thirdPartyId, String thirdPartyUserId, String accountInfoValue, String primaryUserId) {
+        recipeUserAccountInfoBatch.add(pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, recipeUserId);
+            pst.setString(3, recipeId);
+            pst.setString(4, accountInfoType.toString());
+            pst.setString(5, thirdPartyId);
+            pst.setString(6, thirdPartyUserId);
+            pst.setString(7, accountInfoValue);
+            pst.setString(8, primaryUserId);
+        });
     }
 
-    public static void reserveAccountInfoForLinkingMultiple_Transaction(Start start, Connection sqlCon,
-                                                                        AppIdentifier appIdentifier,
-                                                                        Map<String, String> recipeUserIdToPrimaryUserId)
+    public static void addRecipeUserTenantsToBatch(List<PreparedStatementValueSetter> recipeUserAccountInfoBatch, AppIdentifier appIdentifier, String recipeUserId, String recipeId, ACCOUNT_INFO_TYPE accountInfoType, String thirdPartyId, String thirdPartyUserId, String accountInfoValue,
+                                                   List<String> recipeUserTenantIds) {
+        if (thirdPartyId.length() > 28) {
+            System.out.println(thirdPartyId);
+        }
+        for (String tenantId : recipeUserTenantIds) {
+            recipeUserAccountInfoBatch.add(pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, recipeUserId);
+                pst.setString(3, tenantId);
+                pst.setString(4, recipeId);
+                pst.setString(5, accountInfoType.toString());
+                pst.setString(6, thirdPartyId);
+                pst.setString(7, thirdPartyUserId);
+                pst.setString(8, accountInfoValue);
+            });
+        }
+    }
+
+    public static String getRecipeUserAccountInfoBatchQuery (Start start) {
+        return "INSERT INTO " + getConfig(start).getRecipeUserAccountInfosTable()
+                + "(app_id, recipe_user_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value, primary_user_id)"
+                + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
+    }
+
+    public static String getRecipeUserTenantBatchQuery (Start start) {
+        return "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
+                + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value)"
+                + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
+    }
+
+    public static String getPrimaryUserTenantBatchQuery (Start start) {
+        return "INSERT INTO " + getConfig(start).getPrimaryUserTenantsTable()
+                + "(app_id, tenant_id, account_info_type, account_info_value, primary_user_id)"
+                + " VALUES(?, ?, ?, ?, ?)";
+    }
+
+    public static void reservePrimaryUserAccountInfos_Transaction(Start start, TransactionConnection con, List<PrimaryUser> primaryUsers)
             throws SQLException, StorageQueryException {
-        // TODO
+        String QUERY = getPrimaryUserTenantBatchQuery(start);
+        Connection sqlCon = (Connection) con.getConnection();
+        List<PreparedStatementValueSetter> primaryUserTenantSetters = new ArrayList<>();
+
+        for (var user : primaryUsers) {
+            for (var accountInfo : user.accountInfos) {
+                for (String tenantId : user.tenantIds) {
+                    primaryUserTenantSetters.add(pst -> {
+                        pst.setString(1, user.appIdentifier.getAppId());
+                        pst.setString(2, tenantId);
+                        pst.setString(3, accountInfo.type.toString());
+                        pst.setString(4, accountInfo.value);
+                        pst.setString(5, user.primaryUserId);
+                    });
+                }
+            }
+        }
+
+        executeBatch(sqlCon, QUERY, primaryUserTenantSetters);
     }
 }
 

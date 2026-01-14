@@ -28,9 +28,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
 import static io.supertokens.pluginInterface.RECIPE_ID.THIRD_PARTY;
 import io.supertokens.pluginInterface.RowMapper;
+import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
 import io.supertokens.pluginInterface.authRecipe.exceptions.UnknownUserIdException;
@@ -672,17 +672,13 @@ public class ThirdPartyQueries {
             throws SQLException, StorageQueryException {
 
         String app_id_userid_QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
+                + "(app_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id)" + " VALUES(?, ?, ?, ?, ?)";
 
         String all_auth_recipe_users_QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
                 +
-                "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, " +
+                "(app_id, tenant_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id, time_joined, " +
                 "primary_or_recipe_user_time_joined)" +
-                " VALUES(?, ?, ?, ?, ?, ?, ?)";
-
-        String recipe_user_tenants_QUERY = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
-                + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value)"
-                + " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
+                " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
 
         String thirdparty_users_QUERY = "INSERT INTO " + getConfig(start).getThirdPartyUsersTable()
                 + "(app_id, third_party_id, third_party_user_id, user_id, email, time_joined)"
@@ -692,58 +688,37 @@ public class ThirdPartyQueries {
                 + "(app_id, tenant_id, user_id, third_party_id, third_party_user_id)"
                 + " VALUES(?, ?, ?, ?, ?)";
 
+        List<PreparedStatementValueSetter> recipeUserAccountInfoBatch = new ArrayList<>();
+        List<PreparedStatementValueSetter> recipeUserTenantsBatch = new ArrayList<>();
+
         List<PreparedStatementValueSetter> appIdToUserIdBatch = new ArrayList<>();
         List<PreparedStatementValueSetter> allAuthRecipeUsersBatch = new ArrayList<>();
-        List<PreparedStatementValueSetter> recipeUserTenantsBatch = new ArrayList<>();
         List<PreparedStatementValueSetter> thirdPartyUsersBatch = new ArrayList<>();
         List<PreparedStatementValueSetter> thirdPartyUsersToTenantBatch = new ArrayList<>();
 
         for (ThirdPartyImportUser user : users) {
-            TenantIdentifier tenantIdentifier = user.tenantIdentifier;
+            String appId = user.appIdentifier.getAppId();
+            String primaryOrRecipeUserId = user.primaryUserId != null ? user.primaryUserId : user.userId;
+            boolean isLinkedOrIsPrimaryUser = user.primaryUserId != null;
+
+            // Recipe Account Info
+            AccountInfoQueries.addRecipeUserAccountInfoToBatch(recipeUserAccountInfoBatch, user.appIdentifier, user.userId, THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.THIRD_PARTY, "", "", new LoginMethod.ThirdParty(user.thirdpartyId, user.thirdpartyUserId).getAccountInfoValue(), isLinkedOrIsPrimaryUser ? primaryOrRecipeUserId : null);
+            AccountInfoQueries.addRecipeUserAccountInfoToBatch(recipeUserAccountInfoBatch, user.appIdentifier, user.userId, THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.EMAIL, user.thirdpartyId, user.thirdpartyUserId, user.email, isLinkedOrIsPrimaryUser ? primaryOrRecipeUserId : null);
+
+            // Recipe User Tenants
+            AccountInfoQueries.addRecipeUserTenantsToBatch(recipeUserTenantsBatch, user.appIdentifier, user.userId, THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.THIRD_PARTY, "", "", new LoginMethod.ThirdParty(user.thirdpartyId, user.thirdpartyUserId).getAccountInfoValue(), user.recipeUserTenantIds);
+            AccountInfoQueries.addRecipeUserTenantsToBatch(recipeUserTenantsBatch, user.appIdentifier, user.userId, THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", user.email, user.recipeUserTenantIds);
+
             appIdToUserIdBatch.add(pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(1, appId);
                 pst.setString(2, user.userId);
-                pst.setString(3, user.userId);
-                pst.setString(4, THIRD_PARTY.toString());
-            });
-
-            allAuthRecipeUsersBatch.add(pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, tenantIdentifier.getTenantId());
-                pst.setString(3, user.userId);
-                pst.setString(4, user.userId);
+                pst.setString(3, primaryOrRecipeUserId);
+                pst.setBoolean(4, isLinkedOrIsPrimaryUser);
                 pst.setString(5, THIRD_PARTY.toString());
-                pst.setLong(6, user.timeJoinedMSSinceEpoch);
-                pst.setLong(7, user.timeJoinedMSSinceEpoch);
-            });
-
-            // recipe_user_tenants:
-            // - Insert row for email (uses third_party_id + third_party_user_id columns)
-            recipeUserTenantsBatch.add(pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, user.userId);
-                pst.setString(3, tenantIdentifier.getTenantId());
-                pst.setString(4, THIRD_PARTY.toString());
-                pst.setString(5, ACCOUNT_INFO_TYPE.EMAIL.toString());
-                pst.setString(6, user.thirdpartyId);
-                pst.setString(7, user.thirdpartyUserId);
-                pst.setString(8, user.email);
-            });
-
-            // - Insert row for third party id (stores thirdPartyId::thirdPartyUserId in account_info_value)
-            recipeUserTenantsBatch.add(pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, user.userId);
-                pst.setString(3, tenantIdentifier.getTenantId());
-                pst.setString(4, THIRD_PARTY.toString());
-                pst.setString(5, ACCOUNT_INFO_TYPE.THIRD_PARTY.toString());
-                pst.setString(6, "");
-                pst.setString(7, "");
-                pst.setString(8, new LoginMethod.ThirdParty(user.thirdpartyId, user.thirdpartyUserId).getAccountInfoValue());
             });
 
             thirdPartyUsersBatch.add(pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(1, appId);
                 pst.setString(2, user.thirdpartyId);
                 pst.setString(3, user.thirdpartyUserId);
                 pst.setString(4, user.userId);
@@ -751,18 +726,34 @@ public class ThirdPartyQueries {
                 pst.setLong(6, user.timeJoinedMSSinceEpoch);
             });
 
-            thirdPartyUsersToTenantBatch.add(pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, tenantIdentifier.getTenantId());
-                pst.setString(3, user.userId);
-                pst.setString(4, user.thirdpartyId);
-                pst.setString(5, user.thirdpartyUserId);
-            });
+            // Generate entries for all recipe user tenant IDs
+            for (String tenantId : user.recipeUserTenantIds) {
+                allAuthRecipeUsersBatch.add(pst -> {
+                    pst.setString(1, appId);
+                    pst.setString(2, tenantId);
+                    pst.setString(3, user.userId);
+                    pst.setString(4, primaryOrRecipeUserId);
+                    pst.setBoolean(5, isLinkedOrIsPrimaryUser);
+                    pst.setString(6, THIRD_PARTY.toString());
+                    pst.setLong(7, user.timeJoinedMSSinceEpoch);
+                    pst.setLong(8, user.timeJoinedMSSinceEpoch);
+                });
+
+                thirdPartyUsersToTenantBatch.add(pst -> {
+                    pst.setString(1, appId);
+                    pst.setString(2, tenantId);
+                    pst.setString(3, user.userId);
+                    pst.setString(4, user.thirdpartyId);
+                    pst.setString(5, user.thirdpartyUserId);
+                });
+            }
         }
+
+        executeBatch(sqlConnection, AccountInfoQueries.getRecipeUserAccountInfoBatchQuery(start), recipeUserAccountInfoBatch);
+        executeBatch(sqlConnection, AccountInfoQueries.getRecipeUserTenantBatchQuery(start), recipeUserTenantsBatch);
 
         executeBatch(sqlConnection, app_id_userid_QUERY, appIdToUserIdBatch);
         executeBatch(sqlConnection, all_auth_recipe_users_QUERY, allAuthRecipeUsersBatch);
-        executeBatch(sqlConnection, recipe_user_tenants_QUERY, recipeUserTenantsBatch);
         executeBatch(sqlConnection, thirdparty_users_QUERY, thirdPartyUsersBatch);
         executeBatch(sqlConnection, thirdparty_user_to_tenant_QUERY, thirdPartyUsersToTenantBatch);
     }

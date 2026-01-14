@@ -30,8 +30,6 @@ import java.util.Set;
 
 import javax.annotation.Nonnull;
 
-import io.supertokens.pluginInterface.authRecipe.CanBecomePrimaryResult;
-import io.supertokens.pluginInterface.authRecipe.exceptions.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -44,7 +42,6 @@ import com.google.gson.JsonPrimitive;
 import com.zaxxer.hikari.pool.HikariPool;
 
 import ch.qos.logback.classic.Logger;
-import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
 import io.supertokens.pluginInterface.ActiveUsersSQLStorage;
 import io.supertokens.pluginInterface.ActiveUsersStorage;
 import io.supertokens.pluginInterface.ConfigFieldInfo;
@@ -53,11 +50,24 @@ import io.supertokens.pluginInterface.LOG_LEVEL;
 import io.supertokens.pluginInterface.RECIPE_ID;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.Storage;
+import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
+import io.supertokens.pluginInterface.authRecipe.CanBecomePrimaryResult;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
+import io.supertokens.pluginInterface.authRecipe.exceptions.AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithEmailAlreadyExistsException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithPhoneNumberAlreadyExistsException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithThirdPartyInfoAlreadyExistsException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.CannotBecomePrimarySinceRecipeUserIdAlreadyLinkedWithPrimaryUserIdException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.CannotLinkSinceRecipeUserIdAlreadyLinkedWithAnotherPrimaryUserIdException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.EmailChangeNotAllowedException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.InputUserIdIsNotAPrimaryUserException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.PhoneNumberChangeNotAllowedException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.authRecipe.sqlStorage.AuthRecipeSQLStorage;
 import io.supertokens.pluginInterface.bulkimport.BulkImportStorage;
 import io.supertokens.pluginInterface.bulkimport.BulkImportUser;
+import io.supertokens.pluginInterface.bulkimport.PrimaryUser;
 import io.supertokens.pluginInterface.bulkimport.exceptions.BulkImportBatchInsertException;
 import io.supertokens.pluginInterface.bulkimport.exceptions.BulkImportTransactionRolledBackException;
 import io.supertokens.pluginInterface.bulkimport.sqlStorage.BulkImportSQLStorage;
@@ -1141,7 +1151,7 @@ public class Start
             throws StorageQueryException, StorageTransactionLogicException {
         try {
             Connection sqlConnection = (Connection) connection.getConnection();
-            EmailPasswordQueries.signUpMultipleForBulkImport_Transaction(this, sqlConnection, users);
+            EmailPasswordQueries.importUsers_Transaction(this, sqlConnection, users);
         } catch (StorageQueryException | StorageTransactionLogicException e) {
             Throwable actual = e.getCause();
             if (actual instanceof BatchUpdateException batchUpdateException) {
@@ -1171,11 +1181,10 @@ public class Start
                             errorByPosition.put(users.get(position).userId,
                                     new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException());
                         } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
-                            errorByPosition.put(users.get(position).userId, new TenantOrAppNotFoundException(users.get(position).tenantIdentifier.toAppIdentifier()));
+                            errorByPosition.put(users.get(position).userId, new TenantOrAppNotFoundException(users.get(position).appIdentifier));
                         } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
-                            errorByPosition.put(users.get(position).userId,new TenantOrAppNotFoundException(users.get(position).tenantIdentifier));
+                            errorByPosition.put(users.get(position).userId,new TenantOrAppNotFoundException(users.get(position).appIdentifier.getAsPublicTenantIdentifier())); // fetch proper tenant id here
                         }
-
                     }
                     nextException = nextException.getNextException();
                 }
@@ -1661,10 +1670,10 @@ public class Start
                                         new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException());
                             }
                             else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
-                                throw new TenantOrAppNotFoundException(usersToImport.get(position).tenantIdentifier.toAppIdentifier());
+                                throw new TenantOrAppNotFoundException(usersToImport.get(position).appIdentifier);
 
                             } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
-                                throw new TenantOrAppNotFoundException(usersToImport.get(position).tenantIdentifier);
+                                throw new TenantOrAppNotFoundException(usersToImport.get(position).appIdentifier.getAsPublicTenantIdentifier()); // TODO get proper tenant id
                             }
                         }
                         nextException = nextException.getNextException();
@@ -2235,11 +2244,11 @@ public class Start
 
                         } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(),
                                 "app_id")) {
-                            throw new TenantOrAppNotFoundException(users.get(position).tenantIdentifier.toAppIdentifier());
+                            throw new TenantOrAppNotFoundException(users.get(position).appIdentifier);
 
                         } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(),
                                 "tenant_id")) {
-                            throw new TenantOrAppNotFoundException(users.get(position).tenantIdentifier.toAppIdentifier());
+                            throw new TenantOrAppNotFoundException(users.get(position).appIdentifier.getAsPublicTenantIdentifier()); // TODO get proper tenant id
                         }
                     }
                     nextException = nextException.getNextException();
@@ -3604,18 +3613,6 @@ public class Start
     }
 
     @Override
-    public void makePrimaryUsers_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
-                                             List<String> userIds) throws StorageQueryException {
-        try {
-            Connection sqlCon = (Connection) con.getConnection();
-            AccountInfoQueries.addPrimaryUserAccountInfoForUsers_Transaction(this, sqlCon, appIdentifier, userIds);
-            GeneralQueries.makePrimaryUsers_Transaction(this, sqlCon, appIdentifier, userIds);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    @Override
     public boolean linkAccounts_Transaction(AppIdentifier appIdentifier, TransactionConnection con, String recipeUserId,
                                          String primaryUserId)
             throws StorageQueryException, CannotLinkSinceRecipeUserIdAlreadyLinkedWithAnotherPrimaryUserIdException,
@@ -3631,21 +3628,6 @@ public class Start
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
-    }
-
-    @Override
-    public void linkMultipleAccounts_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
-                                                 Map<String, String> recipeUserIdByPrimaryUserId)
-            throws StorageQueryException {
-        try {
-            Connection sqlCon = (Connection) con.getConnection();
-            GeneralQueries.linkMultipleAccounts_Transaction(this, sqlCon, appIdentifier, recipeUserIdByPrimaryUserId);
-            AccountInfoQueries.reserveAccountInfoForLinkingMultiple_Transaction(this, sqlCon, appIdentifier,
-                    recipeUserIdByPrimaryUserId);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-
     }
 
     @Override
@@ -3702,6 +3684,49 @@ public class Start
     public void deleteAccountInfoReservations_Transaction(TransactionConnection con, AppIdentifier appIdentifier,
                                                           String userId) throws StorageQueryException {
         AccountInfoQueries.removeAccountInfoReservationsForDeletingUser_Transaction(this, con, appIdentifier, userId);
+    }
+
+    @Override
+    public void reservePrimaryUserAccountInfos_Transaction(TransactionConnection con, List<PrimaryUser> primaryUsers)
+            throws StorageQueryException, StorageTransactionLogicException {
+        try {
+            AccountInfoQueries.reservePrimaryUserAccountInfos_Transaction(this, con, primaryUsers);
+        } catch (SQLException e) {
+            if (e instanceof BatchUpdateException batchUpdateException) {
+                Map<String, Exception> errorByPosition = new HashMap<>();
+                SQLException nextException = batchUpdateException.getNextException();
+                while (nextException != null) {
+                    if (nextException instanceof PSQLException) {
+                        PostgreSQLConfig config = Config.getConfig(this);
+                        ServerErrorMessage serverMessage = ((PSQLException) nextException).getServerErrorMessage();
+
+                        int position = getErroneousEntryPosition(batchUpdateException);
+                        if (isPrimaryKeyError(serverMessage, config.getPrimaryUserTenantsTable())) {
+                            // The batch operation flattens all primary users into a single batch where each
+                            // PrimaryUser contributes (accountInfos.size() * tenantIds.size()) entries.
+                            // When an error occurs, we need to map the flat batch position back to the specific
+                            // PrimaryUser that caused the error. We do this by iterating through primaryUsers and
+                            // subtracting each one's entry count from the position until we find the one where
+                            // the position falls within its range (position < entries for that PrimaryUser).
+                            PrimaryUser primaryUser = null;
+                            for (var pu : primaryUsers) {
+                                if (position < pu.accountInfos.size() * pu.tenantIds.size()) {
+                                    primaryUser = pu;
+                                    break;
+                                }
+
+                                position -= pu.accountInfos.size() * pu.tenantIds.size();
+                            }
+                            assert primaryUser != null;
+                            errorByPosition.put(primaryUser.primaryUserId, new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(primaryUser.primaryUserId, "there is a conflicting account info"));
+                        }
+                    }
+                    nextException = nextException.getNextException();
+                }
+                throw new StorageTransactionLogicException(new BulkImportBatchInsertException("account linking errors", errorByPosition));
+            }
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
