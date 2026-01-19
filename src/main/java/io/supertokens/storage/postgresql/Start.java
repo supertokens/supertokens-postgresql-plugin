@@ -1173,7 +1173,20 @@ public class Start
                             // Keep behaviour consistent with single-user signup: this primary key violation is treated
                             // as a DuplicateEmailException for EmailPassword signup.
                             errorByPosition.put(users.get(position).userId, new DuplicateEmailException());
-
+                        } else if (isPrimaryKeyError(serverMessage, config.getRecipeUserTenantsTable())) {
+                            EmailPasswordImportUser user = null;
+                            for (var u : users) {
+                                if (position < u.recipeUserTenantIds.size()) {
+                                    user = u;
+                                    break;
+                                }
+                                position -= u.recipeUserTenantIds.size();
+                            }
+                            assert user != null;
+                            errorByPosition.put(user.userId, new DuplicateEmailException());
+                        } else if (isPrimaryKeyError(serverMessage, config.getRecipeUserAccountInfosTable())) {
+                            errorByPosition.put(users.get(position).userId,
+                                    new IllegalStateException("should never happen"));
                         } else if (isPrimaryKeyError(serverMessage, config.getThirdPartyUsersTable())
                                 || isPrimaryKeyError(serverMessage, config.getUsersTable())
                                 || isPrimaryKeyError(serverMessage, config.getThirdPartyUserToTenantTable())
@@ -1183,7 +1196,16 @@ public class Start
                         } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
                             errorByPosition.put(users.get(position).userId, new TenantOrAppNotFoundException(users.get(position).appIdentifier));
                         } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
-                            errorByPosition.put(users.get(position).userId,new TenantOrAppNotFoundException(users.get(position).appIdentifier.getAsPublicTenantIdentifier())); // fetch proper tenant id here
+                            EmailPasswordImportUser user = null;
+                            for (var u : users) {
+                                if (position < u.recipeUserTenantIds.size()) {
+                                    user = u;
+                                    break;
+                                }
+                                position -= u.recipeUserTenantIds.size();
+                            }
+                            assert user != null;
+                            errorByPosition.put(user.userId, new TenantOrAppNotFoundException(new TenantIdentifier(user.appIdentifier.getConnectionUriDomain(), user.appIdentifier.getAppId(), user.recipeUserTenantIds.get(position))));
                         }
                     }
                     nextException = nextException.getNextException();
@@ -1637,11 +1659,11 @@ public class Start
 
     @Override
     public void importThirdPartyUsers_Transaction(TransactionConnection con,
-                                                  List<ThirdPartyImportUser> usersToImport)
+                                                  List<ThirdPartyImportUser> users)
             throws StorageQueryException, StorageTransactionLogicException, TenantOrAppNotFoundException {
         try {
             Connection sqlCon = (Connection) con.getConnection();
-            ThirdPartyQueries.importUser_Transaction(this, sqlCon, usersToImport);
+            ThirdPartyQueries.importUser_Transaction(this, sqlCon, users);
         } catch (SQLException e) {
                 if (e instanceof BatchUpdateException batchUpdateException) {
                     Map<String, Exception> errorByPosition = new HashMap<>();
@@ -1656,24 +1678,35 @@ public class Start
                             if (isUniqueConstraintError(serverMessage, config.getThirdPartyUserToTenantTable(),
                                     "third_party_user_id")) {
 
-                                errorByPosition.put(usersToImport.get(position).userId, new DuplicateThirdPartyUserException());
+                                errorByPosition.put(users.get(position).userId, new DuplicateThirdPartyUserException());
 
                             } else if (isPrimaryKeyError(serverMessage, config.getRecipeUserTenantsTable())) {
-                                // Keep behaviour consistent with single-user thirdparty signup.
-                                errorByPosition.put(usersToImport.get(position).userId, new DuplicateThirdPartyUserException());
+                                errorByPosition.put(users.get(position / 2).userId, new DuplicateThirdPartyUserException());
+
+                            } else if (isPrimaryKeyError(serverMessage, config.getRecipeUserAccountInfosTable())) {
+                                errorByPosition.put(users.get(position).userId,
+                                        new IllegalStateException("should never happen"));
 
                             } else if (isPrimaryKeyError(serverMessage, config.getThirdPartyUsersTable())
                                     || isPrimaryKeyError(serverMessage, config.getUsersTable())
                                     || isPrimaryKeyError(serverMessage, config.getThirdPartyUserToTenantTable())
                                     || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
-                                errorByPosition.put(usersToImport.get(position).userId,
+                                errorByPosition.put(users.get(position).userId,
                                         new io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException());
-                            }
-                            else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
-                                throw new TenantOrAppNotFoundException(usersToImport.get(position).appIdentifier);
+                            } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(), "app_id")) {
+                                errorByPosition.put(users.get(position).userId, new TenantOrAppNotFoundException(users.get(position).appIdentifier));
 
                             } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(), "tenant_id")) {
-                                throw new TenantOrAppNotFoundException(usersToImport.get(position).appIdentifier.getAsPublicTenantIdentifier()); // TODO get proper tenant id
+                                ThirdPartyImportUser user = null;
+                                for (var u : users) {
+                                    if (position < u.recipeUserTenantIds.size() * 2) { // multiplying by 2 since we add 2 account infos - one for email and one for thirdparty info
+                                        user = u;
+                                        break;
+                                    }
+                                    position -= u.recipeUserTenantIds.size();
+                                }
+                                assert user != null;
+                                errorByPosition.put(user.userId, new TenantOrAppNotFoundException(new TenantIdentifier(user.appIdentifier.getConnectionUriDomain(), user.appIdentifier.getAppId(), user.recipeUserTenantIds.get(position % user.recipeUserTenantIds.size()))));
                             }
                         }
                         nextException = nextException.getNextException();
@@ -2233,8 +2266,7 @@ public class Start
                                 || isPrimaryKeyError(serverMessage, config.getPasswordlessUserToTenantTable())
                                 || isPrimaryKeyError(serverMessage, config.getAppIdToUserIdTable())) {
                             errorByPosition.put(users.get(position).userId, new DuplicateUserIdException());
-                        }
-                        if (isUniqueConstraintError(serverMessage, config.getPasswordlessUserToTenantTable(),
+                        } else if (isUniqueConstraintError(serverMessage, config.getPasswordlessUserToTenantTable(),
                                 "email")) {
                             errorByPosition.put(users.get(position).userId, new DuplicateEmailException());
 
@@ -2242,13 +2274,51 @@ public class Start
                                 "phone_number")) {
                             errorByPosition.put(users.get(position).userId, new DuplicatePhoneNumberException());
 
+                        } else if (isPrimaryKeyError(serverMessage, config.getRecipeUserAccountInfosTable())) {
+                            errorByPosition.put(users.get(position).userId,
+                                    new IllegalStateException("should never happen"));
+
+                        } else if (isPrimaryKeyError(serverMessage, config.getRecipeUserTenantsTable())) {
+                            PasswordlessImportUser user = null;
+                            for (var u : users) {
+                                int acCount = (u.email == null ? 0 : 1) + (u.phoneNumber == null ? 0 : 1);
+                                int tCount = u.recipeUserTenantIds.size();
+                                if (position < acCount * tCount) {
+                                    user = u;
+                                    break;
+                                }
+                                position -= u.recipeUserTenantIds.size();
+                            }
+                            assert user != null;
+                            if (user.email != null) {
+                                errorByPosition.put(user.userId, new DuplicateEmailException());
+                            } else {
+                                errorByPosition.put(user.userId, new DuplicatePhoneNumberException());
+                            }
+
                         } else if (isForeignKeyConstraintError(serverMessage, config.getAppIdToUserIdTable(),
                                 "app_id")) {
-                            throw new TenantOrAppNotFoundException(users.get(position).appIdentifier);
+                            errorByPosition.put(users.get(position).userId, new TenantOrAppNotFoundException(users.get(position).appIdentifier));
 
                         } else if (isForeignKeyConstraintError(serverMessage, config.getUsersTable(),
                                 "tenant_id")) {
-                            throw new TenantOrAppNotFoundException(users.get(position).appIdentifier.getAsPublicTenantIdentifier()); // TODO get proper tenant id
+                            PasswordlessImportUser user = null;
+                            for (var u : users) {
+                                int acCount = (u.email == null ? 0 : 1) + (u.phoneNumber == null ? 0 : 1);
+                                int tCount = u.recipeUserTenantIds.size();
+                                if (position < acCount * tCount) {
+                                    user = u;
+                                    break;
+                                }
+                                position -= u.recipeUserTenantIds.size();
+                            }
+                            assert user != null;
+                            if (user.email != null) {
+                                errorByPosition.put(user.userId, new DuplicateEmailException());
+                            } else {
+                                errorByPosition.put(user.userId, new DuplicatePhoneNumberException());
+                            }
+                            errorByPosition.put(user.userId, new TenantOrAppNotFoundException(new TenantIdentifier(user.appIdentifier.getConnectionUriDomain(), user.appIdentifier.getAppId(), user.recipeUserTenantIds.get(position))));
                         }
                     }
                     nextException = nextException.getNextException();
@@ -3667,7 +3737,7 @@ public class Start
                                 position -= pu.accountInfos.size() * pu.tenantIds.size();
                             }
                             assert primaryUser != null;
-                            errorByPosition.put(primaryUser.primaryUserId, new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(primaryUser.primaryUserId, "there is a conflicting account info"));
+                            errorByPosition.put(primaryUser.primaryUserId, new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(primaryUser.primaryUserId, "E027: there is a conflicting account info"));
                         }
                     }
                     nextException = nextException.getNextException();
