@@ -1170,10 +1170,6 @@ public class Start
                             errorByPosition.put(users.get(position).userId, new DuplicateEmailException());
 
                         } else if (isPrimaryKeyError(serverMessage, config.getRecipeUserTenantsTable())) {
-                            // Keep behaviour consistent with single-user signup: this primary key violation is treated
-                            // as a DuplicateEmailException for EmailPassword signup.
-                            errorByPosition.put(users.get(position).userId, new DuplicateEmailException());
-                        } else if (isPrimaryKeyError(serverMessage, config.getRecipeUserTenantsTable())) {
                             EmailPasswordImportUser user = null;
                             for (var u : users) {
                                 if (position < u.recipeUserTenantIds.size()) {
@@ -2251,15 +2247,6 @@ public class Start
                         ServerErrorMessage serverMessage = ((PSQLException) nextException).getServerErrorMessage();
 
                         int position = getErroneousEntryPosition(batchUpdateException);
-
-                        if (isPrimaryKeyError(serverMessage, config.getRecipeUserTenantsTable())) {
-                            // Keep behaviour consistent with single-user passwordless createUser.
-                            if (users.get(position).email != null) {
-                                errorByPosition.put(users.get(position).userId, new DuplicateEmailException());
-                            } else {
-                                errorByPosition.put(users.get(position).userId, new DuplicatePhoneNumberException());
-                            }
-                        }
 
                         if (isPrimaryKeyError(serverMessage, config.getPasswordlessUsersTable())
                                 || isPrimaryKeyError(serverMessage, config.getUsersTable())
