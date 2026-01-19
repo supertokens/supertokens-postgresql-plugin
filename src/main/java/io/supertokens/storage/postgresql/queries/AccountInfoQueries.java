@@ -48,10 +48,11 @@ import io.supertokens.pluginInterface.passwordless.exception.DuplicatePhoneNumbe
 import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.executeBatch;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
-
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import io.supertokens.storage.postgresql.utils.Utils;
 
@@ -71,8 +72,6 @@ public class AccountInfoQueries {
                 + "primary_user_id CHAR(36) NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
                 + " PRIMARY KEY (app_id, recipe_id, recipe_user_id, account_info_type, third_party_id, third_party_user_id),"
-                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "account_info_value", "key")
-                + " UNIQUE (app_id, recipe_id, recipe_user_id, account_info_type, third_party_id, third_party_user_id, account_info_value),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "tenant_id", "fkey")
                 + " FOREIGN KEY(app_id)"
                 + " REFERENCES " + Config.getConfig(start).getAppsTable() + " (app_id) ON DELETE CASCADE"
@@ -115,8 +114,8 @@ public class AccountInfoQueries {
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
                 + " PRIMARY KEY (app_id, tenant_id, account_info_type, account_info_value),"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "app_id", "fkey")
-                + " FOREIGN KEY(app_id)"
-                + " REFERENCES " + Config.getConfig(start).getAppsTable() + " (app_id) ON DELETE CASCADE"
+                + " FOREIGN KEY(app_id, tenant_id)"
+                + " REFERENCES " + Config.getConfig(start).getTenantsTable() + " (app_id, tenant_id) ON DELETE CASCADE"
                 + ");";
         // @formatter:on
     }
@@ -471,10 +470,10 @@ public class AccountInfoQueries {
         }
     }
 
-    public static CanLinkAccountsResult checkIfLoginMethodsCanBeLinked_Transaction(Start start,
-                                                                                   AppIdentifier appIdentifier,
-                                                                                   String _primaryUserId,
-                                                                                   String recipeUserId)
+    public static CanLinkAccountsResult checkIfLoginMethodsCanBeLinked(Start start,
+                                                                       AppIdentifier appIdentifier,
+                                                                       String _primaryUserId,
+                                                                       String recipeUserId)
             throws StorageQueryException, UnknownUserIdException {
         try {
 
@@ -962,15 +961,11 @@ public class AccountInfoQueries {
                     + " ) AND ("
                     + "     (account_info_type, account_info_value) NOT IN ("
                     + "         SELECT DISTINCT account_info_type, account_info_value"
-                    + "         FROM " + recipeUserTenantsTable
-                    + "         WHERE app_id = ? AND recipe_user_id IN ("
-                    + "             SELECT recipe_user_id"
-                    + "             FROM " + recipeUserAccountInfosTable
-                    + "             WHERE app_id = ? AND primary_user_id IN ("
-                    + "                 SELECT primary_user_id FROM " + recipeUserAccountInfosTable
-                    + "                 WHERE app_id = ? AND recipe_user_id = ? LIMIT 1"
-                    + "             ) AND recipe_user_id <> ?"
-                    + "         )"
+                    + "         FROM " + recipeUserAccountInfosTable
+                    + "         WHERE app_id = ? AND primary_user_id IN ("
+                    + "             SELECT primary_user_id FROM " + recipeUserAccountInfosTable
+                    + "             WHERE app_id = ? AND recipe_user_id = ? LIMIT 1"
+                    + "         ) AND recipe_user_id <> ?"
                     + "     )"
                     + "     OR tenant_id NOT IN ("
                     + "         SELECT DISTINCT tenant_id"
@@ -987,19 +982,18 @@ public class AccountInfoQueries {
                     + " )";
 
             update(sqlCon, QUERY, pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, tenantIdentifier.getAppId());
-                pst.setString(3, userId);
-                pst.setString(4, tenantIdentifier.getAppId());
-                pst.setString(5, tenantIdentifier.getAppId());
-                pst.setString(6, tenantIdentifier.getAppId());
-                pst.setString(7, userId);
-                pst.setString(8, userId);
-                pst.setString(9, tenantIdentifier.getAppId());
-                pst.setString(10, tenantIdentifier.getAppId());
-                pst.setString(11, tenantIdentifier.getAppId());
-                pst.setString(12, userId);
-                pst.setString(13, userId);
+                pst.setString(1, tenantIdentifier.getAppId());  // WHERE app_id = ?
+                pst.setString(2, tenantIdentifier.getAppId());  // SELECT ... WHERE app_id = ?
+                pst.setString(3, userId);                       // ... AND recipe_user_id = ?
+                pst.setString(4, tenantIdentifier.getAppId());  // WHERE app_id = ? (NOT IN clause)
+                pst.setString(5, tenantIdentifier.getAppId());  // SELECT ... WHERE app_id = ? (nested)
+                pst.setString(6, userId);                       // ... AND recipe_user_id = ? (nested)
+                pst.setString(7, userId);                       // ... AND recipe_user_id <> ?
+                pst.setString(8, tenantIdentifier.getAppId());  // WHERE app_id = ? (tenant_id NOT IN)
+                pst.setString(9, tenantIdentifier.getAppId());  // WHERE app_id = ? (nested in tenant_id NOT IN)
+                pst.setString(10, tenantIdentifier.getAppId()); // SELECT ... WHERE app_id = ? (deeply nested)
+                pst.setString(11, userId);                      // ... AND recipe_user_id = ? (deeply nested)
+                pst.setString(12, userId);                      // ... AND recipe_user_id <> ?
             });
 
             // Update primary_user_id to NULL in recipe_user_account_infos when unlinking
@@ -1151,19 +1145,12 @@ public class AccountInfoQueries {
                     // Delete records that match app_id, user_id and account_info_type based on current account_info_value in recipe_user_account_infos
                     String QUERY_2_DELETE = "DELETE FROM " + recipeUserTenantsTable
                             + " WHERE app_id = ? AND recipe_user_id = ? AND account_info_type = ?"
-                            + " AND account_info_value IN ("
-                            + "     SELECT account_info_value"
-                            + "     FROM " + recipeUserAccountInfosTable
-                            + "     WHERE app_id = ? AND recipe_user_id = ? AND account_info_type = ?"
-                            + " ) AND account_info_value != ?";
+                            + " AND account_info_value != ?";
                     update(sqlCon, QUERY_2_DELETE, pst -> {
                         pst.setString(1, appIdentifier.getAppId());
                         pst.setString(2, userId);
                         pst.setString(3, accountInfoType.toString());
-                        pst.setString(4, appIdentifier.getAppId());
-                        pst.setString(5, userId);
-                        pst.setString(6, accountInfoType.toString());
-                        pst.setString(7, accountInfoValue);
+                        pst.setString(4, accountInfoValue);
                     });
                 }
                 {
@@ -1275,7 +1262,7 @@ public class AccountInfoQueries {
 
     public static String getPrimaryUserTenantBatchQuery (Start start) {
         return "INSERT INTO " + getConfig(start).getPrimaryUserTenantsTable()
-                + "(app_id, tenant_id, account_info_type, account_info_value, primary_user_id)"
+                + "(app_id, tenant_id, primary_user_id, account_info_type, account_info_value)"
                 + " VALUES(?, ?, ?, ?, ?)";
     }
 
@@ -1291,9 +1278,9 @@ public class AccountInfoQueries {
                     primaryUserTenantSetters.add(pst -> {
                         pst.setString(1, user.appIdentifier.getAppId());
                         pst.setString(2, tenantId);
-                        pst.setString(3, accountInfo.type.toString());
-                        pst.setString(4, accountInfo.value);
-                        pst.setString(5, user.primaryUserId);
+                        pst.setString(3, user.primaryUserId);
+                        pst.setString(4, accountInfo.type.toString());
+                        pst.setString(5, accountInfo.value);
                     });
                 }
             }
