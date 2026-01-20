@@ -142,7 +142,7 @@ public class EmailPasswordQueries {
 
     public static void updateUsersPassword_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                        String userId, String newPassword)
-            throws SQLException, StorageQueryException {
+            throws SQLException {
         String QUERY = "UPDATE " + getConfig(start).getEmailPasswordUsersTable()
                 + " SET password_hash = ? WHERE app_id = ? AND user_id = ?";
 
@@ -155,7 +155,7 @@ public class EmailPasswordQueries {
 
     public static void updateUsersEmail_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                     String userId, String newEmail)
-            throws SQLException, StorageQueryException {
+            throws SQLException {
         {
             String QUERY = "UPDATE " + getConfig(start).getEmailPasswordUsersTable()
                     + " SET email = ? WHERE app_id = ? AND user_id = ?";
@@ -180,7 +180,7 @@ public class EmailPasswordQueries {
 
     public static void deleteAllPasswordResetTokensForUser_Transaction(Start start, Connection con,
                                                                        AppIdentifier appIdentifier, String userId)
-            throws SQLException, StorageQueryException {
+            throws SQLException {
 
         String QUERY =
                 "DELETE FROM " + getConfig(start).getPasswordResetTokensTable() + " WHERE app_id = ? AND user_id = ?";
@@ -450,7 +450,7 @@ public class EmailPasswordQueries {
 
     public static void deleteUser_Transaction(Connection sqlCon, Start start, AppIdentifier appIdentifier,
                                               String userId, boolean deleteUserIdMappingToo)
-            throws StorageQueryException, SQLException {
+            throws SQLException {
         if (deleteUserIdMappingToo) {
             String QUERY = "DELETE FROM " + getConfig(start).getAppIdToUserIdTable()
                     + " WHERE app_id = ? AND user_id = ?";
@@ -573,48 +573,6 @@ public class EmailPasswordQueries {
         return Collections.emptyList();
     }
 
-    public static String lockEmail_Transaction(Start start, Connection con,
-                                               AppIdentifier appIdentifier,
-                                               String email)
-            throws StorageQueryException, SQLException {
-        String QUERY = "SELECT user_id FROM " + getConfig(start).getEmailPasswordUsersTable() +
-                " WHERE app_id = ? AND email = ? FOR UPDATE";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, email);
-        }, result -> {
-            if (result.next()) {
-                return result.getString("user_id");
-            }
-            return null;
-        });
-    }
-
-    public static List<String> lockEmail_Transaction(Start start, Connection con,
-                                               AppIdentifier appIdentifier,
-                                               List<String> emails)
-            throws StorageQueryException, SQLException {
-        if(emails == null || emails.isEmpty()){
-            return new ArrayList<>();
-        }
-        String QUERY = "SELECT user_id FROM " + getConfig(start).getEmailPasswordUsersTable() +
-                " WHERE app_id = ? AND email IN (" + Utils.generateCommaSeperatedQuestionMarks(emails.size()) + ") FOR UPDATE";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            for (int i = 0; i < emails.size(); i++) {
-                pst.setString(2 + i, emails.get(i));
-            }
-        }, result -> {
-            List<String> results = new ArrayList<>();
-            while (result.next()) {
-                results.add(result.getString("user_id"));
-            }
-            return results;
-        });
-    }
-
     public static String getPrimaryUserIdUsingEmail(Start start, TenantIdentifier tenantIdentifier,
                                                     String email)
             throws StorageQueryException, SQLException {
@@ -633,55 +591,6 @@ public class EmailPasswordQueries {
                 return result.getString("user_id");
             }
             return null;
-        });
-    }
-
-    public static List<String> getPrimaryUserIdsUsingEmail_Transaction(Start start, Connection con,
-                                                                       AppIdentifier appIdentifier,
-                                                                       String email)
-            throws StorageQueryException, SQLException {
-        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
-                + "FROM " + getConfig(start).getEmailPasswordUsersTable() + " AS ep" +
-                " JOIN " + getConfig(start).getAppIdToUserIdTable() + " AS all_users" +
-                " ON ep.app_id = all_users.app_id AND ep.user_id = all_users.user_id" +
-                " WHERE ep.app_id = ? AND ep.email = ?";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, email);
-        }, result -> {
-            List<String> userIds = new ArrayList<>();
-            while (result.next()) {
-                userIds.add(result.getString("user_id"));
-            }
-            return userIds;
-        });
-    }
-
-    public static List<String> getPrimaryUserIdsUsingMultipleEmails_Transaction(Start start, Connection con,
-                                                                       AppIdentifier appIdentifier,
-                                                                       List<String> emails)
-            throws StorageQueryException, SQLException {
-        if(emails == null || emails.isEmpty()){
-            return new ArrayList<>();
-        }
-        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
-                + "FROM " + getConfig(start).getEmailPasswordUsersTable() + " AS ep" +
-                " JOIN " + getConfig(start).getAppIdToUserIdTable() + " AS all_users" +
-                " ON ep.app_id = all_users.app_id AND ep.user_id = all_users.user_id" +
-                " WHERE ep.app_id = ? AND ep.email IN ( " + Utils.generateCommaSeperatedQuestionMarks(emails.size()) + " )";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            for (int i = 0; i < emails.size(); i++) {
-                pst.setString(2+i, emails.get(i));
-            }
-        }, result -> {
-            List<String> userIds = new ArrayList<>();
-            while (result.next()) {
-                userIds.add(result.getString("user_id"));
-            }
-            return userIds;
         });
     }
 

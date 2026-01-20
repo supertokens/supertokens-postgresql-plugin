@@ -226,49 +226,6 @@ public class ThirdPartyQueries {
         }
     }
 
-    public static List<String> lockEmail_Transaction(Start start, Connection con,
-                                                     AppIdentifier appIdentifier,
-                                                     String email) throws SQLException, StorageQueryException {
-        String QUERY = "SELECT tp.user_id as user_id "
-                + "FROM " + getConfig(start).getThirdPartyUsersTable() + " AS tp" +
-                " WHERE tp.app_id = ? AND tp.email = ? FOR UPDATE";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, email);
-        }, result -> {
-            List<String> finalResult = new ArrayList<>();
-            while (result.next()) {
-                finalResult.add(result.getString("user_id"));
-            }
-            return finalResult;
-        });
-    }
-
-    public static List<String> lockEmail_Transaction(Start start, Connection con,
-                                                     AppIdentifier appIdentifier,
-                                                     List<String> emails)
-            throws StorageQueryException, SQLException {
-        if(emails == null || emails.isEmpty()){
-            return new ArrayList<>();
-        }
-        String QUERY = "SELECT user_id FROM " + getConfig(start).getThirdPartyUsersTable() +
-                " WHERE app_id = ? AND email IN (" + Utils.generateCommaSeperatedQuestionMarks(emails.size()) + ") FOR UPDATE";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            for (int i = 0; i < emails.size(); i++) {
-                pst.setString(2 + i, emails.get(i));
-            }
-        }, result -> {
-            List<String> results = new ArrayList<>();
-            while (result.next()) {
-                results.add(result.getString("user_id"));
-            }
-            return results;
-        });
-    }
-
     public static List<String> lockThirdPartyInfoAndTenant_Transaction(Start start, Connection con,
                                                                        AppIdentifier appIdentifier,
                                                                        String thirdPartyId, String thirdPartyUserId)
