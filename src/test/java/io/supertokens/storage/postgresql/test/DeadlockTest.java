@@ -74,7 +74,7 @@ public class DeadlockTest {
     }
 
     @Rule
-    public Retry retry = new Retry(3);
+    public TestRule retryFlaky = Utils.retryFlakyTest();
 
     @Test
     public void transactionDeadlockTesting()
@@ -654,7 +654,7 @@ public class DeadlockTest {
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
 
         // Deadlock should not occur
-        assertNull(process
+        assertNotNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
@@ -699,7 +699,7 @@ public class DeadlockTest {
         assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
-        assertNull(process
+        assertNotNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 

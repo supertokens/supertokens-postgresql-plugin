@@ -265,6 +265,9 @@ public class AccountInfoQueries {
             String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
             String recipeUserAccountInfosTable = getConfig(start).getRecipeUserAccountInfosTable();
 
+            // Ensure same user doesn't become primary in parallel
+            io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(sqlCon, appIdentifier.getAppId() + "~" + userId);
+
             // Insert with ON CONFLICT to catch primary key violations
             String QUERY = "INSERT INTO " + primaryUserTenantsTable
                     + " (app_id, tenant_id, account_info_type, account_info_value, primary_user_id)"
@@ -642,6 +645,9 @@ public class AccountInfoQueries {
             }
 
             primaryUserId = primaryUserIds[0];
+
+            // Ensure no linking to same user in parallel
+            io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(sqlCon, appIdentifier.getAppId() + "~" + primaryUserId);
 
             // Step 2: Find all target tenant_ids to write for (union of tenants for the primary user and for the recipe user)
             // and find all (account_info_type, account_info_value) for this user (union from both primary and recipe user)
