@@ -267,7 +267,8 @@ public class DeadlockTest {
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
 
-        assertNotNull(process
+        // Deadlock should not happen
+        assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
@@ -433,7 +434,7 @@ public class DeadlockTest {
         assertTrue(!t1Failed.get() && !t2Failed.get());
         assert (t1State.get().equals("commit") && t2State.get().equals("commit"));
 
-        assertNotNull(process.checkOrWaitForEventInPlugin(
+        assertNull(process.checkOrWaitForEventInPlugin(
                 io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
         process.kill();
@@ -601,7 +602,7 @@ public class DeadlockTest {
         assertTrue(!t1Failed.get() && t2Failed.get());
         assert (t1State.get().equals("commit") && t2State.get().equals("query"));
 
-        assertNotNull(process
+        assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND,
                         1000));
@@ -652,7 +653,8 @@ public class DeadlockTest {
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
 
-        assertNotNull(process
+        // Deadlock should not occur
+        assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
@@ -697,7 +699,7 @@ public class DeadlockTest {
         assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
-        assertNotNull(process
+        assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
