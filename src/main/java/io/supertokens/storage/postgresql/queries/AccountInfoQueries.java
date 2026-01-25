@@ -405,6 +405,120 @@ public class AccountInfoQueries {
         }
     }
 
+    /**
+     * Adds account info entries to primary_user_tenants when a user becomes a primary user.
+     * This overload requires a LockedUser parameter to ensure proper row-level locking has been acquired.
+     *
+     * @param primaryUser The locked user who is becoming a primary user
+     */
+    public static boolean addPrimaryUserAccountInfo_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
+                                                                 LockedUser primaryUser)
+            throws StorageQueryException, AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException,
+            CannotBecomePrimarySinceRecipeUserIdAlreadyLinkedWithPrimaryUserIdException, UnknownUserIdException {
+
+        String userId = primaryUser.getRecipeUserId();
+
+        // Validate via LockedUser state: if already linked to another primary, reject
+        if (primaryUser.isLinked()) {
+            throw new CannotBecomePrimarySinceRecipeUserIdAlreadyLinkedWithPrimaryUserIdException(
+                    primaryUser.getPrimaryUserId(),
+                    "This user ID is already linked to another user ID");
+        }
+
+        // If already a primary user, return false (idempotent)
+        if (primaryUser.isPrimary()) {
+            return false;
+        }
+
+        try {
+            String schema = Config.getConfig(start).getTableSchema();
+            String primaryUserTenantsTable = getConfig(start).getPrimaryUserTenantsTable();
+            String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
+            String recipeUserAccountInfosTable = getConfig(start).getRecipeUserAccountInfosTable();
+
+            // Note: Advisory lock is not needed since we have row-level lock via LockedUser
+
+            // Insert with ON CONFLICT to catch primary key violations
+            String QUERY = "INSERT INTO " + primaryUserTenantsTable
+                    + " (app_id, tenant_id, account_info_type, account_info_value, primary_user_id)"
+                    + " SELECT r.app_id, r.tenant_id, r.account_info_type, r.account_info_value, ?"
+                    + " FROM " + recipeUserTenantsTable + " r"
+                    + " INNER JOIN " + recipeUserAccountInfosTable + " ai"
+                    + "   ON r.app_id = ai.app_id"
+                    + "   AND r.recipe_user_id = ai.recipe_user_id"
+                    + "   AND r.recipe_id = ai.recipe_id"
+                    + "   AND r.account_info_type = ai.account_info_type"
+                    + "   AND r.account_info_value = ai.account_info_value"
+                    + " WHERE r.app_id = ? AND r.recipe_user_id = ? AND ai.primary_user_id IS NULL"
+                    + " ON CONFLICT ON CONSTRAINT " + Utils.getConstraintName(schema, primaryUserTenantsTable, null, "pkey")
+                    + " DO UPDATE SET account_info_type = EXCLUDED.account_info_type"
+                    + " RETURNING primary_user_id, account_info_type";
+
+            String[] conflict = execute(sqlCon, QUERY, pst -> {
+                pst.setString(1, userId); // primary_user_id
+                pst.setString(2, appIdentifier.getAppId());
+                pst.setString(3, userId); // recipe_user_id
+            }, rs -> {
+                String[] firstConflict = null;
+                while (rs.next()) {
+                    String returnedPrimaryUserId = rs.getString("primary_user_id");
+                    String accountInfoType = rs.getString("account_info_type");
+
+                    // Check if the returned primary_user_id is different from the userId
+                    if (!userId.equals(returnedPrimaryUserId)) {
+                        if (firstConflict == null) {
+                            firstConflict = new String[]{returnedPrimaryUserId, accountInfoType};
+                        }
+                        // Prioritize THIRD_PARTY conflicts
+                        if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(accountInfoType)) {
+                            return new String[]{returnedPrimaryUserId, accountInfoType};
+                        }
+                    }
+                }
+                return firstConflict;
+            });
+
+            // Throw conflict if any row had a different primary_user_id
+            if (conflict != null) {
+                assert conflict.length == 2;
+                String conflictingPrimaryUserId = conflict[0];
+                String accountInfoType = conflict[1];
+
+                String message;
+                if (ACCOUNT_INFO_TYPE.EMAIL.toString().equals(accountInfoType)) {
+                    message = "This user's email is already associated with another user ID";
+                } else if (ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString().equals(accountInfoType)) {
+                    message = "This user's phone number is already associated with another user ID";
+                } else if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(accountInfoType)) {
+                    message = "This user's third party login is already associated with another user ID";
+                } else {
+                    message = "Account info is already associated with another user ID";
+                }
+
+                throw new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(conflictingPrimaryUserId, message);
+            }
+
+            // Update primary_user_id in recipe_user_account_infos to recipe_user_id (making it primary)
+            String UPDATE_QUERY = "UPDATE " + recipeUserAccountInfosTable
+                    + " SET primary_user_id = recipe_user_id"
+                    + " WHERE app_id = ? AND recipe_user_id = ?";
+
+            int rowsUpdated = update(sqlCon, UPDATE_QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, userId);
+            });
+
+            if (rowsUpdated == 0) {
+                throw new UnknownUserIdException();
+            }
+
+            // all okay
+            return true; // now became primary
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
     public static CanBecomePrimaryResult checkIfLoginMethodCanBecomePrimary(Start start, AppIdentifier appIdentifier, String recipeUserId)
             throws StorageQueryException, UnknownUserIdException {
         try {
