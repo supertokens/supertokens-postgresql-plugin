@@ -1070,9 +1070,23 @@ public class AccountInfoQueries {
             throw new StorageQueryException(e);
         }
     }
-
-    public static void addTenantIdToRecipeUser_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String userId)
+    /**
+     * Adds a tenant to a recipe user's tenant associations with LockedUser enforcement.
+     * This method requires a LockedUser parameter to ensure proper row-level locks have been acquired,
+     * preventing race conditions during concurrent tenant association and linking operations.
+     *
+     * @param user The locked user to associate with the tenant
+     */
+    public static void addTenantIdToRecipeUser_Transaction(Start start, Connection sqlCon,
+                                                            TenantIdentifier tenantIdentifier, LockedUser user)
             throws StorageQueryException, DuplicateEmailException, DuplicateThirdPartyUserException, DuplicatePhoneNumberException {
+        // Validate that the lock is still valid for this connection
+        if (!user.isValidForConnection(sqlCon)) {
+            throw new IllegalStateException("LockedUser is not valid for this connection - lock may have been released or acquired on a different connection");
+        }
+
+        AppIdentifier appIdentifier = tenantIdentifier.toAppIdentifier();
+        String userId = user.getRecipeUserId();
         String schema = Config.getConfig(start).getTableSchema();
         String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
         String recipeUserAccountInfosTable = getConfig(start).getRecipeUserAccountInfosTable();
@@ -1089,7 +1103,7 @@ public class AccountInfoQueries {
         try {
             String conflictAccountInfoType = execute(sqlCon, QUERY, pst -> {
                 pst.setString(1, tenantIdentifier.getTenantId());
-                pst.setString(2, tenantIdentifier.getAppId());
+                pst.setString(2, appIdentifier.getAppId());
                 pst.setString(3, userId);
             }, rs -> {
                 String firstConflictType = null;

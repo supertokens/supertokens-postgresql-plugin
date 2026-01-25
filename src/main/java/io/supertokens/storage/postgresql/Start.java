@@ -3057,7 +3057,9 @@ public class Start
                 throw new UnknownUserIdException();
             }
 
-            AccountInfoQueries.addTenantIdToRecipeUser_Transaction(this, sqlCon, tenantIdentifier, userId);
+            // Acquire lock on the user before modifying tenant associations
+            LockedUser lockedUser = UserLockingQueries.lockUser(this, sqlCon, tenantIdentifier.toAppIdentifier(), userId);
+            AccountInfoQueries.addTenantIdToRecipeUser_Transaction(this, sqlCon, tenantIdentifier, lockedUser);
 
             boolean added;
             if (recipeId.equals("emailpassword")) {
@@ -3098,6 +3100,8 @@ public class Start
             }
 
             throw new StorageQueryException(throwables);
+        } catch (UserNotFoundForLockingException e) {
+            throw new UnknownUserIdException();
         }
     }
 
@@ -4832,5 +4836,17 @@ public class Start
         Connection sqlCon = (Connection) con.getConnection();
         AccountInfoQueries.removeAccountInfoReservationForPrimaryUserForUnlinking_Transaction(
                 this, sqlCon, appIdentifier, recipeUser, primaryUser);
+    }
+
+    @Override
+    public void addTenantIdToRecipeUser_Transaction(
+            TenantIdentifier tenantIdentifier,
+            TransactionConnection con,
+            LockedUser user)
+            throws StorageQueryException, DuplicateEmailException,
+            DuplicateThirdPartyUserException, DuplicatePhoneNumberException {
+        Connection sqlCon = (Connection) con.getConnection();
+        AccountInfoQueries.addTenantIdToRecipeUser_Transaction(
+                this, sqlCon, tenantIdentifier, user);
     }
 }
