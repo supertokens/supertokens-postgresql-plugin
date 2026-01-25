@@ -57,6 +57,27 @@ import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import io.supertokens.storage.postgresql.utils.Utils;
 
 public class AccountInfoQueries {
+
+    /*
+     * IMPORTANT: Account Info Tables Design Note
+     * ==========================================
+     *
+     * These tables store account identifiers that are TENANT-SCOPED:
+     * - EMAIL: Scoped to (app_id, tenant_id)
+     * - PHONE: Scoped to (app_id, tenant_id)
+     * - THIRD_PARTY (thirdPartyId + thirdPartyUserId): Scoped to (app_id, tenant_id)
+     *
+     * WebAuthn CREDENTIAL IDs are intentionally NOT stored in these tables because:
+     * 1. Credentials are RP-SCOPED (app_id, rp_id), not tenant-scoped
+     * 2. Credentials have a direct 1:1 relationship with users via FK in webauthn_credentials table
+     * 3. Credentials don't participate in account linking conflict detection
+     * 4. The webauthn_credentials table already enforces uniqueness via PK (app_id, rp_id, credential_id)
+     *
+     * For listUsersByAccountInfo with credentialId parameter, use a union query approach:
+     * - Query these tables for email/phone/thirdParty
+     * - Query webauthn_credentials table separately for credentialId
+     */
+
     static String getQueryToCreateRecipeUserAccountInfosTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String tableName = Config.getConfig(start).getRecipeUserAccountInfosTable();
@@ -127,7 +148,12 @@ public class AccountInfoQueries {
 
     static String getQueryToCreateRecipeUserIdIndexForRecipeUserTenantsTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_recipe_user_id ON "
-                + Config.getConfig(start).getRecipeUserTenantsTable() + "(recipe_user_id);";
+                + Config.getConfig(start).getRecipeUserTenantsTable() + "(app_id, recipe_user_id);";
+    }
+
+    static String getQueryToCreateRecipeUserIdIndexForRecipeUserAccountInfoTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_app_recipe_user ON "
+                + Config.getConfig(start).getRecipeUserAccountInfosTable() + "(app_id, recipe_user_id);";
     }
 
     static String getQueryToCreateAccountInfoIndexForRecipeUserTenantsTable(Start start) {
