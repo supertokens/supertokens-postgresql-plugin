@@ -138,11 +138,16 @@ import io.supertokens.pluginInterface.totp.exception.UnknownDeviceException;
 import io.supertokens.pluginInterface.totp.exception.UnknownTotpUserIdException;
 import io.supertokens.pluginInterface.totp.exception.UsedCodeAlreadyExistsException;
 import io.supertokens.pluginInterface.totp.sqlStorage.TOTPSQLStorage;
+import io.supertokens.pluginInterface.useridmapping.LockedUser;
+import io.supertokens.pluginInterface.useridmapping.LockedUserPair;
+import io.supertokens.pluginInterface.useridmapping.UserNotFoundForLockingException;
 import io.supertokens.pluginInterface.useridmapping.UserIdMapping;
 import io.supertokens.pluginInterface.useridmapping.UserIdMappingStorage;
+import io.supertokens.pluginInterface.useridmapping.UserLockingStorage;
 import io.supertokens.pluginInterface.useridmapping.exception.UnknownSuperTokensUserIdException;
 import io.supertokens.pluginInterface.useridmapping.exception.UserIdMappingAlreadyExistsException;
 import io.supertokens.pluginInterface.useridmapping.sqlStorage.UserIdMappingSQLStorage;
+import io.supertokens.pluginInterface.accountinfo.AccountInfoStorage;
 import io.supertokens.pluginInterface.usermetadata.UserMetadataStorage;
 import io.supertokens.pluginInterface.usermetadata.sqlStorage.UserMetadataSQLStorage;
 import io.supertokens.pluginInterface.userroles.UserRolesStorage;
@@ -178,6 +183,7 @@ import io.supertokens.storage.postgresql.queries.SessionQueries;
 import io.supertokens.storage.postgresql.queries.TOTPQueries;
 import io.supertokens.storage.postgresql.queries.ThirdPartyQueries;
 import io.supertokens.storage.postgresql.queries.UserIdMappingQueries;
+import io.supertokens.storage.postgresql.queries.UserLockingQueries;
 import io.supertokens.storage.postgresql.queries.UserMetadataQueries;
 import io.supertokens.storage.postgresql.queries.UserRolesQueries;
 import io.supertokens.storage.postgresql.queries.WebAuthNQueries;
@@ -188,7 +194,7 @@ public class Start
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
         UserIdMappingSQLStorage, MultitenancyStorage, MultitenancySQLStorage, DashboardSQLStorage, TOTPSQLStorage,
         ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage, OAuthStorage, BulkImportSQLStorage,
-        WebAuthNSQLStorage, SAMLStorage {
+        WebAuthNSQLStorage, SAMLStorage, UserLockingStorage, AccountInfoStorage {
 
     // these configs are protected from being modified / viewed by the dev using the SuperTokens
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
@@ -4689,6 +4695,45 @@ public class Start
     public int countSAMLClients(TenantIdentifier tenantIdentifier) throws StorageQueryException {
         try {
             return SAMLQueries.countSAMLClients(this, tenantIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    // UserLockingStorage implementation
+
+    @Override
+    @Nonnull
+    public LockedUser lockUser(AppIdentifier appIdentifier, TransactionConnection con, String userId)
+            throws StorageQueryException, UserNotFoundForLockingException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return UserLockingQueries.lockUser(this, sqlCon, appIdentifier, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    @Nonnull
+    public List<LockedUser> lockUsers(AppIdentifier appIdentifier, TransactionConnection con, List<String> userIds)
+            throws StorageQueryException, UserNotFoundForLockingException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return UserLockingQueries.lockUsers(this, sqlCon, appIdentifier, userIds);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    @Nonnull
+    public LockedUserPair lockUsersForLinking(AppIdentifier appIdentifier, TransactionConnection con,
+                                               String recipeUserId, String primaryUserId)
+            throws StorageQueryException, UserNotFoundForLockingException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return UserLockingQueries.lockUsersForLinking(this, sqlCon, appIdentifier, recipeUserId, primaryUserId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
