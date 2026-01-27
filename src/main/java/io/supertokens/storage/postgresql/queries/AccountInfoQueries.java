@@ -283,128 +283,6 @@ public class AccountInfoQueries {
         }
     }
 
-    public static boolean addPrimaryUserAccountInfo_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier, String userId) throws
-            StorageQueryException, AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException,
-            CannotBecomePrimarySinceRecipeUserIdAlreadyLinkedWithPrimaryUserIdException, UnknownUserIdException {
-        try {
-            String schema = Config.getConfig(start).getTableSchema();
-            String primaryUserTenantsTable = getConfig(start).getPrimaryUserTenantsTable();
-            String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
-            String recipeUserAccountInfosTable = getConfig(start).getRecipeUserAccountInfosTable();
-
-            // Ensure same user doesn't become primary in parallel
-            io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(sqlCon, appIdentifier.getAppId() + "~" + userId);
-
-            // Insert with ON CONFLICT to catch primary key violations
-            String QUERY = "INSERT INTO " + primaryUserTenantsTable
-                    + " (app_id, tenant_id, account_info_type, account_info_value, primary_user_id)"
-                    + " SELECT r.app_id, r.tenant_id, r.account_info_type, r.account_info_value, ?"
-                    + " FROM " + recipeUserTenantsTable + " r"
-                    + " INNER JOIN " + recipeUserAccountInfosTable + " ai"
-                    + "   ON r.app_id = ai.app_id"
-                    + "   AND r.recipe_user_id = ai.recipe_user_id"
-                    + "   AND r.recipe_id = ai.recipe_id"
-                    + "   AND r.account_info_type = ai.account_info_type"
-                    + "   AND r.account_info_value = ai.account_info_value"
-                    + " WHERE r.app_id = ? AND r.recipe_user_id = ? AND ai.primary_user_id IS NULL"
-                    + " ON CONFLICT ON CONSTRAINT " + Utils.getConstraintName(schema, primaryUserTenantsTable, null, "pkey")
-                    + " DO UPDATE SET account_info_type = EXCLUDED.account_info_type"
-                    + " RETURNING primary_user_id, account_info_type";
-
-            String[] conflict = execute(sqlCon, QUERY, pst -> {
-                pst.setString(1, userId); // primary_user_id
-                pst.setString(2, appIdentifier.getAppId());
-                pst.setString(3, userId); // recipe_user_id
-            }, rs -> {
-                String[] firstConflict = null;
-                while (rs.next()) {
-                    String returnedPrimaryUserId = rs.getString("primary_user_id");
-                    String accountInfoType = rs.getString("account_info_type");
-                    
-                    // Check if the returned primary_user_id is different from the userId
-                    if (!userId.equals(returnedPrimaryUserId)) {
-                        if (firstConflict == null) {
-                            firstConflict = new String[]{returnedPrimaryUserId, accountInfoType};
-                        }
-                        // Prioritize THIRD_PARTY conflicts
-                        if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(accountInfoType)) {
-                            return new String[]{returnedPrimaryUserId, accountInfoType};
-                        }
-                    }
-                }
-                return firstConflict;
-            });
-
-            // Throw conflict if any row had a different primary_user_id
-            if (conflict != null) {
-                assert conflict.length == 2;
-                String conflictingPrimaryUserId = conflict[0];
-                String accountInfoType = conflict[1];
-
-                String message;
-                if (ACCOUNT_INFO_TYPE.EMAIL.toString().equals(accountInfoType)) {
-                    message = "This user's email is already associated with another user ID";
-                } else if (ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString().equals(accountInfoType)) {
-                    message = "This user's phone number is already associated with another user ID";
-                } else if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(accountInfoType)) {
-                    message = "This user's third party login is already associated with another user ID";
-                } else {
-                    message = "Account info is already associated with another user ID";
-                }
-
-                throw new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(conflictingPrimaryUserId, message);
-            }
-
-            // Update primary_user_id in recipe_user_account_infos to recipe_user_id (making it primary)
-            // Return both old and new primary_user_id values
-            String UPDATE_QUERY = "WITH old_values AS ("
-                    + " SELECT primary_user_id FROM " + recipeUserAccountInfosTable
-                    + " WHERE app_id = ? AND recipe_user_id = ?"
-                    + " LIMIT 1"
-                    + ")"
-                    + " UPDATE " + recipeUserAccountInfosTable
-                    + " SET primary_user_id = recipe_user_id"
-                    + " WHERE app_id = ? AND recipe_user_id = ?"
-                    + " RETURNING (SELECT primary_user_id FROM old_values) AS old_primary_user_id, primary_user_id AS new_primary_user_id";
-
-            String[] result = execute(sqlCon, UPDATE_QUERY, pst -> {
-                pst.setString(1, appIdentifier.getAppId());
-                pst.setString(2, userId);
-                pst.setString(3, appIdentifier.getAppId());
-                pst.setString(4, userId);
-            }, rs -> {
-                String[] res = null;
-                while (rs.next()) {
-                    String oldPrimaryUserId = rs.getString("old_primary_user_id");
-                    String newPrimaryUserId = rs.getString("new_primary_user_id");
-                    res = new String[]{oldPrimaryUserId, newPrimaryUserId};
-                }
-                return res;
-            });
-
-            if (result == null) {
-                throw new UnknownUserIdException();
-            }
-            {
-                String oldPrimaryUserId = result[0];
-                String newPrimaryUserId = result[1];
-
-                if (oldPrimaryUserId != null) {
-                    if (oldPrimaryUserId.equals(newPrimaryUserId)) {
-                        return false; // was already primary
-                    } else {
-                        throw new CannotBecomePrimarySinceRecipeUserIdAlreadyLinkedWithPrimaryUserIdException(oldPrimaryUserId, "This user ID is already linked to another user ID");
-                    }
-                }
-            }
-
-            // all okay
-            return true; // now became primary
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
     /**
      * Adds account info entries to primary_user_tenants when a user becomes a primary user.
      * This overload requires a LockedUser parameter to ensure proper row-level locking has been acquired.
@@ -750,181 +628,6 @@ public class AccountInfoQueries {
         }
 
 
-    }
-
-    public static boolean reserveAccountInfoForLinking_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
-                                                                String recipeUserId, String _primaryUserId)
-            throws StorageQueryException, UnknownUserIdException,
-            InputUserIdIsNotAPrimaryUserException, CannotLinkSinceRecipeUserIdAlreadyLinkedWithAnotherPrimaryUserIdException,
-            AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException {
-
-        try {
-            String schema = Config.getConfig(start).getTableSchema();
-            String primaryUserTenantsTable = getConfig(start).getPrimaryUserTenantsTable();
-            String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
-            String recipeUserAccountInfosTable = getConfig(start).getRecipeUserAccountInfosTable();
-
-            // Step 1: Fetch the actual primaryUserId for _primaryUserId
-            String primaryUserId;
-            String fetchPrimaryUserIdQuery = "SELECT primary_user_id FROM " + recipeUserAccountInfosTable + " WHERE app_id = ? AND recipe_user_id = ? LIMIT 1";
-            String[] primaryUserIds = execute(sqlCon, fetchPrimaryUserIdQuery, pst -> {
-                pst.setString(1, appIdentifier.getAppId());
-                pst.setString(2, _primaryUserId);
-            }, rs -> {
-                if (rs.next()) {
-                    return new String[]{rs.getString("primary_user_id")};
-                }
-                return null;
-            });
-
-            if (primaryUserIds == null) {
-                throw new UnknownUserIdException();
-            }
-            if (primaryUserIds[0] == null) {
-                // if the mapping doesn't show this as a primary user, it means this user is not a primary user
-                throw new InputUserIdIsNotAPrimaryUserException(_primaryUserId);
-            }
-
-            primaryUserId = primaryUserIds[0];
-
-            // Ensure no linking to same user in parallel
-            io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(sqlCon, appIdentifier.getAppId() + "~" + primaryUserId);
-
-            // Step 2: Find all target tenant_ids to write for (union of tenants for the primary user and for the recipe user)
-            // and find all (account_info_type, account_info_value) for this user (union from both primary and recipe user)
-            // The select/join/insert operations will now use the retrieved primaryUserId value directly
-
-            String QUERY = "INSERT INTO " + primaryUserTenantsTable
-                    + " (app_id, tenant_id, account_info_type, account_info_value, primary_user_id)"
-                    + " SELECT ?, all_tenants.tenant_id, all_accounts.account_info_type, all_accounts.account_info_value, ?"
-                    + " FROM ("
-                    + "   SELECT tenant_id FROM " + primaryUserTenantsTable
-                    + "   WHERE app_id = ? AND primary_user_id = ?"
-                    + "   UNION"
-                    + "   SELECT tenant_id FROM " + recipeUserTenantsTable + " WHERE app_id = ? AND recipe_user_id = ?"
-                    + " ) all_tenants CROSS JOIN ("
-                    + "   SELECT account_info_type, account_info_value FROM " + primaryUserTenantsTable
-                    + "   WHERE app_id = ? AND primary_user_id = ?"
-                    + "   UNION"
-                    + "   SELECT account_info_type, account_info_value FROM " + recipeUserAccountInfosTable + " WHERE app_id = ? AND recipe_user_id = ? AND primary_user_id is NULL"
-                    + " ) all_accounts"
-                    + " ON CONFLICT ON CONSTRAINT " + Utils.getConstraintName(schema, primaryUserTenantsTable, null, "pkey")
-                    + " DO UPDATE SET account_info_type = EXCLUDED.account_info_type"
-                    + " RETURNING primary_user_id, account_info_type";
-
-            String[] conflict = execute(sqlCon, QUERY, pst -> {
-                pst.setString(1, appIdentifier.getAppId()); // app_id for INSERT
-                pst.setString(2, primaryUserId);            // primary_user_id for INSERT
-
-                pst.setString(3, appIdentifier.getAppId()); // tenant subquery 1: primary_user_tenants.app_id
-                pst.setString(4, primaryUserId);            // tenant subquery 1: primary_user_id
-                pst.setString(5, appIdentifier.getAppId()); // tenant subquery 2: recipe_user_tenants.app_id
-                pst.setString(6, recipeUserId);             // tenant subquery 2: recipe_user_tenants.recipe_user_id
-
-                pst.setString(7, appIdentifier.getAppId()); // account subquery 1: primary_user_tenants.app_id
-                pst.setString(8, primaryUserId);            // account subquery 1: primary_user_id
-                pst.setString(9, appIdentifier.getAppId()); // account subquery 2: recipe_user_account_infos.app_id
-                pst.setString(10, recipeUserId);             // account subquery 2: recipe_user_account_infos.recipe_user_id
-            }, rs -> {
-                String[] firstConflict = null;
-                while (rs.next()) {
-                    String returnedPrimaryUserId = rs.getString("primary_user_id");
-                    String accountInfoType = rs.getString("account_info_type");
-
-                    // Check if the returned primary_user_id is different from the expected primaryUserId
-                    if (!primaryUserId.equals(returnedPrimaryUserId)) {
-                        if (firstConflict == null) {
-                            firstConflict = new String[]{returnedPrimaryUserId, accountInfoType};
-                        }
-                        // Prioritize THIRD_PARTY conflicts
-                        if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(accountInfoType)) {
-                            return new String[]{returnedPrimaryUserId, accountInfoType};
-                        }
-                    }
-                }
-                return firstConflict;
-            });
-
-            // Throw conflict if any row had a different primary_user_id
-            if (conflict != null && conflict[0] != null) {
-                String conflictingPrimaryUserId = conflict[0].trim();
-                String accountInfoType = conflict[1];
-
-                String message;
-                if (ACCOUNT_INFO_TYPE.EMAIL.toString().equals(accountInfoType)) {
-                    message = "This user's email is already associated with another user ID";
-                } else if (ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString().equals(accountInfoType)) {
-                    message = "This user's phone number is already associated with another user ID";
-                } else if (ACCOUNT_INFO_TYPE.THIRD_PARTY.toString().equals(accountInfoType)) {
-                    message = "This user's third party login is already associated with another user ID";
-                } else {
-                    message = "Account info is already associated with another user ID";
-                }
-
-                throw new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(conflictingPrimaryUserId, message);
-            }
-
-            // Update primary_user_id in recipe_user_account_infos to link the recipe user to the primary user
-            String UPDATE_QUERY = "WITH old_values AS ("
-                    + " SELECT primary_user_id FROM " + recipeUserAccountInfosTable
-                    + " WHERE app_id = ? AND recipe_user_id = ?"
-                    + " LIMIT 1"
-                    + ")"
-                    + " UPDATE " + recipeUserAccountInfosTable
-                    + " SET primary_user_id = ?"
-                    + " WHERE app_id = ? AND recipe_user_id = ?"
-                    + " RETURNING (SELECT primary_user_id FROM old_values) AS old_primary_user_id, primary_user_id AS new_primary_user_id";
-
-            String[] result = execute(sqlCon, UPDATE_QUERY, pst -> {
-                pst.setString(1, appIdentifier.getAppId());
-                pst.setString(2, recipeUserId);
-                pst.setString(3, primaryUserId);
-                pst.setString(4, appIdentifier.getAppId());
-                pst.setString(5, recipeUserId);
-            }, rs -> {
-                String[] res = null;
-                while (rs.next()) {
-                    String oldPrimaryUserId = rs.getString("old_primary_user_id");
-                    String newPrimaryUserId = rs.getString("new_primary_user_id");
-                    res = new String[]{oldPrimaryUserId, newPrimaryUserId};
-                }
-                return res;
-            });
-
-            if (result == null) {
-                throw new UnknownUserIdException();
-            }
-
-            {
-                String oldPrimaryUserId = result[0];
-                String newPrimaryUserId = result[1];
-
-                // If newPrimaryUserId is NULL, it means something went wrong
-                if (newPrimaryUserId == null) {
-                    throw new InputUserIdIsNotAPrimaryUserException(primaryUserId);
-                }
-
-                if (oldPrimaryUserId != null) {
-                    if (oldPrimaryUserId.equals(newPrimaryUserId)) {
-                        return false; // was already linked to this primary user
-                    } else {
-                        // Fetch the recipe user info to include in the exception
-                        AuthRecipeUserInfo recipeUserInfo = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(
-                                start, sqlCon, appIdentifier, recipeUserId);
-                        if (recipeUserInfo == null) {
-                            throw new UnknownUserIdException();
-                        }
-                        throw new CannotLinkSinceRecipeUserIdAlreadyLinkedWithAnotherPrimaryUserIdException(
-                                recipeUserInfo);
-                    }
-                }
-            }
-
-            // all okay
-            return true;
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
     }
 
     /**
@@ -1277,7 +980,8 @@ public class AccountInfoQueries {
         }
     }
 
-    public static void removeAccountInfoReservationForPrimaryUserForUnlinking_Transaction(Start start, Connection sqlCon, AppIdentifier tenantIdentifier, String userId) throws StorageQueryException {
+    // Helper that performs the actual DB work for unlinking account info reservations
+    public static void doRemoveAccountInfoReservationForUnlinking(Start start, Connection sqlCon, AppIdentifier tenantIdentifier, String userId) throws StorageQueryException {
         try {
             String primaryUserTenantsTable = getConfig(start).getPrimaryUserTenantsTable();
             String recipeUserAccountInfosTable = getConfig(start).getRecipeUserAccountInfosTable();
@@ -1386,8 +1090,8 @@ public class AccountInfoQueries {
             throw new IllegalStateException("Recipe user " + recipeUserId + " is not part of any primary user group");
         }
 
-        // Delegate to the existing implementation that uses user ID strings
-        removeAccountInfoReservationForPrimaryUserForUnlinking_Transaction(start, sqlCon, appIdentifier, recipeUserId);
+        // Delegate to the internal helper that performs the DB operations
+        doRemoveAccountInfoReservationForUnlinking(start, sqlCon, appIdentifier, recipeUserId);
     }
 
     public static void removeAccountInfoReservationsForDeletingUser_Transaction(Start start, TransactionConnection con,
@@ -1399,7 +1103,7 @@ public class AccountInfoQueries {
             String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
             String recipeUserAccountInfosTable = getConfig(start).getRecipeUserAccountInfosTable();
 
-            removeAccountInfoReservationForPrimaryUserForUnlinking_Transaction(start, sqlCon, appIdentifier, userId);
+            doRemoveAccountInfoReservationForUnlinking(start, sqlCon, appIdentifier, userId);
 
             {
                 String recipeUserTenantsDelete = "DELETE FROM " + recipeUserTenantsTable

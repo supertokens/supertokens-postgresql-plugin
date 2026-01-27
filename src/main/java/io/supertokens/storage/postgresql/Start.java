@@ -3688,7 +3688,7 @@ public class Start
             // we do not bother returning if a row was updated here or not, cause it's happening
             // in a transaction anyway.
             GeneralQueries.unlinkAccounts_Transaction(this, sqlCon, appIdentifier, primaryUserId, recipeUserId);
-            AccountInfoQueries.removeAccountInfoReservationForPrimaryUserForUnlinking_Transaction(this, sqlCon, appIdentifier, recipeUserId);
+            AccountInfoQueries.doRemoveAccountInfoReservationForUnlinking(this, sqlCon, appIdentifier, recipeUserId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
