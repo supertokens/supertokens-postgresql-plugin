@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [8.0.5]
+
+- Uses the right data path for postgresql image in `startDb.sh`
+
 ## [8.0.4]
 
 - Helpers for docker build
