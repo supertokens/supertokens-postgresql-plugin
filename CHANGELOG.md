@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [7.2.2]
+
+- Uses the right path for docker in `startDb.sh`
+
 ## [7.2.1] 
 
 - Helpers for docker build
