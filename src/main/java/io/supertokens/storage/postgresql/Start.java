@@ -3134,8 +3134,8 @@ public class Start
                     } else {
                         throw new IllegalStateException("Should never come here!");
                     }
-                    AccountInfoQueries.removeAccountInfoReservationForPrimaryUserWhileRemovingTenant_Transaction(this, sqlCon, tenantIdentifier, userId);
-                    AccountInfoQueries.removeAccountInfoForRecipeUserWhileRemovingTenant_Transaction(this, sqlCon, tenantIdentifier, userId);
+                    AccountInfoQueries.removeAccountInfoReservationForPrimaryUserWhileRemovingTenant_Transaction(this, sqlCon, tenantIdentifier, lockedUser);
+                    AccountInfoQueries.removeAccountInfoForRecipeUserWhileRemovingTenant_Transaction(this, sqlCon, tenantIdentifier, lockedUser);
 
                     sqlCon.commit();
                     return removed;
