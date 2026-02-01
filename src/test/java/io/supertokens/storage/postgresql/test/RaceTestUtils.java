@@ -24,12 +24,9 @@ import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storageLayer.StorageLayer;
 
-import java.sql.ResultSet;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
@@ -65,11 +62,21 @@ public class RaceTestUtils {
     /**
      * Check complete consistency for a user object against reservation tables.
      *
-     * This method verifies:
-     * 1. If the user is a primary user (or linked), check that primary_user_tenants
-     *    exactly matches the emails of all linked login methods for each tenant
-     * 2. Check that recipe_user_tenants exactly matches the email for each login method
-     *    in each tenant the login method belongs to
+     * This method verifies the following invariants (for email account_info_type only):
+     *
+     * I1 (Primary Reservation Completeness): For every linked recipe user's email,
+     *     that email must be reserved in primary_user_tenants for the primary user.
+     *
+     * I2 (Primary Reservation Accuracy): Every email in primary_user_tenants must
+     *     correspond to an actual login method's email (no orphaned reservations).
+     *
+     * I3 (Recipe Tables Consistency): recipe_user_tenants must match the login method's
+     *     actual email (no missing, mismatched, or orphaned entries).
+     *
+     * Note: This method does NOT verify:
+     * - Phone numbers or third-party identities (only emails)
+     * - I4 (Recipe User Uniqueness) - same email across different recipe users
+     * - recipe_user_account_infos table consistency
      *
      * @param main The Main process
      * @param user The AuthRecipeUserInfo to check (from getUserById)
@@ -85,19 +92,24 @@ public class RaceTestUtils {
         }
 
         String primaryUserId = user.getSupertokensUserId();
-        boolean isPrimaryOrLinked = user.isPrimaryUser || user.loginMethods.length > 1;
+
+        // Check primary_user_tenants if user is a primary user.
+        // Note: When querying by a linked recipe user's ID, getUserById returns the primary user,
+        // so isPrimaryUser will be true. loginMethods.length > 1 is a redundant check since
+        // multiple login methods implies linking which requires a primary user.
+        boolean shouldCheckPrimaryUserTenants = user.isPrimaryUser;
 
         // For each tenant the user is in, check consistency
         for (String tenantId : user.tenantIds) {
             TenantIdentifier tenant = new TenantIdentifier(null, null, tenantId);
 
-            // 1. Check primary_user_tenants if user is primary/linked
-            if (isPrimaryOrLinked) {
+            // 1. Check primary_user_tenants if user is a primary user (verifies I1 and I2)
+            if (shouldCheckPrimaryUserTenants) {
                 List<String> primaryIssues = checkPrimaryUserTenantsConsistency(main, tenant, user);
                 issues.addAll(primaryIssues);
             }
 
-            // 2. Check recipe_user_tenants for each login method in this tenant
+            // 2. Check recipe_user_tenants for each login method in this tenant (verifies I3)
             for (LoginMethod loginMethod : user.loginMethods) {
                 if (loginMethod.tenantIds.contains(tenantId)) {
                     List<String> recipeIssues = checkRecipeUserTenantsConsistency(main, tenant, loginMethod);
@@ -112,8 +124,15 @@ public class RaceTestUtils {
     /**
      * Check that primary_user_tenants exactly matches the linked recipe users for a tenant.
      *
-     * Expected: For each login method in the user that belongs to this tenant,
-     * if the login method has an email, that email should be reserved in primary_user_tenants.
+     * Verifies I1 (Primary Reservation Completeness) and I2 (Primary Reservation Accuracy):
+     * - I1: All emails from all login methods must be reserved in this tenant
+     * - I2: Each reserved email must correspond to some login method's email in the linked group
+     *
+     * IMPORTANT: The implementation reserves ALL emails from ALL login methods in ALL tenants
+     * where ANY linked user exists. This is intentional to prevent identity conflicts:
+     * - If P1 links R1, and P1 is only in tenant1 but R1 is in tenant1+tenant2
+     * - P1's email must be reserved in tenant2 too, even though P1's login method isn't there
+     * - Otherwise another primary could claim P1's email in tenant2, creating a conflict
      */
     private static List<String> checkPrimaryUserTenantsConsistency(Main main, TenantIdentifier tenant,
                                                                     AuthRecipeUserInfo user) throws Exception {
@@ -123,31 +142,33 @@ public class RaceTestUtils {
         // Get all email reservations from primary_user_tenants for this primary user in this tenant
         Set<String> reservedEmails = getAllPrimaryUserEmailReservations(main, tenant, primaryUserId);
 
-        // Build expected set of emails from login methods in this tenant
+        // Build expected set of emails from ALL login methods (not filtered by tenant).
+        // The implementation reserves all emails in all tenants where any linked user exists,
+        // to prevent identity conflicts across the linked group.
         Set<String> expectedEmails = new HashSet<>();
         for (LoginMethod lm : user.loginMethods) {
-            if (lm.tenantIds.contains(tenant.getTenantId()) && lm.email != null) {
+            if (lm.email != null) {
                 expectedEmails.add(lm.email);
             }
         }
 
-        // Check for missing reservations (emails in user but not in table)
+        // Check for missing reservations (emails in user but not in table) - I1 violation
         for (String expectedEmail : expectedEmails) {
             if (!reservedEmails.contains(expectedEmail)) {
-                issues.add("MISSING PRIMARY RESERVATION: Email '" + expectedEmail +
-                        "' is in user's login methods for tenant '" + tenant.getTenantId() +
-                        "' but NOT in primary_user_tenants for primary user " + primaryUserId +
-                        ". Reserved emails: " + reservedEmails);
+                issues.add("MISSING PRIMARY RESERVATION (I1 violation): Email '" + expectedEmail +
+                        "' is in user's login methods but NOT in primary_user_tenants for primary user " +
+                        primaryUserId + " in tenant '" + tenant.getTenantId() +
+                        "'. Reserved emails: " + reservedEmails);
             }
         }
 
-        // Check for orphaned reservations (emails in table but not in user)
+        // Check for orphaned reservations (emails in table but not in any login method) - I2 violation
         for (String reservedEmail : reservedEmails) {
             if (!expectedEmails.contains(reservedEmail)) {
-                issues.add("ORPHANED PRIMARY RESERVATION: Email '" + reservedEmail +
+                issues.add("ORPHANED PRIMARY RESERVATION (I2 violation): Email '" + reservedEmail +
                         "' is in primary_user_tenants for primary user " + primaryUserId +
                         " in tenant '" + tenant.getTenantId() +
-                        "' but NOT in user's login methods. Expected emails: " + expectedEmails);
+                        "' but NOT in any login method. Expected emails: " + expectedEmails);
             }
         }
 
@@ -156,6 +177,10 @@ public class RaceTestUtils {
 
     /**
      * Check that recipe_user_tenants exactly matches the login method's email for a tenant.
+     *
+     * Verifies I3 (Recipe Tables Consistency) for the email account_info_type:
+     * - If login method has email, recipe_user_tenants must have matching entry
+     * - If login method has no email, recipe_user_tenants must NOT have an email entry (orphan check)
      */
     private static List<String> checkRecipeUserTenantsConsistency(Main main, TenantIdentifier tenant,
                                                                    LoginMethod loginMethod) throws Exception {
@@ -168,17 +193,21 @@ public class RaceTestUtils {
 
         if (expectedEmail != null) {
             if (reservedEmail == null) {
-                issues.add("MISSING RECIPE RESERVATION: Login method " + recipeUserId +
+                issues.add("MISSING RECIPE RESERVATION (I3 violation): Login method " + recipeUserId +
                         " has email '" + expectedEmail + "' in tenant '" + tenant.getTenantId() +
                         "' but NO reservation in recipe_user_tenants");
             } else if (!reservedEmail.equals(expectedEmail)) {
-                issues.add("MISMATCHED RECIPE RESERVATION: Login method " + recipeUserId +
+                issues.add("MISMATCHED RECIPE RESERVATION (I3 violation): Login method " + recipeUserId +
                         " has email '" + expectedEmail + "' but recipe_user_tenants has '" +
                         reservedEmail + "' in tenant '" + tenant.getTenantId() + "'");
             }
         } else {
-            // Login method has no email - recipe_user_tenants might still have phone number etc.
-            // We only check email consistency here
+            // Login method has no email - check for orphaned entries
+            if (reservedEmail != null) {
+                issues.add("ORPHANED RECIPE RESERVATION (I3 violation): Login method " + recipeUserId +
+                        " has NO email but recipe_user_tenants has '" + reservedEmail +
+                        "' in tenant '" + tenant.getTenantId() + "'");
+            }
         }
 
         return issues;

@@ -3667,9 +3667,16 @@ public class Start
                 throw new UnknownUserIdException();
             }
 
+            LockedUser recipeUser = lockedUsers.getRecipeUser();
+            LockedUser primaryUser = lockedUsers.getPrimaryUser();
+
+            if (recipeUser.isLinked() && recipeUser.getPrimaryUserId().equals(primaryUser.getPrimaryUserId())){
+                return false;
+            }
+
             // Use the LockedUser version of reserveAccountInfoForLinking_Transaction
             boolean didLinkAccounts = AccountInfoQueries.reserveAccountInfoForLinking_Transaction(
-                    this, sqlCon, appIdentifier, lockedUsers.getRecipeUser(), lockedUsers.getPrimaryUser());
+                    this, sqlCon, appIdentifier, recipeUser, primaryUser);
             if (didLinkAccounts) {
                 GeneralQueries.linkAccounts_Transaction(this, sqlCon, appIdentifier, recipeUserId, primaryUserId);
             }
