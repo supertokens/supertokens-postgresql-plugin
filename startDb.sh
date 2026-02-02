@@ -1,15 +1,14 @@
-docker run --rm --name postgres \
-    -e 'POSTGRES_USER=root' \
-    -e 'POSTGRES_PASSWORD=root' \
-    -d -p 5432:5432 \
-    -v ~/Desktop/db/pstgres:/var/lib/postgresql/18/docker \
-    postgres \
+docker container run --name postgres $RUNPARAMS -p 5432:5432 -e 'POSTGRES_USER=root' -e 'POSTGRES_PASSWORD=root' --rm -d percona/percona-distribution-postgresql:13-arm64 postgres \
     -c 'max_connections=1000' \
     -c 'autovacuum_naptime=1' \
     -c 'autovacuum_vacuum_threshold=10' \
     -c 'autovacuum_analyze_threshold=10'
 
-sleep 30
+until docker exec postgres pg_isready; do
+  sleep 1
+done
+
+docker container exec postgres psql -U root -d postgres -c "CREATE EXTENSION pg_stat_monitor;"
 
 docker exec postgres psql -U root root -c 'create database supertokens;'
 docker exec postgres psql -U root root -c 'create database st0;'
