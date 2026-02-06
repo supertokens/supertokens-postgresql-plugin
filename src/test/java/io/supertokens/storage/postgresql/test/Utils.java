@@ -42,9 +42,19 @@ public abstract class Utils extends Mockito {
 
     private static ByteArrayOutputStream byteArrayOutputStream;
 
+    // Track the current test database for cleanup
+    private static final ThreadLocal<String> currentTestDatabaseName = new ThreadLocal<>();
+
     public static void afterTesting() {
         String installDir = "../";
         try {
+            // Drop the test-specific database
+            String testDb = currentTestDatabaseName.get();
+            if (testDb != null) {
+                DatabaseTestHelper.dropTestDatabase(testDb);
+                currentTestDatabaseName.remove();
+            }
+
             // we remove the license key file
             ProcessBuilder pb = new ProcessBuilder("rm", "licenseKey");
             pb.directory(new File(installDir));
@@ -87,23 +97,38 @@ public abstract class Utils extends Mockito {
         String installDir = "../";
         String workerId = System.getProperty("org.gradle.test.worker");
         try {
-            // if the default config is not the same as the current config, we must reset
-            // the storage layer
-            File ogConfig = new File("../temp/config.yaml");
-            File currentConfig = new File("../config" + workerId + ".yaml");
-            if (currentConfig.isFile()) {
-                byte[] ogConfigContent = Files.readAllBytes(ogConfig.toPath());
-                byte[] currentConfigContent = Files.readAllBytes(currentConfig.toPath());
-                if (!Arrays.equals(ogConfigContent, currentConfigContent)) {
-                    StorageLayer.close();
-                }
+            // IMPORTANT: Kill all processes FIRST to close database connections
+            // This must happen before we try to drop the database
+            TestingProcessManager.killAll();
+
+            // Now close the storage layer
+            StorageLayer.close();
+
+            // Now it's safe to drop previous test database (connections are closed)
+            String previousDb = currentTestDatabaseName.get();
+            if (previousDb != null) {
+                DatabaseTestHelper.dropTestDatabase(previousDb);
+                currentTestDatabaseName.remove();
             }
 
+            // Create a new test-specific database
+            String testDbName = DatabaseTestHelper.createTestDatabase();
+            currentTestDatabaseName.set(testDbName);
+
+            // Copy base config file
             ProcessBuilder pb = new ProcessBuilder("cp", "temp/config.yaml", "./config" + workerId + ".yaml");
             pb.directory(new File(installDir));
             Process process = pb.start();
             process.waitFor();
 
+            // Update config with test-specific database name and connection details
+            setValueInConfigDirectly("postgresql_database_name", "\"" + testDbName + "\"", workerId);
+            setValueInConfigDirectly("postgresql_host", "\"" + DatabaseTestHelper.getHost() + "\"", workerId);
+            setValueInConfigDirectly("postgresql_port", DatabaseTestHelper.getPort(), workerId);
+            setValueInConfigDirectly("postgresql_user", "\"" + DatabaseTestHelper.getUser() + "\"", workerId);
+            setValueInConfigDirectly("postgresql_password", "\"" + DatabaseTestHelper.getPassword() + "\"", workerId);
+
+            // Kill again and delete info (now on the new database context)
             TestingProcessManager.killAll();
             TestingProcessManager.deleteAllInformation();
             TestingProcessManager.killAll();
@@ -114,6 +139,27 @@ public abstract class Utils extends Mockito {
             e.printStackTrace();
         }
         System.gc();
+    }
+
+    /**
+     * Internal method to set a config value without closing StorageLayer.
+     * Used during reset() to configure the test database.
+     */
+    private static void setValueInConfigDirectly(String key, String value, String workerId) throws IOException {
+        String oldStr = "\n((#\\s)?)" + key + "(:|((:\\s).+))\n";
+        String newStr = "\n" + key + ": " + value + "\n";
+        StringBuilder originalFileContent = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new FileReader("../config" + workerId + ".yaml"))) {
+            String currentReadingLine = reader.readLine();
+            while (currentReadingLine != null) {
+                originalFileContent.append(currentReadingLine).append(System.lineSeparator());
+                currentReadingLine = reader.readLine();
+            }
+            String modifiedFileContent = originalFileContent.toString().replaceAll(oldStr, newStr);
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter("../config" + workerId + ".yaml"))) {
+                writer.write(modifiedFileContent);
+            }
+        }
     }
 
     static void stopLicenseKeyFromUpdatingToLatest(TestingProcessManager.TestingProcess process) {
@@ -189,6 +235,23 @@ public abstract class Utils extends Mockito {
                 System.out.println(byteArrayOutputStream.toString(StandardCharsets.UTF_8));
             }
         };
+    }
+
+    /**
+     * Checks if file logging is enabled (i.e., log paths are not set to "null" via environment variables).
+     * When INFO_LOG_PATH or ERROR_LOG_PATH envvars are set to "null", logging goes to console instead of files.
+     *
+     * @return true if file logging is enabled, false if logging is configured to go to console
+     */
+    public static boolean isFileLoggingEnabled() {
+        String infoLogPath = System.getenv("INFO_LOG_PATH");
+        String errorLogPath = System.getenv("ERROR_LOG_PATH");
+
+        // If either envvar is set to "null" (case-insensitive), file logging is disabled
+        boolean infoLogNull = infoLogPath != null && infoLogPath.equalsIgnoreCase("null");
+        boolean errorLogNull = errorLogPath != null && errorLogPath.equalsIgnoreCase("null");
+
+        return !infoLogNull && !errorLogNull;
     }
 
     public static TestRule retryFlakyTest() {

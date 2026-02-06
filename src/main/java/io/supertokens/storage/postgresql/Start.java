@@ -20,8 +20,10 @@ package io.supertokens.storage.postgresql;
 import java.lang.reflect.Field;
 import java.sql.BatchUpdateException;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -1089,7 +1091,79 @@ public class Start
 
     @Override
     public void modifyConfigToAddANewUserPoolForTesting(JsonObject config, int poolNumber) {
-        config.add("postgresql_database_name", new JsonPrimitive("st" + poolNumber));
+        // Use worker-specific database names to avoid conflicts during parallel test execution
+        String workerId = System.getProperty("org.gradle.test.worker", "");
+        String dbName = workerId.isEmpty() ? "st" + poolNumber : "st" + poolNumber + "_w" + workerId;
+
+        // Only auto-create databases for standard pool numbers (1-10).
+        // Higher pool numbers (like 1000) are used in tests that expect the database
+        // NOT to exist (for testing error handling).
+        if (poolNumber >= 1 && poolNumber <= 10) {
+            ensureTestDatabaseExists(dbName, config);
+        }
+
+        config.add("postgresql_database_name", new JsonPrimitive(dbName));
+    }
+
+    /**
+     * Helper method to get configuration values from environment variables or system properties.
+     */
+    private static String getConfigValue(String name, String defaultValue) {
+        String value = System.getenv(name);
+        if (value == null || value.isEmpty()) {
+            value = System.getProperty(name);
+        }
+        return (value != null && !value.isEmpty()) ? value : defaultValue;
+    }
+
+    /**
+     * Ensures a test database exists, creating it if necessary.
+     * This is called during test setup to create auxiliary databases for multitenancy tests.
+     */
+    private void ensureTestDatabaseExists(String dbName, JsonObject config) {
+        // Get connection info from config or use defaults
+        // Check both environment variables and system properties, matching DatabaseTestHelper behavior
+        String host = config.has("postgresql_host")
+            ? config.get("postgresql_host").getAsString()
+            : getConfigValue("TEST_PG_HOST", "localhost");
+        String port = config.has("postgresql_port")
+            ? String.valueOf(config.get("postgresql_port").getAsInt())
+            : getConfigValue("TEST_PG_PORT", getConfigValue("ST_POSTGRESQL_PLUGIN_SERVER_PORT", "5432"));
+        String user = config.has("postgresql_user")
+            ? config.get("postgresql_user").getAsString()
+            : getConfigValue("TEST_PG_USER", "root");
+        String password = config.has("postgresql_password")
+            ? config.get("postgresql_password").getAsString()
+            : getConfigValue("TEST_PG_PASSWORD", "root");
+
+        String adminUrl = "jdbc:postgresql://" + host + ":" + port + "/postgres";
+
+        try {
+            // Ensure driver is loaded
+            Class.forName("org.postgresql.Driver");
+        } catch (ClassNotFoundException e) {
+            // Driver should already be available
+            return;
+        }
+
+        try (Connection conn = DriverManager.getConnection(adminUrl, user, password);
+             Statement stmt = conn.createStatement()) {
+
+            // Drop existing database for clean state (important for test isolation)
+            try {
+                stmt.executeUpdate("DROP DATABASE IF EXISTS " + dbName);
+            } catch (SQLException ignored) {
+                // Ignore errors - database might have active connections
+            }
+
+            // Create fresh database
+            stmt.executeUpdate("CREATE DATABASE " + dbName);
+
+        } catch (SQLException e) {
+            // Database might already exist or creation failed - log but don't fail
+            // The actual connection attempt will surface any real issues
+            System.err.println("[Start] Warning: Could not create test database " + dbName + ": " + e.getMessage());
+        }
     }
 
     @Override

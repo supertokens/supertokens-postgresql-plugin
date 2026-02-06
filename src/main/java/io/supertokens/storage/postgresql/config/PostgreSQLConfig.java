@@ -674,7 +674,7 @@ public class PostgreSQLConfig {
 
         { // postgresql_host
             if (postgresql_host == null) {
-                postgresql_host = "localhost";
+                postgresql_host = System.getProperty("ST_POSTGRESQL_PLUGIN_SERVER_HOST", "localhost");
             }
         }
 

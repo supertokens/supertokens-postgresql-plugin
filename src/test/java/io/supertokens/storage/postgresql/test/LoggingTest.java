@@ -47,6 +47,7 @@ import java.util.Iterator;
 import java.util.Scanner;
 
 import static org.junit.Assert.*;
+import static org.junit.Assume.assumeTrue;
 
 public class LoggingTest {
     @Rule
@@ -64,6 +65,9 @@ public class LoggingTest {
 
     @Test
     public void defaultLogging() throws Exception {
+        // Skip this test if file logging is disabled (envvar set to null)
+        assumeTrue("File logging is disabled via environment variable", Utils.isFileLoggingEnabled());
+
         String[] args = {"../"};
         StorageLayer.close();
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -107,6 +111,9 @@ public class LoggingTest {
 
     @Test
     public void customLogging() throws Exception {
+        // Skip this test if file logging is disabled (envvar set to null)
+        assumeTrue("File logging is disabled via environment variable", Utils.isFileLoggingEnabled());
+
         try {
             String[] args = {"../"};
 
