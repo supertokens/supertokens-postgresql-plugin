@@ -68,12 +68,11 @@ public abstract class Utils extends Mockito {
             process = pb.start();
             process.waitFor();
 
-            // remove webserver-temp folders created by tomcat
-            final File webserverTemp = new File(installDir + "webserver-temp");
-            try {
-                FileUtils.deleteDirectory(webserverTemp);
-            } catch (Exception ignored) {
-            }
+            // Note: We don't delete webserver-temp here because:
+            // 1. Each Webserver creates its own UUID subdirectory (webserver-temp/UUID/)
+            // 2. Each Webserver cleans up its own subdirectory in stop()
+            // 3. Deleting the entire webserver-temp folder causes cross-worker conflicts
+            //    when tests run in parallel (one worker's cleanup deletes another's temp dir)
 
             // remove .started folder created by processes
             final File dotStartedFolder = new File(installDir + ".started" + workerId);

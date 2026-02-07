@@ -113,9 +113,9 @@ public class AccountLinkingTests {
         } catch (HttpResponseException e) {
             assert (e.statusCode == 400);
             assert (e.getMessage()
-                    .equals("Http error. Status Code: 400. Message: Cannot link users that are parts of different " +
-                            "databases. Different pool IDs: |localhost|5432|supertokens|public AND " +
-                            "|localhost|5432|st2|public"));
+                    .matches("Http error. Status Code: 400. Message: Cannot link users that are parts of different " +
+                            "databases. Different pool IDs: \\|[^|]+\\|\\d+\\|[^|]+\\|public AND " +
+                            "\\|[^|]+\\|\\d+\\|[^|]+\\|public"));
         }
 
 

@@ -63,6 +63,16 @@ public class DbConnectionPoolTest {
         Utils.reset();
     }
 
+    /**
+     * Helper method to get the tenant database name that matches what
+     * Start.modifyConfigToAddANewUserPoolForTesting() creates.
+     * The name is worker-specific to avoid conflicts during parallel test execution.
+     */
+    private static String getTenantDatabaseName(int poolNumber) {
+        String workerId = System.getProperty("org.gradle.test.worker", "");
+        return workerId.isEmpty() ? "st" + poolNumber : "st" + poolNumber + "_w" + workerId;
+    }
+
     @Test
     public void testActiveConnectionsWithTenants() throws Exception {
         String[] args = {"../"};
@@ -76,7 +86,8 @@ public class DbConnectionPoolTest {
         Thread.sleep(2000); // let all db connections establish
 
         Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
-        assertEquals(10, start.getDbActivityCount("supertokens"));
+        String testDbName = DatabaseTestHelper.getCurrentTestDatabase();
+        assertEquals(10, start.getDbActivityCount(testDbName));
 
         JsonObject config = new JsonObject();
         start.modifyConfigToAddANewUserPoolForTesting(config, 1);
@@ -91,7 +102,8 @@ public class DbConnectionPoolTest {
 
         Thread.sleep(1000); // let the new tenant be ready
 
-        assertEquals(10, start.getDbActivityCount("st1"));
+        String tenantDbName = getTenantDatabaseName(1);
+        assertEquals(10, start.getDbActivityCount(tenantDbName));
 
         // change connection pool size
         config.addProperty("postgresql_connection_pool_size", 20);
@@ -106,13 +118,13 @@ public class DbConnectionPoolTest {
 
         Thread.sleep(2000); // let the new tenant be ready
 
-        assertEquals(20, start.getDbActivityCount("st1"));
+        assertEquals(20, start.getDbActivityCount(tenantDbName));
 
         // delete tenant
         Multitenancy.deleteTenant(new TenantIdentifier(null, null, "t1"), process.getProcess());
         Thread.sleep(2000); // let the tenant be deleted
 
-        assertEquals(0, start.getDbActivityCount("st1"));
+        assertEquals(0, start.getDbActivityCount(tenantDbName));
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -133,7 +145,8 @@ public class DbConnectionPoolTest {
             Thread.sleep(2000); // let all db connections establish
 
             Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
-            assertEquals(10, start.getDbActivityCount("supertokens"));
+            String testDbName = DatabaseTestHelper.getCurrentTestDatabase();
+            assertEquals(10, start.getDbActivityCount(testDbName));
 
             JsonObject config = new JsonObject();
             start.modifyConfigToAddANewUserPoolForTesting(config, 1);
@@ -152,7 +165,7 @@ public class DbConnectionPoolTest {
 
             Thread.sleep(15000); // let the new tenant be ready
 
-            assertEquals(300, start.getDbActivityCount("st1"));
+            assertEquals(300, start.getDbActivityCount(getTenantDatabaseName(1)));
 
             ExecutorService es = Executors.newFixedThreadPool(100);
 
@@ -218,13 +231,13 @@ public class DbConnectionPoolTest {
 
             assertEquals(0, errorCount.get());
 
-            assertEquals(200, start.getDbActivityCount("st1"));
+            assertEquals(200, start.getDbActivityCount(getTenantDatabaseName(1)));
 
             // delete tenant
             Multitenancy.deleteTenant(new TenantIdentifier(null, null, "t1"), process.getProcess());
             Thread.sleep(3000); // let the tenant be deleted
 
-            assertEquals(0, start.getDbActivityCount("st1"));
+            assertEquals(0, start.getDbActivityCount(getTenantDatabaseName(1)));
 
             System.out.println(successAfterErrorTime.get() - firstErrorTime.get() + "ms");
             assertTrue(successAfterErrorTime.get() - firstErrorTime.get() < 250);
@@ -262,7 +275,8 @@ public class DbConnectionPoolTest {
             Thread.sleep(65000); // let the idle connections time out
 
             Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
-            assertEquals(10, start.getDbActivityCount("supertokens"));
+            String testDbName = DatabaseTestHelper.getCurrentTestDatabase();
+            assertEquals(10, start.getDbActivityCount(testDbName));
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -279,8 +293,11 @@ public class DbConnectionPoolTest {
         process.startProcess();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
+        Thread.sleep(2000); // let all db connections establish
+
         Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
-        assertEquals(10, start.getDbActivityCount("supertokens"));
+        String testDbName = DatabaseTestHelper.getCurrentTestDatabase();
+        assertEquals(10, start.getDbActivityCount(testDbName));
 
         JsonObject config = new JsonObject();
         start.modifyConfigToAddANewUserPoolForTesting(config, 1);
@@ -297,7 +314,7 @@ public class DbConnectionPoolTest {
 
         for (int retry = 0; retry < 5; retry++) {
             try {
-                assertEquals(10, start.getDbActivityCount("st1"));
+                assertEquals(10, start.getDbActivityCount(getTenantDatabaseName(1)));
                 break;
             } catch (AssertionError e) {
                 Thread.sleep(1000);
@@ -305,7 +322,7 @@ public class DbConnectionPoolTest {
             }
         }
 
-        assertEquals(10, start.getDbActivityCount("st1"));
+        assertEquals(10, start.getDbActivityCount(getTenantDatabaseName(1)));
 
         // change connection pool size
         config.addProperty("postgresql_connection_pool_size", 20);
@@ -321,13 +338,13 @@ public class DbConnectionPoolTest {
 
         Thread.sleep(2000); // let the new tenant be ready
 
-        assertEquals(5, start.getDbActivityCount("st1"));
+        assertEquals(5, start.getDbActivityCount(getTenantDatabaseName(1)));
 
         // delete tenant
         Multitenancy.deleteTenant(new TenantIdentifier(null, null, "t1"), process.getProcess());
         Thread.sleep(2000); // let the tenant be deleted
 
-        assertEquals(0, start.getDbActivityCount("st1"));
+        assertEquals(0, start.getDbActivityCount(getTenantDatabaseName(1)));
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -346,7 +363,8 @@ public class DbConnectionPoolTest {
         Thread.sleep(2000); // let all db connections establish
 
         Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
-        assertEquals(10, start.getDbActivityCount("supertokens"));
+        String testDbName = DatabaseTestHelper.getCurrentTestDatabase();
+        assertEquals(10, start.getDbActivityCount(testDbName));
 
         JsonObject config = new JsonObject();
         start.modifyConfigToAddANewUserPoolForTesting(config, 1);
@@ -366,7 +384,7 @@ public class DbConnectionPoolTest {
 
         Thread.sleep(3000); // let the new tenant be ready
 
-        assertTrue(10 >= start.getDbActivityCount("st1"));
+        assertTrue(10 >= start.getDbActivityCount(getTenantDatabaseName(1)));
 
         ExecutorService es = Executors.newFixedThreadPool(150);
 
@@ -398,19 +416,19 @@ public class DbConnectionPoolTest {
         es.shutdown();
         es.awaitTermination(2, TimeUnit.MINUTES);
 
-        assertTrue(5 < start.getDbActivityCount("st1"));
+        assertTrue(5 < start.getDbActivityCount(getTenantDatabaseName(1)));
 
         assertEquals(0, errorCount.get());
 
         Thread.sleep(65000); // let the idle connections time out
 
-        assertEquals(5, start.getDbActivityCount("st1"));
+        assertEquals(5, start.getDbActivityCount(getTenantDatabaseName(1)));
 
         // delete tenant
         Multitenancy.deleteTenant(new TenantIdentifier(null, null, "t1"), process.getProcess());
         Thread.sleep(3000); // let the tenant be deleted
 
-        assertEquals(0, start.getDbActivityCount("st1"));
+        assertEquals(0, start.getDbActivityCount(getTenantDatabaseName(1)));
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));

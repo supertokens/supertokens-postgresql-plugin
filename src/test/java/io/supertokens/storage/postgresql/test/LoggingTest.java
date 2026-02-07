@@ -458,9 +458,9 @@ public class LoggingTest {
                 String dbUser = "db_user";
                 String dbPassword = "db_password";
                 String dbName = "db_does_not_exist";
-                String dbConnectionUri = "postgresql://" + dbUser + ":" + dbPassword + "@localhost:5432/" + dbName;
-
-                Utils.setValueInConfig("postgresql_connection_uri", dbConnectionUri);
+                Utils.setValueInConfig("postgresql_database_name", dbName);
+                Utils.setValueInConfig("postgresql_use", dbUser);
+                Utils.setValueInConfig("postgresql_password", dbPassword);
 
                 TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
 
