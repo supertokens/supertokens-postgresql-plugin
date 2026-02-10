@@ -3346,6 +3346,9 @@ public class Start
     @Override
     public Map<String, TOTPDevice[]> getDevicesForMultipleUsers(AppIdentifier appIdentifier, List<String> userIds)
             throws StorageQueryException {
+        if (userIds == null || userIds.isEmpty()) {
+            return new HashMap<>();
+        }
         try {
             Map<String, List<TOTPDevice>> devicesMap = TOTPQueries.getDevicesForMultipleUsers(this, appIdentifier, userIds);
             // Convert Map<String, List<TOTPDevice>> to Map<String, TOTPDevice[]>

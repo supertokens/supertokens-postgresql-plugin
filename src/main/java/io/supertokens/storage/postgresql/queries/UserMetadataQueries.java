@@ -150,10 +150,11 @@ public class UserMetadataQueries {
                 pst.setString(2+i, userIds.get(i));
             }
         }, result -> {
-            Map<String, JsonObject>  userMetadataByUserId = new HashMap<>();
+            Map<String, JsonObject> userMetadataByUserId = new HashMap<>();
             JsonParser jp = new JsonParser();
-            if (result.next()) {
-                userMetadataByUserId.put(result.getString("user_id"),
+            while (result.next()) {
+                String userId = result.getString("user_id");
+                userMetadataByUserId.put(userId,
                         jp.parse(result.getString("user_metadata")).getAsJsonObject());
             }
             return userMetadataByUserId;
