@@ -34,7 +34,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Helper class for managing test-specific PostgreSQL databases.
- * Each test gets its own isolated database to prevent interference.
+ * Each worker gets its own isolated database to prevent interference during parallel execution.
+ * Within a worker, tests share the same database (data is cleared between tests via TRUNCATE).
  */
 public class DatabaseTestHelper {
 
@@ -42,6 +43,11 @@ public class DatabaseTestHelper {
 
     // Thread-local storage for the current test's database name
     private static final ThreadLocal<String> currentTestDatabase = new ThreadLocal<>();
+
+    // Static storage for per-worker database (created once per worker, reused across tests)
+    private static volatile String workerDatabase = null;
+    private static volatile boolean workerDatabaseInitialized = false;
+    private static final Object workerDbLock = new Object();
 
     // PostgreSQL connection details - read from environment or use defaults
     private static final String PG_HOST = getConfigValue("TEST_PG_HOST", "pg");
@@ -74,10 +80,19 @@ public class DatabaseTestHelper {
     }
 
     /**
-     * Create a new test database.
-     * Connects to the admin database to create the test database.
+     * Get or create the test database for this worker.
+     * The database is created once per worker and reused across tests.
+     * Data is cleared between tests via truncateAllData().
      */
     public static String createTestDatabase() {
+        // Check if we already have a database for this worker
+        synchronized (workerDbLock) {
+            if (workerDatabaseInitialized && workerDatabase != null) {
+                currentTestDatabase.set(workerDatabase);
+                return workerDatabase;
+            }
+        }
+
         String dbName = generateTestDatabaseName();
 
         try {
@@ -93,8 +108,12 @@ public class DatabaseTestHelper {
 
             // Create the database
             stmt.executeUpdate("CREATE DATABASE " + dbName);
-            // System.out.println("[DatabaseTestHelper] Created test database: " + dbName);
 
+            // Store as the worker's database (created once, reused for all tests)
+            synchronized (workerDbLock) {
+                workerDatabase = dbName;
+                workerDatabaseInitialized = true;
+            }
             currentTestDatabase.set(dbName);
             return dbName;
 
@@ -105,16 +124,12 @@ public class DatabaseTestHelper {
     }
 
     /**
-     * Drop the current test database.
-     * Should be called after the test completes.
+     * Clear the current test database reference.
+     * The database persists and is reused for subsequent tests in this worker.
      */
     public static void dropCurrentTestDatabase() {
-        String dbName = currentTestDatabase.get();
-        if (dbName == null) {
-            return;
-        }
-
-        dropTestDatabase(dbName);
+        // Don't drop - just clear the thread-local reference
+        // The database is reused across tests in this worker
         currentTestDatabase.remove();
     }
 
@@ -149,6 +164,39 @@ public class DatabaseTestHelper {
         } catch (SQLException e) {
             // Log but don't fail - database might already be dropped
             System.err.println("[DatabaseTestHelper] Warning: Could not drop database " + dbName + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Truncate all data in the current test database while keeping tables intact.
+     * Uses a DO block to find all tables in the public schema and truncate them in a single statement.
+     * This is much faster than DROP DATABASE + CREATE DATABASE + CREATE TABLE because:
+     * - No DDL overhead (tables, indexes, constraints all preserved)
+     * - Next process startup's CREATE TABLE IF NOT EXISTS are all no-ops
+     * - No need to start a whole SuperTokens process just to drop tables
+     */
+    public static void truncateAllData() {
+        String dbName = currentTestDatabase.get();
+        if (dbName == null) return;
+
+        String dbUrl = String.format("jdbc:postgresql://%s:%s/%s", PG_HOST, PG_PORT, dbName);
+
+        try (Connection conn = DriverManager.getConnection(dbUrl, PG_USER, PG_PASSWORD);
+             Statement stmt = conn.createStatement()) {
+
+            // Build a single TRUNCATE statement for all tables in the public schema.
+            // This handles tables with any prefix (default or custom from previous tests).
+            stmt.execute(
+                "DO $$ DECLARE tbl_list TEXT; BEGIN " +
+                "SELECT string_agg(quote_ident(tablename), ', ') INTO tbl_list " +
+                "FROM pg_tables WHERE schemaname = 'public'; " +
+                "IF tbl_list IS NOT NULL THEN " +
+                "EXECUTE 'TRUNCATE TABLE ' || tbl_list || ' CASCADE'; " +
+                "END IF; END $$"
+            );
+
+        } catch (SQLException e) {
+            System.err.println("[DatabaseTestHelper] Warning: Could not truncate data in " + dbName + ": " + e.getMessage());
         }
     }
 

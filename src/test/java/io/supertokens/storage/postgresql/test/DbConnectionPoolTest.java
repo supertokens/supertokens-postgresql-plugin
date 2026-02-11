@@ -268,12 +268,12 @@ public class DbConnectionPoolTest {
                     .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
             Utils.setValueInConfig("postgresql_connection_pool_size", "20");
             Utils.setValueInConfig("postgresql_minimum_idle_connections", "10");
-            Utils.setValueInConfig("postgresql_idle_connection_timeout", "3000");
+            Utils.setValueInConfig("postgresql_idle_connection_timeout", "10000"); // HikariCP minimum is 10000ms
             System.setProperty("com.zaxxer.hikari.housekeeping.periodMs", "1000");
             process.startProcess();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-            Thread.sleep(8000); // let the idle connections time out (3s idle + 1s housekeeping + buffer)
+            Thread.sleep(15000); // let the idle connections time out (10s idle + 1s housekeeping + buffer)
 
             Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
             String testDbName = DatabaseTestHelper.getCurrentTestDatabase();
@@ -371,7 +371,7 @@ public class DbConnectionPoolTest {
         start.modifyConfigToAddANewUserPoolForTesting(config, 1);
         config.addProperty("postgresql_connection_pool_size", 300);
         config.addProperty("postgresql_minimum_idle_connections", 5);
-        config.addProperty("postgresql_idle_connection_timeout", 3000);
+        config.addProperty("postgresql_idle_connection_timeout", 10000); // HikariCP minimum is 10000ms
         System.setProperty("com.zaxxer.hikari.housekeeping.periodMs", "1000");
 
         AtomicLong errorCount = new AtomicLong(0);
@@ -422,7 +422,7 @@ public class DbConnectionPoolTest {
 
         assertEquals(0, errorCount.get());
 
-        Thread.sleep(8000); // let the idle connections time out (3s idle + 1s housekeeping + buffer)
+        Thread.sleep(15000); // let the idle connections time out (10s idle + 1s housekeeping + buffer)
 
         assertEquals(5, start.getDbActivityCount(getTenantDatabaseName(1)));
 

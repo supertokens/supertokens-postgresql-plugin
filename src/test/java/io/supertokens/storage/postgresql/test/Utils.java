@@ -49,12 +49,8 @@ public abstract class Utils extends Mockito {
     public static void afterTesting() {
         String installDir = "../";
         try {
-            // Drop the test-specific database
-            String testDb = currentTestDatabaseName.get();
-            if (testDb != null) {
-                DatabaseTestHelper.dropTestDatabase(testDb);
-                currentTestDatabaseName.remove();
-            }
+            // Clean up the test database reference
+            currentTestDatabaseName.remove();
 
             // we remove the license key file
             ProcessBuilder pb = new ProcessBuilder("rm", "licenseKey");
@@ -97,25 +93,22 @@ public abstract class Utils extends Mockito {
         String installDir = "../";
         String workerId = System.getProperty("org.gradle.test.worker");
         try {
-            // IMPORTANT: Kill all processes FIRST to close database connections
-            // This must happen before we try to drop the database
-            TestingProcessManager.killAll();
+            // Kill all processes WITHOUT dropping tables — TRUNCATE will handle data cleanup.
+            // This preserves the schema so the next process startup's CREATE TABLE IF NOT EXISTS
+            // are all no-ops, saving ~88 DDL statements per test.
+            TestingProcessManager.killAll(false);
 
-            // Now close the storage layer
+            // Close the storage layer (releases HikariCP pools etc.)
             StorageLayer.close();
 
-            // Now it's safe to drop previous test database (connections are closed)
-            String previousDb = currentTestDatabaseName.get();
-            if (previousDb != null) {
-                DatabaseTestHelper.dropTestDatabase(previousDb);
-                currentTestDatabaseName.remove();
-            }
-
-            // Create a new test-specific database
+            // Get or create the per-worker test database (created once, reused across tests)
             String testDbName = DatabaseTestHelper.createTestDatabase();
             currentTestDatabaseName.set(testDbName);
 
-            // Copy base config file
+            // Truncate all data in the test database (keeps tables intact for fast re-use)
+            DatabaseTestHelper.truncateAllData();
+
+            // Copy base config file (tests may have modified it)
             ProcessBuilder pb = new ProcessBuilder("cp", "temp/config.yaml", "./config" + workerId + ".yaml");
             pb.directory(new File(installDir));
             Process process = pb.start();
@@ -127,11 +120,6 @@ public abstract class Utils extends Mockito {
             setValueInConfigDirectly("postgresql_port", DatabaseTestHelper.getPort(), workerId);
             setValueInConfigDirectly("postgresql_user", "\"" + DatabaseTestHelper.getUser() + "\"", workerId);
             setValueInConfigDirectly("postgresql_password", "\"" + DatabaseTestHelper.getPassword() + "\"", workerId);
-
-            // Kill again and delete info (now on the new database context)
-            TestingProcessManager.killAll();
-            TestingProcessManager.deleteAllInformation();
-            TestingProcessManager.killAll();
 
             byteArrayOutputStream = new ByteArrayOutputStream();
             System.setErr(new PrintStream(byteArrayOutputStream));
