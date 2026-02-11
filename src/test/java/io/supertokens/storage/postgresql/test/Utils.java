@@ -36,6 +36,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 public abstract class Utils extends Mockito {
@@ -229,9 +230,24 @@ public abstract class Utils extends Mockito {
 
     public static TestRule getOnFailure() {
         return new TestWatcher() {
+            private Map<String, Map<String, Double>> pgStatBefore;
+
+            @Override
+            protected void starting(Description description) {
+                pgStatBefore = DatabaseTestHelper.takePgStatMonitorSnapshot(
+                        DatabaseTestHelper.getCurrentTestDatabase());
+            }
+
             @Override
             protected void failed(Throwable e, Description description) {
                 System.out.println(byteArrayOutputStream.toString(StandardCharsets.UTF_8));
+            }
+
+            @Override
+            protected void finished(Description description) {
+                String testName = description.getClassName() + "." + description.getMethodName();
+                DatabaseTestHelper.collectPgStatMonitorData(
+                        DatabaseTestHelper.getCurrentTestDatabase(), testName, pgStatBefore);
             }
         };
     }

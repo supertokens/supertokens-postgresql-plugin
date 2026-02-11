@@ -1089,17 +1089,27 @@ public class Start
         }
     }
 
+    // Track which auxiliary databases have already been DROP'd + CREATE'd in this JVM.
+    // The first call per DB name does a full DROP + CREATE for clean state between tests.
+    // Subsequent calls for the same DB name skip the DROP/CREATE entirely — avoiding the ~5s
+    // block that occurs when DROP DATABASE hits a database with active HikariCP connections.
+    private static final java.util.Set<String> ensuredDatabases = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     @Override
     public void modifyConfigToAddANewUserPoolForTesting(JsonObject config, int poolNumber) {
         // Use worker-specific database names to avoid conflicts during parallel test execution
         String workerId = System.getProperty("org.gradle.test.worker", "");
         String dbName = workerId.isEmpty() ? "st" + poolNumber : "st" + poolNumber + "_w" + workerId;
 
-        // Only auto-create databases for standard pool numbers (1-10).
+        // Only auto-create databases for standard pool numbers (0-50).
         // Higher pool numbers (like 1000) are used in tests that expect the database
         // NOT to exist (for testing error handling).
-        if (poolNumber >= 1 && poolNumber <= 10) {
-            ensureTestDatabaseExists(dbName, config);
+        if (poolNumber >= 0 && poolNumber <= 50) {
+            if (ensuredDatabases.add(dbName)) {
+                // First time seeing this DB in this JVM — do the full DROP + CREATE
+                ensureTestDatabaseExists(dbName, config);
+            }
+            // Otherwise, the DB was already created earlier in this JVM — skip
         }
 
         config.add("postgresql_database_name", new JsonPrimitive(dbName));
@@ -1149,11 +1159,18 @@ public class Start
         try (Connection conn = DriverManager.getConnection(adminUrl, user, password);
              Statement stmt = conn.createStatement()) {
 
-            // Drop existing database for clean state (important for test isolation)
+            // Terminate any lingering connections from previous test runs, then drop for clean state.
+            try {
+                stmt.executeUpdate(
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '" + dbName + "' AND pid <> pg_backend_pid()");
+            } catch (SQLException ignored) {
+                // pg_stat_activity query might fail on some setups
+            }
+
             try {
                 stmt.executeUpdate("DROP DATABASE IF EXISTS " + dbName);
             } catch (SQLException ignored) {
-                // Ignore errors - database might have active connections
+                // Ignore errors - database might still have connections
             }
 
             // Create fresh database

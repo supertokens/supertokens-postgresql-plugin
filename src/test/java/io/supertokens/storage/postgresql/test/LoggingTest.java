@@ -326,7 +326,7 @@ public class LoggingTest {
         String dbUser = "db_user";
         String dbPassword = "db_password";
         String dbName = "db_does_not_exist";
-        String dbConnectionUri = "postgresql://" + dbUser + ":" + dbPassword + "@localhost:5432/" + dbName;
+        String dbConnectionUri = "postgresql://" + dbUser + ":" + dbPassword + "@" + DatabaseTestHelper.getHost() + ":" + DatabaseTestHelper.getPort() + "/" + dbName;
 
         Utils.setValueInConfig("postgresql_connection_uri", dbConnectionUri);
         Utils.setValueInConfig("error_log_path", "null");
