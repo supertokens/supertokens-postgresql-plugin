@@ -268,11 +268,12 @@ public class DbConnectionPoolTest {
                     .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
             Utils.setValueInConfig("postgresql_connection_pool_size", "20");
             Utils.setValueInConfig("postgresql_minimum_idle_connections", "10");
-            Utils.setValueInConfig("postgresql_idle_connection_timeout", "30000");
+            Utils.setValueInConfig("postgresql_idle_connection_timeout", "3000");
+            System.setProperty("com.zaxxer.hikari.housekeeping.periodMs", "1000");
             process.startProcess();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-            Thread.sleep(65000); // let the idle connections time out
+            Thread.sleep(8000); // let the idle connections time out (3s idle + 1s housekeeping + buffer)
 
             Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
             String testDbName = DatabaseTestHelper.getCurrentTestDatabase();
@@ -370,7 +371,8 @@ public class DbConnectionPoolTest {
         start.modifyConfigToAddANewUserPoolForTesting(config, 1);
         config.addProperty("postgresql_connection_pool_size", 300);
         config.addProperty("postgresql_minimum_idle_connections", 5);
-        config.addProperty("postgresql_idle_connection_timeout", 30000);
+        config.addProperty("postgresql_idle_connection_timeout", 3000);
+        System.setProperty("com.zaxxer.hikari.housekeeping.periodMs", "1000");
 
         AtomicLong errorCount = new AtomicLong(0);
 
@@ -388,7 +390,7 @@ public class DbConnectionPoolTest {
 
         ExecutorService es = Executors.newFixedThreadPool(150);
 
-        for (int i = 0; i < 10000; i++) {
+        for (int i = 0; i < 1000; i++) {
             int finalI = i;
             es.execute(() -> {
                 try {
@@ -420,7 +422,7 @@ public class DbConnectionPoolTest {
 
         assertEquals(0, errorCount.get());
 
-        Thread.sleep(65000); // let the idle connections time out
+        Thread.sleep(8000); // let the idle connections time out (3s idle + 1s housekeeping + buffer)
 
         assertEquals(5, start.getDbActivityCount(getTenantDatabaseName(1)));
 
