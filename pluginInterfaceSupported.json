@@ -1,6 +1,6 @@
 {
   "_comment": "contains a list of plugin interfaces branch names that this core supports",
   "versions": [
-    "feat/bulk-mfa-query-apis"
+    "8.4"
   ]
 }
