@@ -3435,6 +3435,25 @@ public class Start
     }
 
     @Override
+    public Map<String, TOTPDevice[]> getDevicesForMultipleUsers(AppIdentifier appIdentifier, List<String> userIds)
+            throws StorageQueryException {
+        if (userIds == null || userIds.isEmpty()) {
+            return new HashMap<>();
+        }
+        try {
+            Map<String, List<TOTPDevice>> devicesMap = TOTPQueries.getDevicesForMultipleUsers(this, appIdentifier, userIds);
+            // Convert Map<String, List<TOTPDevice>> to Map<String, TOTPDevice[]>
+            Map<String, TOTPDevice[]> result = new HashMap<>();
+            for (Map.Entry<String, List<TOTPDevice>> entry : devicesMap.entrySet()) {
+                result.put(entry.getKey(), entry.getValue().toArray(new TOTPDevice[0]));
+            }
+            return result;
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public void insertUsedCode_Transaction(TransactionConnection con, TenantIdentifier tenantIdentifier,
                                            TOTPUsedCode usedCodeObj)
             throws StorageQueryException, UnknownTotpUserIdException, UsedCodeAlreadyExistsException,
