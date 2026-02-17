@@ -198,6 +198,7 @@ public class PostgreSQLConfig {
             defaultValue = "null", isOptional = true, isEditable = true)
     private Integer postgresql_minimum_idle_connections = null;
 
+
     @IgnoreForAnnotationCheck
     boolean isValidAndNormalised = false;
 
@@ -401,6 +402,7 @@ public class PostgreSQLConfig {
     public Integer getMinimumIdleConnections() {
         return postgresql_minimum_idle_connections;
     }
+
 
     public String getThirdPartyUserToTenantTable() {
         return addSchemaAndPrefixToTableName("thirdparty_user_to_tenant");
@@ -674,7 +676,7 @@ public class PostgreSQLConfig {
 
         { // postgresql_host
             if (postgresql_host == null) {
-                postgresql_host = "localhost";
+                postgresql_host = System.getProperty("ST_POSTGRESQL_PLUGIN_SERVER_HOST", "localhost");
             }
         }
 

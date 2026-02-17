@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.4.0]
+
+- Adds support for bulk query APIs for usermetadata and TOTP
+
 ## [9.3.2]
 
 - Regenerates `implementationDependencies.json`

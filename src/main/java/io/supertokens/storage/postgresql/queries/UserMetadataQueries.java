@@ -55,6 +55,7 @@ public class UserMetadataQueries {
         // @formatter:on
     }
 
+    // TODO: Add IF NOT EXISTS to prevent crash on dirty DB state from prior test failures
     public static String getQueryToCreateAppIdIndexForUserMetadataTable(Start start) {
         return "CREATE INDEX user_metadata_app_id_index ON "
                 + Config.getConfig(start).getUserMetadataTable() + "(app_id);";
@@ -150,10 +151,11 @@ public class UserMetadataQueries {
                 pst.setString(2+i, userIds.get(i));
             }
         }, result -> {
-            Map<String, JsonObject>  userMetadataByUserId = new HashMap<>();
+            Map<String, JsonObject> userMetadataByUserId = new HashMap<>();
             JsonParser jp = new JsonParser();
-            if (result.next()) {
-                userMetadataByUserId.put(result.getString("user_id"),
+            while (result.next()) {
+                String userId = result.getString("user_id");
+                userMetadataByUserId.put(userId,
                         jp.parse(result.getString("user_metadata")).getAsJsonObject());
             }
             return userMetadataByUserId;

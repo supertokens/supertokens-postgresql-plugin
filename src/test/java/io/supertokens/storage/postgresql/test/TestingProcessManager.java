@@ -41,10 +41,14 @@ public class TestingProcessManager {
     }
 
     static void killAll() {
+        killAll(true);
+    }
+
+    static void killAll(boolean removeAllInfo) {
         synchronized (alive) {
             for (TestingProcess testingProcess : alive) {
                 try {
-                    testingProcess.kill();
+                    testingProcess.kill(removeAllInfo);
                 } catch (InterruptedException e) {
                 }
             }

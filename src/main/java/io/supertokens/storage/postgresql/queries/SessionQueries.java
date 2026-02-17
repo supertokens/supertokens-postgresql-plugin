@@ -68,6 +68,7 @@ public class SessionQueries {
         // @formatter:on
     }
 
+    // TODO: Add IF NOT EXISTS to prevent crash on dirty DB state from prior test failures
     public static String getQueryToCreateTenantIdIndexForSessionInfoTable(Start start) {
         return "CREATE INDEX session_info_tenant_id_index ON "
                 + Config.getConfig(start).getSessionInfoTable() + "(app_id, tenant_id);";
@@ -90,11 +91,13 @@ public class SessionQueries {
         // @formatter:on
     }
 
+    // TODO: Add IF NOT EXISTS to prevent crash on dirty DB state from prior test failures
     public static String getQueryToCreateAppIdIndexForAccessTokenSigningKeysTable(Start start) {
         return "CREATE INDEX access_token_signing_keys_app_id_index ON "
                 + Config.getConfig(start).getAccessTokenSigningKeysTable() + "(app_id);";
     }
 
+    // TODO: Add IF NOT EXISTS to prevent crash on dirty DB state from prior test failures
     static String getQueryToCreateSessionExpiryIndex(Start start) {
         return "CREATE INDEX session_expiry_index ON "
                 + Config.getConfig(start).getSessionInfoTable() + "(expires_at);";

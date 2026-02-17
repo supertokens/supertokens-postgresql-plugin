@@ -23,6 +23,7 @@ import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.output.Logging;
 import io.supertokens.storageLayer.StorageLayer;
 import org.junit.AfterClass;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -50,6 +51,8 @@ public class LogLevelTest {
 
     @Test
     public void testLogLevelNoneOutput() throws Exception {
+        // Skip test if file logging is disabled (logs go to console instead)
+        Assume.assumeTrue("Skipping - file logging is disabled", Utils.isFileLoggingEnabled());
         {
             Utils.setValueInConfig("log_level", "NONE");
             String[] args = {"../"};
@@ -94,6 +97,8 @@ public class LogLevelTest {
 
     @Test
     public void testLogLevelErrorOutput() throws Exception {
+        // Skip test if file logging is disabled (logs go to console instead)
+        Assume.assumeTrue("Skipping - file logging is disabled", Utils.isFileLoggingEnabled());
         {
             Utils.setValueInConfig("log_level", "ERROR");
             String[] args = {"../"};
@@ -148,6 +153,8 @@ public class LogLevelTest {
 
     @Test
     public void testLogLevelWarnOutput() throws Exception {
+        // Skip test if file logging is disabled (logs go to console instead)
+        Assume.assumeTrue("Skipping - file logging is disabled", Utils.isFileLoggingEnabled());
         {
             Utils.setValueInConfig("log_level", "WARN");
             String[] args = {"../"};
@@ -202,6 +209,8 @@ public class LogLevelTest {
 
     @Test
     public void testLogLevelInfoOutput() throws Exception {
+        // Skip test if file logging is disabled (logs go to console instead)
+        Assume.assumeTrue("Skipping - file logging is disabled", Utils.isFileLoggingEnabled());
         {
             Utils.setValueInConfig("log_level", "INFO");
             String[] args = {"../"};
@@ -256,6 +265,8 @@ public class LogLevelTest {
 
     @Test
     public void testLogLevelDebugOutput() throws Exception {
+        // Skip test if file logging is disabled (logs go to console instead)
+        Assume.assumeTrue("Skipping - file logging is disabled", Utils.isFileLoggingEnabled());
         {
             Utils.setValueInConfig("log_level", "DEBUG");
             String[] args = {"../"};

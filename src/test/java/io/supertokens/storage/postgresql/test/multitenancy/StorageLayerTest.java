@@ -41,6 +41,7 @@ import io.supertokens.pluginInterface.multitenancy.exceptions.DuplicateThirdPart
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.test.TestingProcessManager;
+import io.supertokens.storage.postgresql.test.DatabaseTestHelper;
 import io.supertokens.storage.postgresql.test.Utils;
 import io.supertokens.storageLayer.StorageLayer;
 import io.supertokens.thirdparty.InvalidProviderConfigException;
@@ -703,15 +704,16 @@ public class StorageLayerTest {
         for (int i = 0; i < 50; i++) {
             final int insideLoop = i;
             executor.submit(() -> {
-                JsonObject config = new JsonObject();
-                config.addProperty("postgresql_database_name", "st" + insideLoop);
-                tenants[insideLoop] = new TenantConfig(new TenantIdentifier(null, "a" + insideLoop, null),
-                        new EmailPasswordConfig(false),
-                        new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
-                        new PasswordlessConfig(false),
-                        null, null,
-                        config);
                 try {
+                    JsonObject config = new JsonObject();
+                    StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess())
+                            .modifyConfigToAddANewUserPoolForTesting(config, insideLoop);
+                    tenants[insideLoop] = new TenantConfig(new TenantIdentifier(null, "a" + insideLoop, null),
+                            new EmailPasswordConfig(false),
+                            new ThirdPartyConfig(false, new ThirdPartyConfig.Provider[0]),
+                            new PasswordlessConfig(false),
+                            null, null,
+                            config);
                     Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantIdentifier(null, null, null),
                             tenants[insideLoop]);
                 } catch (Exception e) {
@@ -757,7 +759,7 @@ public class StorageLayerTest {
 
         JsonObject tenantConfigJson = new JsonObject();
         tenantConfigJson.add("postgresql_connection_uri",
-                new JsonPrimitive("postgresql://root:root@localhost:5432/random"));
+                new JsonPrimitive("postgresql://root:root@" + DatabaseTestHelper.getHost() + ":" + DatabaseTestHelper.getPort() + "/random"));
 
         TenantConfig tenantConfig = new TenantConfig(new TenantIdentifier("abc", null, null),
                 new EmailPasswordConfig(false),
@@ -797,7 +799,7 @@ public class StorageLayerTest {
 
             JsonObject tenantConfigJson = new JsonObject();
             tenantConfigJson.add("postgresql_connection_uri",
-                    new JsonPrimitive("postgresql://root:root@localhost:5432/random"));
+                    new JsonPrimitive("postgresql://root:root@" + DatabaseTestHelper.getHost() + ":" + DatabaseTestHelper.getPort() + "/random"));
 
             TenantIdentifier tid = new TenantIdentifier("abc", null, null);
 
@@ -897,7 +899,7 @@ public class StorageLayerTest {
         } catch (StorageQueryException e) {
             assertEquals(e.getMessage(),
                     "java.sql.SQLException: com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to " +
-                            "initialize pool: Connection to localhost:8989 refused. Check that the hostname and port " +
+                            "initialize pool: Connection to " + DatabaseTestHelper.getHost() + ":8989 refused. Check that the hostname and port " +
                             "are correct and that the postmaster is accepting TCP/IP connections.");
         }
 
