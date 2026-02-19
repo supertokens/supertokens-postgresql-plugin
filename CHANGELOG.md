@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.0.11]
+
+- Updates postgres' docker data path in `startDb.sh`
+
 ## [5.0.9] - 2024-03-21
 
 - Fixes user id mapping queries
