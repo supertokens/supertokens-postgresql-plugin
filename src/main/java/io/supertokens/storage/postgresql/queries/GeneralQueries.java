@@ -42,6 +42,7 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.useridmapping.LockedUser;
 import io.supertokens.pluginInterface.opentelemetry.WithinOtelSpan;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
@@ -739,6 +740,7 @@ public class GeneralQueries {
                     // indexes
                     update(con, AccountInfoQueries.getQueryToCreateTenantIndexForRecipeUserTenantsTable(start), NO_OP_SETTER);
                     update(con, AccountInfoQueries.getQueryToCreateRecipeUserIdIndexForRecipeUserTenantsTable(start), NO_OP_SETTER);
+                    update(con, AccountInfoQueries.getQueryToCreateRecipeUserIdIndexForRecipeUserAccountInfoTable(start), NO_OP_SETTER);
                     update(con, AccountInfoQueries.getQueryToCreateAccountInfoIndexForRecipeUserTenantsTable(start), NO_OP_SETTER);
                 }
 
@@ -1574,15 +1576,8 @@ public class GeneralQueries {
                                                                                     String thirdPartyId,
                                                                                     String thirdPartyUserId)
             throws SQLException, StorageQueryException {
-        // we first lock on the table based on thirdparty info and tenant - this will ensure that any other
-        // query happening related to the account linking on this third party info / tenant will wait for this to
-        // finish,
-        // and vice versa.
-
-        ThirdPartyQueries.lockThirdPartyInfoAndTenant_Transaction(start, sqlCon, appIdentifier, thirdPartyId,
-                thirdPartyUserId);
-
-        // now that we have locks on all the relevant tables, we can read from them safely
+        // Note: Locking is now done at the core level via UserLockingStorage.lockUser()
+        // This method just queries the users without acquiring locks.
         List<String> userIds = ThirdPartyQueries.listUserIdsByThirdPartyInfo_Transaction(start, sqlCon, appIdentifier,
                 thirdPartyId, thirdPartyUserId);
         List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds_Transaction(start, sqlCon, appIdentifier,
@@ -1923,21 +1918,16 @@ public class GeneralQueries {
                 .collect(Collectors.toList());
     }
 
-    public static String getRecipeIdForUser_Transaction(Start start, Connection sqlCon,
-                                                        TenantIdentifier tenantIdentifier, String userId)
-            throws SQLException, StorageQueryException {
-
-        String QUERY = "SELECT recipe_id FROM " + getConfig(start).getAppIdToUserIdTable()
-                + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
-        return execute(sqlCon, QUERY, pst -> {
-            pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, userId);
-        }, result -> {
-            if (result.next()) {
-                return result.getString("recipe_id");
-            }
-            return null;
-        });
+    /**
+     * Gets the recipe ID for a user that is already locked.
+     * The recipe ID is stored in the LockedUser object, which was fetched from
+     * app_id_to_user_id during lock acquisition.
+     *
+     * @param lockedUser The locked user (lock must be held)
+     * @return The recipe ID string
+     */
+    public static String getRecipeIdForUser_Transaction(LockedUser lockedUser) {
+        return lockedUser.getRecipeId();
     }
 
     public static Map<String, List<String>> getTenantIdsForUserIds_transaction(Start start, Connection sqlCon,

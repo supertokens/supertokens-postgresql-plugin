@@ -319,8 +319,9 @@ public class TOTPQueries {
     public static TOTPDevice[] getDevices_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                       String userId)
             throws StorageQueryException, SQLException {
+        // Note: FOR UPDATE removed - caller should obtain user lock via UserLockingStorage before calling this method
         String QUERY = "SELECT * FROM " + Config.getConfig(start).getTotpUserDevicesTable()
-                + " WHERE app_id = ? AND user_id = ? FOR UPDATE;";
+                + " WHERE app_id = ? AND user_id = ?;";
 
         return execute(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());

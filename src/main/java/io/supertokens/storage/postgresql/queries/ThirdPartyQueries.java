@@ -226,59 +226,6 @@ public class ThirdPartyQueries {
         }
     }
 
-    public static List<String> lockThirdPartyInfoAndTenant_Transaction(Start start, Connection con,
-                                                                       AppIdentifier appIdentifier,
-                                                                       String thirdPartyId, String thirdPartyUserId)
-            throws SQLException, StorageQueryException {
-        String QUERY = "SELECT user_id " +
-                " FROM " + getConfig(start).getThirdPartyUsersTable() +
-                " WHERE app_id = ? AND third_party_id = ? AND third_party_user_id = ? FOR UPDATE";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, thirdPartyId);
-            pst.setString(3, thirdPartyUserId);
-        }, result -> {
-            List<String> finalResult = new ArrayList<>();
-            while (result.next()) {
-                finalResult.add(result.getString("user_id"));
-            }
-            return finalResult;
-        });
-    }
-
-    public static List<String> lockThirdPartyInfoAndTenant_Transaction(Start start, Connection con,
-                                                                       AppIdentifier appIdentifier,
-                                                                       Map<String, String> thirdPartyUserIdToThirdPartyId)
-            throws SQLException, StorageQueryException {
-        if(thirdPartyUserIdToThirdPartyId == null || thirdPartyUserIdToThirdPartyId.isEmpty()) {
-            return new ArrayList<>();
-        }
-
-        String QUERY = "SELECT user_id " +
-                " FROM " + getConfig(start).getThirdPartyUsersTable() +
-                " WHERE app_id = ? AND third_party_id IN ("+Utils.generateCommaSeperatedQuestionMarks(
-                thirdPartyUserIdToThirdPartyId.size())+") AND third_party_user_id IN ("+
-                Utils.generateCommaSeperatedQuestionMarks(thirdPartyUserIdToThirdPartyId.size())+") FOR UPDATE";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            int counter = 2;
-            for (String thirdPartyId : thirdPartyUserIdToThirdPartyId.values()){
-                pst.setString(counter++, thirdPartyId);
-            }
-            for (String thirdPartyUserId : thirdPartyUserIdToThirdPartyId.keySet()) {
-                pst.setString(counter++, thirdPartyUserId);
-            }
-        }, result -> {
-            List<String> finalResult = new ArrayList<>();
-            while (result.next()) {
-                finalResult.add(result.getString("user_id"));
-            }
-            return finalResult;
-        });
-    }
-
     public static List<LoginMethod> getUsersInfoUsingIdList(Start start, Set<String> ids,
                                                             AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
