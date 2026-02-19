@@ -1,20 +1,25 @@
 {
-  "_comment": "Contains list of implementation dependencies URL for this project",
-  "list": [
-    {
-      "jar": "https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.2/postgresql-42.7.2.jar",
-      "name": "PostgreSQL JDBC Driver 42.7.2",
-      "src": "https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.2/postgresql-42.7.2-sources.jar"
-    },
-    {
-      "jar": "https://repo1.maven.org/maven2/com/zaxxer/HikariCP/3.4.1/HikariCP-3.4.1.jar",
-      "name": "HikariCP 3.4.1",
-      "src": "https://repo1.maven.org/maven2/com/zaxxer/HikariCP/3.4.1/HikariCP-3.4.1-sources.jar"
-    },
-    {
-      "jar": "https://repo1.maven.org/maven2/org/slf4j/slf4j-api/2.0.7/slf4j-api-2.0.7.jar",
-      "name": "SLF4j API 2.0.7",
-      "src": "https://repo1.maven.org/maven2/org/slf4j/slf4j-api/2.0.7/slf4j-api-2.0.7-sources.jar"
-    }
-  ]
+"_comment": "Contains list of implementation dependencies URL for this project. This is a generated file, don't modify the contents by hand.",
+"list": [
+	{
+		"jar":"https://repo.maven.apache.org/maven2/com/zaxxer/HikariCP/3.4.1/HikariCP-3.4.1.jar",
+		"name":"HikariCP 3.4.1",
+		"src":"https://repo.maven.apache.org/maven2/com/zaxxer/HikariCP/3.4.1/HikariCP-3.4.1-sources.jar"
+	},
+	{
+		"jar":"https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/1.7.25/slf4j-api-1.7.25.jar",
+		"name":"slf4j-api 1.7.25",
+		"src":"https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/1.7.25/slf4j-api-1.7.25-sources.jar"
+	},
+	{
+		"jar":"https://repo.maven.apache.org/maven2/org/postgresql/postgresql/42.7.2/postgresql-42.7.2.jar",
+		"name":"postgresql 42.7.2",
+		"src":"https://repo.maven.apache.org/maven2/org/postgresql/postgresql/42.7.2/postgresql-42.7.2-sources.jar"
+	},
+	{
+		"jar":"https://repo.maven.apache.org/maven2/org/checkerframework/checker-qual/3.42.0/checker-qual-3.42.0.jar",
+		"name":"checker-qual 3.42.0",
+		"src":"https://repo.maven.apache.org/maven2/org/checkerframework/checker-qual/3.42.0/checker-qual-3.42.0-sources.jar"
+	}
+]
 }
