@@ -133,7 +133,7 @@ public class UserLockingQueries {
         String QUERY = "SELECT user_id FROM " + Config.getConfig(start).getAppIdToUserIdTable()
             + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
 
-        Boolean found = execute(con, QUERY, pst -> {
+        boolean found = execute(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, userId);
         }, rs -> rs.next());
