@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [4.0.8]
+
+- Uses the right path for postgresql docker in `startDb.sh`
+
 ## [4.0.7]
 
 - Adds opentelemetry collector uri env var.
