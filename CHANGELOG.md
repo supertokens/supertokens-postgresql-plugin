@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [6.0.4] 
+
+- Uses the right data path for postgres in docker
+
 ## [6.0.3] - 2025-08-12
 
 - Helpers for docker build
