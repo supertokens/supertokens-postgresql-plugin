@@ -11,6 +11,9 @@ docker run --rm --name postgres \
 
 sleep 30
 
+docker ps -a
+docker logs
+
 docker exec postgres psql -U root root -c 'create database supertokens;'
 docker exec postgres psql -U root root -c 'create database st0;'
 docker exec postgres psql -U root root -c 'create database st1;'
