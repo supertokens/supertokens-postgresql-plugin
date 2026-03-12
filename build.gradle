@@ -82,7 +82,8 @@ tasks.register('generateMetaInf') {
 build.dependsOn(generateMetaInf)
 
 test {
-    jvmArgs '-Djava.security.egd=file:/dev/urandom'
+    jvmArgs '-Djava.security.egd=file:/dev/urandom',
+            '--add-opens=java.base/java.util=ALL-UNNAMED'
     minHeapSize = "128m" // initial heap size
     maxHeapSize = "1024m" // maximum heap size
     testLogging {
