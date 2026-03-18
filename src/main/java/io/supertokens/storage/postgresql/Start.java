@@ -863,18 +863,24 @@ public class Start
                             .replace("\\\\", "\\");
                 }
 
+                // Empty/unset stringValue is already handled above (null/empty check),
+                // so boxed types (Integer, Long, etc.) can safely share branches
+                // with their primitive counterparts.
                 if (field.getType().equals(String.class)) {
                     configJson.addProperty(field.getName(), stringValue);
-                } else if (field.getType().equals(int.class)) {
+                } else if (field.getType().equals(int.class) || field.getType().equals(Integer.class)) {
                     configJson.addProperty(field.getName(), Integer.parseInt(stringValue));
-                } else if (field.getType().equals(long.class)) {
+                } else if (field.getType().equals(long.class) || field.getType().equals(Long.class)) {
                     configJson.addProperty(field.getName(), Long.parseLong(stringValue));
-                } else if (field.getType().equals(boolean.class)) {
+                } else if (field.getType().equals(boolean.class) || field.getType().equals(Boolean.class)) {
                     configJson.addProperty(field.getName(), Boolean.parseBoolean(stringValue));
-                } else if (field.getType().equals(float.class)) {
+                } else if (field.getType().equals(float.class) || field.getType().equals(Float.class)) {
                     configJson.addProperty(field.getName(), Float.parseFloat(stringValue));
-                } else if (field.getType().equals(double.class)) {
+                } else if (field.getType().equals(double.class) || field.getType().equals(Double.class)) {
                     configJson.addProperty(field.getName(), Double.parseDouble(stringValue));
+                } else {
+                    throw new RuntimeException(
+                            "Unknown field type " + field.getType().getName() + " for config field " + field.getName());
                 }
             }
         }
