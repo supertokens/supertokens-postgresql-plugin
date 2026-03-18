@@ -2,7 +2,7 @@ plugins {
     id 'java-library'
 }
 
-version = "9.2.0"
+version = "9.2.1"
 
 repositories {
     mavenCentral()
@@ -80,7 +80,8 @@ tasks.register('generateMetaInf') {
 build.dependsOn(generateMetaInf)
 
 test {
-    jvmArgs '-Djava.security.egd=file:/dev/urandom'
+    jvmArgs '-Djava.security.egd=file:/dev/urandom',
+            '--add-opens=java.base/java.util=ALL-UNNAMED'
     minHeapSize = "128m" // initial heap size
     maxHeapSize = "1024m" // maximum heap size
     testLogging {

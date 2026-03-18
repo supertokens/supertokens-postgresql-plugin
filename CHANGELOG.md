@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.2.1]
+
+- Fixes env var parsing
+
 ## [9.2.0]
 
 - Adds docker support for opentelemetry javaagent
