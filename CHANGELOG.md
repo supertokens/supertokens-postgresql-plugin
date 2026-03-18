@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.0.6]
+
+- Changes data path for postgresql in docker (CI)
+
 ## [9.0.5]
 
 - Adds `OTEL_COLLECTOR_CONNECTION_URI` environment variable to configure OpenTelemetry collector connection URI
