@@ -2,7 +2,7 @@ plugins {
     id 'java-library'
 }
 
-version = "8.1.5"
+version = "8.1.6"
 
 repositories {
     mavenCentral()
