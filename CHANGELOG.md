@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [8.1.6]
+
+- Regenerates implementationDependencies json
+
 ## [8.1.5]
 
 - Using the right data dir in `startDb.sh`
