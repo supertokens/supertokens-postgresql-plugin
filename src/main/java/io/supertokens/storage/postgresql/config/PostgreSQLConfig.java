@@ -506,6 +506,17 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("bulk_import_users");
     }
 
+    public String getRecipeUserAccountInfosTable() {
+        return addSchemaAndPrefixToTableName("recipe_user_account_infos");
+    }
+
+    public String getRecipeUserTenantsTable() {
+        return addSchemaAndPrefixToTableName("recipe_user_tenants");
+    }
+
+    public String getPrimaryUserTenantsTable() {
+        return addSchemaAndPrefixToTableName("primary_user_tenants");
+    }
 
     private String addSchemaAndPrefixToTableName(String tableName) {
         return addSchemaToTableName(postgresql_table_names_prefix + tableName);

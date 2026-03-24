@@ -16,16 +16,6 @@
 
 package io.supertokens.storage.postgresql.queries;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import io.supertokens.pluginInterface.exceptions.StorageQueryException;
-import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
-import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
-import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
-import io.supertokens.storage.postgresql.Start;
-import io.supertokens.storage.postgresql.config.Config;
-import io.supertokens.storage.postgresql.utils.Utils;
-
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -33,8 +23,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
+import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.executeBatch;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 public class UserMetadataQueries {
 
@@ -121,6 +123,7 @@ public class UserMetadataQueries {
     public static JsonObject getUserMetadata_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                          String userId)
             throws SQLException, StorageQueryException {
+        io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(con, appIdentifier.getAppId() + "~" + userId);
         String QUERY = "SELECT user_metadata FROM " + getConfig(start).getUserMetadataTable()
                 + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
         return execute(con, QUERY, pst -> {

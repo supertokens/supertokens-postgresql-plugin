@@ -74,7 +74,7 @@ public class DeadlockTest {
     }
 
     @Rule
-    public Retry retry = new Retry(3);
+    public TestRule retryFlaky = Utils.retryFlakyTest();
 
     @Test
     public void transactionDeadlockTesting()
@@ -267,7 +267,8 @@ public class DeadlockTest {
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
 
-        assertNotNull(process
+        // Deadlock should not happen
+        assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
@@ -433,7 +434,7 @@ public class DeadlockTest {
         assertTrue(!t1Failed.get() && !t2Failed.get());
         assert (t1State.get().equals("commit") && t2State.get().equals("commit"));
 
-        assertNotNull(process.checkOrWaitForEventInPlugin(
+        assertNull(process.checkOrWaitForEventInPlugin(
                 io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));
 
         process.kill();
@@ -519,7 +520,7 @@ public class DeadlockTest {
                     t1Failed.set(false);
 
                     return null;
-                }, SQLStorage.TransactionIsolationLevel.SERIALIZABLE);
+                });
             } catch (StorageQueryException | StorageTransactionLogicException e) {
                 // This is expected because of "could not serialize access"
                 t1Failed.set(true);
@@ -601,7 +602,7 @@ public class DeadlockTest {
         assertTrue(!t1Failed.get() && t2Failed.get());
         assert (t1State.get().equals("commit") && t2State.get().equals("query"));
 
-        assertNotNull(process
+        assertNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND,
                         1000));
@@ -652,6 +653,7 @@ public class DeadlockTest {
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_NOT_RESOLVED));
 
+        // Deadlock should not occur
         assertNotNull(process
                 .checkOrWaitForEventInPlugin(
                         io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.DEADLOCK_FOUND));

@@ -16,10 +16,24 @@
 
 package io.supertokens.storage.postgresql.queries;
 
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static io.supertokens.pluginInterface.RECIPE_ID.THIRD_PARTY;
 import io.supertokens.pluginInterface.RowMapper;
+import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
-import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
@@ -27,19 +41,13 @@ import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.thirdparty.ThirdPartyImportUser;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.executeBatch;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
-import io.supertokens.storage.postgresql.utils.Utils;
-
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.*;
-import java.util.stream.Collectors;
-
-import static io.supertokens.pluginInterface.RECIPE_ID.THIRD_PARTY;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 public class ThirdPartyQueries {
 
@@ -136,6 +144,17 @@ public class ThirdPartyQueries {
                     });
                 }
 
+                { // recipe_user_tenants
+                    // Insert row for email
+                    AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
+                            THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.EMAIL, thirdParty.id, thirdParty.userId, email);
+
+                    // Insert row for third party id
+                    AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
+                            THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.THIRD_PARTY, "", "",
+                            new LoginMethod.ThirdParty(thirdParty.id, thirdParty.userId).getAccountInfoValue());
+                }
+
                 { // thirdparty_users
                     String QUERY = "INSERT INTO " + getConfig(start).getThirdPartyUsersTable()
                             + "(app_id, third_party_id, third_party_user_id, user_id, email, time_joined)"
@@ -205,49 +224,6 @@ public class ThirdPartyQueries {
                 });
             }
         }
-    }
-
-    public static List<String> lockEmail_Transaction(Start start, Connection con,
-                                                     AppIdentifier appIdentifier,
-                                                     String email) throws SQLException, StorageQueryException {
-        String QUERY = "SELECT tp.user_id as user_id "
-                + "FROM " + getConfig(start).getThirdPartyUsersTable() + " AS tp" +
-                " WHERE tp.app_id = ? AND tp.email = ? FOR UPDATE";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, email);
-        }, result -> {
-            List<String> finalResult = new ArrayList<>();
-            while (result.next()) {
-                finalResult.add(result.getString("user_id"));
-            }
-            return finalResult;
-        });
-    }
-
-    public static List<String> lockEmail_Transaction(Start start, Connection con,
-                                                     AppIdentifier appIdentifier,
-                                                     List<String> emails)
-            throws StorageQueryException, SQLException {
-        if(emails == null || emails.isEmpty()){
-            return new ArrayList<>();
-        }
-        String QUERY = "SELECT user_id FROM " + getConfig(start).getThirdPartyUsersTable() +
-                " WHERE app_id = ? AND email IN (" + Utils.generateCommaSeperatedQuestionMarks(emails.size()) + ") FOR UPDATE";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            for (int i = 0; i < emails.size(); i++) {
-                pst.setString(2 + i, emails.get(i));
-            }
-        }, result -> {
-            List<String> results = new ArrayList<>();
-            while (result.next()) {
-                results.add(result.getString("user_id"));
-            }
-            return results;
-        });
     }
 
     public static List<String> lockThirdPartyInfoAndTenant_Transaction(Start start, Connection con,
@@ -653,13 +629,13 @@ public class ThirdPartyQueries {
             throws SQLException, StorageQueryException {
 
         String app_id_userid_QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
+                + "(app_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id)" + " VALUES(?, ?, ?, ?, ?)";
 
         String all_auth_recipe_users_QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
                 +
-                "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, " +
+                "(app_id, tenant_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id, time_joined, " +
                 "primary_or_recipe_user_time_joined)" +
-                " VALUES(?, ?, ?, ?, ?, ?, ?)";
+                " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
 
         String thirdparty_users_QUERY = "INSERT INTO " + getConfig(start).getThirdPartyUsersTable()
                 + "(app_id, third_party_id, third_party_user_id, user_id, email, time_joined)"
@@ -669,32 +645,37 @@ public class ThirdPartyQueries {
                 + "(app_id, tenant_id, user_id, third_party_id, third_party_user_id)"
                 + " VALUES(?, ?, ?, ?, ?)";
 
+        List<PreparedStatementValueSetter> recipeUserAccountInfoBatch = new ArrayList<>();
+        List<PreparedStatementValueSetter> recipeUserTenantsBatch = new ArrayList<>();
+
         List<PreparedStatementValueSetter> appIdToUserIdBatch = new ArrayList<>();
         List<PreparedStatementValueSetter> allAuthRecipeUsersBatch = new ArrayList<>();
         List<PreparedStatementValueSetter> thirdPartyUsersBatch = new ArrayList<>();
         List<PreparedStatementValueSetter> thirdPartyUsersToTenantBatch = new ArrayList<>();
 
         for (ThirdPartyImportUser user : users) {
-            TenantIdentifier tenantIdentifier = user.tenantIdentifier;
-            appIdToUserIdBatch.add(pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, user.userId);
-                pst.setString(3, user.userId);
-                pst.setString(4, THIRD_PARTY.toString());
-            });
+            String appId = user.appIdentifier.getAppId();
+            String primaryOrRecipeUserId = user.primaryUserId != null ? user.primaryUserId : user.userId;
+            boolean isLinkedOrIsPrimaryUser = user.primaryUserId != null;
 
-            allAuthRecipeUsersBatch.add(pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, tenantIdentifier.getTenantId());
-                pst.setString(3, user.userId);
-                pst.setString(4, user.userId);
+            // Recipe Account Info
+            AccountInfoQueries.addRecipeUserAccountInfoToBatch(recipeUserAccountInfoBatch, user.appIdentifier, user.userId, THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.THIRD_PARTY, "", "", new LoginMethod.ThirdParty(user.thirdpartyId, user.thirdpartyUserId).getAccountInfoValue(), isLinkedOrIsPrimaryUser ? primaryOrRecipeUserId : null);
+            AccountInfoQueries.addRecipeUserAccountInfoToBatch(recipeUserAccountInfoBatch, user.appIdentifier, user.userId, THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.EMAIL, user.thirdpartyId, user.thirdpartyUserId, user.email, isLinkedOrIsPrimaryUser ? primaryOrRecipeUserId : null);
+
+            // Recipe User Tenants
+            AccountInfoQueries.addRecipeUserTenantsToBatch(recipeUserTenantsBatch, user.appIdentifier, user.userId, THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.THIRD_PARTY, "", "", new LoginMethod.ThirdParty(user.thirdpartyId, user.thirdpartyUserId).getAccountInfoValue(), user.recipeUserTenantIds);
+            AccountInfoQueries.addRecipeUserTenantsToBatch(recipeUserTenantsBatch, user.appIdentifier, user.userId, THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", user.email, user.recipeUserTenantIds);
+
+            appIdToUserIdBatch.add(pst -> {
+                pst.setString(1, appId);
+                pst.setString(2, user.userId);
+                pst.setString(3, primaryOrRecipeUserId);
+                pst.setBoolean(4, isLinkedOrIsPrimaryUser);
                 pst.setString(5, THIRD_PARTY.toString());
-                pst.setLong(6, user.timeJoinedMSSinceEpoch);
-                pst.setLong(7, user.timeJoinedMSSinceEpoch);
             });
 
             thirdPartyUsersBatch.add(pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(1, appId);
                 pst.setString(2, user.thirdpartyId);
                 pst.setString(3, user.thirdpartyUserId);
                 pst.setString(4, user.userId);
@@ -702,14 +683,31 @@ public class ThirdPartyQueries {
                 pst.setLong(6, user.timeJoinedMSSinceEpoch);
             });
 
-            thirdPartyUsersToTenantBatch.add(pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, tenantIdentifier.getTenantId());
-                pst.setString(3, user.userId);
-                pst.setString(4, user.thirdpartyId);
-                pst.setString(5, user.thirdpartyUserId);
-            });
+            // Generate entries for all recipe user tenant IDs
+            for (String tenantId : user.recipeUserTenantIds) {
+                allAuthRecipeUsersBatch.add(pst -> {
+                    pst.setString(1, appId);
+                    pst.setString(2, tenantId);
+                    pst.setString(3, user.userId);
+                    pst.setString(4, primaryOrRecipeUserId);
+                    pst.setBoolean(5, isLinkedOrIsPrimaryUser);
+                    pst.setString(6, THIRD_PARTY.toString());
+                    pst.setLong(7, user.timeJoinedMSSinceEpoch);
+                    pst.setLong(8, user.timeJoinedMSSinceEpoch);
+                });
+
+                thirdPartyUsersToTenantBatch.add(pst -> {
+                    pst.setString(1, appId);
+                    pst.setString(2, tenantId);
+                    pst.setString(3, user.userId);
+                    pst.setString(4, user.thirdpartyId);
+                    pst.setString(5, user.thirdpartyUserId);
+                });
+            }
         }
+
+        executeBatch(sqlConnection, AccountInfoQueries.getRecipeUserAccountInfoBatchQuery(start), recipeUserAccountInfoBatch);
+        executeBatch(sqlConnection, AccountInfoQueries.getRecipeUserTenantBatchQuery(start), recipeUserTenantsBatch);
 
         executeBatch(sqlConnection, app_id_userid_QUERY, appIdToUserIdBatch);
         executeBatch(sqlConnection, all_auth_recipe_users_QUERY, allAuthRecipeUsersBatch);

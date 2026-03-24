@@ -23,7 +23,7 @@ import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicatePasswordResetTokenException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateUserIdException;
-import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.emailpassword.sqlStorage.EmailPasswordSQLStorage;
 import io.supertokens.pluginInterface.emailverification.EmailVerificationTokenInfo;
 import io.supertokens.pluginInterface.emailverification.exception.DuplicateEmailVerificationTokenException;
@@ -159,7 +159,7 @@ public class ExceptionParsingTest {
             SignatureException, InvalidAlgorithmParameterException, NoSuchPaddingException, BadPaddingException,
             UnsupportedEncodingException, InvalidKeySpecException, IllegalBlockSizeException,
             StorageTransactionLogicException, DuplicateUserIdException, DuplicateEmailException,
-            TenantOrAppNotFoundException {
+            TenantOrAppNotFoundException, Exception {
         {
             String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -184,6 +184,8 @@ public class ExceptionParsingTest {
                     throw new StorageTransactionLogicException(new Exception("This should throw"));
                 } catch (DuplicateEmailException ex) {
                     // expected
+                } catch (Exception e) {
+                    throw new StorageTransactionLogicException(e);
                 }
                 return true;
             });
@@ -193,6 +195,8 @@ public class ExceptionParsingTest {
                     storage.updateUsersEmail_Transaction(new AppIdentifier(null, null), conn, userId, userEmail3);
                 } catch (DuplicateEmailException ex) {
                     throw new StorageQueryException(ex);
+                } catch (Exception e) {
+                    throw new StorageTransactionLogicException(e);
                 }
                 return true;
             });

@@ -16,31 +16,39 @@
 
 package io.supertokens.storage.postgresql.queries;
 
+import static java.lang.System.currentTimeMillis;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static io.supertokens.pluginInterface.RECIPE_ID.EMAIL_PASSWORD;
 import io.supertokens.pluginInterface.RowMapper;
+import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
+import io.supertokens.pluginInterface.authRecipe.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.emailpassword.EmailPasswordImportUser;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
-import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.executeBatch;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
-import io.supertokens.storage.postgresql.utils.Utils;
-
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.*;
-import java.util.stream.Collectors;
-
-import static io.supertokens.pluginInterface.RECIPE_ID.EMAIL_PASSWORD;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
-import static java.lang.System.currentTimeMillis;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 public class EmailPasswordQueries {
     static String getQueryToCreateUsersTable(Start start) {
@@ -134,7 +142,7 @@ public class EmailPasswordQueries {
 
     public static void updateUsersPassword_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                        String userId, String newPassword)
-            throws SQLException, StorageQueryException {
+            throws SQLException {
         String QUERY = "UPDATE " + getConfig(start).getEmailPasswordUsersTable()
                 + " SET password_hash = ? WHERE app_id = ? AND user_id = ?";
 
@@ -147,7 +155,7 @@ public class EmailPasswordQueries {
 
     public static void updateUsersEmail_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                     String userId, String newEmail)
-            throws SQLException, StorageQueryException {
+            throws SQLException {
         {
             String QUERY = "UPDATE " + getConfig(start).getEmailPasswordUsersTable()
                     + " SET email = ? WHERE app_id = ? AND user_id = ?";
@@ -172,7 +180,7 @@ public class EmailPasswordQueries {
 
     public static void deleteAllPasswordResetTokensForUser_Transaction(Start start, Connection con,
                                                                        AppIdentifier appIdentifier, String userId)
-            throws SQLException, StorageQueryException {
+            throws SQLException {
 
         String QUERY =
                 "DELETE FROM " + getConfig(start).getPasswordResetTokensTable() + " WHERE app_id = ? AND user_id = ?";
@@ -309,6 +317,11 @@ public class EmailPasswordQueries {
                     });
                 }
 
+                { // recipe_user_tenants
+                    AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, userId,
+                            EMAIL_PASSWORD.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", email);
+                }
+
                 { // emailpassword_users
                     String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUsersTable()
                             + "(app_id, user_id, email, password_hash, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
@@ -345,16 +358,16 @@ public class EmailPasswordQueries {
         });
     }
 
-    public static void signUpMultipleForBulkImport_Transaction(Start start, Connection sqlCon, List<EmailPasswordImportUser> usersToSignUp)
+    public static void importUsers_Transaction(Start start, Connection sqlCon, List<EmailPasswordImportUser> usersToSignUp)
             throws StorageQueryException, StorageTransactionLogicException {
         try {
             String app_id_to_user_id_QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                    + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
+                    + "(app_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id)" + " VALUES(?, ?, ?, ?, ?)";
 
             String all_auth_recipe_users_QUERY = "INSERT INTO " + getConfig(start).getUsersTable() +
-                    "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, " +
+                    "(app_id, tenant_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id, time_joined, " +
                     "primary_or_recipe_user_time_joined)" +
-                    " VALUES(?, ?, ?, ?, ?, ?, ?)";
+                    " VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
 
             String emailpassword_users_QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUsersTable()
                     + "(app_id, user_id, email, password_hash, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
@@ -363,6 +376,9 @@ public class EmailPasswordQueries {
                     "INSERT INTO " + getConfig(start).getEmailPasswordUserToTenantTable()
                             + "(app_id, tenant_id, user_id, email)" + " VALUES(?, ?, ?, ?)";
 
+            List<PreparedStatementValueSetter> recipeUserAccountInfoBatch = new ArrayList<>();
+            List<PreparedStatementValueSetter> recipeUserTenantsBatch = new ArrayList<>();
+
             List<PreparedStatementValueSetter> appIdToUserIdSetters = new ArrayList<>();
             List<PreparedStatementValueSetter> allAuthRecipeUsersSetters = new ArrayList<>();
             List<PreparedStatementValueSetter> emailPasswordUsersSetters = new ArrayList<>();
@@ -370,40 +386,57 @@ public class EmailPasswordQueries {
 
             for (EmailPasswordImportUser user : usersToSignUp) {
                 String userId = user.userId;
-                TenantIdentifier tenantIdentifier = user.tenantIdentifier;
+                String appId = user.appIdentifier.getAppId();
+                String primaryOrRecipeUserId = user.primaryUserId != null ? user.primaryUserId : user.userId;
+                boolean isLinkedOrIsPrimaryUser = user.primaryUserId != null;
+
+                // Recipe Account Info
+                AccountInfoQueries.addRecipeUserAccountInfoToBatch(recipeUserAccountInfoBatch, user.appIdentifier, user.userId, EMAIL_PASSWORD.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", user.email, isLinkedOrIsPrimaryUser ? primaryOrRecipeUserId : null);
+
+                // Recipe User Tenants
+                AccountInfoQueries.addRecipeUserTenantsToBatch(recipeUserTenantsBatch, user.appIdentifier, user.userId, EMAIL_PASSWORD.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", user.email, user.recipeUserTenantIds);
+
 
                 appIdToUserIdSetters.add(pst -> {
-                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(1, appId);
                     pst.setString(2, userId);
-                    pst.setString(3, userId);
-                    pst.setString(4, EMAIL_PASSWORD.toString());
-                });
-
-                allAuthRecipeUsersSetters.add(pst -> {
-                    pst.setString(1, tenantIdentifier.getAppId());
-                    pst.setString(2, tenantIdentifier.getTenantId());
-                    pst.setString(3, userId);
-                    pst.setString(4, userId);
+                    pst.setString(3, primaryOrRecipeUserId);
+                    pst.setBoolean(4, isLinkedOrIsPrimaryUser);
                     pst.setString(5, EMAIL_PASSWORD.toString());
-                    pst.setLong(6, user.timeJoinedMSSinceEpoch);
-                    pst.setLong(7, user.timeJoinedMSSinceEpoch);
                 });
 
                 emailPasswordUsersSetters.add(pst -> {
-                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(1, appId);
                     pst.setString(2, userId);
                     pst.setString(3, user.email);
                     pst.setString(4, user.passwordHash);
                     pst.setLong(5, user.timeJoinedMSSinceEpoch);
                 });
 
-                emailPasswordUsersToTenantSetters.add(pst -> {
-                    pst.setString(1, tenantIdentifier.getAppId());
-                    pst.setString(2, tenantIdentifier.getTenantId());
-                    pst.setString(3, userId);
-                    pst.setString(4, user.email);
-                });
+                // Generate entries for all recipe user tenant IDs
+                for (String tenantId : user.recipeUserTenantIds) {
+                    allAuthRecipeUsersSetters.add(pst -> {
+                        pst.setString(1, appId);
+                        pst.setString(2, tenantId);
+                        pst.setString(3, userId);
+                        pst.setString(4, primaryOrRecipeUserId);
+                        pst.setBoolean(5, isLinkedOrIsPrimaryUser);
+                        pst.setString(6, EMAIL_PASSWORD.toString());
+                        pst.setLong(7, user.timeJoinedMSSinceEpoch);
+                        pst.setLong(8, user.timeJoinedMSSinceEpoch);
+                    });
+
+                    emailPasswordUsersToTenantSetters.add(pst -> {
+                        pst.setString(1, appId);
+                        pst.setString(2, tenantId);
+                        pst.setString(3, userId);
+                        pst.setString(4, user.email);
+                    });
+                }
             }
+
+            executeBatch(sqlCon, AccountInfoQueries.getRecipeUserAccountInfoBatchQuery(start), recipeUserAccountInfoBatch);
+            executeBatch(sqlCon, AccountInfoQueries.getRecipeUserTenantBatchQuery(start), recipeUserTenantsBatch);
 
             executeBatch(sqlCon, app_id_to_user_id_QUERY, appIdToUserIdSetters);
             executeBatch(sqlCon, all_auth_recipe_users_QUERY, allAuthRecipeUsersSetters);
@@ -417,7 +450,7 @@ public class EmailPasswordQueries {
 
     public static void deleteUser_Transaction(Connection sqlCon, Start start, AppIdentifier appIdentifier,
                                               String userId, boolean deleteUserIdMappingToo)
-            throws StorageQueryException, SQLException {
+            throws SQLException {
         if (deleteUserIdMappingToo) {
             String QUERY = "DELETE FROM " + getConfig(start).getAppIdToUserIdTable()
                     + " WHERE app_id = ? AND user_id = ?";
@@ -540,48 +573,6 @@ public class EmailPasswordQueries {
         return Collections.emptyList();
     }
 
-    public static String lockEmail_Transaction(Start start, Connection con,
-                                               AppIdentifier appIdentifier,
-                                               String email)
-            throws StorageQueryException, SQLException {
-        String QUERY = "SELECT user_id FROM " + getConfig(start).getEmailPasswordUsersTable() +
-                " WHERE app_id = ? AND email = ? FOR UPDATE";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, email);
-        }, result -> {
-            if (result.next()) {
-                return result.getString("user_id");
-            }
-            return null;
-        });
-    }
-
-    public static List<String> lockEmail_Transaction(Start start, Connection con,
-                                               AppIdentifier appIdentifier,
-                                               List<String> emails)
-            throws StorageQueryException, SQLException {
-        if(emails == null || emails.isEmpty()){
-            return new ArrayList<>();
-        }
-        String QUERY = "SELECT user_id FROM " + getConfig(start).getEmailPasswordUsersTable() +
-                " WHERE app_id = ? AND email IN (" + Utils.generateCommaSeperatedQuestionMarks(emails.size()) + ") FOR UPDATE";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            for (int i = 0; i < emails.size(); i++) {
-                pst.setString(2 + i, emails.get(i));
-            }
-        }, result -> {
-            List<String> results = new ArrayList<>();
-            while (result.next()) {
-                results.add(result.getString("user_id"));
-            }
-            return results;
-        });
-    }
-
     public static String getPrimaryUserIdUsingEmail(Start start, TenantIdentifier tenantIdentifier,
                                                     String email)
             throws StorageQueryException, SQLException {
@@ -600,55 +591,6 @@ public class EmailPasswordQueries {
                 return result.getString("user_id");
             }
             return null;
-        });
-    }
-
-    public static List<String> getPrimaryUserIdsUsingEmail_Transaction(Start start, Connection con,
-                                                                       AppIdentifier appIdentifier,
-                                                                       String email)
-            throws StorageQueryException, SQLException {
-        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
-                + "FROM " + getConfig(start).getEmailPasswordUsersTable() + " AS ep" +
-                " JOIN " + getConfig(start).getAppIdToUserIdTable() + " AS all_users" +
-                " ON ep.app_id = all_users.app_id AND ep.user_id = all_users.user_id" +
-                " WHERE ep.app_id = ? AND ep.email = ?";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, email);
-        }, result -> {
-            List<String> userIds = new ArrayList<>();
-            while (result.next()) {
-                userIds.add(result.getString("user_id"));
-            }
-            return userIds;
-        });
-    }
-
-    public static List<String> getPrimaryUserIdsUsingMultipleEmails_Transaction(Start start, Connection con,
-                                                                       AppIdentifier appIdentifier,
-                                                                       List<String> emails)
-            throws StorageQueryException, SQLException {
-        if(emails == null || emails.isEmpty()){
-            return new ArrayList<>();
-        }
-        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
-                + "FROM " + getConfig(start).getEmailPasswordUsersTable() + " AS ep" +
-                " JOIN " + getConfig(start).getAppIdToUserIdTable() + " AS all_users" +
-                " ON ep.app_id = all_users.app_id AND ep.user_id = all_users.user_id" +
-                " WHERE ep.app_id = ? AND ep.email IN ( " + Utils.generateCommaSeperatedQuestionMarks(emails.size()) + " )";
-
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            for (int i = 0; i < emails.size(); i++) {
-                pst.setString(2+i, emails.get(i));
-            }
-        }, result -> {
-            List<String> userIds = new ArrayList<>();
-            while (result.next()) {
-                userIds.add(result.getString("user_id"));
-            }
-            return userIds;
         });
     }
 

@@ -17,6 +17,21 @@
 package io.supertokens.storage.postgresql.queries;
 
 
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.jetbrains.annotations.Nullable;
+
+import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
+import static io.supertokens.pluginInterface.RECIPE_ID.WEBAUTHN;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
@@ -27,19 +42,11 @@ import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.webauthn.AccountRecoveryTokenInfo;
 import io.supertokens.pluginInterface.webauthn.WebAuthNOptions;
 import io.supertokens.pluginInterface.webauthn.WebAuthNStoredCredential;
-import io.supertokens.storage.postgresql.Start;
-import io.supertokens.storage.postgresql.utils.Utils;
-import org.jetbrains.annotations.Nullable;
-
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.*;
-
-import static io.supertokens.pluginInterface.RECIPE_ID.WEBAUTHN;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import io.supertokens.storage.postgresql.Start;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 public class WebAuthNQueries {
 
@@ -317,6 +324,10 @@ public class WebAuthNQueries {
                 pst.setLong(6, timeJoined);
                 pst.setLong(7, timeJoined);
             });
+
+            // recipe_user_tenants
+            AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, userId,
+                    WEBAUTHN.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", email);
 
             // webauthn_user_to_tenant
             String insertWebauthNUsersToTenant =

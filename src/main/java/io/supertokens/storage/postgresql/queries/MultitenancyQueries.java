@@ -244,6 +244,10 @@ public class MultitenancyQueries {
             {
                 try {
                     {
+                        io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(
+                                sqlCon, tenantConfig.tenantIdentifier.getConnectionUriDomain() + "~" + tenantConfig.tenantIdentifier.getAppId() + "~" + tenantConfig.tenantIdentifier.getTenantId());
+                    }
+                    {
                         String QUERY = "DELETE FROM " + getConfig(start).getTenantConfigsTable()
                                 + " WHERE connection_uri_domain = ? AND app_id = ? AND tenant_id = ?;";
                         int rowsAffected = update(sqlCon, QUERY, pst -> {
