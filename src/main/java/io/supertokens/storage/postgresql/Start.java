@@ -17,39 +17,11 @@
 
 package io.supertokens.storage.postgresql;
 
-import java.lang.reflect.Field;
-import java.sql.BatchUpdateException;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.sql.SQLTransactionRollbackException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import javax.annotation.Nonnull;
-
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-import org.jetbrains.annotations.TestOnly;
-import org.postgresql.util.PSQLException;
-import org.postgresql.util.ServerErrorMessage;
-import org.slf4j.LoggerFactory;
-
+import ch.qos.logback.classic.Logger;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.zaxxer.hikari.pool.HikariPool;
-
-import ch.qos.logback.classic.Logger;
-import io.supertokens.pluginInterface.ActiveUsersSQLStorage;
-import io.supertokens.pluginInterface.ActiveUsersStorage;
-import io.supertokens.pluginInterface.ConfigFieldInfo;
-import io.supertokens.pluginInterface.KeyValueInfo;
-import io.supertokens.pluginInterface.LOG_LEVEL;
-import io.supertokens.pluginInterface.RECIPE_ID;
-import io.supertokens.pluginInterface.STORAGE_TYPE;
-import io.supertokens.pluginInterface.Storage;
+import io.supertokens.pluginInterface.*;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
 import io.supertokens.pluginInterface.authRecipe.sqlStorage.AuthRecipeSQLStorage;
@@ -94,19 +66,15 @@ import io.supertokens.pluginInterface.multitenancy.sqlStorage.MultitenancySQLSto
 import io.supertokens.pluginInterface.oauth.OAuthClient;
 import io.supertokens.pluginInterface.oauth.OAuthLogoutChallenge;
 import io.supertokens.pluginInterface.oauth.OAuthStorage;
-import io.supertokens.pluginInterface.oauth.sqlStorage.OAuthSQLStorage;
 import io.supertokens.pluginInterface.oauth.exception.DuplicateOAuthLogoutChallengeException;
 import io.supertokens.pluginInterface.oauth.exception.OAuthClientNotFoundException;
+import io.supertokens.pluginInterface.oauth.sqlStorage.OAuthSQLStorage;
 import io.supertokens.pluginInterface.opentelemetry.OtelProvider;
 import io.supertokens.pluginInterface.opentelemetry.WithinOtelSpan;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
 import io.supertokens.pluginInterface.passwordless.PasswordlessDevice;
 import io.supertokens.pluginInterface.passwordless.PasswordlessImportUser;
-import io.supertokens.pluginInterface.passwordless.exception.DuplicateCodeIdException;
-import io.supertokens.pluginInterface.passwordless.exception.DuplicateDeviceIdHashException;
-import io.supertokens.pluginInterface.passwordless.exception.DuplicateLinkCodeHashException;
-import io.supertokens.pluginInterface.passwordless.exception.DuplicatePhoneNumberException;
-import io.supertokens.pluginInterface.passwordless.exception.UnknownDeviceIdHash;
+import io.supertokens.pluginInterface.passwordless.exception.*;
 import io.supertokens.pluginInterface.passwordless.sqlStorage.PasswordlessSQLStorage;
 import io.supertokens.pluginInterface.saml.SAMLClaimsInfo;
 import io.supertokens.pluginInterface.saml.SAMLClient;
@@ -141,35 +109,29 @@ import io.supertokens.pluginInterface.userroles.sqlStorage.UserRolesSQLStorage;
 import io.supertokens.pluginInterface.webauthn.AccountRecoveryTokenInfo;
 import io.supertokens.pluginInterface.webauthn.WebAuthNOptions;
 import io.supertokens.pluginInterface.webauthn.WebAuthNStoredCredential;
-import io.supertokens.pluginInterface.webauthn.exceptions.DuplicateOptionsIdException;
-import io.supertokens.pluginInterface.webauthn.exceptions.DuplicateRecoverAccountTokenException;
-import io.supertokens.pluginInterface.webauthn.exceptions.DuplicateUserEmailException;
-import io.supertokens.pluginInterface.webauthn.exceptions.WebauthNCredentialNotExistsException;
-import io.supertokens.pluginInterface.webauthn.exceptions.WebauthNOptionsNotExistsException;
+import io.supertokens.pluginInterface.webauthn.exceptions.*;
 import io.supertokens.pluginInterface.webauthn.slqStorage.WebAuthNSQLStorage;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import io.supertokens.storage.postgresql.annotations.EnvName;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storage.postgresql.output.Logging;
-import io.supertokens.storage.postgresql.queries.ActiveUsersQueries;
-import io.supertokens.storage.postgresql.queries.BulkImportQueries;
-import io.supertokens.storage.postgresql.queries.DashboardQueries;
-import io.supertokens.storage.postgresql.queries.EmailPasswordQueries;
-import io.supertokens.storage.postgresql.queries.EmailVerificationQueries;
-import io.supertokens.storage.postgresql.queries.GeneralQueries;
-import io.supertokens.storage.postgresql.queries.JWTSigningQueries;
-import io.supertokens.storage.postgresql.queries.MultitenancyQueries;
-import io.supertokens.storage.postgresql.queries.OAuthQueries;
-import io.supertokens.storage.postgresql.queries.PasswordlessQueries;
-import io.supertokens.storage.postgresql.queries.SAMLQueries;
-import io.supertokens.storage.postgresql.queries.SessionQueries;
-import io.supertokens.storage.postgresql.queries.TOTPQueries;
-import io.supertokens.storage.postgresql.queries.ThirdPartyQueries;
-import io.supertokens.storage.postgresql.queries.UserIdMappingQueries;
-import io.supertokens.storage.postgresql.queries.UserMetadataQueries;
-import io.supertokens.storage.postgresql.queries.UserRolesQueries;
-import io.supertokens.storage.postgresql.queries.WebAuthNQueries;
+import io.supertokens.storage.postgresql.queries.*;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.ServerErrorMessage;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nonnull;
+import java.lang.reflect.Field;
+import java.sql.BatchUpdateException;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.SQLTransactionRollbackException;
+import java.util.*;
+
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 
 @WithinOtelSpan
 public class Start
@@ -4055,8 +4017,8 @@ public class Start
     }
 
     @Override
-    public String getRefreshTokenMappingForUpdate(AppIdentifier appIdentifier, TransactionConnection con,
-                                                   String externalRefreshToken)
+    public String getRefreshTokenMappingForUpdate_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                              String externalRefreshToken)
             throws StorageQueryException {
         try {
             return OAuthQueries.getRefreshTokenMappingForUpdate(this, (Connection) con.getConnection(),
@@ -4067,9 +4029,9 @@ public class Start
     }
 
     @Override
-    public void updateOAuthSessionInternal(AppIdentifier appIdentifier, TransactionConnection con,
-                                            String externalRefreshToken, String newInternalRefreshToken,
-                                            String sessionHandle, String jti, long exp)
+    public void updateOAuthSessionInternal_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                       String externalRefreshToken, String newInternalRefreshToken,
+                                                       String sessionHandle, String jti, long exp)
             throws StorageQueryException {
         try {
             OAuthQueries.updateOAuthSessionInternal(this, (Connection) con.getConnection(),
