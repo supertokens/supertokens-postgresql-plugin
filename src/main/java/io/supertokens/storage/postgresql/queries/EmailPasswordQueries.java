@@ -291,12 +291,15 @@ public class EmailPasswordQueries {
             try {
                 { // app_id_to_user_id
                     String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                            + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
+                            + "(app_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
+                            + " VALUES(?, ?, ?, ?, ?, ?)";
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
                         pst.setString(2, userId);
                         pst.setString(3, userId);
                         pst.setString(4, EMAIL_PASSWORD.toString());
+                        pst.setLong(5, timeJoined);
+                        pst.setLong(6, timeJoined);
                     });
                 }
 
@@ -362,7 +365,8 @@ public class EmailPasswordQueries {
             throws StorageQueryException, StorageTransactionLogicException {
         try {
             String app_id_to_user_id_QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                    + "(app_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id)" + " VALUES(?, ?, ?, ?, ?)";
+                    + "(app_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
+                    + " VALUES(?, ?, ?, ?, ?, ?, ?)";
 
             String all_auth_recipe_users_QUERY = "INSERT INTO " + getConfig(start).getUsersTable() +
                     "(app_id, tenant_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id, time_joined, " +
@@ -403,6 +407,8 @@ public class EmailPasswordQueries {
                     pst.setString(3, primaryOrRecipeUserId);
                     pst.setBoolean(4, isLinkedOrIsPrimaryUser);
                     pst.setString(5, EMAIL_PASSWORD.toString());
+                    pst.setLong(6, user.timeJoinedMSSinceEpoch);
+                    pst.setLong(7, user.timeJoinedMSSinceEpoch);
                 });
 
                 emailPasswordUsersSetters.add(pst -> {

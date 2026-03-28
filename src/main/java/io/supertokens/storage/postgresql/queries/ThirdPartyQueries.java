@@ -118,12 +118,15 @@ public class ThirdPartyQueries {
             try {
                 { // app_id_to_user_id
                     String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                            + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
+                            + "(app_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
+                            + " VALUES(?, ?, ?, ?, ?, ?)";
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
                         pst.setString(2, id);
                         pst.setString(3, id);
                         pst.setString(4, THIRD_PARTY.toString());
+                        pst.setLong(5, timeJoined);
+                        pst.setLong(6, timeJoined);
                     });
                 }
 
@@ -576,7 +579,8 @@ public class ThirdPartyQueries {
             throws SQLException, StorageQueryException {
 
         String app_id_userid_QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                + "(app_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id)" + " VALUES(?, ?, ?, ?, ?)";
+                + "(app_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
+                + " VALUES(?, ?, ?, ?, ?, ?, ?)";
 
         String all_auth_recipe_users_QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
                 +
@@ -619,6 +623,8 @@ public class ThirdPartyQueries {
                 pst.setString(3, primaryOrRecipeUserId);
                 pst.setBoolean(4, isLinkedOrIsPrimaryUser);
                 pst.setString(5, THIRD_PARTY.toString());
+                pst.setLong(6, user.timeJoinedMSSinceEpoch);
+                pst.setLong(7, user.timeJoinedMSSinceEpoch);
             });
 
             thirdPartyUsersBatch.add(pst -> {

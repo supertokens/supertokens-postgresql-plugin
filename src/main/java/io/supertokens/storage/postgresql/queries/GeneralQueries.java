@@ -261,6 +261,8 @@ public class GeneralQueries {
                 + "recipe_id VARCHAR(128) NOT NULL,"
                 + "primary_or_recipe_user_id CHAR(36) NOT NULL,"
                 + "is_linked_or_is_a_primary_user BOOLEAN NOT NULL DEFAULT FALSE,"
+                + "time_joined BIGINT NOT NULL DEFAULT 0,"
+                + "primary_or_recipe_user_time_joined BIGINT NOT NULL DEFAULT 0,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, null, "pkey")
                 + " PRIMARY KEY (app_id, user_id), "
                 + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, "primary_or_recipe_user_id", "fkey")
@@ -287,6 +289,30 @@ public class GeneralQueries {
     static String getQueryToCreateUserIdIndexForAppIdToUserIdTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS app_id_to_user_id_user_id_index ON "
                 + Config.getConfig(start).getAppIdToUserIdTable() + "(user_id, app_id);";
+    }
+
+    static String getQueryToCreateAppIdToUserIdPaginationIndex1(Start start) {
+        return "CREATE INDEX IF NOT EXISTS app_id_to_user_id_pagination_index1 ON "
+                + Config.getConfig(start).getAppIdToUserIdTable()
+                + "(app_id, primary_or_recipe_user_time_joined DESC, primary_or_recipe_user_id DESC);";
+    }
+
+    static String getQueryToCreateAppIdToUserIdPaginationIndex2(Start start) {
+        return "CREATE INDEX IF NOT EXISTS app_id_to_user_id_pagination_index2 ON "
+                + Config.getConfig(start).getAppIdToUserIdTable()
+                + "(app_id, primary_or_recipe_user_time_joined ASC, primary_or_recipe_user_id DESC);";
+    }
+
+    static String getQueryToCreateAppIdToUserIdPaginationIndex3(Start start) {
+        return "CREATE INDEX IF NOT EXISTS app_id_to_user_id_pagination_index3 ON "
+                + Config.getConfig(start).getAppIdToUserIdTable()
+                + "(recipe_id, app_id, primary_or_recipe_user_time_joined DESC, primary_or_recipe_user_id DESC);";
+    }
+
+    static String getQueryToCreateAppIdToUserIdPaginationIndex4(Start start) {
+        return "CREATE INDEX IF NOT EXISTS app_id_to_user_id_pagination_index4 ON "
+                + Config.getConfig(start).getAppIdToUserIdTable()
+                + "(recipe_id, app_id, primary_or_recipe_user_time_joined ASC, primary_or_recipe_user_id DESC);";
     }
 
     public static void createTablesIfNotExists(Start start, Connection con) throws SQLException, StorageQueryException {
@@ -324,6 +350,10 @@ public class GeneralQueries {
                     update(con, getQueryToCreateAppIdIndexForAppIdToUserIdTable(start), NO_OP_SETTER);
                     update(con, getQueryToCreatePrimaryUserIdIndexForAppIdToUserIdTable(start), NO_OP_SETTER);
                     update(con, getQueryToCreateUserIdIndexForAppIdToUserIdTable(start), NO_OP_SETTER);
+                    update(con, getQueryToCreateAppIdToUserIdPaginationIndex1(start), NO_OP_SETTER);
+                    update(con, getQueryToCreateAppIdToUserIdPaginationIndex2(start), NO_OP_SETTER);
+                    update(con, getQueryToCreateAppIdToUserIdPaginationIndex3(start), NO_OP_SETTER);
+                    update(con, getQueryToCreateAppIdToUserIdPaginationIndex4(start), NO_OP_SETTER);
                 }
 
                 if (!doesTableExists(start, con, Config.getConfig(start).getUsersTable())) {
@@ -1512,9 +1542,21 @@ public class GeneralQueries {
                 " SET primary_or_recipe_user_time_joined = (SELECT MIN(time_joined) FROM " +
                 getConfig(start).getUsersTable() + " WHERE app_id = ? AND primary_or_recipe_user_id = ?) WHERE " +
                 " app_id = ? AND primary_or_recipe_user_id = ?";
+        String APP_ID_QUERY = "UPDATE " + getConfig(start).getAppIdToUserIdTable() +
+                " SET primary_or_recipe_user_time_joined = (SELECT MIN(time_joined) FROM " +
+                getConfig(start).getAppIdToUserIdTable() + " WHERE app_id = ? AND primary_or_recipe_user_id = ?) WHERE " +
+                " app_id = ? AND primary_or_recipe_user_id = ?";
         List<PreparedStatementValueSetter> usersUpdateBatch = new ArrayList<>();
+        List<PreparedStatementValueSetter> appIdUpdateBatch = new ArrayList<>();
         for(String primaryUserId : primaryUserIds) {
-            usersUpdateBatch.add(pst -> {
+            PreparedStatementValueSetter setter = pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, primaryUserId);
+                pst.setString(3, appIdentifier.getAppId());
+                pst.setString(4, primaryUserId);
+            };
+            usersUpdateBatch.add(setter);
+            appIdUpdateBatch.add(pst -> {
                 pst.setString(1, appIdentifier.getAppId());
                 pst.setString(2, primaryUserId);
                 pst.setString(3, appIdentifier.getAppId());
@@ -1523,6 +1565,7 @@ public class GeneralQueries {
         }
 
         executeBatch(sqlCon, QUERY, usersUpdateBatch);
+        executeBatch(sqlCon, APP_ID_QUERY, appIdUpdateBatch);
     }
 
     public static void unlinkAccounts_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
@@ -1545,7 +1588,8 @@ public class GeneralQueries {
 
         {
             String QUERY = "UPDATE " + getConfig(start).getAppIdToUserIdTable() +
-                    " SET is_linked_or_is_a_primary_user = false, primary_or_recipe_user_id = ?" +
+                    " SET is_linked_or_is_a_primary_user = false, primary_or_recipe_user_id = ?," +
+                    " primary_or_recipe_user_time_joined = time_joined" +
                     " WHERE app_id = ? AND user_id = ?";
 
             update(sqlCon, QUERY, pst -> {
@@ -2143,16 +2187,30 @@ public class GeneralQueries {
     public static void updateTimeJoinedForPrimaryUser_Transaction(Start start, Connection sqlCon,
                                                                   AppIdentifier appIdentifier, String primaryUserId)
             throws SQLException, StorageQueryException {
-        String QUERY = "UPDATE " + getConfig(start).getUsersTable() +
-                " SET primary_or_recipe_user_time_joined = (SELECT MIN(time_joined) FROM " +
-                getConfig(start).getUsersTable() + " WHERE app_id = ? AND primary_or_recipe_user_id = ?) WHERE " +
-                " app_id = ? AND primary_or_recipe_user_id = ?";
-        update(sqlCon, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, primaryUserId);
-            pst.setString(3, appIdentifier.getAppId());
-            pst.setString(4, primaryUserId);
-        });
+        {
+            String QUERY = "UPDATE " + getConfig(start).getUsersTable() +
+                    " SET primary_or_recipe_user_time_joined = (SELECT MIN(time_joined) FROM " +
+                    getConfig(start).getUsersTable() + " WHERE app_id = ? AND primary_or_recipe_user_id = ?) WHERE " +
+                    " app_id = ? AND primary_or_recipe_user_id = ?";
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, primaryUserId);
+                pst.setString(3, appIdentifier.getAppId());
+                pst.setString(4, primaryUserId);
+            });
+        }
+        {
+            String QUERY = "UPDATE " + getConfig(start).getAppIdToUserIdTable() +
+                    " SET primary_or_recipe_user_time_joined = (SELECT MIN(time_joined) FROM " +
+                    getConfig(start).getAppIdToUserIdTable() + " WHERE app_id = ? AND primary_or_recipe_user_id = ?) WHERE " +
+                    " app_id = ? AND primary_or_recipe_user_id = ?";
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, primaryUserId);
+                pst.setString(3, appIdentifier.getAppId());
+                pst.setString(4, primaryUserId);
+            });
+        }
     }
 
     private static class AllAuthRecipeUsersResultHolder {
