@@ -121,11 +121,11 @@ public class GeneralQueries {
                 + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "primary_or_recipe_user_id", "fkey")
                 + " FOREIGN KEY(app_id, primary_or_recipe_user_id)"
                 + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +
-                " (app_id, user_id) ON DELETE CASCADE,"
+                " (app_id, user_id) ON DELETE CASCADE ON UPDATE CASCADE,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "user_id", "fkey")
                 + " FOREIGN KEY(app_id, user_id)"
                 + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +
-                " (app_id, user_id) ON DELETE CASCADE"
+                " (app_id, user_id) ON DELETE CASCADE ON UPDATE CASCADE"
                 + ");";
         // @formatter:on
     }
@@ -268,7 +268,7 @@ public class GeneralQueries {
                 + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, "primary_or_recipe_user_id", "fkey")
                 + " FOREIGN KEY(app_id, primary_or_recipe_user_id)"
                 + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +
-                " (app_id, user_id) ON DELETE CASCADE,"
+                " (app_id, user_id) ON DELETE CASCADE ON UPDATE CASCADE,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, appToUserTable, "app_id", "fkey")
                 + " FOREIGN KEY(app_id) REFERENCES " + Config.getConfig(start).getAppsTable()
                 + " (app_id) ON DELETE CASCADE"

@@ -69,7 +69,7 @@ public class PasswordlessQueries {
                 + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, "user_id", "fkey")
                 + " FOREIGN KEY(app_id, user_id)"
                 + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +
-                " (app_id, user_id) ON DELETE CASCADE,"
+                " (app_id, user_id) ON DELETE CASCADE ON UPDATE CASCADE,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, usersTable, null, "pkey")
                 + " PRIMARY KEY (app_id, user_id)"
                 + ");";
