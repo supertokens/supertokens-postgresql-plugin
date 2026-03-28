@@ -49,6 +49,12 @@ public abstract class Utils extends Mockito {
     public static void afterTesting() {
         String installDir = "../";
         try {
+            // Kill any remaining SuperTokens processes so the test JVM can exit.
+            // Without this, the last test's instance stays alive (non-daemon threads
+            // in the webserver, cron jobs, and connection pools prevent JVM shutdown).
+            TestingProcessManager.killAll(false);
+            StorageLayer.close();
+
             // Clean up the test database reference
             currentTestDatabaseName.remove();
 
