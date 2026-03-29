@@ -972,7 +972,7 @@ public class GeneralQueries {
             throws SQLException, StorageQueryException {
         StringBuilder QUERY = new StringBuilder(
                 "SELECT COUNT(*) AS total FROM (");
-        QUERY.append("SELECT primary_or_recipe_user_id FROM " + getConfig(start).getUsersTable());
+        QUERY.append("SELECT primary_or_recipe_user_id FROM " + getConfig(start).getAppIdToUserIdTable());
         QUERY.append(" WHERE app_id = ?");
         if (includeRecipeIds != null && includeRecipeIds.length > 0) {
             QUERY.append(" AND recipe_id IN (");
@@ -1007,10 +1007,11 @@ public class GeneralQueries {
             throws SQLException, StorageQueryException {
         StringBuilder QUERY = new StringBuilder(
                 "SELECT COUNT(*) AS total FROM (");
-        QUERY.append("SELECT primary_or_recipe_user_id FROM " + getConfig(start).getUsersTable());
-        QUERY.append(" WHERE app_id = ? AND tenant_id = ?");
+        QUERY.append("SELECT auid.primary_or_recipe_user_id FROM " + getConfig(start).getRecipeUserTenantsTable() + " rut");
+        QUERY.append(" JOIN " + getConfig(start).getAppIdToUserIdTable() + " auid ON rut.app_id = auid.app_id AND rut.recipe_user_id = auid.user_id");
+        QUERY.append(" WHERE rut.app_id = ? AND rut.tenant_id = ?");
         if (includeRecipeIds != null && includeRecipeIds.length > 0) {
-            QUERY.append(" AND recipe_id IN (");
+            QUERY.append(" AND rut.recipe_id IN (");
             for (int i = 0; i < includeRecipeIds.length; i++) {
                 QUERY.append("?");
                 if (i != includeRecipeIds.length - 1) {
@@ -1021,7 +1022,7 @@ public class GeneralQueries {
             QUERY.append(")");
         }
 
-        QUERY.append(" GROUP BY primary_or_recipe_user_id) AS uniq_users");
+        QUERY.append(" GROUP BY auid.primary_or_recipe_user_id) AS uniq_users");
 
         return execute(start, QUERY.toString(), pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
@@ -2044,7 +2045,7 @@ public class GeneralQueries {
     public static boolean checkIfUsesAccountLinking(Start start, AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT 1 FROM "
-                + getConfig(start).getUsersTable()
+                + getConfig(start).getAppIdToUserIdTable()
                 + " WHERE app_id = ? AND is_linked_or_is_a_primary_user = true LIMIT 1";
 
         return execute(start, QUERY, pst -> {
