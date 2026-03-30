@@ -172,7 +172,7 @@ public class UnlinkRaceTest {
         } else {
             // User is still linked - verify consistency using reservation tables
             if (userEmail != null) {
-                RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+                RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                         process.getProcess(), finalUser);
 
                 if (!result.isConsistent) {
@@ -657,7 +657,7 @@ public class UnlinkRaceTest {
 
         if (isLinked) {
             // CRITICAL: Check reservation tables directly via SQL
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                     process.getProcess(), finalUser);
 
             if (!result.isConsistent) {

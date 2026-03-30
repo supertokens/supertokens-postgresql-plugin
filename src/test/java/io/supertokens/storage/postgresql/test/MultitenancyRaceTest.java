@@ -178,7 +178,7 @@ public class MultitenancyRaceTest {
 
         if (isLinked) {
             // CRITICAL: Check reservation tables directly for ALL tenants the user is in
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                     main, finalUser);
 
             if (!result.isConsistent) {
@@ -298,7 +298,7 @@ public class MultitenancyRaceTest {
 
         if (isLinked && email != null) {
             // CRITICAL: Check reservation tables directly for ALL tenants
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                     main, finalUser);
 
             if (!result.isConsistent) {
@@ -409,7 +409,7 @@ public class MultitenancyRaceTest {
 
         if (isLinked) {
             // CRITICAL: Check reservation tables directly for ALL tenants
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                     main, finalUser);
 
             if (!result.isConsistent) {
@@ -539,7 +539,7 @@ public class MultitenancyRaceTest {
 
             if (isLinked) {
                 // CRITICAL: Check reservation tables directly for ALL tenants
-                RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+                RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                         main, finalUser);
 
                 if (!result.isConsistent) {
@@ -1002,7 +1002,7 @@ public class MultitenancyRaceTest {
 
         if (isLinked) {
             // CRITICAL: Check reservation tables directly for ALL tenants
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                     main, finalUser);
 
             if (!result.isConsistent) {

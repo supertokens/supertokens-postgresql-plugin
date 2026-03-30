@@ -161,7 +161,7 @@ public class WebAuthnRaceTest {
 
         if (isLinked && actualEmail != null) {
             // CRITICAL: Check reservation tables directly via SQL
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                     main, finalUser);
 
             if (!result.isConsistent) {
@@ -373,7 +373,7 @@ public class WebAuthnRaceTest {
 
                     if (actualEmail != null) {
                         // CRITICAL: Check reservation tables directly via SQL
-                        RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+                        RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                                 main, finalUser);
 
                         if (!result.isConsistent) {
@@ -504,7 +504,7 @@ public class WebAuthnRaceTest {
 
             if (actualEmail != null) {
                 // CRITICAL: Check reservation tables directly via SQL
-                RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+                RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                         main, finalUser);
 
                 if (!result.isConsistent) {
