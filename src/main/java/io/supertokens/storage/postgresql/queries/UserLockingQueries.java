@@ -91,7 +91,7 @@ public class UserLockingQueries {
         }, rs -> {
             Map<String, LockedUser> map = new HashMap<>();
             while (rs.next()) {
-                String uid = rs.getString("user_id");
+                String uid = rs.getString("user_id").trim();
                 String recipeId = rs.getString("recipe_id");
                 boolean isLinkedOrPrimary = rs.getBoolean("is_linked_or_is_a_primary_user");
                 String primaryUserId = isLinkedOrPrimary ? rs.getString("primary_or_recipe_user_id") : null;

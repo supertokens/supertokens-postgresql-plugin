@@ -1161,6 +1161,16 @@ public class GeneralQueries {
                         queryParams.add(dashboardSearchTags.phoneNumbers.get(i) + "%");
                     }
                     query.append(")");
+                    // Provider filter (if also present)
+                    if (hasProviders) {
+                        query.append(" AND rut.third_party_id <> '' AND (");
+                        for (int i = 0; i < dashboardSearchTags.providers.size(); i++) {
+                            if (i > 0) query.append(" OR");
+                            query.append(" rut.third_party_id ILIKE ?");
+                            queryParams.add(dashboardSearchTags.providers.get(i) + "%");
+                        }
+                        query.append(")");
+                    }
 
                 } else if (hasEmails && hasProviders) {
                     // Email + Provider: single row match (email rows of thirdparty users have third_party_id)
@@ -1172,6 +1182,22 @@ public class GeneralQueries {
                         queryParams.add("%@" + dashboardSearchTags.emails.get(i) + "%");
                     }
                     query.append(") AND (");
+                    for (int i = 0; i < dashboardSearchTags.providers.size(); i++) {
+                        if (i > 0) query.append(" OR");
+                        query.append(" rut.third_party_id ILIKE ?");
+                        queryParams.add(dashboardSearchTags.providers.get(i) + "%");
+                    }
+                    query.append(")");
+
+                } else if (hasPhones && hasProviders) {
+                    // Phone + Provider: no recipe has both, so this always returns empty
+                    query.append(" AND rut.account_info_type = 'phone' AND (");
+                    for (int i = 0; i < dashboardSearchTags.phoneNumbers.size(); i++) {
+                        if (i > 0) query.append(" OR");
+                        query.append(" rut.account_info_value ILIKE ?");
+                        queryParams.add(dashboardSearchTags.phoneNumbers.get(i) + "%");
+                    }
+                    query.append(") AND rut.third_party_id <> '' AND (");
                     for (int i = 0; i < dashboardSearchTags.providers.size(); i++) {
                         if (i > 0) query.append(" OR");
                         query.append(" rut.third_party_id ILIKE ?");
@@ -1398,8 +1424,6 @@ public class GeneralQueries {
             });
         }
 
-        updateTimeJoinedForPrimaryUser_Transaction(start, sqlCon, appIdentifier, primaryUserId);
-
         {
             String QUERY = "UPDATE " + getConfig(start).getAppIdToUserIdTable() +
                     " SET is_linked_or_is_a_primary_user = true, primary_or_recipe_user_id = (" +
@@ -1414,6 +1438,10 @@ public class GeneralQueries {
                 pst.setString(4, recipeUserId);
             });
         }
+
+        // Must be called AFTER both all_auth_recipe_users and app_id_to_user_id have been updated
+        // with the new primary_or_recipe_user_id, so the MIN(time_joined) subquery sees all linked users.
+        updateTimeJoinedForPrimaryUser_Transaction(start, sqlCon, appIdentifier, primaryUserId);
     }
 
     public static void linkMultipleAccounts_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
