@@ -64,7 +64,7 @@ public class EmailPasswordQueries {
                 + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUsersTable, "user_id", "fkey")
                 + " FOREIGN KEY(app_id, user_id)"
                 + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() +
-                " (app_id, user_id) ON DELETE CASCADE,"
+                " (app_id, user_id) ON DELETE CASCADE ON UPDATE CASCADE,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, emailPasswordUsersTable, null, "pkey")
                 + " PRIMARY KEY (app_id, user_id)"
                 + ");";
@@ -291,12 +291,15 @@ public class EmailPasswordQueries {
             try {
                 { // app_id_to_user_id
                     String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                            + "(app_id, user_id, primary_or_recipe_user_id, recipe_id)" + " VALUES(?, ?, ?, ?)";
+                            + "(app_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
+                            + " VALUES(?, ?, ?, ?, ?, ?)";
                     update(sqlCon, QUERY, pst -> {
                         pst.setString(1, tenantIdentifier.getAppId());
                         pst.setString(2, userId);
                         pst.setString(3, userId);
                         pst.setString(4, EMAIL_PASSWORD.toString());
+                        pst.setLong(5, timeJoined);
+                        pst.setLong(6, timeJoined);
                     });
                 }
 
@@ -362,7 +365,8 @@ public class EmailPasswordQueries {
             throws StorageQueryException, StorageTransactionLogicException {
         try {
             String app_id_to_user_id_QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                    + "(app_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id)" + " VALUES(?, ?, ?, ?, ?)";
+                    + "(app_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
+                    + " VALUES(?, ?, ?, ?, ?, ?, ?)";
 
             String all_auth_recipe_users_QUERY = "INSERT INTO " + getConfig(start).getUsersTable() +
                     "(app_id, tenant_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id, time_joined, " +
@@ -403,6 +407,8 @@ public class EmailPasswordQueries {
                     pst.setString(3, primaryOrRecipeUserId);
                     pst.setBoolean(4, isLinkedOrIsPrimaryUser);
                     pst.setString(5, EMAIL_PASSWORD.toString());
+                    pst.setLong(6, user.timeJoinedMSSinceEpoch);
+                    pst.setLong(7, user.timeJoinedMSSinceEpoch);
                 });
 
                 emailPasswordUsersSetters.add(pst -> {
@@ -576,11 +582,12 @@ public class EmailPasswordQueries {
     public static String getPrimaryUserIdUsingEmail(Start start, TenantIdentifier tenantIdentifier,
                                                     String email)
             throws StorageQueryException, SQLException {
-        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
-                + "FROM " + getConfig(start).getEmailPasswordUserToTenantTable() + " AS ep" +
-                " JOIN " + getConfig(start).getUsersTable() + " AS all_users" +
-                " ON ep.app_id = all_users.app_id AND ep.user_id = all_users.user_id" +
-                " WHERE ep.app_id = ? AND ep.tenant_id = ? AND ep.email = ?";
+        String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id AS user_id "
+                + "FROM " + getConfig(start).getRecipeUserTenantsTable() + " AS rut"
+                + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " AS auid"
+                + " ON rut.app_id = auid.app_id AND rut.recipe_user_id = auid.user_id"
+                + " WHERE rut.app_id = ? AND rut.tenant_id = ? AND rut.account_info_type = 'email'"
+                + " AND rut.account_info_value = ? AND rut.recipe_id = 'emailpassword'";
 
         return execute(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());

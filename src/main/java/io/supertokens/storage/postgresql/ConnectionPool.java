@@ -73,7 +73,8 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
             attributes = "?" + attributes;
         }
 
-        config.setJdbcUrl("jdbc:" + scheme + "://" + hostName + port + "/" + databaseName + attributes);
+        String jdbcUrl = "jdbc:" + scheme + "://" + hostName + port + "/" + databaseName + attributes;
+        config.setJdbcUrl(jdbcUrl);
 
         if (userConfig.getUser() != null) {
             config.setUsername(userConfig.getUser());

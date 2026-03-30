@@ -142,7 +142,7 @@ public class RaceConditionTest {
         assertNotNull(finalUser);
 
         // Check reservation tables directly via SQL
-        RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+        RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                 process.getProcess(), finalUser);
 
         if (!result.isConsistent) {
@@ -247,7 +247,7 @@ public class RaceConditionTest {
             }
 
             // Check reservation tables directly via SQL
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                     process.getProcess(), finalUser);
 
             if (!result.isConsistent) {
@@ -338,7 +338,7 @@ public class RaceConditionTest {
         assertNotNull(finalUser);
 
         // Check reservation tables directly via SQL
-        RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+        RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                 process.getProcess(), finalUser);
 
         if (!result.isConsistent) {
@@ -449,7 +449,7 @@ public class RaceConditionTest {
             }
 
             // Check reservation tables directly via SQL
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                     process.getProcess(), finalUser);
 
             if (!result.isConsistent) {
@@ -558,7 +558,7 @@ public class RaceConditionTest {
 
         if (finalUser != null) {
             // Check reservation tables directly via SQL
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                     process.getProcess(), finalUser);
 
             if (!result.isConsistent) {

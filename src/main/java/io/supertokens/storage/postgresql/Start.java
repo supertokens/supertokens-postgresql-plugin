@@ -20,8 +20,10 @@ package io.supertokens.storage.postgresql;
 import java.lang.reflect.Field;
 import java.sql.BatchUpdateException;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -1106,9 +1108,98 @@ public class Start
         }
     }
 
+    // Track which auxiliary databases have already been DROP'd + CREATE'd in this JVM.
+    // The first call per DB name does a full DROP + CREATE for clean state between tests.
+    // Subsequent calls for the same DB name skip the DROP/CREATE entirely — avoiding the ~5s
+    // block that occurs when DROP DATABASE hits a database with active HikariCP connections.
+    private static final java.util.Set<String> ensuredDatabases = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     @Override
     public void modifyConfigToAddANewUserPoolForTesting(JsonObject config, int poolNumber) {
-        config.add("postgresql_database_name", new JsonPrimitive("st" + poolNumber));
+        // Use worker-specific database names to avoid conflicts during parallel test execution
+        String workerId = System.getProperty("org.gradle.test.worker", "");
+        String dbName = workerId.isEmpty() ? "st" + poolNumber : "st" + poolNumber + "_w" + workerId;
+
+        // Only auto-create databases for standard pool numbers (0-50).
+        // Higher pool numbers (like 1000) are used in tests that expect the database
+        // NOT to exist (for testing error handling).
+        if (poolNumber >= 0 && poolNumber <= 50) {
+            if (ensuredDatabases.add(dbName)) {
+                // First time seeing this DB in this JVM — do the full DROP + CREATE
+                ensureTestDatabaseExists(dbName, config);
+            }
+            // Otherwise, the DB was already created earlier in this JVM — skip
+        }
+
+        config.add("postgresql_database_name", new JsonPrimitive(dbName));
+    }
+
+    /**
+     * Helper method to get configuration values from environment variables or system properties.
+     */
+    private static String getConfigValue(String name, String defaultValue) {
+        String value = System.getenv(name);
+        if (value == null || value.isEmpty()) {
+            value = System.getProperty(name);
+        }
+        return (value != null && !value.isEmpty()) ? value : defaultValue;
+    }
+
+    /**
+     * Ensures a test database exists, creating it if necessary.
+     * This is called during test setup to create auxiliary databases for multitenancy tests.
+     */
+    private void ensureTestDatabaseExists(String dbName, JsonObject config) {
+        // Get connection info from config or use defaults
+        // Check both environment variables and system properties, matching DatabaseTestHelper behavior
+        String host = config.has("postgresql_host")
+            ? config.get("postgresql_host").getAsString()
+            : getConfigValue("TEST_PG_HOST", "localhost");
+        String port = config.has("postgresql_port")
+            ? String.valueOf(config.get("postgresql_port").getAsInt())
+            : getConfigValue("TEST_PG_PORT", getConfigValue("ST_POSTGRESQL_PLUGIN_SERVER_PORT", "5432"));
+        String user = config.has("postgresql_user")
+            ? config.get("postgresql_user").getAsString()
+            : getConfigValue("TEST_PG_USER", "root");
+        String password = config.has("postgresql_password")
+            ? config.get("postgresql_password").getAsString()
+            : getConfigValue("TEST_PG_PASSWORD", "root");
+
+        String adminUrl = "jdbc:postgresql://" + host + ":" + port + "/postgres";
+
+        try {
+            // Ensure driver is loaded
+            Class.forName("org.postgresql.Driver");
+        } catch (ClassNotFoundException e) {
+            // Driver should already be available
+            return;
+        }
+
+        try (Connection conn = DriverManager.getConnection(adminUrl, user, password);
+             Statement stmt = conn.createStatement()) {
+
+            // Terminate any lingering connections from previous test runs, then drop for clean state.
+            try {
+                stmt.executeUpdate(
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '" + dbName + "' AND pid <> pg_backend_pid()");
+            } catch (SQLException ignored) {
+                // pg_stat_activity query might fail on some setups
+            }
+
+            try {
+                stmt.executeUpdate("DROP DATABASE IF EXISTS " + dbName);
+            } catch (SQLException ignored) {
+                // Ignore errors - database might still have connections
+            }
+
+            // Create fresh database
+            stmt.executeUpdate("CREATE DATABASE " + dbName);
+
+        } catch (SQLException e) {
+            // Database might already exist or creation failed - log but don't fail
+            // The actual connection attempt will surface any real issues
+            System.err.println("[Start] Warning: Could not create test database " + dbName + ": " + e.getMessage());
+        }
     }
 
     @Override

@@ -57,6 +57,7 @@ public class UserMetadataQueries {
         // @formatter:on
     }
 
+    // TODO: Add IF NOT EXISTS to prevent crash on dirty DB state from prior test failures
     public static String getQueryToCreateAppIdIndexForUserMetadataTable(Start start) {
         return "CREATE INDEX user_metadata_app_id_index ON "
                 + Config.getConfig(start).getUserMetadataTable() + "(app_id);";

@@ -58,7 +58,7 @@ public class UserIdMappingQueries {
                 + "CONSTRAINT " + Utils.getConstraintName(schema, userIdMappingTable, "supertokens_user_id", "fkey")
                 + " FOREIGN KEY (app_id, supertokens_user_id)"
                 + " REFERENCES " + Config.getConfig(start).getAppIdToUserIdTable() + "(app_id, user_id)" +
-                " ON DELETE CASCADE"
+                " ON DELETE CASCADE ON UPDATE CASCADE"
                 + ");";
         // @formatter:on
     }

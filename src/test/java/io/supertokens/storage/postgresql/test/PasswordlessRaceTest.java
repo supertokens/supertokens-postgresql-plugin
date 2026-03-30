@@ -163,7 +163,7 @@ public class PasswordlessRaceTest {
 
         if (isLinked && actualEmail != null) {
             // CRITICAL: Check reservation tables directly via SQL
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                     process.getProcess(), finalUser);
 
             if (!result.isConsistent) {
@@ -347,7 +347,7 @@ public class PasswordlessRaceTest {
 
                 if (isLinked) {
                     // CRITICAL: Check reservation tables directly via SQL
-                    RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+                    RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                             process.getProcess(), finalUser);
 
                     if (!result.isConsistent) {
@@ -579,7 +579,7 @@ public class PasswordlessRaceTest {
 
         if (isLinked) {
             // CRITICAL: Check reservation tables directly via SQL
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkEmailReservationConsistency(
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
                     process.getProcess(), finalUser);
 
             if (!result.isConsistent) {

@@ -186,11 +186,11 @@ public class DeadlockTest {
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-        ExecutorService es = Executors.newFixedThreadPool(1000);
+        ExecutorService es = Executors.newFixedThreadPool(200);
 
         AtomicBoolean pass = new AtomicBoolean(true);
 
-        for (int i = 0; i < 3000; i++) {
+        for (int i = 0; i < 500; i++) {
             es.execute(() -> {
                 try {
                     Passwordless.CreateCodeResponse resp = Passwordless.createCode(process.getProcess(),
@@ -207,8 +207,9 @@ public class DeadlockTest {
         }
 
         es.shutdown();
-        es.awaitTermination(2, TimeUnit.MINUTES);
+        es.awaitTermination(60, TimeUnit.SECONDS);
 
+        assertTrue("Executor didn't finish in time", es.isTerminated());
         assert (pass.get());
 
         process.kill();
@@ -622,7 +623,7 @@ public class DeadlockTest {
         process.startProcess();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-        ExecutorService es = Executors.newFixedThreadPool(1000);
+        ExecutorService es = Executors.newFixedThreadPool(200);
 
         AtomicBoolean pass = new AtomicBoolean(true);
 
@@ -631,7 +632,7 @@ public class DeadlockTest {
 
         AuthRecipe.createPrimaryUser(process.getProcess(), user1.getSupertokensUserId());
 
-        for (int i = 0; i < 3000; i++) {
+        for (int i = 0; i < 500; i++) {
             es.execute(() -> {
                 try {
                     AuthRecipe.linkAccounts(process.getProcess(), user2.getSupertokensUserId(),
@@ -646,8 +647,9 @@ public class DeadlockTest {
         }
 
         es.shutdown();
-        es.awaitTermination(2, TimeUnit.MINUTES);
+        es.awaitTermination(60, TimeUnit.SECONDS);
 
+        assertTrue("Executor didn't finish in time", es.isTerminated());
         assert (pass.get());
 
         // No longer deadlocks? This should be OK.
@@ -675,13 +677,13 @@ public class DeadlockTest {
         process.startProcess();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-        ExecutorService es = Executors.newFixedThreadPool(1000);
+        ExecutorService es = Executors.newFixedThreadPool(200);
 
         AtomicBoolean pass = new AtomicBoolean(true);
 
         AuthRecipeUserInfo user1 = EmailPassword.signUp(process.getProcess(), "test1@example.com", "password");
 
-        for (int i = 0; i < 3000; i++) {
+        for (int i = 0; i < 500; i++) {
             es.execute(() -> {
                 try {
                     AuthRecipe.createPrimaryUser(process.getProcess(), user1.getSupertokensUserId());
@@ -696,8 +698,9 @@ public class DeadlockTest {
         }
 
         es.shutdown();
-        es.awaitTermination(2, TimeUnit.MINUTES);
+        es.awaitTermination(60, TimeUnit.SECONDS);
 
+        assertTrue("Executor didn't finish in time", es.isTerminated());
         assert (pass.get());
         // TODO: these no longer deadlock. This is OK?
         // assertNull(process

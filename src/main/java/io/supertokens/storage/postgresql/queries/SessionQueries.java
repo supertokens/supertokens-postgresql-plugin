@@ -68,6 +68,7 @@ public class SessionQueries {
         // @formatter:on
     }
 
+    // TODO: Add IF NOT EXISTS to prevent crash on dirty DB state from prior test failures
     public static String getQueryToCreateTenantIdIndexForSessionInfoTable(Start start) {
         return "CREATE INDEX session_info_tenant_id_index ON "
                 + Config.getConfig(start).getSessionInfoTable() + "(app_id, tenant_id);";
@@ -90,11 +91,13 @@ public class SessionQueries {
         // @formatter:on
     }
 
+    // TODO: Add IF NOT EXISTS to prevent crash on dirty DB state from prior test failures
     public static String getQueryToCreateAppIdIndexForAccessTokenSigningKeysTable(Start start) {
         return "CREATE INDEX access_token_signing_keys_app_id_index ON "
                 + Config.getConfig(start).getAccessTokenSigningKeysTable() + "(app_id);";
     }
 
+    // TODO: Add IF NOT EXISTS to prevent crash on dirty DB state from prior test failures
     static String getQueryToCreateSessionExpiryIndex(Start start) {
         return "CREATE INDEX session_expiry_index ON "
                 + Config.getConfig(start).getSessionInfoTable() + "(expires_at);";
@@ -155,7 +158,7 @@ public class SessionQueries {
                 "FROM " + getConfig(start).getUserIdMappingTable() + " um2 " +
                 "WHERE um2.app_id = ? AND um2.supertokens_user_id IN (" +
                     "SELECT primary_or_recipe_user_id " +
-                    "FROM " + getConfig(start).getUsersTable() + " " +
+                    "FROM " + getConfig(start).getAppIdToUserIdTable() + " " +
                     "WHERE app_id = ? AND user_id IN (" +
                         "SELECT user_id FROM (" +
                             "SELECT um1.supertokens_user_id as user_id, 0 as o1 " +
@@ -169,7 +172,7 @@ public class SessionQueries {
                 ") " +
                 "UNION " +
                 "SELECT primary_or_recipe_user_id, 1 as o " +
-                "FROM " + getConfig(start).getUsersTable() + " " +
+                "FROM " + getConfig(start).getAppIdToUserIdTable() + " " +
                 "WHERE app_id = ? AND user_id IN (" +
                     "SELECT user_ID FROM (" +
                         "SELECT um1.supertokens_user_id as user_id, 0 as o2 " +
@@ -427,7 +430,7 @@ public class SessionQueries {
                         "sess.created_at_time, sess.jwt_user_payload, sess.use_static_key, users" +
                         ".primary_or_recipe_user_id FROM " +
                         getConfig(start).getSessionInfoTable()
-                        + " AS sess LEFT JOIN " + getConfig(start).getUsersTable() +
+                        + " AS sess LEFT JOIN " + getConfig(start).getAppIdToUserIdTable() +
                         " as users ON sess.app_id = users.app_id AND sess.user_id = users.user_id WHERE sess.app_id =" +
                         " ? AND " +
                         "sess.tenant_id = ? AND sess.session_handle = ?";

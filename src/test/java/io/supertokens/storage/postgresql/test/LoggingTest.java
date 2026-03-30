@@ -47,6 +47,7 @@ import java.util.Iterator;
 import java.util.Scanner;
 
 import static org.junit.Assert.*;
+import static org.junit.Assume.assumeTrue;
 
 public class LoggingTest {
     @Rule
@@ -64,6 +65,9 @@ public class LoggingTest {
 
     @Test
     public void defaultLogging() throws Exception {
+        // Skip this test if file logging is disabled (envvar set to null)
+        assumeTrue("File logging is disabled via environment variable", Utils.isFileLoggingEnabled());
+
         String[] args = {"../"};
         StorageLayer.close();
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -107,6 +111,9 @@ public class LoggingTest {
 
     @Test
     public void customLogging() throws Exception {
+        // Skip this test if file logging is disabled (envvar set to null)
+        assumeTrue("File logging is disabled via environment variable", Utils.isFileLoggingEnabled());
+
         try {
             String[] args = {"../"};
 
@@ -319,7 +326,7 @@ public class LoggingTest {
         String dbUser = "db_user";
         String dbPassword = "db_password";
         String dbName = "db_does_not_exist";
-        String dbConnectionUri = "postgresql://" + dbUser + ":" + dbPassword + "@localhost:5432/" + dbName;
+        String dbConnectionUri = "postgresql://" + dbUser + ":" + dbPassword + "@" + DatabaseTestHelper.getHost() + ":" + DatabaseTestHelper.getPort() + "/" + dbName;
 
         Utils.setValueInConfig("postgresql_connection_uri", dbConnectionUri);
         Utils.setValueInConfig("error_log_path", "null");
@@ -451,9 +458,9 @@ public class LoggingTest {
                 String dbUser = "db_user";
                 String dbPassword = "db_password";
                 String dbName = "db_does_not_exist";
-                String dbConnectionUri = "postgresql://" + dbUser + ":" + dbPassword + "@localhost:5432/" + dbName;
-
-                Utils.setValueInConfig("postgresql_connection_uri", dbConnectionUri);
+                Utils.setValueInConfig("postgresql_database_name", dbName);
+                Utils.setValueInConfig("postgresql_use", dbUser);
+                Utils.setValueInConfig("postgresql_password", dbPassword);
 
                 TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
 

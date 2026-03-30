@@ -18,7 +18,9 @@
 package io.supertokens.storage.postgresql.test;
 
 import io.supertokens.ProcessState;
+import io.supertokens.authRecipe.AuthRecipe;
 import io.supertokens.pluginInterface.RECIPE_ID;
+import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicatePasswordResetTokenException;
@@ -57,6 +59,7 @@ import java.security.spec.InvalidKeySpecException;
 
 import static junit.framework.TestCase.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 public class ExceptionParsingTest {
     @Rule
@@ -109,6 +112,13 @@ public class ExceptionParsingTest {
             assertEquals(storage.getUsersCount(new TenantIdentifier(null, null, null),
                     new RECIPE_ID[]{RECIPE_ID.THIRD_PARTY}), 1);
 
+            // Verify reservation table integrity for the successfully created user
+            AuthRecipeUserInfo tpUser = AuthRecipe.getUserById(process.getProcess(), userId);
+            assertNotNull(tpUser);
+            RaceTestUtils.ConsistencyCheckResult tpResult = RaceTestUtils.checkReservationConsistency(
+                    process.getProcess(), tpUser);
+            assertTrue("ThirdParty reservation inconsistency: " + tpResult.issues, tpResult.isConsistent);
+
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
         }
@@ -147,6 +157,13 @@ public class ExceptionParsingTest {
 
             assertEquals(storage.getUsersCount(new TenantIdentifier(null, null, null),
                     new RECIPE_ID[]{RECIPE_ID.EMAIL_PASSWORD}), 1);
+
+            // Verify reservation table integrity for the successfully created user
+            AuthRecipeUserInfo epUser = AuthRecipe.getUserById(process.getProcess(), userId);
+            assertNotNull(epUser);
+            RaceTestUtils.ConsistencyCheckResult epResult = RaceTestUtils.checkReservationConsistency(
+                    process.getProcess(), epUser);
+            assertTrue("EmailPassword reservation inconsistency: " + epResult.issues, epResult.isConsistent);
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));

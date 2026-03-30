@@ -36,15 +36,28 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 public abstract class Utils extends Mockito {
 
     private static ByteArrayOutputStream byteArrayOutputStream;
 
+    // Track the current test database for cleanup
+    private static final ThreadLocal<String> currentTestDatabaseName = new ThreadLocal<>();
+
     public static void afterTesting() {
         String installDir = "../";
         try {
+            // Kill any remaining SuperTokens processes so the test JVM can exit.
+            // Without this, the last test's instance stays alive (non-daemon threads
+            // in the webserver, cron jobs, and connection pools prevent JVM shutdown).
+            TestingProcessManager.killAll(false);
+            StorageLayer.close();
+
+            // Clean up the test database reference
+            currentTestDatabaseName.remove();
+
             // we remove the license key file
             ProcessBuilder pb = new ProcessBuilder("rm", "licenseKey");
             pb.directory(new File(installDir));
@@ -58,12 +71,11 @@ public abstract class Utils extends Mockito {
             process = pb.start();
             process.waitFor();
 
-            // remove webserver-temp folders created by tomcat
-            final File webserverTemp = new File(installDir + "webserver-temp");
-            try {
-                FileUtils.deleteDirectory(webserverTemp);
-            } catch (Exception ignored) {
-            }
+            // Note: We don't delete webserver-temp here because:
+            // 1. Each Webserver creates its own UUID subdirectory (webserver-temp/UUID/)
+            // 2. Each Webserver cleans up its own subdirectory in stop()
+            // 3. Deleting the entire webserver-temp folder causes cross-worker conflicts
+            //    when tests run in parallel (one worker's cleanup deletes another's temp dir)
 
             // remove .started folder created by processes
             final File dotStartedFolder = new File(installDir + ".started" + workerId);
@@ -87,26 +99,33 @@ public abstract class Utils extends Mockito {
         String installDir = "../";
         String workerId = System.getProperty("org.gradle.test.worker");
         try {
-            // if the default config is not the same as the current config, we must reset
-            // the storage layer
-            File ogConfig = new File("../temp/config.yaml");
-            File currentConfig = new File("../config" + workerId + ".yaml");
-            if (currentConfig.isFile()) {
-                byte[] ogConfigContent = Files.readAllBytes(ogConfig.toPath());
-                byte[] currentConfigContent = Files.readAllBytes(currentConfig.toPath());
-                if (!Arrays.equals(ogConfigContent, currentConfigContent)) {
-                    StorageLayer.close();
-                }
-            }
+            // Kill all processes WITHOUT dropping tables — TRUNCATE will handle data cleanup.
+            // This preserves the schema so the next process startup's CREATE TABLE IF NOT EXISTS
+            // are all no-ops, saving ~88 DDL statements per test.
+            TestingProcessManager.killAll(false);
 
+            // Close the storage layer (releases HikariCP pools etc.)
+            StorageLayer.close();
+
+            // Get or create the per-worker test database (created once, reused across tests)
+            String testDbName = DatabaseTestHelper.createTestDatabase();
+            currentTestDatabaseName.set(testDbName);
+
+            // Truncate all data in the test database (keeps tables intact for fast re-use)
+            DatabaseTestHelper.truncateAllData();
+
+            // Copy base config file (tests may have modified it)
             ProcessBuilder pb = new ProcessBuilder("cp", "temp/config.yaml", "./config" + workerId + ".yaml");
             pb.directory(new File(installDir));
             Process process = pb.start();
             process.waitFor();
 
-            TestingProcessManager.killAll();
-            TestingProcessManager.deleteAllInformation();
-            TestingProcessManager.killAll();
+            // Update config with test-specific database name and connection details
+            setValueInConfigDirectly("postgresql_database_name", "\"" + testDbName + "\"", workerId);
+            setValueInConfigDirectly("postgresql_host", "\"" + DatabaseTestHelper.getHost() + "\"", workerId);
+            setValueInConfigDirectly("postgresql_port", DatabaseTestHelper.getPort(), workerId);
+            setValueInConfigDirectly("postgresql_user", "\"" + DatabaseTestHelper.getUser() + "\"", workerId);
+            setValueInConfigDirectly("postgresql_password", "\"" + DatabaseTestHelper.getPassword() + "\"", workerId);
 
             byteArrayOutputStream = new ByteArrayOutputStream();
             System.setErr(new PrintStream(byteArrayOutputStream));
@@ -114,6 +133,27 @@ public abstract class Utils extends Mockito {
             e.printStackTrace();
         }
         System.gc();
+    }
+
+    /**
+     * Internal method to set a config value without closing StorageLayer.
+     * Used during reset() to configure the test database.
+     */
+    private static void setValueInConfigDirectly(String key, String value, String workerId) throws IOException {
+        String oldStr = "\n((#\\s)?)" + key + "(:|((:\\s).+))\n";
+        String newStr = "\n" + key + ": " + value + "\n";
+        StringBuilder originalFileContent = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new FileReader("../config" + workerId + ".yaml"))) {
+            String currentReadingLine = reader.readLine();
+            while (currentReadingLine != null) {
+                originalFileContent.append(currentReadingLine).append(System.lineSeparator());
+                currentReadingLine = reader.readLine();
+            }
+            String modifiedFileContent = originalFileContent.toString().replaceAll(oldStr, newStr);
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter("../config" + workerId + ".yaml"))) {
+                writer.write(modifiedFileContent);
+            }
+        }
     }
 
     static void stopLicenseKeyFromUpdatingToLatest(TestingProcessManager.TestingProcess process) {
@@ -184,11 +224,43 @@ public abstract class Utils extends Mockito {
 
     public static TestRule getOnFailure() {
         return new TestWatcher() {
+            private Map<String, Map<String, Double>> pgStatBefore;
+
+            @Override
+            protected void starting(Description description) {
+                pgStatBefore = DatabaseTestHelper.takePgStatMonitorSnapshot(
+                        DatabaseTestHelper.getCurrentTestDatabase());
+            }
+
             @Override
             protected void failed(Throwable e, Description description) {
                 System.out.println(byteArrayOutputStream.toString(StandardCharsets.UTF_8));
             }
+
+            @Override
+            protected void finished(Description description) {
+                String testName = description.getClassName() + "." + description.getMethodName();
+                DatabaseTestHelper.collectPgStatMonitorData(
+                        DatabaseTestHelper.getCurrentTestDatabase(), testName, pgStatBefore);
+            }
         };
+    }
+
+    /**
+     * Checks if file logging is enabled (i.e., log paths are not set to "null" via environment variables).
+     * When INFO_LOG_PATH or ERROR_LOG_PATH envvars are set to "null", logging goes to console instead of files.
+     *
+     * @return true if file logging is enabled, false if logging is configured to go to console
+     */
+    public static boolean isFileLoggingEnabled() {
+        String infoLogPath = System.getenv("INFO_LOG_PATH");
+        String errorLogPath = System.getenv("ERROR_LOG_PATH");
+
+        // If either envvar is set to "null" (case-insensitive), file logging is disabled
+        boolean infoLogNull = infoLogPath != null && infoLogPath.equalsIgnoreCase("null");
+        boolean errorLogNull = errorLogPath != null && errorLogPath.equalsIgnoreCase("null");
+
+        return !infoLogNull && !errorLogNull;
     }
 
     public static TestRule retryFlakyTest() {
