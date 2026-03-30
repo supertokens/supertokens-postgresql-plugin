@@ -25,6 +25,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import io.supertokens.pluginInterface.ConfigFieldInfo;
+import io.supertokens.pluginInterface.MigrationMode;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.annotations.*;
@@ -199,6 +200,15 @@ public class PostgreSQLConfig {
     private Integer postgresql_minimum_idle_connections = null;
 
 
+    @EnvName("SUPERTOKENS_MIGRATION_MODE")
+    @JsonProperty
+    @IgnoreForAnnotationCheck
+    @DashboardInfo(
+            description = "Migration mode for all_auth_recipe_users table deprecation. " +
+                    "Values: LEGACY, DUAL_WRITE_READ_OLD, DUAL_WRITE_READ_NEW, MIGRATED",
+            defaultValue = "\"LEGACY\"", isOptional = true)
+    private String migration_mode = null;
+
     @IgnoreForAnnotationCheck
     boolean isValidAndNormalised = false;
 
@@ -317,6 +327,17 @@ public class PostgreSQLConfig {
 
     public String getConnectionURI() {
         return postgresql_connection_uri;
+    }
+
+    public MigrationMode getMigrationMode() {
+        if (migration_mode == null) {
+            return MigrationMode.LEGACY;
+        }
+        try {
+            return MigrationMode.valueOf(migration_mode.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return MigrationMode.LEGACY;
+        }
     }
 
     public String getUsersTable() {
@@ -574,6 +595,16 @@ public class PostgreSQLConfig {
                     throw new InvalidConfigException(
                             "'postgresql_minimum_idle_connections' must be less than or equal to "
                                     + "'postgresql_connection_pool_size'");
+                }
+            }
+
+            if (migration_mode != null) {
+                try {
+                    MigrationMode.valueOf(migration_mode.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    throw new InvalidConfigException(
+                            "Invalid migration_mode value: '" + migration_mode +
+                            "'. Must be one of: LEGACY, DUAL_WRITE_READ_OLD, DUAL_WRITE_READ_NEW, MIGRATED");
                 }
             }
         }
