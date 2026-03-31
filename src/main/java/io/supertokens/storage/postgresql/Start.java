@@ -48,6 +48,7 @@ import io.supertokens.pluginInterface.ActiveUsersSQLStorage;
 import io.supertokens.pluginInterface.ActiveUsersStorage;
 import io.supertokens.pluginInterface.ConfigFieldInfo;
 import io.supertokens.pluginInterface.KeyValueInfo;
+import io.supertokens.pluginInterface.MigrationMode;
 import io.supertokens.pluginInterface.LOG_LEVEL;
 import io.supertokens.pluginInterface.RECIPE_ID;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
@@ -1417,10 +1418,13 @@ public class Start
             UnknownUserIdException {
         Connection sqlCon = (Connection) conn.getConnection();
         try {
+            MigrationMode mode = Config.getConfig(this).getMigrationMode();
             // Acquire lock to get LockedUser for the new API
             LockedUser lockedUser = UserLockingQueries.lockUser(this, sqlCon, appIdentifier, userId);
-            AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser,
-                    ACCOUNT_INFO_TYPE.EMAIL, email);
+            if (mode.writesToNewTables()) {
+                AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser,
+                        ACCOUNT_INFO_TYPE.EMAIL, email);
+            }
             EmailPasswordQueries.updateUsersEmail_Transaction(this, sqlCon, appIdentifier, userId, email);
         } catch (SQLException e) {
             if (e instanceof PSQLException && isUniqueConstraintError(((PSQLException) e).getServerErrorMessage(),
@@ -1685,10 +1689,13 @@ public class Start
             UnknownUserIdException {
         Connection sqlCon = (Connection) con.getConnection();
         try {
+            MigrationMode mode = Config.getConfig(this).getMigrationMode();
             // Acquire lock to get LockedUser for the new API
             LockedUser lockedUser = UserLockingQueries.lockUser(this, sqlCon, appIdentifier, userId);
-            AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser,
-                    ACCOUNT_INFO_TYPE.EMAIL, newEmail);
+            if (mode.writesToNewTables()) {
+                AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser,
+                        ACCOUNT_INFO_TYPE.EMAIL, newEmail);
+            }
             ThirdPartyQueries.updateUserEmail_Transaction(this, sqlCon, appIdentifier, thirdPartyId,
                     thirdPartyUserId, newEmail);
         } catch (PhoneNumberChangeNotAllowedException | DuplicatePhoneNumberException | DuplicateThirdPartyUserException e) {
@@ -2432,12 +2439,15 @@ public class Start
         try {
             Connection sqlCon = (Connection) con.getConnection();
 
+            MigrationMode mode = Config.getConfig(this).getMigrationMode();
             // Acquire lock once to get LockedUser for all calls
             LockedUser lockedUser = UserLockingQueries.lockUser(this, sqlCon, appIdentifier, userId);
 
             // Update non-nulls first
             if (email != null) {
-                AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser, ACCOUNT_INFO_TYPE.EMAIL, email);
+                if (mode.writesToNewTables()) {
+                    AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser, ACCOUNT_INFO_TYPE.EMAIL, email);
+                }
                 int updated_rows = PasswordlessQueries.updateUserEmail_Transaction(this, sqlCon, appIdentifier, userId,
                         email);
                 if (updated_rows != 1) {
@@ -2445,7 +2455,9 @@ public class Start
                 }
             }
             if (phoneNumber != null) {
-                AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser, ACCOUNT_INFO_TYPE.PHONE_NUMBER, phoneNumber);
+                if (mode.writesToNewTables()) {
+                    AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser, ACCOUNT_INFO_TYPE.PHONE_NUMBER, phoneNumber);
+                }
                 int updated_rows = PasswordlessQueries.updateUserPhoneNumber_Transaction(this, sqlCon, appIdentifier, userId,
                         phoneNumber);
                 if (updated_rows != 1) {
@@ -2455,7 +2467,9 @@ public class Start
 
             // now update the nulls
             if (email == null && shouldUpdateEmail) {
-                AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser, ACCOUNT_INFO_TYPE.EMAIL, email);
+                if (mode.writesToNewTables()) {
+                    AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser, ACCOUNT_INFO_TYPE.EMAIL, email);
+                }
                 int updated_rows = PasswordlessQueries.updateUserEmail_Transaction(this, sqlCon, appIdentifier, userId,
                         email);
                 if (updated_rows != 1) {
@@ -2463,7 +2477,9 @@ public class Start
                 }
             }
             if (phoneNumber == null && shouldUpdatePhoneNumber) {
-                AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser, ACCOUNT_INFO_TYPE.PHONE_NUMBER, phoneNumber);
+                if (mode.writesToNewTables()) {
+                    AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser, ACCOUNT_INFO_TYPE.PHONE_NUMBER, phoneNumber);
+                }
                 int updated_rows = PasswordlessQueries.updateUserPhoneNumber_Transaction(this, sqlCon, appIdentifier, userId,
                         phoneNumber);
                 if (updated_rows != 1) {
@@ -3147,7 +3163,10 @@ public class Start
             // Get recipe ID from LockedUser (fetched from app_id_to_user_id during lock acquisition)
             String recipeId = GeneralQueries.getRecipeIdForUser_Transaction(lockedUser);
 
-            AccountInfoQueries.addTenantIdToRecipeUser_Transaction(this, sqlCon, tenantIdentifier, lockedUser);
+            MigrationMode mode = Config.getConfig(Start.this).getMigrationMode();
+            if (mode.writesToNewTables()) {
+                AccountInfoQueries.addTenantIdToRecipeUser_Transaction(this, sqlCon, tenantIdentifier, lockedUser);
+            }
 
             boolean added;
             if (recipeId.equals("emailpassword")) {
@@ -3225,8 +3244,11 @@ public class Start
                     } else {
                         throw new IllegalStateException("Should never come here!");
                     }
-                    AccountInfoQueries.removeAccountInfoReservationForPrimaryUserWhileRemovingTenant_Transaction(this, sqlCon, tenantIdentifier, lockedUser);
-                    AccountInfoQueries.removeAccountInfoForRecipeUserWhileRemovingTenant_Transaction(this, sqlCon, tenantIdentifier, lockedUser);
+                    MigrationMode mode = Config.getConfig(Start.this).getMigrationMode();
+                    if (mode.writesToNewTables()) {
+                        AccountInfoQueries.removeAccountInfoReservationForPrimaryUserWhileRemovingTenant_Transaction(this, sqlCon, tenantIdentifier, lockedUser);
+                        AccountInfoQueries.removeAccountInfoForRecipeUserWhileRemovingTenant_Transaction(this, sqlCon, tenantIdentifier, lockedUser);
+                    }
 
                     sqlCon.commit();
                     return removed;
@@ -3748,9 +3770,16 @@ public class Start
                 throw new UnknownUserIdException();
             }
 
+            MigrationMode mode = Config.getConfig(this).getMigrationMode();
             // Use the LockedUser version of addPrimaryUserAccountInfo_Transaction
-            boolean didBecomePrimary = AccountInfoQueries.addPrimaryUserAccountInfo_Transaction(
-                    this, sqlCon, appIdentifier, lockedUser);
+            boolean didBecomePrimary;
+            if (mode.writesToNewTables()) {
+                didBecomePrimary = AccountInfoQueries.addPrimaryUserAccountInfo_Transaction(
+                        this, sqlCon, appIdentifier, lockedUser);
+            } else {
+                // In LEGACY mode, skip new table writes; the old path handles conflicts
+                didBecomePrimary = true;
+            }
             if (didBecomePrimary) {
                 GeneralQueries.makePrimaryUser_Transaction(this, sqlCon, appIdentifier, userId);
             }
@@ -3784,9 +3813,16 @@ public class Start
                 return false;
             }
 
+            MigrationMode mode = Config.getConfig(this).getMigrationMode();
             // Use the LockedUser version of reserveAccountInfoForLinking_Transaction
-            boolean didLinkAccounts = AccountInfoQueries.reserveAccountInfoForLinking_Transaction(
-                    this, sqlCon, appIdentifier, recipeUser, primaryUser);
+            boolean didLinkAccounts;
+            if (mode.writesToNewTables()) {
+                didLinkAccounts = AccountInfoQueries.reserveAccountInfoForLinking_Transaction(
+                        this, sqlCon, appIdentifier, recipeUser, primaryUser);
+            } else {
+                // In LEGACY mode, skip new table writes; the old path handles conflicts
+                didLinkAccounts = true;
+            }
             if (didLinkAccounts) {
                 GeneralQueries.linkAccounts_Transaction(this, sqlCon, appIdentifier, recipeUserId, primaryUserId);
             }
@@ -3802,10 +3838,13 @@ public class Start
             throws StorageQueryException {
         try {
             Connection sqlCon = (Connection) con.getConnection();
+            MigrationMode mode = Config.getConfig(this).getMigrationMode();
             // we do not bother returning if a row was updated here or not, cause it's happening
             // in a transaction anyway.
             GeneralQueries.unlinkAccounts_Transaction(this, sqlCon, appIdentifier, primaryUserId, recipeUserId);
-            AccountInfoQueries.doRemoveAccountInfoReservationForUnlinking(this, sqlCon, appIdentifier, recipeUserId);
+            if (mode.writesToNewTables()) {
+                AccountInfoQueries.doRemoveAccountInfoReservationForUnlinking(this, sqlCon, appIdentifier, recipeUserId);
+            }
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -3843,18 +3882,28 @@ public class Start
             AnotherPrimaryUserWithEmailAlreadyExistsException,
             AnotherPrimaryUserWithThirdPartyInfoAlreadyExistsException,
             StorageQueryException {
-        AccountInfoQueries.addTenantIdToPrimaryUser_Transaction(this, con, tenantIdentifier, primaryUser);
+        MigrationMode mode = Config.getConfig(this).getMigrationMode();
+        if (mode.writesToNewTables()) {
+            AccountInfoQueries.addTenantIdToPrimaryUser_Transaction(this, con, tenantIdentifier, primaryUser);
+        }
     }
 
     @Override
     public void deleteAccountInfoReservations_Transaction(TransactionConnection con, AppIdentifier appIdentifier,
                                                           String userId) throws StorageQueryException {
-        AccountInfoQueries.removeAccountInfoReservationsForDeletingUser_Transaction(this, con, appIdentifier, userId);
+        MigrationMode mode = Config.getConfig(this).getMigrationMode();
+        if (mode.writesToNewTables()) {
+            AccountInfoQueries.removeAccountInfoReservationsForDeletingUser_Transaction(this, con, appIdentifier, userId);
+        }
     }
 
     @Override
     public void reservePrimaryUserAccountInfos_Transaction(TransactionConnection con, List<PrimaryUser> primaryUsers)
             throws StorageQueryException, StorageTransactionLogicException {
+        MigrationMode mode = Config.getConfig(this).getMigrationMode();
+        if (!mode.writesToNewTables()) {
+            return;
+        }
         try {
             AccountInfoQueries.reservePrimaryUserAccountInfos_Transaction(this, con, primaryUsers);
         } catch (SQLException e) {
@@ -4679,9 +4728,12 @@ public class Start
             DuplicateEmailException, EmailChangeNotAllowedException, UnknownUserIdException {
         try {
             Connection sqlCon = (Connection) con.getConnection();
+            MigrationMode mode = Config.getConfig(this).getMigrationMode();
             // Acquire lock to get LockedUser for the new API
             LockedUser lockedUser = UserLockingQueries.lockUser(this, sqlCon, tenantIdentifier.toAppIdentifier(), userId);
-            AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, tenantIdentifier.toAppIdentifier(), lockedUser, ACCOUNT_INFO_TYPE.EMAIL, newEmail);
+            if (mode.writesToNewTables()) {
+                AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, tenantIdentifier.toAppIdentifier(), lockedUser, ACCOUNT_INFO_TYPE.EMAIL, newEmail);
+            }
             WebAuthNQueries.updateUserEmail_Transaction(this, sqlCon, tenantIdentifier, userId, newEmail);
         } catch (StorageQueryException e) {
             if (e.getCause() instanceof SQLException){
@@ -4911,6 +4963,10 @@ public class Start
             InputUserIdIsNotAPrimaryUserException,
             CannotLinkSinceRecipeUserIdAlreadyLinkedWithAnotherPrimaryUserIdException,
             AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException {
+        MigrationMode mode = Config.getConfig(this).getMigrationMode();
+        if (!mode.writesToNewTables()) {
+            return true;
+        }
         Connection sqlCon = (Connection) con.getConnection();
         return AccountInfoQueries.reserveAccountInfoForLinking_Transaction(
                 this, sqlCon, appIdentifier, recipeUser, primaryUser);
@@ -4926,6 +4982,10 @@ public class Start
             throws StorageQueryException, UnknownUserIdException,
             EmailChangeNotAllowedException, PhoneNumberChangeNotAllowedException,
             DuplicateEmailException, DuplicatePhoneNumberException, DuplicateThirdPartyUserException {
+        MigrationMode mode = Config.getConfig(this).getMigrationMode();
+        if (!mode.writesToNewTables()) {
+            return;
+        }
         Connection sqlCon = (Connection) con.getConnection();
         AccountInfoQueries.updateAccountInfo_Transaction(
                 this, sqlCon, appIdentifier, user, accountInfoType, newAccountInfoValue);
@@ -4939,6 +4999,10 @@ public class Start
             throws StorageQueryException, UnknownUserIdException,
             AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException,
             CannotBecomePrimarySinceRecipeUserIdAlreadyLinkedWithPrimaryUserIdException {
+        MigrationMode mode = Config.getConfig(this).getMigrationMode();
+        if (!mode.writesToNewTables()) {
+            return true;
+        }
         Connection sqlCon = (Connection) con.getConnection();
         return AccountInfoQueries.addPrimaryUserAccountInfo_Transaction(
                 this, sqlCon, appIdentifier, primaryUser);
@@ -4950,6 +5014,10 @@ public class Start
             TransactionConnection con,
             LockedUser recipeUser)
             throws StorageQueryException {
+        MigrationMode mode = Config.getConfig(this).getMigrationMode();
+        if (!mode.writesToNewTables()) {
+            return;
+        }
         Connection sqlCon = (Connection) con.getConnection();
         AccountInfoQueries.removeAccountInfoReservationForPrimaryUserForUnlinking_Transaction(
                 this, sqlCon, appIdentifier, recipeUser);
@@ -4962,6 +5030,10 @@ public class Start
             LockedUser user)
             throws StorageQueryException, DuplicateEmailException,
             DuplicateThirdPartyUserException, DuplicatePhoneNumberException {
+        MigrationMode mode = Config.getConfig(this).getMigrationMode();
+        if (!mode.writesToNewTables()) {
+            return;
+        }
         Connection sqlCon = (Connection) con.getConnection();
         AccountInfoQueries.addTenantIdToRecipeUser_Transaction(
                 this, sqlCon, tenantIdentifier, user);
