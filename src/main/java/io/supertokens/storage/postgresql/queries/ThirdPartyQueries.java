@@ -481,10 +481,12 @@ public class ThirdPartyQueries {
                                                                     TenantIdentifier tenantIdentifier, String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
-                + "FROM " + getConfig(start).getThirdPartyUserToTenantTable() + " AS tp"
+                + "FROM " + getConfig(start).getThirdPartyUsersTable() + " AS tp"
                 + " JOIN " + getConfig(start).getUsersTable() + " AS all_users"
                 + " ON tp.app_id = all_users.app_id AND tp.user_id = all_users.user_id"
-                + " WHERE tp.app_id = ? AND tp.tenant_id = ? AND tp.email = ?";
+                + " JOIN " + getConfig(start).getThirdPartyUserToTenantTable() + " AS tp_tenants"
+                + " ON tp_tenants.app_id = all_users.app_id AND tp_tenants.user_id = all_users.user_id"
+                + " WHERE tp.app_id = ? AND tp_tenants.tenant_id = ? AND tp.email = ?";
 
         return execute(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
