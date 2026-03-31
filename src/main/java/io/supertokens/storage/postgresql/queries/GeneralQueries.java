@@ -33,6 +33,7 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 
 import io.supertokens.pluginInterface.KeyValueInfo;
+import io.supertokens.pluginInterface.MigrationMode;
 import io.supertokens.pluginInterface.RECIPE_ID;
 import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
@@ -970,6 +971,14 @@ public class GeneralQueries {
 
     public static long getUsersCount(Start start, AppIdentifier appIdentifier, RECIPE_ID[] includeRecipeIds)
             throws SQLException, StorageQueryException {
+        if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
+            return getUsersCount_new(start, appIdentifier, includeRecipeIds);
+        }
+        return getUsersCount_legacy(start, appIdentifier, includeRecipeIds);
+    }
+
+    private static long getUsersCount_new(Start start, AppIdentifier appIdentifier, RECIPE_ID[] includeRecipeIds)
+            throws SQLException, StorageQueryException {
         StringBuilder QUERY = new StringBuilder(
                 "SELECT COUNT(*) AS total FROM (");
         QUERY.append("SELECT primary_or_recipe_user_id FROM " + getConfig(start).getAppIdToUserIdTable());
@@ -1003,7 +1012,50 @@ public class GeneralQueries {
         });
     }
 
+    private static long getUsersCount_legacy(Start start, AppIdentifier appIdentifier, RECIPE_ID[] includeRecipeIds)
+            throws SQLException, StorageQueryException {
+        StringBuilder QUERY = new StringBuilder(
+                "SELECT COUNT(*) AS total FROM (");
+        QUERY.append("SELECT primary_or_recipe_user_id FROM " + getConfig(start).getUsersTable());
+        QUERY.append(" WHERE app_id = ?");
+        if (includeRecipeIds != null && includeRecipeIds.length > 0) {
+            QUERY.append(" AND recipe_id IN (");
+            for (int i = 0; i < includeRecipeIds.length; i++) {
+                QUERY.append("?");
+                if (i != includeRecipeIds.length - 1) {
+                    // not the last element
+                    QUERY.append(",");
+                }
+            }
+            QUERY.append(")");
+        }
+        QUERY.append(" GROUP BY primary_or_recipe_user_id) AS uniq_users");
+
+        return execute(start, QUERY.toString(), pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            if (includeRecipeIds != null) {
+                for (int i = 0; i < includeRecipeIds.length; i++) {
+                    // i+2 cause this starts with 1 and not 0, and 1 is appId
+                    pst.setString(i + 2, includeRecipeIds[i].toString());
+                }
+            }
+        }, result -> {
+            if (result.next()) {
+                return result.getLong("total");
+            }
+            return 0L;
+        });
+    }
+
     public static long getUsersCount(Start start, TenantIdentifier tenantIdentifier, RECIPE_ID[] includeRecipeIds)
+            throws SQLException, StorageQueryException {
+        if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
+            return getUsersCount_new(start, tenantIdentifier, includeRecipeIds);
+        }
+        return getUsersCount_legacy(start, tenantIdentifier, includeRecipeIds);
+    }
+
+    private static long getUsersCount_new(Start start, TenantIdentifier tenantIdentifier, RECIPE_ID[] includeRecipeIds)
             throws SQLException, StorageQueryException {
         StringBuilder QUERY = new StringBuilder(
                 "SELECT COUNT(*) AS total FROM (");
@@ -1023,6 +1075,43 @@ public class GeneralQueries {
         }
 
         QUERY.append(" GROUP BY auid.primary_or_recipe_user_id) AS uniq_users");
+
+        return execute(start, QUERY.toString(), pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            if (includeRecipeIds != null) {
+                for (int i = 0; i < includeRecipeIds.length; i++) {
+                    // i+3 cause this starts with 1 and not 0, and 1 is appId, 2 is tenantId
+                    pst.setString(i + 3, includeRecipeIds[i].toString());
+                }
+            }
+        }, result -> {
+            if (result.next()) {
+                return result.getLong("total");
+            }
+            return 0L;
+        });
+    }
+
+    private static long getUsersCount_legacy(Start start, TenantIdentifier tenantIdentifier, RECIPE_ID[] includeRecipeIds)
+            throws SQLException, StorageQueryException {
+        StringBuilder QUERY = new StringBuilder(
+                "SELECT COUNT(*) AS total FROM (");
+        QUERY.append("SELECT primary_or_recipe_user_id FROM " + getConfig(start).getUsersTable());
+        QUERY.append(" WHERE app_id = ? AND tenant_id = ?");
+        if (includeRecipeIds != null && includeRecipeIds.length > 0) {
+            QUERY.append(" AND recipe_id IN (");
+            for (int i = 0; i < includeRecipeIds.length; i++) {
+                QUERY.append("?");
+                if (i != includeRecipeIds.length - 1) {
+                    // not the last element
+                    QUERY.append(",");
+                }
+            }
+            QUERY.append(")");
+        }
+
+        QUERY.append(" GROUP BY primary_or_recipe_user_id) AS uniq_users");
 
         return execute(start, QUERY.toString(), pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
@@ -1068,12 +1157,38 @@ public class GeneralQueries {
 
     public static boolean doesUserIdExist(Start start, TenantIdentifier tenantIdentifier, String userId)
             throws SQLException, StorageQueryException {
+        if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
+            return doesUserIdExist_new(start, tenantIdentifier, userId);
+        }
+        return doesUserIdExist_legacy(start, tenantIdentifier, userId);
+    }
+
+    private static boolean doesUserIdExist_new(Start start, TenantIdentifier tenantIdentifier, String userId)
+            throws SQLException, StorageQueryException {
         // We query both tables cause there is a case where a primary user ID exists, but its associated
         // recipe user ID has been deleted AND there are other recipe user IDs linked to this primary user ID already.
         String QUERY = "SELECT 1 FROM " + getConfig(start).getRecipeUserTenantsTable()
                 + " WHERE app_id = ? AND tenant_id = ? AND recipe_user_id = ? UNION SELECT 1 FROM " +
                 getConfig(start).getPrimaryUserTenantsTable() +
                 " WHERE app_id = ? AND tenant_id = ? AND primary_user_id = ?";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, userId);
+            pst.setString(4, tenantIdentifier.getAppId());
+            pst.setString(5, tenantIdentifier.getTenantId());
+            pst.setString(6, userId);
+        }, ResultSet::next);
+    }
+
+    private static boolean doesUserIdExist_legacy(Start start, TenantIdentifier tenantIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+        // We query both tables cause there is a case where a primary user ID exists, but its associated
+        // recipe user ID has been deleted AND there are other recipe user IDs linked to this primary user ID already.
+        String QUERY = "SELECT 1 FROM " + getConfig(start).getUsersTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND user_id = ? UNION SELECT 1 FROM " +
+                getConfig(start).getUsersTable() +
+                " WHERE app_id = ? AND tenant_id = ? AND primary_or_recipe_user_id = ?";
         return execute(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
@@ -1110,6 +1225,21 @@ public class GeneralQueries {
                                                 @Nullable RECIPE_ID[] includeRecipeIds, @Nullable String userId,
                                                 @Nullable Long timeJoined,
                                                 @Nullable DashboardSearchTags dashboardSearchTags)
+            throws SQLException, StorageQueryException {
+        if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
+            return getUsers_new(start, tenantIdentifier, limit, timeJoinedOrder, includeRecipeIds, userId, timeJoined,
+                    dashboardSearchTags);
+        }
+        return getUsers_legacy(start, tenantIdentifier, limit, timeJoinedOrder, includeRecipeIds, userId, timeJoined,
+                dashboardSearchTags);
+    }
+
+    private static AuthRecipeUserInfo[] getUsers_new(Start start, TenantIdentifier tenantIdentifier,
+                                                     @NotNull Integer limit,
+                                                     @NotNull String timeJoinedOrder,
+                                                     @Nullable RECIPE_ID[] includeRecipeIds, @Nullable String userId,
+                                                     @Nullable Long timeJoined,
+                                                     @Nullable DashboardSearchTags dashboardSearchTags)
             throws SQLException, StorageQueryException {
 
         // This list will be used to keep track of the result's order from the db
@@ -1318,6 +1448,311 @@ public class GeneralQueries {
                 usersFromQuery = execute(start, QUERY, pst -> {
                     if (includeRecipeIds != null) {
                         for (int i = 0; i < includeRecipeIds.length; i++) {
+                            pst.setString(i + 1, includeRecipeIds[i].toString());
+                        }
+                    }
+                    int baseIndex = includeRecipeIds == null ? 0 : includeRecipeIds.length;
+                    pst.setString(baseIndex + 1, tenantIdentifier.getAppId());
+                    pst.setString(baseIndex + 2, tenantIdentifier.getTenantId());
+                    pst.setInt(baseIndex + 3, limit);
+                }, result -> {
+                    List<String> temp = new ArrayList<>();
+                    while (result.next()) {
+                        temp.add(result.getString("primary_or_recipe_user_id"));
+                    }
+                    return temp;
+                });
+            }
+        }
+
+        AuthRecipeUserInfo[] finalResult = new AuthRecipeUserInfo[usersFromQuery.size()];
+
+        List<AuthRecipeUserInfo> users = getPrimaryUserInfoForUserIds(start,
+                tenantIdentifier.toAppIdentifier(),
+                usersFromQuery);
+
+        // we fill in all the slots in finalResult based on their position in
+        // usersFromQuery
+        Map<String, AuthRecipeUserInfo> userIdToInfoMap = new HashMap<>();
+        for (AuthRecipeUserInfo user : users) {
+            userIdToInfoMap.put(user.getSupertokensUserId(), user);
+        }
+        for (int i = 0; i < usersFromQuery.size(); i++) {
+            if (finalResult[i] == null) {
+                finalResult[i] = userIdToInfoMap.get(usersFromQuery.get(i));
+            }
+        }
+
+        return finalResult;
+    }
+
+    private static AuthRecipeUserInfo[] getUsers_legacy(Start start, TenantIdentifier tenantIdentifier,
+                                                        @NotNull Integer limit,
+                                                        @NotNull String timeJoinedOrder,
+                                                        @Nullable RECIPE_ID[] includeRecipeIds, @Nullable String userId,
+                                                        @Nullable Long timeJoined,
+                                                        @Nullable DashboardSearchTags dashboardSearchTags)
+            throws SQLException, StorageQueryException {
+
+        // This list will be used to keep track of the result's order from the db
+        List<String> usersFromQuery;
+
+        if (dashboardSearchTags != null) {
+            ArrayList<String> queryList = new ArrayList<>();
+            {
+                StringBuilder USER_SEARCH_TAG_CONDITION = new StringBuilder();
+
+                {
+                    // check if we should search through the emailpassword table
+                    if (dashboardSearchTags.shouldEmailPasswordTableBeSearched()) {
+                        String QUERY = "SELECT  allAuthUsersTable.*" + " FROM " + getConfig(start).getUsersTable()
+                                + " AS allAuthUsersTable" +
+                                " JOIN " + getConfig(start).getEmailPasswordUserToTenantTable()
+                                + " AS emailpasswordTable ON allAuthUsersTable.app_id = emailpasswordTable.app_id AND "
+                                + "allAuthUsersTable.tenant_id = emailpasswordTable.tenant_id AND "
+                                + "allAuthUsersTable.user_id = emailpasswordTable.user_id";
+
+                        // attach email tags to queries
+                        QUERY = QUERY +
+                                " WHERE (emailpasswordTable.app_id = ? AND emailpasswordTable.tenant_id = ?) AND"
+                                + " ( emailpasswordTable.email LIKE ? OR emailpasswordTable.email LIKE ? ";
+                        queryList.add(tenantIdentifier.getAppId());
+                        queryList.add(tenantIdentifier.getTenantId());
+                        queryList.add(dashboardSearchTags.emails.get(0) + "%");
+                        queryList.add("%@" + dashboardSearchTags.emails.get(0) + "%");
+                        for (int i = 1; i < dashboardSearchTags.emails.size(); i++) {
+                            QUERY += " OR emailpasswordTable.email LIKE ? OR emailpasswordTable.email LIKE ?";
+                            queryList.add(dashboardSearchTags.emails.get(i) + "%");
+                            queryList.add("%@" + dashboardSearchTags.emails.get(i) + "%");
+                        }
+
+                        QUERY += " )";
+
+                        USER_SEARCH_TAG_CONDITION.append("SELECT * FROM ( ").append(QUERY)
+                                .append(" LIMIT 1000) AS emailpasswordResultTable");
+                    }
+                }
+
+                {
+                    // check if we should search through the thirdparty table
+                    if (dashboardSearchTags.shouldThirdPartyTableBeSearched()) {
+                        String QUERY = "SELECT  allAuthUsersTable.*" + " FROM " + getConfig(start).getUsersTable()
+                                + " AS allAuthUsersTable"
+                                + " JOIN " + getConfig(start).getThirdPartyUserToTenantTable()
+                                +
+                                " AS thirdPartyToTenantTable ON allAuthUsersTable.app_id = thirdPartyToTenantTable" +
+                                ".app_id AND"
+                                + " allAuthUsersTable.tenant_id = thirdPartyToTenantTable.tenant_id AND"
+                                + " allAuthUsersTable.user_id = thirdPartyToTenantTable.user_id"
+                                + " JOIN " + getConfig(start).getThirdPartyUsersTable()
+                                + " AS thirdPartyTable ON thirdPartyToTenantTable.app_id = thirdPartyTable.app_id AND"
+                                + " thirdPartyToTenantTable.user_id = thirdPartyTable.user_id";
+
+                        // check if email tag is present
+                        if (dashboardSearchTags.emails != null) {
+
+                            QUERY +=
+                                    " WHERE (thirdPartyToTenantTable.app_id = ? AND thirdPartyToTenantTable.tenant_id" +
+                                            " = ?)"
+                                            + " AND ( thirdPartyTable.email LIKE ? OR thirdPartyTable.email LIKE ?";
+                            queryList.add(tenantIdentifier.getAppId());
+                            queryList.add(tenantIdentifier.getTenantId());
+                            queryList.add(dashboardSearchTags.emails.get(0) + "%");
+                            queryList.add("%@" + dashboardSearchTags.emails.get(0) + "%");
+
+                            for (int i = 1; i < dashboardSearchTags.emails.size(); i++) {
+                                QUERY += " OR thirdPartyTable.email LIKE ? OR thirdPartyTable.email LIKE ?";
+                                queryList.add(dashboardSearchTags.emails.get(i) + "%");
+                                queryList.add("%@" + dashboardSearchTags.emails.get(i) + "%");
+                            }
+
+                            QUERY += " )";
+
+                        }
+
+                        // check if providers tag is present
+                        if (dashboardSearchTags.providers != null) {
+                            if (dashboardSearchTags.emails != null) {
+                                QUERY += " AND ";
+                            } else {
+                                QUERY += " WHERE (thirdPartyToTenantTable.app_id = ? AND thirdPartyToTenantTable" +
+                                        ".tenant_id = ?) AND ";
+                                queryList.add(tenantIdentifier.getAppId());
+                                queryList.add(tenantIdentifier.getTenantId());
+                            }
+
+                            QUERY += " ( thirdPartyTable.third_party_id LIKE ?";
+                            queryList.add(dashboardSearchTags.providers.get(0) + "%");
+                            for (int i = 1; i < dashboardSearchTags.providers.size(); i++) {
+                                QUERY += " OR thirdPartyTable.third_party_id LIKE ?";
+                                queryList.add(dashboardSearchTags.providers.get(i) + "%");
+                            }
+
+                            QUERY += " )";
+                        }
+
+                        // check if we need to append this to an existing search query
+                        if (USER_SEARCH_TAG_CONDITION.length() != 0) {
+                            USER_SEARCH_TAG_CONDITION.append(" UNION ").append("SELECT * FROM ( ").append(QUERY)
+                                    .append(" LIMIT 1000) AS thirdPartyResultTable");
+
+                        } else {
+                            USER_SEARCH_TAG_CONDITION.append("SELECT * FROM ( ").append(QUERY)
+                                    .append(" LIMIT 1000) AS thirdPartyResultTable");
+
+                        }
+                    }
+                }
+
+                {
+                    // check if we should search through the passwordless table
+                    if (dashboardSearchTags.shouldPasswordlessTableBeSearched()) {
+                        String QUERY = "SELECT  allAuthUsersTable.*" + " FROM " + getConfig(start).getUsersTable()
+                                + " AS allAuthUsersTable" +
+                                " JOIN " + getConfig(start).getPasswordlessUserToTenantTable()
+                                + " AS passwordlessTable ON allAuthUsersTable.app_id = passwordlessTable.app_id AND"
+                                + " allAuthUsersTable.tenant_id = passwordlessTable.tenant_id AND"
+                                + " allAuthUsersTable.user_id = passwordlessTable.user_id";
+
+                        // check if email tag is present
+                        if (dashboardSearchTags.emails != null) {
+
+                            QUERY = QUERY + " WHERE (passwordlessTable.app_id = ? AND passwordlessTable.tenant_id = ?)"
+                                    + " AND ( passwordlessTable.email LIKE ? OR passwordlessTable.email LIKE ?";
+                            queryList.add(tenantIdentifier.getAppId());
+                            queryList.add(tenantIdentifier.getTenantId());
+                            queryList.add(dashboardSearchTags.emails.get(0) + "%");
+                            queryList.add("%@" + dashboardSearchTags.emails.get(0) + "%");
+                            for (int i = 1; i < dashboardSearchTags.emails.size(); i++) {
+                                QUERY += " OR passwordlessTable.email LIKE ? OR passwordlessTable.email LIKE ?";
+                                queryList.add(dashboardSearchTags.emails.get(i) + "%");
+                                queryList.add("%@" + dashboardSearchTags.emails.get(i) + "%");
+                            }
+
+                            QUERY += " )";
+                        }
+
+                        // check if phone tag is present
+                        if (dashboardSearchTags.phoneNumbers != null) {
+
+                            if (dashboardSearchTags.emails != null) {
+                                QUERY += " AND ";
+                            } else {
+                                QUERY += " WHERE (passwordlessTable.app_id = ? AND passwordlessTable.tenant_id = ?) " +
+                                        "AND ";
+                                queryList.add(tenantIdentifier.getAppId());
+                                queryList.add(tenantIdentifier.getTenantId());
+                            }
+
+                            QUERY += " ( passwordlessTable.phone_number LIKE ?";
+                            queryList.add(dashboardSearchTags.phoneNumbers.get(0) + "%");
+                            for (int i = 1; i < dashboardSearchTags.phoneNumbers.size(); i++) {
+                                QUERY += " OR passwordlessTable.phone_number LIKE ?";
+                                queryList.add(dashboardSearchTags.phoneNumbers.get(i) + "%");
+                            }
+
+                            QUERY += " )";
+                        }
+
+                        // check if we need to append this to an existing search query
+                        if (USER_SEARCH_TAG_CONDITION.length() != 0) {
+                            USER_SEARCH_TAG_CONDITION.append(" UNION ").append("SELECT * FROM ( ").append(QUERY)
+                                    .append(" LIMIT 1000) AS passwordlessResultTable");
+
+                        } else {
+                            USER_SEARCH_TAG_CONDITION.append("SELECT * FROM ( ").append(QUERY)
+                                    .append(" LIMIT 1000) AS passwordlessResultTable");
+
+                        }
+                    }
+                }
+
+                if (USER_SEARCH_TAG_CONDITION.toString().length() == 0) {
+                    usersFromQuery = new ArrayList<>();
+                } else {
+
+                    String finalQuery =
+                            "SELECT DISTINCT primary_or_recipe_user_id, primary_or_recipe_user_time_joined  FROM ( " +
+                                    USER_SEARCH_TAG_CONDITION.toString() + " )"
+                                    + " AS finalResultTable ORDER BY primary_or_recipe_user_time_joined " +
+                                    timeJoinedOrder + ", primary_or_recipe_user_id DESC ";
+                    usersFromQuery = execute(start, finalQuery, pst -> {
+                        for (int i = 1; i <= queryList.size(); i++) {
+                            pst.setString(i, queryList.get(i - 1));
+                        }
+                    }, result -> {
+                        List<String> temp = new ArrayList<>();
+                        while (result.next()) {
+                            temp.add(result.getString("primary_or_recipe_user_id"));
+                        }
+                        return temp;
+                    });
+                }
+            }
+
+        } else {
+            StringBuilder RECIPE_ID_CONDITION = new StringBuilder();
+            if (includeRecipeIds != null && includeRecipeIds.length > 0) {
+                RECIPE_ID_CONDITION.append("recipe_id IN (");
+                for (int i = 0; i < includeRecipeIds.length; i++) {
+
+                    RECIPE_ID_CONDITION.append("?");
+                    if (i != includeRecipeIds.length - 1) {
+                        // not the last element
+                        RECIPE_ID_CONDITION.append(",");
+                    }
+                }
+                RECIPE_ID_CONDITION.append(")");
+            }
+
+            if (timeJoined != null && userId != null) {
+                String recipeIdCondition = RECIPE_ID_CONDITION.toString();
+                if (!recipeIdCondition.equals("")) {
+                    recipeIdCondition = recipeIdCondition + " AND";
+                }
+                String timeJoinedOrderSymbol = timeJoinedOrder.equals("ASC") ? ">" : "<";
+                String QUERY = "SELECT DISTINCT primary_or_recipe_user_id, primary_or_recipe_user_time_joined FROM " +
+                        getConfig(start).getUsersTable() + " WHERE "
+                        + recipeIdCondition + " (primary_or_recipe_user_time_joined " + timeJoinedOrderSymbol
+                        +
+                        " ? OR (primary_or_recipe_user_time_joined = ? AND primary_or_recipe_user_id <= ?)) AND " +
+                        "app_id = ? AND tenant_id = ?"
+                        + " ORDER BY primary_or_recipe_user_time_joined " + timeJoinedOrder
+                        + ", primary_or_recipe_user_id DESC LIMIT ?";
+                usersFromQuery = execute(start, QUERY, pst -> {
+                    if (includeRecipeIds != null) {
+                        for (int i = 0; i < includeRecipeIds.length; i++) {
+                            // i+1 cause this starts with 1 and not 0
+                            pst.setString(i + 1, includeRecipeIds[i].toString());
+                        }
+                    }
+                    int baseIndex = includeRecipeIds == null ? 0 : includeRecipeIds.length;
+                    pst.setLong(baseIndex + 1, timeJoined);
+                    pst.setLong(baseIndex + 2, timeJoined);
+                    pst.setString(baseIndex + 3, userId);
+                    pst.setString(baseIndex + 4, tenantIdentifier.getAppId());
+                    pst.setString(baseIndex + 5, tenantIdentifier.getTenantId());
+                    pst.setInt(baseIndex + 6, limit);
+                }, result -> {
+                    List<String> temp = new ArrayList<>();
+                    while (result.next()) {
+                        temp.add(result.getString("primary_or_recipe_user_id"));
+                    }
+                    return temp;
+                });
+            } else {
+                String recipeIdCondition = RECIPE_ID_CONDITION.toString();
+                String QUERY = "SELECT DISTINCT primary_or_recipe_user_id, primary_or_recipe_user_time_joined FROM " +
+                        getConfig(start).getUsersTable() + " WHERE ";
+                if (!recipeIdCondition.equals("")) {
+                    QUERY += recipeIdCondition + " AND";
+                }
+                QUERY += " app_id = ? AND tenant_id = ? ORDER BY primary_or_recipe_user_time_joined " + timeJoinedOrder
+                        + ", primary_or_recipe_user_id DESC LIMIT ?";
+                usersFromQuery = execute(start, QUERY, pst -> {
+                    if (includeRecipeIds != null) {
+                        for (int i = 0; i < includeRecipeIds.length; i++) {
+                            // i+1 cause this starts with 1 and not 0
                             pst.setString(i + 1, includeRecipeIds[i].toString());
                         }
                     }
@@ -1690,6 +2125,16 @@ public class GeneralQueries {
                                                                          AppIdentifier appIdentifier,
                                                                          List<String> userIds)
             throws StorageQueryException, SQLException {
+        if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
+            return getPrimaryUserInfoForUserIds_new(start, appIdentifier, userIds);
+        }
+        return getPrimaryUserInfoForUserIds_legacy(start, appIdentifier, userIds);
+    }
+
+    private static List<AuthRecipeUserInfo> getPrimaryUserInfoForUserIds_new(Start start,
+                                                                             AppIdentifier appIdentifier,
+                                                                             List<String> userIds)
+            throws StorageQueryException, SQLException {
         if (userIds == null || userIds.isEmpty()){
             return new ArrayList<>();
         }
@@ -1704,6 +2149,103 @@ public class GeneralQueries {
                         getConfig(start).getAppIdToUserIdTable() + " as au " +
                         "LEFT JOIN " + getConfig(start).getRecipeUserTenantsTable() +
                         " as rt ON au.app_id = rt.app_id AND au.user_id = rt.recipe_user_id" +
+                        " WHERE au.primary_or_recipe_user_id IN (SELECT primary_or_recipe_user_id FROM " +
+                        getConfig(start).getAppIdToUserIdTable() + " WHERE (user_id IN ("
+                        + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
+                        ") OR primary_or_recipe_user_id IN (" +
+                        Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
+                        ")) AND app_id = ?) AND au.app_id = ?";
+
+        List<AllAuthRecipeUsersResultHolder> allAuthUsersResult = execute(start, QUERY, pst -> {
+            // IN user_id
+            int index = 1;
+            for (int i = 0; i < userIds.size(); i++, index++) {
+                pst.setString(index, userIds.get(i));
+            }
+            // IN primary_or_recipe_user_id
+            for (int i = 0; i < userIds.size(); i++, index++) {
+                pst.setString(index, userIds.get(i));
+            }
+            // for app_id
+            pst.setString(index, appIdentifier.getAppId());
+            pst.setString(index + 1, appIdentifier.getAppId());
+        }, result -> {
+            List<AllAuthRecipeUsersResultHolder> parsedResult = new ArrayList<>();
+            while (result.next()) {
+                parsedResult.add(new AllAuthRecipeUsersResultHolder(result.getString("user_id"),
+                        result.getString("tenant_id"),
+                        result.getString("primary_or_recipe_user_id"),
+                        result.getBoolean("is_linked_or_is_a_primary_user"),
+                        result.getString("recipe_id"),
+                        result.getLong("time_joined")));
+            }
+            return parsedResult;
+        });
+
+        // Now we form the userIds again, but based on the user_id in the result from above.
+        Set<String> recipeUserIdsToFetch = new HashSet<>();
+        for (AllAuthRecipeUsersResultHolder user : allAuthUsersResult) {
+            // this will remove duplicate entries wherein a user id is shared across several tenants.
+            recipeUserIdsToFetch.add(user.userId);
+        }
+
+        List<LoginMethod> loginMethods = new ArrayList<>();
+        loginMethods.addAll(
+                EmailPasswordQueries.getUsersInfoUsingIdList(start, recipeUserIdsToFetch, appIdentifier));
+        loginMethods.addAll(ThirdPartyQueries.getUsersInfoUsingIdList(start, recipeUserIdsToFetch, appIdentifier));
+        loginMethods.addAll(
+                PasswordlessQueries.getUsersInfoUsingIdList(start, recipeUserIdsToFetch, appIdentifier));
+        loginMethods.addAll(WebAuthNQueries.getUsersInfoUsingIdList(start, recipeUserIdsToFetch, appIdentifier));
+
+        Map<String, LoginMethod> recipeUserIdToLoginMethodMap = new HashMap<>();
+        for (LoginMethod loginMethod : loginMethods) {
+            recipeUserIdToLoginMethodMap.put(loginMethod.getSupertokensUserId(), loginMethod);
+        }
+
+        Map<String, AuthRecipeUserInfo> userIdToAuthRecipeUserInfo = new HashMap<>();
+
+        for (AllAuthRecipeUsersResultHolder authRecipeUsersResultHolder : allAuthUsersResult) {
+            String recipeUserId = authRecipeUsersResultHolder.userId;
+            LoginMethod loginMethod = recipeUserIdToLoginMethodMap.get(recipeUserId);
+
+            if (loginMethod == null) {
+                // loginMethod will be null for primaryUserId for which the user has been deleted during unlink
+                continue;
+            }
+
+            String primaryUserId = authRecipeUsersResultHolder.primaryOrRecipeUserId;
+            AuthRecipeUserInfo curr = userIdToAuthRecipeUserInfo.get(primaryUserId);
+            if (curr == null) {
+                curr = AuthRecipeUserInfo.create(primaryUserId, authRecipeUsersResultHolder.isLinkedOrIsAPrimaryUser,
+                        loginMethod);
+            } else {
+                curr.addLoginMethod(loginMethod);
+            }
+            userIdToAuthRecipeUserInfo.put(primaryUserId, curr);
+        }
+
+        return userIdToAuthRecipeUserInfo.keySet().stream().map(userIdToAuthRecipeUserInfo::get)
+                .collect(Collectors.toList());
+    }
+
+    private static List<AuthRecipeUserInfo> getPrimaryUserInfoForUserIds_legacy(Start start,
+                                                                                AppIdentifier appIdentifier,
+                                                                                List<String> userIds)
+            throws StorageQueryException, SQLException {
+        if (userIds == null || userIds.isEmpty()){
+            return new ArrayList<>();
+        }
+
+        // We check both user_id and primary_or_recipe_user_id because the input may have a recipe userId
+        // which is linked to a primary user ID in which case it won't be in the primary_or_recipe_user_id column,
+        // or the input may have a primary user ID whose recipe user ID was removed, so it won't be in the user_id
+        // column
+        String QUERY =
+                "SELECT au.user_id, au.primary_or_recipe_user_id, au.is_linked_or_is_a_primary_user, au.recipe_id, " +
+                        "aaru.tenant_id, aaru.time_joined FROM " +
+                        getConfig(start).getAppIdToUserIdTable() + " as au " +
+                        "LEFT JOIN " + getConfig(start).getUsersTable() +
+                        " as aaru ON au.app_id = aaru.app_id AND au.user_id = aaru.user_id" +
                         " WHERE au.primary_or_recipe_user_id IN (SELECT primary_or_recipe_user_id FROM " +
                         getConfig(start).getAppIdToUserIdTable() + " WHERE (user_id IN ("
                         + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +
@@ -2072,8 +2614,29 @@ public class GeneralQueries {
 
     public static boolean checkIfUsesAccountLinking(Start start, AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
+        if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
+            return checkIfUsesAccountLinking_new(start, appIdentifier);
+        }
+        return checkIfUsesAccountLinking_legacy(start, appIdentifier);
+    }
+
+    private static boolean checkIfUsesAccountLinking_new(Start start, AppIdentifier appIdentifier)
+            throws SQLException, StorageQueryException {
         String QUERY = "SELECT 1 FROM "
                 + getConfig(start).getAppIdToUserIdTable()
+                + " WHERE app_id = ? AND is_linked_or_is_a_primary_user = true LIMIT 1";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+        }, result -> {
+            return result.next();
+        });
+    }
+
+    private static boolean checkIfUsesAccountLinking_legacy(Start start, AppIdentifier appIdentifier)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT 1 FROM "
+                + getConfig(start).getUsersTable()
                 + " WHERE app_id = ? AND is_linked_or_is_a_primary_user = true LIMIT 1";
 
         return execute(start, QUERY, pst -> {
