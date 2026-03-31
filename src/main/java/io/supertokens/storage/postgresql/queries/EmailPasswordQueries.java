@@ -157,7 +157,9 @@ public class EmailPasswordQueries {
     public static void updateUsersEmail_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                     String userId, String newEmail)
             throws SQLException {
-        {
+        MigrationMode mode = Config.getConfig(start).getMigrationMode();
+
+        { // emailpassword_users — ALWAYS
             String QUERY = "UPDATE " + getConfig(start).getEmailPasswordUsersTable()
                     + " SET email = ? WHERE app_id = ? AND user_id = ?";
 
@@ -167,7 +169,7 @@ public class EmailPasswordQueries {
                 pst.setString(3, userId);
             });
         }
-        {
+        if (mode.writesToOldTables()) { // emailpassword_user_to_tenant
             String QUERY = "UPDATE " + getConfig(start).getEmailPasswordUserToTenantTable()
                     + " SET email = ? WHERE app_id = ? AND user_id = ?";
 
@@ -290,7 +292,9 @@ public class EmailPasswordQueries {
         return start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try {
-                { // app_id_to_user_id
+                MigrationMode mode = Config.getConfig(start).getMigrationMode();
+
+                { // app_id_to_user_id — ALWAYS
                     String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
                             + "(app_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
                             + " VALUES(?, ?, ?, ?, ?, ?)";
@@ -304,7 +308,7 @@ public class EmailPasswordQueries {
                     });
                 }
 
-                { // all_auth_recipe_users
+                if (mode.writesToOldTables()) { // all_auth_recipe_users
                     String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
                             +
                             "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, " +
@@ -321,12 +325,12 @@ public class EmailPasswordQueries {
                     });
                 }
 
-                { // recipe_user_tenants
+                if (mode.writesToNewTables()) { // recipe_user_tenants
                     AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, userId,
                             EMAIL_PASSWORD.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", email);
                 }
 
-                { // emailpassword_users
+                { // emailpassword_users — ALWAYS
                     String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUsersTable()
                             + "(app_id, user_id, email, password_hash, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
 
@@ -339,7 +343,7 @@ public class EmailPasswordQueries {
                     });
                 }
 
-                { // emailpassword_user_to_tenant
+                if (mode.writesToOldTables()) { // emailpassword_user_to_tenant
                     String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUserToTenantTable()
                             + "(app_id, tenant_id, user_id, email)" + " VALUES(?, ?, ?, ?)";
 
@@ -365,6 +369,8 @@ public class EmailPasswordQueries {
     public static void importUsers_Transaction(Start start, Connection sqlCon, List<EmailPasswordImportUser> usersToSignUp)
             throws StorageQueryException, StorageTransactionLogicException {
         try {
+            MigrationMode mode = Config.getConfig(start).getMigrationMode();
+
             String app_id_to_user_id_QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
                     + "(app_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
                     + " VALUES(?, ?, ?, ?, ?, ?, ?)";
@@ -396,11 +402,12 @@ public class EmailPasswordQueries {
                 boolean isLinkedOrIsPrimaryUser = user.primaryUserId != null;
 
                 // Recipe Account Info
-                AccountInfoQueries.addRecipeUserAccountInfoToBatch(recipeUserAccountInfoBatch, user.appIdentifier, user.userId, EMAIL_PASSWORD.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", user.email, isLinkedOrIsPrimaryUser ? primaryOrRecipeUserId : null);
+                if (mode.writesToNewTables()) {
+                    AccountInfoQueries.addRecipeUserAccountInfoToBatch(recipeUserAccountInfoBatch, user.appIdentifier, user.userId, EMAIL_PASSWORD.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", user.email, isLinkedOrIsPrimaryUser ? primaryOrRecipeUserId : null);
 
-                // Recipe User Tenants
-                AccountInfoQueries.addRecipeUserTenantsToBatch(recipeUserTenantsBatch, user.appIdentifier, user.userId, EMAIL_PASSWORD.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", user.email, user.recipeUserTenantIds);
-
+                    // Recipe User Tenants
+                    AccountInfoQueries.addRecipeUserTenantsToBatch(recipeUserTenantsBatch, user.appIdentifier, user.userId, EMAIL_PASSWORD.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", user.email, user.recipeUserTenantIds);
+                }
 
                 appIdToUserIdSetters.add(pst -> {
                     pst.setString(1, appId);
@@ -422,33 +429,41 @@ public class EmailPasswordQueries {
 
                 // Generate entries for all recipe user tenant IDs
                 for (String tenantId : user.recipeUserTenantIds) {
-                    allAuthRecipeUsersSetters.add(pst -> {
-                        pst.setString(1, appId);
-                        pst.setString(2, tenantId);
-                        pst.setString(3, userId);
-                        pst.setString(4, primaryOrRecipeUserId);
-                        pst.setBoolean(5, isLinkedOrIsPrimaryUser);
-                        pst.setString(6, EMAIL_PASSWORD.toString());
-                        pst.setLong(7, user.timeJoinedMSSinceEpoch);
-                        pst.setLong(8, user.timeJoinedMSSinceEpoch);
-                    });
+                    if (mode.writesToOldTables()) {
+                        allAuthRecipeUsersSetters.add(pst -> {
+                            pst.setString(1, appId);
+                            pst.setString(2, tenantId);
+                            pst.setString(3, userId);
+                            pst.setString(4, primaryOrRecipeUserId);
+                            pst.setBoolean(5, isLinkedOrIsPrimaryUser);
+                            pst.setString(6, EMAIL_PASSWORD.toString());
+                            pst.setLong(7, user.timeJoinedMSSinceEpoch);
+                            pst.setLong(8, user.timeJoinedMSSinceEpoch);
+                        });
 
-                    emailPasswordUsersToTenantSetters.add(pst -> {
-                        pst.setString(1, appId);
-                        pst.setString(2, tenantId);
-                        pst.setString(3, userId);
-                        pst.setString(4, user.email);
-                    });
+                        emailPasswordUsersToTenantSetters.add(pst -> {
+                            pst.setString(1, appId);
+                            pst.setString(2, tenantId);
+                            pst.setString(3, userId);
+                            pst.setString(4, user.email);
+                        });
+                    }
                 }
             }
 
-            executeBatch(sqlCon, AccountInfoQueries.getRecipeUserAccountInfoBatchQuery(start), recipeUserAccountInfoBatch);
-            executeBatch(sqlCon, AccountInfoQueries.getRecipeUserTenantBatchQuery(start), recipeUserTenantsBatch);
+            if (mode.writesToNewTables()) {
+                executeBatch(sqlCon, AccountInfoQueries.getRecipeUserAccountInfoBatchQuery(start), recipeUserAccountInfoBatch);
+                executeBatch(sqlCon, AccountInfoQueries.getRecipeUserTenantBatchQuery(start), recipeUserTenantsBatch);
+            }
 
             executeBatch(sqlCon, app_id_to_user_id_QUERY, appIdToUserIdSetters);
-            executeBatch(sqlCon, all_auth_recipe_users_QUERY, allAuthRecipeUsersSetters);
+            if (mode.writesToOldTables()) {
+                executeBatch(sqlCon, all_auth_recipe_users_QUERY, allAuthRecipeUsersSetters);
+            }
             executeBatch(sqlCon, emailpassword_users_QUERY, emailPasswordUsersSetters);
-            executeBatch(sqlCon, emailpassword_users_to_tenant_QUERY, emailPasswordUsersToTenantSetters);
+            if (mode.writesToOldTables()) {
+                executeBatch(sqlCon, emailpassword_users_to_tenant_QUERY, emailPasswordUsersToTenantSetters);
+            }
             sqlCon.commit();
         } catch (SQLException throwables) {
             throw new StorageTransactionLogicException(throwables);
@@ -458,7 +473,10 @@ public class EmailPasswordQueries {
     public static void deleteUser_Transaction(Connection sqlCon, Start start, AppIdentifier appIdentifier,
                                               String userId, boolean deleteUserIdMappingToo)
             throws SQLException {
+        MigrationMode mode = Config.getConfig(start).getMigrationMode();
+
         if (deleteUserIdMappingToo) {
+            // Deleting from app_id_to_user_id cascades to all child tables
             String QUERY = "DELETE FROM " + getConfig(start).getAppIdToUserIdTable()
                     + " WHERE app_id = ? AND user_id = ?";
 
@@ -467,7 +485,7 @@ public class EmailPasswordQueries {
                 pst.setString(2, userId);
             });
         } else {
-            {
+            if (mode.writesToOldTables()) {
                 String QUERY = "DELETE FROM " + getConfig(start).getUsersTable()
                         + " WHERE app_id = ? AND user_id = ?";
                 update(sqlCon, QUERY, pst -> {
@@ -476,7 +494,7 @@ public class EmailPasswordQueries {
                 });
             }
 
-            {
+            { // emailpassword_users — ALWAYS
                 String QUERY = "DELETE FROM " + getConfig(start).getEmailPasswordUsersTable()
                         + " WHERE app_id = ? AND user_id = ?";
                 update(sqlCon, QUERY, pst -> {
@@ -485,7 +503,7 @@ public class EmailPasswordQueries {
                 });
             }
 
-            {
+            { // password_reset_tokens — ALWAYS
                 String QUERY = "DELETE FROM " + getConfig(start).getPasswordResetTokensTable()
                         + " WHERE app_id = ? AND user_id = ?";
                 update(sqlCon, QUERY, pst -> {
@@ -635,6 +653,8 @@ public class EmailPasswordQueries {
     public static boolean addUserIdToTenant_Transaction(Start start, Connection sqlCon,
                                                         TenantIdentifier tenantIdentifier, String userId)
             throws SQLException, StorageQueryException, UnknownUserIdException {
+        MigrationMode mode = Config.getConfig(start).getMigrationMode();
+
         UserInfoPartial userInfo = EmailPasswordQueries.getUserInfoUsingId_Transaction(start, sqlCon,
                 tenantIdentifier.toAppIdentifier(), userId);
 
@@ -645,7 +665,7 @@ public class EmailPasswordQueries {
         GeneralQueries.AccountLinkingInfo accountLinkingInfo = GeneralQueries.getAccountLinkingInfo_Transaction(start,
                 sqlCon, tenantIdentifier.toAppIdentifier(), userId);
 
-        { // all_auth_recipe_users
+        if (mode.writesToOldTables()) { // all_auth_recipe_users
             String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
                     +
                     "(app_id, tenant_id, user_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user, " +
@@ -668,7 +688,7 @@ public class EmailPasswordQueries {
                     finalAccountLinkingInfo.primaryUserId);
         }
 
-        { // emailpassword_user_to_tenant
+        if (mode.writesToOldTables()) { // emailpassword_user_to_tenant
             String QUERY = "INSERT INTO " + getConfig(start).getEmailPasswordUserToTenantTable()
                     + "(app_id, tenant_id, user_id, email)"
                     + " VALUES(?, ?, ?, ?) " + " ON CONFLICT ON CONSTRAINT "
@@ -685,12 +705,16 @@ public class EmailPasswordQueries {
 
             return numRows > 0;
         }
+
+        return true;
     }
 
     public static boolean removeUserIdFromTenant_Transaction(Start start, Connection sqlCon,
                                                              TenantIdentifier tenantIdentifier, String userId)
             throws SQLException, StorageQueryException {
-        { // all_auth_recipe_users
+        MigrationMode mode = Config.getConfig(start).getMigrationMode();
+
+        if (mode.writesToOldTables()) { // all_auth_recipe_users
             String QUERY = "DELETE FROM " + getConfig(start).getUsersTable()
                     + " WHERE app_id = ? AND tenant_id = ? and user_id = ? and recipe_id = ?";
             int numRows = update(sqlCon, QUERY, pst -> {
@@ -700,8 +724,10 @@ public class EmailPasswordQueries {
                 pst.setString(4, EMAIL_PASSWORD.toString());
             });
             return numRows > 0;
+            // automatically deleted from emailpassword_user_to_tenant because of foreign key constraint
         }
-        // automatically deleted from emailpassword_user_to_tenant because of foreign key constraint
+
+        return true;
     }
 
     private static UserInfoPartial fillUserInfoWithVerified_transaction(Start start, Connection sqlCon,
