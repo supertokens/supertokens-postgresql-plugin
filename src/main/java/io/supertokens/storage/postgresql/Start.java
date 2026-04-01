@@ -1424,6 +1424,26 @@ public class Start
             if (mode.writesToNewTables()) {
                 AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser,
                         ACCOUNT_INFO_TYPE.EMAIL, email);
+            } else {
+                // In legacy mode, AccountInfoQueries is not used, so we need to check for
+                // email conflicts with other primary users manually
+                AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(this, sqlCon,
+                        appIdentifier, userId);
+                if (user != null && user.isPrimaryUser) {
+                    for (String tenantId : user.tenantIds) {
+                        AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByEmail_legacy(this,
+                                new TenantIdentifier(
+                                        appIdentifier.getConnectionUriDomain(), appIdentifier.getAppId(), tenantId),
+                                email);
+                        for (AuthRecipeUserInfo existingUser : existingUsers) {
+                            if (existingUser.isPrimaryUser
+                                    && !existingUser.getSupertokensUserId().equals(user.getSupertokensUserId())
+                                    && existingUser.tenantIds.contains(tenantId)) {
+                                throw new EmailChangeNotAllowedException();
+                            }
+                        }
+                    }
+                }
             }
             EmailPasswordQueries.updateUsersEmail_Transaction(this, sqlCon, appIdentifier, userId, email);
         } catch (SQLException e) {
@@ -1695,6 +1715,26 @@ public class Start
             if (mode.writesToNewTables()) {
                 AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser,
                         ACCOUNT_INFO_TYPE.EMAIL, newEmail);
+            } else {
+                // In legacy mode, AccountInfoQueries is not used, so we need to check for
+                // email conflicts with other primary users manually (app-scoped to handle cross-tenant linking)
+                AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(this, sqlCon,
+                        appIdentifier, userId);
+                if (user != null && user.isPrimaryUser) {
+                    AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp(this,
+                            appIdentifier, newEmail);
+                    for (AuthRecipeUserInfo existingUser : existingUsers) {
+                        if (existingUser.isPrimaryUser
+                                && !existingUser.getSupertokensUserId().equals(user.getSupertokensUserId())) {
+                            // Check if they share any tenant
+                            for (String tenantId : user.tenantIds) {
+                                if (existingUser.tenantIds.contains(tenantId)) {
+                                    throw new EmailChangeNotAllowedException();
+                                }
+                            }
+                        }
+                    }
+                }
             }
             ThirdPartyQueries.updateUserEmail_Transaction(this, sqlCon, appIdentifier, thirdPartyId,
                     thirdPartyUserId, newEmail);
@@ -2447,6 +2487,9 @@ public class Start
             if (email != null) {
                 if (mode.writesToNewTables()) {
                     AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser, ACCOUNT_INFO_TYPE.EMAIL, email);
+                } else {
+                    // Legacy email conflict check
+                    checkLegacyEmailConflict(appIdentifier, userId, email);
                 }
                 int updated_rows = PasswordlessQueries.updateUserEmail_Transaction(this, sqlCon, appIdentifier, userId,
                         email);
@@ -2457,6 +2500,9 @@ public class Start
             if (phoneNumber != null) {
                 if (mode.writesToNewTables()) {
                     AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser, ACCOUNT_INFO_TYPE.PHONE_NUMBER, phoneNumber);
+                } else {
+                    // Legacy phone conflict check
+                    checkLegacyPhoneConflict(appIdentifier, userId, phoneNumber);
                 }
                 int updated_rows = PasswordlessQueries.updateUserPhoneNumber_Transaction(this, sqlCon, appIdentifier, userId,
                         phoneNumber);
@@ -3777,8 +3823,27 @@ public class Start
                 didBecomePrimary = AccountInfoQueries.addPrimaryUserAccountInfo_Transaction(
                         this, sqlCon, appIdentifier, lockedUser);
             } else {
-                // In LEGACY mode, skip new table writes; the old path handles conflicts
-                didBecomePrimary = true;
+                // In LEGACY mode, check if user is already primary
+                AuthRecipeUserInfo existingUser = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(
+                        this, sqlCon, appIdentifier, userId);
+                if (existingUser == null) {
+                    throw new UnknownUserIdException();
+                }
+                if (existingUser.isPrimaryUser && existingUser.getSupertokensUserId().equals(userId)) {
+                    didBecomePrimary = false; // already primary
+                } else if (existingUser.isPrimaryUser) {
+                    throw new CannotBecomePrimarySinceRecipeUserIdAlreadyLinkedWithPrimaryUserIdException(
+                            existingUser.getSupertokensUserId(),
+                            "This user ID is already linked to another user ID");
+                } else {
+                    // Check for conflicting account info
+                    CanBecomePrimaryResult checkResult = checkIfLoginMethodCanBecomePrimary_legacy(appIdentifier, userId);
+                    if (checkResult.status == CanBecomePrimaryResult.RESULT.CONFLICTING_ACCOUNT_INFO) {
+                        throw new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(
+                                checkResult.conflictingPrimaryUserId, checkResult.message);
+                    }
+                    didBecomePrimary = true;
+                }
             }
             if (didBecomePrimary) {
                 GeneralQueries.makePrimaryUser_Transaction(this, sqlCon, appIdentifier, userId);
@@ -3820,11 +3885,37 @@ public class Start
                 didLinkAccounts = AccountInfoQueries.reserveAccountInfoForLinking_Transaction(
                         this, sqlCon, appIdentifier, recipeUser, primaryUser);
             } else {
-                // In LEGACY mode, skip new table writes; the old path handles conflicts
-                didLinkAccounts = true;
+                // In LEGACY mode, check for conflicts using legacy tables
+                io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult checkResult =
+                        checkIfLoginMethodsCanBeLinked_legacy(appIdentifier, primaryUserId, recipeUserId);
+                switch (checkResult.status) {
+                    case OK:
+                        didLinkAccounts = true;
+                        break;
+                    case WAS_ALREADY_LINKED_TO_PRIMARY_USER:
+                        didLinkAccounts = false;
+                        break;
+                    case INPUT_USER_IS_NOT_PRIMARY_USER:
+                        throw new InputUserIdIsNotAPrimaryUserException(primaryUserId);
+                    case RECIPE_USER_LINKED_TO_ANOTHER_PRIMARY_USER:
+                        // Need to get the recipe user info for the exception
+                        AuthRecipeUserInfo recipeUserInfo = GeneralQueries.getPrimaryUserInfoForUserId(
+                                this, appIdentifier, recipeUserId);
+                        throw new CannotLinkSinceRecipeUserIdAlreadyLinkedWithAnotherPrimaryUserIdException(
+                                recipeUserInfo);
+                    case ACCOUNT_INFO_ASSOCIATED_WITH_ANOTHER_PRIMARY_USER:
+                        throw new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(
+                                checkResult.conflictingPrimaryUserId, checkResult.message);
+                    default:
+                        throw new IllegalStateException("should never happen");
+                }
             }
             if (didLinkAccounts) {
-                GeneralQueries.linkAccounts_Transaction(this, sqlCon, appIdentifier, recipeUserId, primaryUserId);
+                // Use the resolved primary user ID from LockedUserPair, not the raw parameter
+                // (the raw parameter might be a recipe user ID of an already-linked user)
+                String resolvedPrimaryUserId = primaryUser.getPrimaryUserId() != null
+                        ? primaryUser.getPrimaryUserId() : primaryUserId;
+                GeneralQueries.linkAccounts_Transaction(this, sqlCon, appIdentifier, recipeUserId, resolvedPrimaryUserId);
             }
             return didLinkAccounts;
         } catch (SQLException e) {
@@ -3864,15 +3955,249 @@ public class Start
     @Override
     public CanBecomePrimaryResult checkIfLoginMethodCanBecomePrimary(AppIdentifier appIdentifier, String recipeUserId)
             throws StorageQueryException, UnknownUserIdException {
-        return AccountInfoQueries.checkIfLoginMethodCanBecomePrimary(this, appIdentifier, recipeUserId);
+        if (Config.getConfig(this).getMigrationMode().readsFromNewTables()) {
+            return AccountInfoQueries.checkIfLoginMethodCanBecomePrimary(this, appIdentifier, recipeUserId);
+        }
+        return checkIfLoginMethodCanBecomePrimary_legacy(appIdentifier, recipeUserId);
+    }
+
+    private void checkLegacyEmailConflict(AppIdentifier appIdentifier, String userId, String newEmail)
+            throws StorageQueryException, EmailChangeNotAllowedException {
+        try {
+            AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId(this, appIdentifier, userId);
+            if (user != null && user.isPrimaryUser) {
+                AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp(this,
+                        appIdentifier, newEmail);
+                for (AuthRecipeUserInfo existingUser : existingUsers) {
+                    if (existingUser.isPrimaryUser
+                            && !existingUser.getSupertokensUserId().equals(user.getSupertokensUserId())) {
+                        for (String tenantId : user.tenantIds) {
+                            if (existingUser.tenantIds.contains(tenantId)) {
+                                throw new EmailChangeNotAllowedException();
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    private void checkLegacyPhoneConflict(AppIdentifier appIdentifier, String userId, String newPhone)
+            throws StorageQueryException, PhoneNumberChangeNotAllowedException {
+        try {
+            AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId(this, appIdentifier, userId);
+            if (user != null && user.isPrimaryUser) {
+                AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByPhoneNumber_legacy_forApp(this,
+                        appIdentifier, newPhone);
+                for (AuthRecipeUserInfo existingUser : existingUsers) {
+                    if (existingUser.isPrimaryUser
+                            && !existingUser.getSupertokensUserId().equals(user.getSupertokensUserId())) {
+                        for (String tenantId : user.tenantIds) {
+                            if (existingUser.tenantIds.contains(tenantId)) {
+                                throw new PhoneNumberChangeNotAllowedException();
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    private CanBecomePrimaryResult checkIfLoginMethodCanBecomePrimary_legacy(AppIdentifier appIdentifier,
+                                                                             String recipeUserId)
+            throws StorageQueryException, UnknownUserIdException {
+        try {
+            AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId(this, appIdentifier, recipeUserId);
+            if (user == null) {
+                throw new UnknownUserIdException();
+            }
+
+            if (user.isPrimaryUser) {
+                if (user.getSupertokensUserId().equals(recipeUserId)) {
+                    return CanBecomePrimaryResult.wasAlreadyAPrimaryUserResult();
+                } else {
+                    return CanBecomePrimaryResult.linkedWithAnotherPrimaryUserResult(user.getSupertokensUserId());
+                }
+            }
+
+            // Check for conflicting account info with other primary users
+            for (LoginMethod lm : user.loginMethods) {
+                if (!lm.getSupertokensUserId().equals(recipeUserId)) continue;
+
+                if (lm.email != null) {
+                    AuthRecipeUserInfo[] usersWithEmail = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp(this,
+                            appIdentifier, lm.email);
+                    for (AuthRecipeUserInfo u : usersWithEmail) {
+                        if (u.isPrimaryUser) {
+                            for (String tenantId : user.tenantIds) {
+                                if (u.tenantIds.contains(tenantId)) {
+                                    return CanBecomePrimaryResult.conflictingAccountInfoResult(
+                                            u.getSupertokensUserId(),
+                                            "This user's email is already associated with another user ID");
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (lm.phoneNumber != null) {
+                    AuthRecipeUserInfo[] usersWithPhone = GeneralQueries.listPrimaryUsersByPhoneNumber_legacy_forApp(
+                            this, appIdentifier, lm.phoneNumber);
+                    for (AuthRecipeUserInfo u : usersWithPhone) {
+                        if (u.isPrimaryUser) {
+                            for (String tenantId : user.tenantIds) {
+                                if (u.tenantIds.contains(tenantId)) {
+                                    return CanBecomePrimaryResult.conflictingAccountInfoResult(
+                                            u.getSupertokensUserId(),
+                                            "This user's phone number is already associated with another user ID");
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (lm.thirdParty != null) {
+                    List<String> tpUserIds = ThirdPartyQueries.listPrimaryUserIdsByThirdPartyInfo_legacy(this,
+                            appIdentifier, lm.thirdParty.id, lm.thirdParty.userId);
+                    for (String tpUserId : tpUserIds) {
+                        if (!tpUserId.equals(recipeUserId)) {
+                            // Check tenant overlap before declaring conflict
+                            AuthRecipeUserInfo tpUser = GeneralQueries.getPrimaryUserInfoForUserId(this,
+                                    appIdentifier, tpUserId);
+                            if (tpUser != null && tpUser.isPrimaryUser) {
+                                for (String tenantId : user.tenantIds) {
+                                    if (tpUser.tenantIds.contains(tenantId)) {
+                                        return CanBecomePrimaryResult.conflictingAccountInfoResult(tpUserId,
+                                                "This user's third party login is already associated with another user ID");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return CanBecomePrimaryResult.okResult();
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
     public io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult checkIfLoginMethodsCanBeLinked(
             AppIdentifier appIdentifier,
             String primaryUserId, String recipeUserId) throws StorageQueryException, UnknownUserIdException {
-        return AccountInfoQueries.checkIfLoginMethodsCanBeLinked(this, appIdentifier,
-                primaryUserId, recipeUserId);
+        if (Config.getConfig(this).getMigrationMode().readsFromNewTables()) {
+            return AccountInfoQueries.checkIfLoginMethodsCanBeLinked(this, appIdentifier,
+                    primaryUserId, recipeUserId);
+        }
+        return checkIfLoginMethodsCanBeLinked_legacy(appIdentifier, primaryUserId, recipeUserId);
+    }
+
+    private io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult checkIfLoginMethodsCanBeLinked_legacy(
+            AppIdentifier appIdentifier, String inputPrimaryUserId, String recipeUserId)
+            throws StorageQueryException, UnknownUserIdException {
+        try {
+            AuthRecipeUserInfo primaryUser = GeneralQueries.getPrimaryUserInfoForUserId(this, appIdentifier,
+                    inputPrimaryUserId);
+            if (primaryUser == null) {
+                throw new UnknownUserIdException();
+            }
+            if (!primaryUser.isPrimaryUser) {
+                return io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult.inputUserIsNotPrimaryUserResult();
+            }
+
+            AuthRecipeUserInfo recipeUser = GeneralQueries.getPrimaryUserInfoForUserId(this, appIdentifier,
+                    recipeUserId);
+            if (recipeUser == null) {
+                throw new UnknownUserIdException();
+            }
+
+            if (recipeUser.isPrimaryUser) {
+                if (recipeUser.getSupertokensUserId().equals(primaryUser.getSupertokensUserId())) {
+                    return io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult
+                            .wasAlreadyLinkedToPrimaryUserResult();
+                } else {
+                    return io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult
+                            .recipeUserLinkedToAnotherPrimaryUserResult(recipeUser.getSupertokensUserId());
+                }
+            }
+
+            // Check for conflicting account info — union of tenant IDs from both users
+            Set<String> allTenantIds = new java.util.HashSet<>();
+            for (String t : primaryUser.tenantIds) allTenantIds.add(t);
+            for (String t : recipeUser.tenantIds) allTenantIds.add(t);
+
+            // Check all login methods of both users for conflicts
+            List<LoginMethod> allLoginMethods = new java.util.ArrayList<>();
+            allLoginMethods.addAll(java.util.Arrays.asList(primaryUser.loginMethods));
+            allLoginMethods.addAll(java.util.Arrays.asList(recipeUser.loginMethods));
+
+            for (LoginMethod lm : allLoginMethods) {
+                if (lm.email != null) {
+                    AuthRecipeUserInfo[] usersWithEmail = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp(this,
+                            appIdentifier, lm.email);
+                    for (AuthRecipeUserInfo u : usersWithEmail) {
+                        if (u.isPrimaryUser && !u.getSupertokensUserId().equals(primaryUser.getSupertokensUserId())) {
+                            for (String tenantId : allTenantIds) {
+                                if (u.tenantIds.contains(tenantId)) {
+                                    return io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult
+                                            .notOkResult(u.getSupertokensUserId(),
+                                                    "This user's email is already associated with another user ID");
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (lm.phoneNumber != null) {
+                    AuthRecipeUserInfo[] usersWithPhone = GeneralQueries.listPrimaryUsersByPhoneNumber_legacy_forApp(
+                            this, appIdentifier, lm.phoneNumber);
+                    for (AuthRecipeUserInfo u : usersWithPhone) {
+                        if (u.isPrimaryUser && !u.getSupertokensUserId().equals(primaryUser.getSupertokensUserId())) {
+                            for (String tenantId : allTenantIds) {
+                                if (u.tenantIds.contains(tenantId)) {
+                                    return io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult
+                                            .notOkResult(u.getSupertokensUserId(),
+                                                    "This user's phone number is already associated with another user ID");
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (lm.thirdParty != null) {
+                    List<String> tpUserIds = ThirdPartyQueries.listPrimaryUserIdsByThirdPartyInfo_legacy(this,
+                            appIdentifier, lm.thirdParty.id, lm.thirdParty.userId);
+                    for (String tpUserId : tpUserIds) {
+                        // Exclude the primary user we're linking to AND the recipe user being linked
+                        if (!tpUserId.equals(primaryUser.getSupertokensUserId())
+                                && !tpUserId.equals(recipeUserId)) {
+                            // Also check tenant overlap
+                            AuthRecipeUserInfo tpUser = GeneralQueries.getPrimaryUserInfoForUserId(this,
+                                    appIdentifier, tpUserId);
+                            if (tpUser != null && tpUser.isPrimaryUser) {
+                                for (String tenantId : allTenantIds) {
+                                    if (tpUser.tenantIds.contains(tenantId)) {
+                                        return io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult
+                                                .notOkResult(tpUserId,
+                                                        "This user's third party login is already associated with another user ID");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult.okResult();
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
@@ -3885,6 +4210,48 @@ public class Start
         MigrationMode mode = Config.getConfig(this).getMigrationMode();
         if (mode.writesToNewTables()) {
             AccountInfoQueries.addTenantIdToPrimaryUser_Transaction(this, con, tenantIdentifier, primaryUser);
+        } else {
+            // In LEGACY mode, check for email/phone/thirdparty conflicts with other primary users on this tenant
+            try {
+                AppIdentifier appIdentifier = tenantIdentifier.toAppIdentifier();
+                String primaryUserId = primaryUser.getPrimaryUserId() != null ? primaryUser.getPrimaryUserId() : primaryUser.getRecipeUserId();
+                AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId(this, appIdentifier, primaryUserId);
+                if (user != null && user.isPrimaryUser) {
+                    for (LoginMethod lm : user.loginMethods) {
+                        if (lm.email != null) {
+                            AuthRecipeUserInfo[] usersWithEmail = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp(this,
+                                    appIdentifier, lm.email);
+                            for (AuthRecipeUserInfo u : usersWithEmail) {
+                                if (u.isPrimaryUser && !u.getSupertokensUserId().equals(primaryUserId)
+                                        && u.tenantIds.contains(tenantIdentifier.getTenantId())) {
+                                    throw new AnotherPrimaryUserWithEmailAlreadyExistsException(u.getSupertokensUserId());
+                                }
+                            }
+                        }
+                        if (lm.phoneNumber != null) {
+                            AuthRecipeUserInfo[] usersWithPhone = GeneralQueries.listPrimaryUsersByPhoneNumber_legacy_forApp(
+                                    this, appIdentifier, lm.phoneNumber);
+                            for (AuthRecipeUserInfo u : usersWithPhone) {
+                                if (u.isPrimaryUser && !u.getSupertokensUserId().equals(primaryUserId)
+                                        && u.tenantIds.contains(tenantIdentifier.getTenantId())) {
+                                    throw new AnotherPrimaryUserWithPhoneNumberAlreadyExistsException(u.getSupertokensUserId());
+                                }
+                            }
+                        }
+                        if (lm.thirdParty != null) {
+                            List<String> tpUserIds = ThirdPartyQueries.listPrimaryUserIdsByThirdPartyInfo_legacy(this,
+                                    appIdentifier, lm.thirdParty.id, lm.thirdParty.userId);
+                            for (String tpUserId : tpUserIds) {
+                                if (!tpUserId.equals(primaryUserId)) {
+                                    throw new AnotherPrimaryUserWithThirdPartyInfoAlreadyExistsException(tpUserId);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                throw new StorageQueryException(e);
+            }
         }
     }
 
@@ -3902,6 +4269,67 @@ public class Start
             throws StorageQueryException, StorageTransactionLogicException {
         MigrationMode mode = Config.getConfig(this).getMigrationMode();
         if (!mode.writesToNewTables()) {
+            // In LEGACY mode, check for conflicts using old tables
+            try {
+                for (PrimaryUser pu : primaryUsers) {
+                    for (PrimaryUser.AccountInfo ai : pu.accountInfos) {
+                        for (String tenantId : pu.tenantIds) {
+                            if (ai.type == ACCOUNT_INFO_TYPE.EMAIL) {
+                                AuthRecipeUserInfo[] users = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp(this,
+                                        pu.appIdentifier, ai.value);
+                                for (AuthRecipeUserInfo u : users) {
+                                    if (u.isPrimaryUser && !u.getSupertokensUserId().equals(pu.primaryUserId)
+                                            && u.tenantIds.contains(tenantId)) {
+                                        throw new StorageTransactionLogicException(
+                                                new BulkImportBatchInsertException("conflict",
+                                                java.util.Map.of(pu.primaryUserId,
+                                                    new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(
+                                                        u.getSupertokensUserId(),
+                                                        "E027: there is a conflicting account info"))));
+                                    }
+                                }
+                            } else if (ai.type == ACCOUNT_INFO_TYPE.PHONE_NUMBER) {
+                                AuthRecipeUserInfo[] users = GeneralQueries.listPrimaryUsersByPhoneNumber_legacy_forApp(this,
+                                        pu.appIdentifier, ai.value);
+                                for (AuthRecipeUserInfo u : users) {
+                                    if (u.isPrimaryUser && !u.getSupertokensUserId().equals(pu.primaryUserId)
+                                            && u.tenantIds.contains(tenantId)) {
+                                        throw new StorageTransactionLogicException(
+                                                new BulkImportBatchInsertException("conflict",
+                                                java.util.Map.of(pu.primaryUserId,
+                                                    new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(
+                                                        u.getSupertokensUserId(),
+                                                        "E027: there is a conflicting account info"))));
+                                    }
+                                }
+                            } else if (ai.type == ACCOUNT_INFO_TYPE.THIRD_PARTY) {
+                                // Third party account info value is "thirdPartyId::thirdPartyUserId"
+                                String[] parts = ai.value.split("::", 2);
+                                if (parts.length == 2) {
+                                    List<String> tpUserIds = ThirdPartyQueries.listPrimaryUserIdsByThirdPartyInfo_legacy(
+                                            this, pu.appIdentifier, parts[0], parts[1]);
+                                    for (String tpUserId : tpUserIds) {
+                                        if (!tpUserId.equals(pu.primaryUserId)) {
+                                            AuthRecipeUserInfo tpUser = GeneralQueries.getPrimaryUserInfoForUserId(this,
+                                                    pu.appIdentifier, tpUserId);
+                                            if (tpUser != null && tpUser.isPrimaryUser && tpUser.tenantIds.contains(tenantId)) {
+                                                throw new StorageTransactionLogicException(
+                                                        new BulkImportBatchInsertException("conflict",
+                                                        java.util.Map.of(pu.primaryUserId,
+                                                            new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(
+                                                                tpUserId,
+                                                                "E027: there is a conflicting account info"))));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                throw new StorageQueryException(e);
+            }
             return;
         }
         try {
@@ -4733,6 +5161,9 @@ public class Start
             LockedUser lockedUser = UserLockingQueries.lockUser(this, sqlCon, tenantIdentifier.toAppIdentifier(), userId);
             if (mode.writesToNewTables()) {
                 AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, tenantIdentifier.toAppIdentifier(), lockedUser, ACCOUNT_INFO_TYPE.EMAIL, newEmail);
+            } else {
+                // Legacy email conflict check
+                checkLegacyEmailConflict(tenantIdentifier.toAppIdentifier(), userId, newEmail);
             }
             WebAuthNQueries.updateUserEmail_Transaction(this, sqlCon, tenantIdentifier, userId, newEmail);
         } catch (StorageQueryException e) {

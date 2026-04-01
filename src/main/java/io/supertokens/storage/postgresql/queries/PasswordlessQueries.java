@@ -282,11 +282,16 @@ public class PasswordlessQueries {
                                                               @Nonnull String phoneNumber, String userId)
             throws SQLException, StorageQueryException {
 
+        String tenantSubquery;
+        if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
+            tenantSubquery = "SELECT tenant_id FROM " + getConfig(start).getRecipeUserTenantsTable()
+                    + " WHERE app_id = ? AND recipe_user_id = ?";
+        } else {
+            tenantSubquery = "SELECT tenant_id FROM " + getConfig(start).getUsersTable()
+                    + " WHERE app_id = ? AND user_id = ?";
+        }
         String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable()
-                + " WHERE app_id = ? AND phone_number = ? AND tenant_id IN ("
-                + "    SELECT tenant_id FROM " + getConfig(start).getRecipeUserTenantsTable()
-                + "    WHERE app_id = ? AND recipe_user_id = ?"
-                + ")";
+                + " WHERE app_id = ? AND phone_number = ? AND tenant_id IN (" + tenantSubquery + ")";
 
         update(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
@@ -314,11 +319,16 @@ public class PasswordlessQueries {
                                                         @Nonnull String email, String userId)
             throws SQLException, StorageQueryException {
 
+        String tenantSubquery;
+        if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
+            tenantSubquery = "SELECT tenant_id FROM " + getConfig(start).getRecipeUserTenantsTable()
+                    + " WHERE app_id = ? AND recipe_user_id = ?";
+        } else {
+            tenantSubquery = "SELECT tenant_id FROM " + getConfig(start).getUsersTable()
+                    + " WHERE app_id = ? AND user_id = ?";
+        }
         String QUERY = "DELETE FROM " + getConfig(start).getPasswordlessDevicesTable()
-                + " WHERE app_id = ? AND email = ? AND tenant_id IN ("
-                + "    SELECT tenant_id FROM " + getConfig(start).getRecipeUserTenantsTable()
-                + "    WHERE app_id = ? AND recipe_user_id = ?"
-                + ")";
+                + " WHERE app_id = ? AND email = ? AND tenant_id IN (" + tenantSubquery + ")";
 
         update(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());

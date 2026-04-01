@@ -806,4 +806,50 @@ public class ThirdPartyQueries {
                     result.getLong("time_joined"));
         }
     }
+
+    public static List<String> listPrimaryUserIdsByThirdPartyInfo_legacy(Start start, AppIdentifier appIdentifier,
+                                                                         String thirdPartyId, String thirdPartyUserId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id"
+                + " FROM " + getConfig(start).getThirdPartyUsersTable() + " tp"
+                + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " auid"
+                + " ON tp.app_id = auid.app_id AND tp.user_id = auid.user_id"
+                + " WHERE tp.app_id = ? AND tp.third_party_id = ? AND tp.third_party_user_id = ?";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, thirdPartyId);
+            pst.setString(3, thirdPartyUserId);
+        }, result -> {
+            List<String> userIds = new ArrayList<>();
+            while (result.next()) {
+                userIds.add(result.getString("primary_or_recipe_user_id"));
+            }
+            return userIds;
+        });
+    }
+
+    public static List<String> listPrimaryUserIdsByThirdPartyInfo_legacy_Transaction(Start start, Connection sqlCon,
+                                                                                      AppIdentifier appIdentifier,
+                                                                                      String thirdPartyId,
+                                                                                      String thirdPartyUserId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id"
+                + " FROM " + getConfig(start).getThirdPartyUsersTable() + " tp"
+                + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " auid"
+                + " ON tp.app_id = auid.app_id AND tp.user_id = auid.user_id"
+                + " WHERE tp.app_id = ? AND tp.third_party_id = ? AND tp.third_party_user_id = ?";
+
+        return execute(sqlCon, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, thirdPartyId);
+            pst.setString(3, thirdPartyUserId);
+        }, result -> {
+            List<String> userIds = new ArrayList<>();
+            while (result.next()) {
+                userIds.add(result.getString("primary_or_recipe_user_id"));
+            }
+            return userIds;
+        });
+    }
 }
