@@ -4270,6 +4270,46 @@ public class Start
         MigrationMode mode = Config.getConfig(this).getMigrationMode();
         if (!mode.writesToNewTables()) {
             // In LEGACY mode, check for conflicts using old tables
+            // First, check for intra-batch conflicts (two PrimaryUsers in the same batch
+            // with the same account info on overlapping tenants)
+            Map<String, Exception> intraBatchErrors = new HashMap<>();
+            for (int i = 0; i < primaryUsers.size(); i++) {
+                PrimaryUser pu1 = primaryUsers.get(i);
+                for (int j = i + 1; j < primaryUsers.size(); j++) {
+                    PrimaryUser pu2 = primaryUsers.get(j);
+                    if (pu1.primaryUserId.equals(pu2.primaryUserId)) {
+                        continue;
+                    }
+                    // Check if they share any tenant
+                    boolean sharesTenant = false;
+                    for (String t : pu1.tenantIds) {
+                        if (pu2.tenantIds.contains(t)) {
+                            sharesTenant = true;
+                            break;
+                        }
+                    }
+                    if (!sharesTenant) {
+                        continue;
+                    }
+                    // Check if they share any account info
+                    for (PrimaryUser.AccountInfo ai1 : pu1.accountInfos) {
+                        for (PrimaryUser.AccountInfo ai2 : pu2.accountInfos) {
+                            if (ai1.type == ai2.type && ai1.value.equals(ai2.value)) {
+                                // pu2 conflicts with pu1 — mark pu2 as error
+                                intraBatchErrors.put(pu2.primaryUserId,
+                                        new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(
+                                                pu1.primaryUserId,
+                                                "E027: there is a conflicting account info"));
+                            }
+                        }
+                    }
+                }
+            }
+            if (!intraBatchErrors.isEmpty()) {
+                throw new StorageTransactionLogicException(
+                        new BulkImportBatchInsertException("conflict", intraBatchErrors));
+            }
+
             try {
                 for (PrimaryUser pu : primaryUsers) {
                     for (PrimaryUser.AccountInfo ai : pu.accountInfos) {
