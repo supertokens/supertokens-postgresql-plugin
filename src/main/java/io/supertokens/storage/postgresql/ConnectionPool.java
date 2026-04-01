@@ -93,6 +93,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         config.addDataSourceProperty("prepStmtCacheSize", "250");
         config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
         config.addDataSourceProperty("tcpKeepAlive", "true");
+        config.addDataSourceProperty("socketTimeout", "60");
         // TODO: set maxLifetimeValue to lesser than 10 mins so that the following error doesnt happen:
         // io.supertokens.storage.postgresql.HikariLoggingAppender.doAppend(HikariLoggingAppender.java:117) |
         // SuperTokens

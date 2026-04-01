@@ -30,6 +30,7 @@ import java.util.Set;
 
 import org.jetbrains.annotations.Nullable;
 
+import io.supertokens.pluginInterface.MigrationMode;
 import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
 import static io.supertokens.pluginInterface.RECIPE_ID.WEBAUTHN;
 import io.supertokens.pluginInterface.RowMapper;
@@ -45,6 +46,7 @@ import io.supertokens.pluginInterface.webauthn.WebAuthNStoredCredential;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import io.supertokens.storage.postgresql.utils.Utils;
 
@@ -297,6 +299,7 @@ public class WebAuthNQueries {
                                               String relyingPartyId)
             throws StorageTransactionLogicException, StorageQueryException {
         long timeJoined = System.currentTimeMillis();
+        MigrationMode mode = Config.getConfig(start).getMigrationMode();
 
         try {
             // app_id_to_user_id
@@ -312,38 +315,41 @@ public class WebAuthNQueries {
                 pst.setLong(6, timeJoined);
             });
 
-            // all_auth_recipe_users
-            String insertAllAuthRecipeUsers = "INSERT INTO " + getConfig(start).getUsersTable()
-                    +
-                    "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, " +
-                    "primary_or_recipe_user_time_joined)" +
-                    " VALUES(?, ?, ?, ?, ?, ?, ?)";
-            update(sqlCon, insertAllAuthRecipeUsers, pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, tenantIdentifier.getTenantId());
-                pst.setString(3, userId);
-                pst.setString(4, userId);
-                pst.setString(5, WEBAUTHN.toString());
-                pst.setLong(6, timeJoined);
-                pst.setLong(7, timeJoined);
-            });
+            if (mode.writesToOldTables()) { // all_auth_recipe_users
+                String insertAllAuthRecipeUsers = "INSERT INTO " + getConfig(start).getUsersTable()
+                        +
+                        "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, " +
+                        "primary_or_recipe_user_time_joined)" +
+                        " VALUES(?, ?, ?, ?, ?, ?, ?)";
+                update(sqlCon, insertAllAuthRecipeUsers, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, tenantIdentifier.getTenantId());
+                    pst.setString(3, userId);
+                    pst.setString(4, userId);
+                    pst.setString(5, WEBAUTHN.toString());
+                    pst.setLong(6, timeJoined);
+                    pst.setLong(7, timeJoined);
+                });
+            }
 
-            // recipe_user_tenants
-            AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, userId,
-                    WEBAUTHN.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", email);
+            if (mode.writesToNewTables()) { // recipe_user_tenants
+                AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, userId,
+                        WEBAUTHN.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", email);
+            }
 
-            // webauthn_user_to_tenant
-            String insertWebauthNUsersToTenant =
-                    "INSERT INTO " + getConfig(start).getWebAuthNUserToTenantTable()
-                            + " (app_id, tenant_id, user_id, email) "
-                            + " VALUES (?,?,?,?);";
+            if (mode.writesToOldTables()) { // webauthn_user_to_tenant
+                String insertWebauthNUsersToTenant =
+                        "INSERT INTO " + getConfig(start).getWebAuthNUserToTenantTable()
+                                + " (app_id, tenant_id, user_id, email) "
+                                + " VALUES (?,?,?,?);";
 
-            update(sqlCon, insertWebauthNUsersToTenant, pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, tenantIdentifier.getTenantId());
-                pst.setString(3, userId);
-                pst.setString(4, email);
-            });
+                update(sqlCon, insertWebauthNUsersToTenant, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, tenantIdentifier.getTenantId());
+                    pst.setString(3, userId);
+                    pst.setString(4, email);
+                });
+            }
 
             // webauthn_users
             String insertWebauthNUsers = "INSERT INTO " + getConfig(start).getWebAuthNUsersTable()
@@ -427,6 +433,40 @@ public class WebAuthNQueries {
                                                                          TenantIdentifier tenantIdentifier,
                                                                          String email)
             throws SQLException, StorageQueryException {
+        if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
+            return getPrimaryUserIdForTenantUsingEmail_Transaction_new(start, sqlConnection, tenantIdentifier, email);
+        }
+        return getPrimaryUserIdForTenantUsingEmail_Transaction_legacy(start, sqlConnection, tenantIdentifier, email);
+    }
+
+    private static String getPrimaryUserIdForTenantUsingEmail_Transaction_legacy(Start start, Connection sqlConnection,
+                                                                                  TenantIdentifier tenantIdentifier,
+                                                                                  String email)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
+                + "FROM " + getConfig(start).getWebAuthNUserToTenantTable() + " AS webauthn"
+                + " JOIN " + getConfig(start).getUsersTable() + " AS all_users"
+                + " ON webauthn.tenant_id = all_users.tenant_id"
+                + " AND webauthn.app_id = all_users.app_id"
+                + " AND webauthn.user_id = all_users.user_id"
+                + " WHERE webauthn.tenant_id = ? AND webauthn.app_id = ? AND webauthn.email = ?";
+
+        return execute(sqlConnection, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getTenantId());
+            pst.setString(2, tenantIdentifier.getAppId());
+            pst.setString(3, email);
+        }, result -> {
+            if (result.next()) {
+                return result.getString("user_id");
+            }
+            return null;
+        });
+    }
+
+    private static String getPrimaryUserIdForTenantUsingEmail_Transaction_new(Start start, Connection sqlConnection,
+                                                                               TenantIdentifier tenantIdentifier,
+                                                                               String email)
+            throws SQLException, StorageQueryException {
         String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getRecipeUserTenantsTable() + " AS rut"
                 + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " AS auid"
@@ -448,6 +488,35 @@ public class WebAuthNQueries {
 
     public static String getPrimaryUserIdForAppUsingEmail_Transaction(Start start, Connection sqlConnection,
                                                                       AppIdentifier appIdentifier, String email)
+            throws SQLException, StorageQueryException {
+        if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
+            return getPrimaryUserIdForAppUsingEmail_Transaction_new(start, sqlConnection, appIdentifier, email);
+        }
+        return getPrimaryUserIdForAppUsingEmail_Transaction_legacy(start, sqlConnection, appIdentifier, email);
+    }
+
+    private static String getPrimaryUserIdForAppUsingEmail_Transaction_legacy(Start start, Connection sqlConnection,
+                                                                               AppIdentifier appIdentifier, String email)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
+                + "FROM " + getConfig(start).getWebAuthNUserToTenantTable() + " AS webauthn"
+                + " JOIN " + getConfig(start).getUsersTable() + " AS all_users"
+                + " ON webauthn.user_id = all_users.user_id"
+                + " WHERE webauthn.app_id = ? AND webauthn.email = ?";
+
+        return execute(sqlConnection, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, email);
+        }, result -> {
+            if (result.next()) {
+                return result.getString("user_id");
+            }
+            return null;
+        });
+    }
+
+    private static String getPrimaryUserIdForAppUsingEmail_Transaction_new(Start start, Connection sqlConnection,
+                                                                            AppIdentifier appIdentifier, String email)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getRecipeUserAccountInfosTable() + " AS ruai"
@@ -473,6 +542,39 @@ public class WebAuthNQueries {
         if(emails == null || emails.isEmpty()) {
             return new ArrayList<>();
         }
+        if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
+            return getPrimaryUserIdsUsingEmails_Transaction_new(start, sqlConnection, appIdentifier, emails);
+        }
+        return getPrimaryUserIdsUsingEmails_Transaction_legacy(start, sqlConnection, appIdentifier, emails);
+    }
+
+    private static List<String> getPrimaryUserIdsUsingEmails_Transaction_legacy(Start start, Connection sqlConnection,
+                                                                                 AppIdentifier appIdentifier, List<String> emails)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
+                + "FROM " + getConfig(start).getWebAuthNUserToTenantTable() + " AS ep"
+                + " JOIN " + getConfig(start).getUsersTable() + " AS all_users"
+                + " ON ep.app_id = all_users.app_id AND ep.user_id = all_users.user_id"
+                + " WHERE ep.app_id = ? AND ep.email IN (" + Utils.generateCommaSeperatedQuestionMarks(emails.size()) + ")";
+
+        return execute(sqlConnection, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            int i = 2;
+            for(String email : emails) {
+                pst.setString(i++, email);
+            }
+        }, result -> {
+            List<String> idResult = new ArrayList<>();
+            if (result.next()) {
+                idResult.add(result.getString("user_id"));
+            }
+            return idResult;
+        });
+    }
+
+    private static List<String> getPrimaryUserIdsUsingEmails_Transaction_new(Start start, Connection sqlConnection,
+                                                                              AppIdentifier appIdentifier, List<String> emails)
+            throws SQLException, StorageQueryException {
         String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getRecipeUserAccountInfosTable() + " AS ruai"
                 + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " AS auid"
@@ -692,18 +794,24 @@ public class WebAuthNQueries {
     public static void updateUserEmail_Transaction(Start start, Connection sqlConnection, TenantIdentifier tenantIdentifier,
                                                    String userId, String newEmail) throws StorageQueryException {
         try {
-            String UPDATE_USER_TO_TENANT_QUERY =
-                    "UPDATE " + getConfig(start).getWebAuthNUserToTenantTable() +
-                            " SET email = ? WHERE app_id = ? AND tenant_id = ? AND user_id = ?";
+            MigrationMode mode = Config.getConfig(start).getMigrationMode();
+
+            if (mode.writesToOldTables()) { // webauthn_user_to_tenant
+                String UPDATE_USER_TO_TENANT_QUERY =
+                        "UPDATE " + getConfig(start).getWebAuthNUserToTenantTable() +
+                                " SET email = ? WHERE app_id = ? AND tenant_id = ? AND user_id = ?";
+
+                update(sqlConnection, UPDATE_USER_TO_TENANT_QUERY, pst -> {
+                    pst.setString(1, newEmail);
+                    pst.setString(2, tenantIdentifier.getAppId());
+                    pst.setString(3, tenantIdentifier.getTenantId());
+                    pst.setString(4, userId);
+                });
+            }
+
+            // webauthn_users - ALWAYS
             String UPDATE_USER_QUERY = "UPDATE " + getConfig(start).getWebAuthNUsersTable() +
                     " SET email = ? WHERE app_id = ? AND user_id = ?";
-
-            update(sqlConnection, UPDATE_USER_TO_TENANT_QUERY, pst -> {
-                pst.setString(1, newEmail);
-                pst.setString(2, tenantIdentifier.getAppId());
-                pst.setString(3, tenantIdentifier.getTenantId());
-                pst.setString(4, userId);
-            });
 
             update(sqlConnection, UPDATE_USER_QUERY, pst -> {
                 pst.setString(1, newEmail);
