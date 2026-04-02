@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.4.2]
+
+- Fixes concurrency issue with oauth refresh token
+
 ## [9.4.1]
 
 - Fixes env var reading with specific types
