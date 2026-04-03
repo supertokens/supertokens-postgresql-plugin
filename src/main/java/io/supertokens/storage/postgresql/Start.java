@@ -151,6 +151,7 @@ import io.supertokens.pluginInterface.useridmapping.exception.UnknownSuperTokens
 import io.supertokens.pluginInterface.useridmapping.exception.UserIdMappingAlreadyExistsException;
 import io.supertokens.pluginInterface.useridmapping.sqlStorage.UserIdMappingSQLStorage;
 import io.supertokens.pluginInterface.accountinfo.AccountInfoStorage;
+import io.supertokens.pluginInterface.migration.MigrationBackfillStorage;
 import io.supertokens.pluginInterface.usermetadata.UserMetadataStorage;
 import io.supertokens.pluginInterface.usermetadata.sqlStorage.UserMetadataSQLStorage;
 import io.supertokens.pluginInterface.userroles.UserRolesStorage;
@@ -175,6 +176,7 @@ import io.supertokens.storage.postgresql.queries.ActiveUsersQueries;
 import io.supertokens.storage.postgresql.queries.BulkImportQueries;
 import io.supertokens.storage.postgresql.queries.DashboardQueries;
 import io.supertokens.storage.postgresql.queries.EmailPasswordQueries;
+import io.supertokens.storage.postgresql.queries.MigrationBackfillQueries;
 import io.supertokens.storage.postgresql.queries.EmailVerificationQueries;
 import io.supertokens.storage.postgresql.queries.GeneralQueries;
 import io.supertokens.storage.postgresql.queries.JWTSigningQueries;
@@ -197,7 +199,8 @@ public class Start
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
         UserIdMappingSQLStorage, MultitenancyStorage, MultitenancySQLStorage, DashboardSQLStorage, TOTPSQLStorage,
         ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage, OAuthStorage, BulkImportSQLStorage,
-        WebAuthNSQLStorage, SAMLStorage, UserLockingStorage, AccountInfoStorage {
+        WebAuthNSQLStorage, SAMLStorage, UserLockingStorage, AccountInfoStorage,
+        MigrationBackfillStorage {
 
     // these configs are protected from being modified / viewed by the dev using the SuperTokens
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
@@ -5508,5 +5511,46 @@ public class Start
         Connection sqlCon = (Connection) con.getConnection();
         AccountInfoQueries.addTenantIdToRecipeUser_Transaction(
                 this, sqlCon, tenantIdentifier, user);
+    }
+
+    // MigrationBackfillStorage implementation
+
+    @Override
+    public MigrationMode getMigrationMode() {
+        return Config.getConfig(this).getMigrationMode();
+    }
+
+    @Override
+    public int getBackfillPendingUsersCount(AppIdentifier appIdentifier) throws StorageQueryException {
+        try {
+            return MigrationBackfillQueries.getBackfillPendingUsersCount(this, appIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public int backfillUsersBatch(AppIdentifier appIdentifier, int batchSize) throws StorageQueryException {
+        try {
+            return this.startTransaction(con -> {
+                Connection sqlCon = (Connection) con.getConnection();
+                try {
+                    return MigrationBackfillQueries.backfillUsersBatch(this, sqlCon, appIdentifier, batchSize);
+                } catch (SQLException e) {
+                    throw new StorageTransactionLogicException(e);
+                }
+            });
+        } catch (StorageTransactionLogicException e) {
+            throw new StorageQueryException(e.actualException);
+        }
+    }
+
+    @Override
+    public int verifyBackfillCompleteness(AppIdentifier appIdentifier) throws StorageQueryException {
+        try {
+            return MigrationBackfillQueries.verifyBackfillCompleteness(this, appIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 }

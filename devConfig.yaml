@@ -77,3 +77,7 @@ postgresql_password: "root"
 # (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: null) integer value. Minimum number of idle connections to be kept
 # active. If not set, minimum idle connections will be same as the connection pool size.
 # postgresql_minimum_idle_connections:
+
+# (OPTIONAL | Default: "LEGACY") string value. Migration mode for all_auth_recipe_users table deprecation.
+# Values: LEGACY, DUAL_WRITE_READ_OLD, DUAL_WRITE_READ_NEW, MIGRATED
+# migration_mode:
