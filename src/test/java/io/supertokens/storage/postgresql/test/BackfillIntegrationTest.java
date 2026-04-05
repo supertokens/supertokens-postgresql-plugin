@@ -27,10 +27,12 @@ import io.supertokens.passwordless.Passwordless;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
+import io.supertokens.pluginInterface.MigrationMode;
 import io.supertokens.pluginInterface.migration.MigrationBackfillStorage;
 import io.supertokens.pluginInterface.multitenancy.*;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
+import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 import io.supertokens.storageLayer.StorageLayer;
 import io.supertokens.thirdparty.ThirdParty;
 
@@ -122,6 +124,10 @@ public class BackfillIntegrationTest {
             MigrationBackfillStorage backfillStorage = (MigrationBackfillStorage) storage;
             AppIdentifier appIdentifier = new AppIdentifier(null, null);
 
+            // Use DUAL_WRITE mode so all_auth_recipe_users gets populated
+            // (backfill reads from it for tenant info)
+            Config.getConfig(storage).setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
+
             // Create users of each type
             AuthRecipeUserInfo epUser = EmailPassword.signUp(main, "ep@test.com", "password123");
 
@@ -195,7 +201,7 @@ public class BackfillIntegrationTest {
 
     @Test
     public void backfillCronSkipsInLegacyMode() throws Exception {
-        // Default mode is LEGACY, so the cron should skip
+        // Explicitly set LEGACY mode so the cron should skip
         TestingProcessManager.TestingProcess process = startProcess();
         try {
             Main main = process.getProcess();
@@ -204,6 +210,10 @@ public class BackfillIntegrationTest {
             }
 
             Start storage = (Start) StorageLayer.getStorage(main);
+
+            // Switch to LEGACY mode for this test
+            Config.getConfig(storage).setMigrationModeForTesting(MigrationMode.LEGACY);
+
             MigrationBackfillStorage backfillStorage = (MigrationBackfillStorage) storage;
 
             // Verify mode is LEGACY
@@ -251,6 +261,9 @@ public class BackfillIntegrationTest {
             MigrationBackfillStorage backfillStorage = (MigrationBackfillStorage) storage;
             AppIdentifier appIdentifier = new AppIdentifier(null, null);
 
+            // Use DUAL_WRITE mode so all_auth_recipe_users gets populated
+            Config.getConfig(storage).setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
+
             // Create user in default tenant
             AuthRecipeUserInfo user = EmailPassword.signUp(main, "multi@test.com", "password123");
 
@@ -288,6 +301,9 @@ public class BackfillIntegrationTest {
             Start storage = (Start) StorageLayer.getStorage(main);
             MigrationBackfillStorage backfillStorage = (MigrationBackfillStorage) storage;
             AppIdentifier appIdentifier = new AppIdentifier(null, null);
+
+            // Use DUAL_WRITE mode so all_auth_recipe_users gets populated
+            Config.getConfig(storage).setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
             // Create EP user (primary) + TP user (linked)
             AuthRecipeUserInfo epUser = EmailPassword.signUp(main, "primary@test.com", "password123");
@@ -334,6 +350,9 @@ public class BackfillIntegrationTest {
             Start storage = (Start) StorageLayer.getStorage(main);
             MigrationBackfillStorage backfillStorage = (MigrationBackfillStorage) storage;
             AppIdentifier appIdentifier = new AppIdentifier(null, null);
+
+            // Use DUAL_WRITE mode so all_auth_recipe_users gets populated
+            Config.getConfig(storage).setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
             // Create 5 users
             for (int i = 0; i < 5; i++) {

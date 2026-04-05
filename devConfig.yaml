@@ -80,4 +80,4 @@ postgresql_password: "root"
 
 # (OPTIONAL | Default: "LEGACY") string value. Migration mode for all_auth_recipe_users table deprecation.
 # Values: LEGACY, DUAL_WRITE_READ_OLD, DUAL_WRITE_READ_NEW, MIGRATED
-# migration_mode:
+migration_mode: MIGRATED

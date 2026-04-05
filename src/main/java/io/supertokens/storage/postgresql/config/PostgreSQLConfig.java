@@ -28,6 +28,7 @@ import io.supertokens.pluginInterface.ConfigFieldInfo;
 import io.supertokens.pluginInterface.MigrationMode;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.storage.postgresql.Start;
+import org.jetbrains.annotations.TestOnly;
 import io.supertokens.storage.postgresql.annotations.*;
 
 import java.lang.reflect.Field;
@@ -338,6 +339,11 @@ public class PostgreSQLConfig {
         } catch (IllegalArgumentException e) {
             return MigrationMode.LEGACY;
         }
+    }
+
+    @TestOnly
+    public void setMigrationModeForTesting(MigrationMode mode) {
+        this.migration_mode = mode.name();
     }
 
     public String getUsersTable() {
