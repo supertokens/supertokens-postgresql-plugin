@@ -136,66 +136,87 @@ public class MultitenancyRaceTest {
                 "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(main, primaryUser.getSupertokensUserId());
 
-        AuthRecipeUserInfo recipeUser = EmailPassword.signUp(tenant1, storage1, main,
-                "recipe@test.com", "password123");
+        for (int iter = 0; iter < RaceTestUtils.RACE_TEST_ITERATIONS; iter++) {
+            AuthRecipeUserInfo recipeUser = EmailPassword.signUp(tenant1, storage1, main,
+                    "recipe" + iter + "@test.com", "password123");
 
-        // Concurrent operations
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        CountDownLatch startLatch = new CountDownLatch(1);
-
-        // Thread 1: Link accounts
-        Future<?> linkFuture = executor.submit(() -> {
+            // Reset: remove from tenant2 if present
             try {
-                startLatch.await();
-                AuthRecipe.linkAccounts(main, recipeUser.getSupertokensUserId(),
-                        primaryUser.getSupertokensUserId());
+                Multitenancy.removeUserIdFromTenant(main, tenant2, storage2,
+                        recipeUser.getSupertokensUserId(), null);
             } catch (Exception e) {
-                // Expected in race conditions
+                // User might not be in tenant2 yet
             }
-        });
 
-        // Thread 2: Add user to tenant2
-        Future<?> tenantFuture = executor.submit(() -> {
+            // Unlink if necessary
             try {
-                startLatch.await();
-                Multitenancy.addUserIdToTenant(main, tenant2, storage2,
-                        recipeUser.getSupertokensUserId());
-            } catch (Exception e) {
-                // Expected in race conditions
-            }
-        });
-
-        startLatch.countDown();
-        linkFuture.get(30, TimeUnit.SECONDS);
-        tenantFuture.get(30, TimeUnit.SECONDS);
-
-        // Verify: After operations complete, user's email should be reserved in ALL tenants they're in
-        AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(main, recipeUser.getSupertokensUserId());
-        assertNotNull(finalUser);
-
-        // Check if user is linked (primary user ID differs from recipe user ID)
-        boolean isLinked = !finalUser.getSupertokensUserId().equals(recipeUser.getSupertokensUserId());
-
-        if (isLinked) {
-            // CRITICAL: Check reservation tables directly for ALL tenants the user is in
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
-                    main, finalUser);
-
-            if (!result.isConsistent) {
-                System.out.println("RACE DETECTED:");
-                for (String issue : result.issues) {
-                    System.out.println("  " + issue);
+                AuthRecipeUserInfo current = AuthRecipe.getUserById(main, recipeUser.getSupertokensUserId());
+                if (current != null && !current.getSupertokensUserId().equals(recipeUser.getSupertokensUserId())) {
+                    AuthRecipe.unlinkAccounts(main, recipeUser.getSupertokensUserId());
                 }
-                RaceTestUtils.printAllReservations(main, finalUser);
+            } catch (Exception e) {
+                // Ignore
             }
 
-            assertTrue("Reservation consistency check failed: " + result.issues, result.isConsistent);
+            // Concurrent operations
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            CountDownLatch startLatch = new CountDownLatch(1);
 
-            // Verify user's tenant list includes all expected tenants
-            System.out.println("User is in tenants: " + Arrays.toString(finalUser.tenantIds.toArray()));
+            // Thread 1: Link accounts
+            Future<?> linkFuture = executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    AuthRecipe.linkAccounts(main, recipeUser.getSupertokensUserId(),
+                            primaryUser.getSupertokensUserId());
+                } catch (Exception e) {
+                    // Expected in race conditions
+                }
+            });
+
+            // Thread 2: Add user to tenant2
+            Future<?> tenantFuture = executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    Multitenancy.addUserIdToTenant(main, tenant2, storage2,
+                            recipeUser.getSupertokensUserId());
+                } catch (Exception e) {
+                    // Expected in race conditions
+                }
+            });
+
+            startLatch.countDown();
+            linkFuture.get(30, TimeUnit.SECONDS);
+            tenantFuture.get(30, TimeUnit.SECONDS);
+
+            // Verify: After operations complete, user's email should be reserved in ALL tenants they're in
+            AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(main, recipeUser.getSupertokensUserId());
+            assertNotNull(finalUser);
+
+            // Check if user is linked (primary user ID differs from recipe user ID)
+            boolean isLinked = !finalUser.getSupertokensUserId().equals(recipeUser.getSupertokensUserId());
+
+            if (isLinked) {
+                // CRITICAL: Check reservation tables directly for ALL tenants the user is in
+                RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
+                        main, finalUser);
+
+                if (!result.isConsistent) {
+                    System.out.println("RACE DETECTED (iteration " + iter + "):");
+                    for (String issue : result.issues) {
+                        System.out.println("  " + issue);
+                    }
+                    RaceTestUtils.printAllReservations(main, finalUser);
+                }
+
+                assertTrue("Reservation consistency check failed at iteration " + iter + ": " + result.issues, result.isConsistent);
+
+                // Verify user's tenant list includes all expected tenants
+                System.out.println("User is in tenants: " + Arrays.toString(finalUser.tenantIds.toArray()));
+            }
+
+            executor.shutdown();
         }
 
-        executor.shutdown();
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
@@ -243,75 +264,97 @@ public class MultitenancyRaceTest {
                 "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(main, primaryUser.getSupertokensUserId());
 
-        AuthRecipeUserInfo recipeUser = EmailPassword.signUp(tenants.get(0), storages.get(0), main,
-                "recipe@test.com", "password123");
+        for (int iter = 0; iter < RaceTestUtils.RACE_TEST_ITERATIONS; iter++) {
+            AuthRecipeUserInfo recipeUser = EmailPassword.signUp(tenants.get(0), storages.get(0), main,
+                    "recipe" + iter + "@test.com", "password123");
 
-        // Concurrent: link + add to multiple tenants
-        ExecutorService executor = Executors.newFixedThreadPool(10);
-        CountDownLatch startLatch = new CountDownLatch(1);
-
-        // Thread 1: Link accounts
-        executor.submit(() -> {
-            try {
-                startLatch.await();
-                AuthRecipe.linkAccounts(main, recipeUser.getSupertokensUserId(),
-                        primaryUser.getSupertokensUserId());
-            } catch (Exception e) {
-                // Expected
+            // Reset: remove from all tenants except 0
+            for (int i = 1; i < NUM_TENANTS; i++) {
+                try {
+                    Multitenancy.removeUserIdFromTenant(main, tenants.get(i), storages.get(i),
+                            recipeUser.getSupertokensUserId(), null);
+                } catch (Exception e) {
+                    // User might not be in this tenant
+                }
             }
-        });
 
-        // Threads 2-N: Add user to tenants 1-4
-        for (int i = 1; i < NUM_TENANTS; i++) {
-            final TenantIdentifier tenant = tenants.get(i);
-            final Storage storage = storages.get(i);
+            // Reset: unlink if necessary
+            try {
+                AuthRecipeUserInfo current = AuthRecipe.getUserById(main, recipeUser.getSupertokensUserId());
+                if (current != null && !current.getSupertokensUserId().equals(recipeUser.getSupertokensUserId())) {
+                    AuthRecipe.unlinkAccounts(main, recipeUser.getSupertokensUserId());
+                }
+            } catch (Exception e) {
+                // Ignore
+            }
+
+            // Concurrent: link + add to multiple tenants
+            ExecutorService executor = Executors.newFixedThreadPool(10);
+            CountDownLatch startLatch = new CountDownLatch(1);
+
+            // Thread 1: Link accounts
             executor.submit(() -> {
                 try {
                     startLatch.await();
-                    Multitenancy.addUserIdToTenant(main, tenant, storage,
-                            recipeUser.getSupertokensUserId());
+                    AuthRecipe.linkAccounts(main, recipeUser.getSupertokensUserId(),
+                            primaryUser.getSupertokensUserId());
                 } catch (Exception e) {
                     // Expected
                 }
             });
-        }
 
-        startLatch.countDown();
-        executor.shutdown();
-        executor.awaitTermination(60, TimeUnit.SECONDS);
-
-        // Verify: After everything settles, user's email should be consistent
-        AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(main, recipeUser.getSupertokensUserId());
-        assertNotNull(finalUser);
-
-        // Find the recipe user's login method
-        String email = null;
-        for (var loginMethod : finalUser.loginMethods) {
-            if (loginMethod.getSupertokensUserId().equals(recipeUser.getSupertokensUserId())) {
-                email = loginMethod.email;
-                break;
+            // Threads 2-N: Add user to tenants 1-4
+            for (int i = 1; i < NUM_TENANTS; i++) {
+                final TenantIdentifier tenant = tenants.get(i);
+                final Storage storage = storages.get(i);
+                executor.submit(() -> {
+                    try {
+                        startLatch.await();
+                        Multitenancy.addUserIdToTenant(main, tenant, storage,
+                                recipeUser.getSupertokensUserId());
+                    } catch (Exception e) {
+                        // Expected
+                    }
+                });
             }
-        }
 
-        // Check if user is linked (primary user ID differs from recipe user ID)
-        boolean isLinked = !finalUser.getSupertokensUserId().equals(recipeUser.getSupertokensUserId());
+            startLatch.countDown();
+            executor.shutdown();
+            executor.awaitTermination(60, TimeUnit.SECONDS);
 
-        if (isLinked && email != null) {
-            // CRITICAL: Check reservation tables directly for ALL tenants
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
-                    main, finalUser);
+            // Verify: After everything settles, user's email should be consistent
+            AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(main, recipeUser.getSupertokensUserId());
+            assertNotNull(finalUser);
 
-            if (!result.isConsistent) {
-                System.out.println("RACE DETECTED:");
-                for (String issue : result.issues) {
-                    System.out.println("  " + issue);
+            // Find the recipe user's login method
+            String email = null;
+            for (var loginMethod : finalUser.loginMethods) {
+                if (loginMethod.getSupertokensUserId().equals(recipeUser.getSupertokensUserId())) {
+                    email = loginMethod.email;
+                    break;
                 }
             }
 
-            assertTrue("Reservation consistency check failed: " + result.issues, result.isConsistent);
-        }
+            // Check if user is linked (primary user ID differs from recipe user ID)
+            boolean isLinked = !finalUser.getSupertokensUserId().equals(recipeUser.getSupertokensUserId());
 
-        System.out.println("User ended up in tenants: " + Arrays.toString(finalUser.tenantIds.toArray()));
+            if (isLinked && email != null) {
+                // CRITICAL: Check reservation tables directly for ALL tenants
+                RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
+                        main, finalUser);
+
+                if (!result.isConsistent) {
+                    System.out.println("RACE DETECTED (iteration " + iter + "):");
+                    for (String issue : result.issues) {
+                        System.out.println("  " + issue);
+                    }
+                }
+
+                assertTrue("Reservation consistency check failed at iteration " + iter + ": " + result.issues, result.isConsistent);
+            }
+
+            System.out.println("User ended up in tenants: " + Arrays.toString(finalUser.tenantIds.toArray()));
+        }
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -362,68 +405,78 @@ public class MultitenancyRaceTest {
                 "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(main, primaryUser.getSupertokensUserId());
 
-        AuthRecipeUserInfo recipeUser = EmailPassword.signUp(tenant1, storage1, main,
-                "recipe@test.com", "password123");
-        // recipeUser is NOT linked yet
+        for (int iter = 0; iter < RaceTestUtils.RACE_TEST_ITERATIONS; iter++) {
+            AuthRecipeUserInfo recipeUser = EmailPassword.signUp(tenant1, storage1, main,
+                    "recipe" + iter + "@test.com", "password123");
 
-        // Concurrent operations
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        CountDownLatch startLatch = new CountDownLatch(1);
-
-        // Thread 1: Add to tenant2
-        Future<?> tenantFuture = executor.submit(() -> {
+            // Reset: remove from tenant2 if present
             try {
-                startLatch.await();
-                Multitenancy.addUserIdToTenant(main, tenant2, storage2,
-                        recipeUser.getSupertokensUserId());
+                Multitenancy.removeUserIdFromTenant(main, tenant2, storage2,
+                        recipeUser.getSupertokensUserId(), null);
             } catch (Exception e) {
-                // Expected
+                // User might not be in tenant2 yet
             }
-        });
 
-        // Thread 2: Link accounts
-        Future<?> linkFuture = executor.submit(() -> {
-            try {
-                startLatch.await();
-                AuthRecipe.linkAccounts(main, recipeUser.getSupertokensUserId(),
-                        primaryUser.getSupertokensUserId());
-            } catch (Exception e) {
-                // Expected
-            }
-        });
+            // Concurrent operations
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            CountDownLatch startLatch = new CountDownLatch(1);
 
-        startLatch.countDown();
-        tenantFuture.get(30, TimeUnit.SECONDS);
-        linkFuture.get(30, TimeUnit.SECONDS);
-
-        // Verify state
-        AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(main, recipeUser.getSupertokensUserId());
-        assertNotNull(finalUser);
-
-        // Check if user is linked (primary user ID differs from recipe user ID)
-        boolean isLinked = !finalUser.getSupertokensUserId().equals(recipeUser.getSupertokensUserId());
-
-        boolean isInTenant2 = finalUser.tenantIds.contains("tenant2");
-
-        System.out.println("User is linked: " + isLinked + ", in tenant2: " + isInTenant2);
-
-        if (isLinked) {
-            // CRITICAL: Check reservation tables directly for ALL tenants
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
-                    main, finalUser);
-
-            if (!result.isConsistent) {
-                System.out.println("RACE DETECTED:");
-                for (String issue : result.issues) {
-                    System.out.println("  " + issue);
+            // Thread 1: Add to tenant2
+            Future<?> tenantFuture = executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    Multitenancy.addUserIdToTenant(main, tenant2, storage2,
+                            recipeUser.getSupertokensUserId());
+                } catch (Exception e) {
+                    // Expected
                 }
-                RaceTestUtils.printAllReservations(main, finalUser);
+            });
+
+            // Thread 2: Link accounts
+            Future<?> linkFuture = executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    AuthRecipe.linkAccounts(main, recipeUser.getSupertokensUserId(),
+                            primaryUser.getSupertokensUserId());
+                } catch (Exception e) {
+                    // Expected
+                }
+            });
+
+            startLatch.countDown();
+            tenantFuture.get(30, TimeUnit.SECONDS);
+            linkFuture.get(30, TimeUnit.SECONDS);
+
+            // Verify state
+            AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(main, recipeUser.getSupertokensUserId());
+            assertNotNull(finalUser);
+
+            // Check if user is linked (primary user ID differs from recipe user ID)
+            boolean isLinked = !finalUser.getSupertokensUserId().equals(recipeUser.getSupertokensUserId());
+
+            boolean isInTenant2 = finalUser.tenantIds.contains("tenant2");
+
+            System.out.println("Iteration " + iter + ": User is linked: " + isLinked + ", in tenant2: " + isInTenant2);
+
+            if (isLinked) {
+                // CRITICAL: Check reservation tables directly for ALL tenants
+                RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
+                        main, finalUser);
+
+                if (!result.isConsistent) {
+                    System.out.println("RACE DETECTED (iteration " + iter + "):");
+                    for (String issue : result.issues) {
+                        System.out.println("  " + issue);
+                    }
+                    RaceTestUtils.printAllReservations(main, finalUser);
+                }
+
+                assertTrue("Reservation consistency check failed at iteration " + iter + ": " + result.issues, result.isConsistent);
             }
 
-            assertTrue("Reservation consistency check failed: " + result.issues, result.isConsistent);
+            executor.shutdown();
         }
 
-        executor.shutdown();
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
@@ -596,56 +649,72 @@ public class MultitenancyRaceTest {
         Storage storage1 = getStorage(main, tenant1);
         Storage storage2 = getStorage(main, tenant2);
 
-        AuthRecipeUserInfo user = EmailPassword.signUp(tenant1, storage1, main,
-                "old@test.com", "password123");
+        for (int iter = 0; iter < RaceTestUtils.RACE_TEST_ITERATIONS; iter++) {
+            final int iterFinal = iter;
+            AuthRecipeUserInfo user = EmailPassword.signUp(tenant1, storage1, main,
+                    "old" + iter + "@test.com", "password123");
 
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        CountDownLatch startLatch = new CountDownLatch(1);
-
-        // Thread 1: Add to tenant2
-        Future<?> tenantFuture = executor.submit(() -> {
+            // Reset: remove from tenant2 if present
             try {
-                startLatch.await();
-                Multitenancy.addUserIdToTenant(main, tenant2, storage2,
-                        user.getSupertokensUserId());
+                Multitenancy.removeUserIdFromTenant(main, tenant2, storage2,
+                        user.getSupertokensUserId(), null);
             } catch (Exception e) {
-                // Expected
+                // User might not be in tenant2 yet
             }
-        });
 
-        // Thread 2: Update email
-        Future<?> emailFuture = executor.submit(() -> {
-            try {
-                startLatch.await();
-                EmailPassword.updateUsersEmailOrPassword(main,
-                        user.getSupertokensUserId(), "new@test.com", null);
-            } catch (Exception e) {
-                // Expected
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            CountDownLatch startLatch = new CountDownLatch(1);
+
+            // Thread 1: Add to tenant2
+            Future<?> tenantFuture = executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    Multitenancy.addUserIdToTenant(main, tenant2, storage2,
+                            user.getSupertokensUserId());
+                } catch (Exception e) {
+                    // Expected
+                }
+            });
+
+            // Thread 2: Update email
+            Future<?> emailFuture = executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    EmailPassword.updateUsersEmailOrPassword(main,
+                            user.getSupertokensUserId(), "new" + iterFinal + "@test.com", null);
+                } catch (Exception e) {
+                    // Expected
+                }
+            });
+
+            startLatch.countDown();
+            tenantFuture.get(30, TimeUnit.SECONDS);
+            emailFuture.get(30, TimeUnit.SECONDS);
+
+            // Verify: Both tenants should have the SAME email
+            AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(main, user.getSupertokensUserId());
+            assertNotNull(finalUser);
+
+            // Find the user's login method
+            String actualEmail = null;
+            for (var loginMethod : finalUser.loginMethods) {
+                if (loginMethod.getSupertokensUserId().equals(user.getSupertokensUserId())) {
+                    actualEmail = loginMethod.email;
+                    break;
+                }
             }
-        });
 
-        startLatch.countDown();
-        tenantFuture.get(30, TimeUnit.SECONDS);
-        emailFuture.get(30, TimeUnit.SECONDS);
+            // The email should be consistent - this is what we're testing
+            System.out.println("Iteration " + iter + ": User email: " + actualEmail);
+            System.out.println("User tenants: " + Arrays.toString(finalUser.tenantIds.toArray()));
 
-        // Verify: Both tenants should have the SAME email
-        AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(main, user.getSupertokensUserId());
-        assertNotNull(finalUser);
+            // Add consistency check
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(main, finalUser);
+            assertTrue("Reservation consistency violated at iteration " + iter + ": " + result.issues, result.isConsistent);
 
-        // Find the user's login method
-        String actualEmail = null;
-        for (var loginMethod : finalUser.loginMethods) {
-            if (loginMethod.getSupertokensUserId().equals(user.getSupertokensUserId())) {
-                actualEmail = loginMethod.email;
-                break;
-            }
+            executor.shutdown();
         }
 
-        // The email should be consistent - this is what we're testing
-        System.out.println("User email: " + actualEmail);
-        System.out.println("User tenants: " + Arrays.toString(finalUser.tenantIds.toArray()));
-
-        executor.shutdown();
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
@@ -686,65 +755,80 @@ public class MultitenancyRaceTest {
                 "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(main, primaryUser.getSupertokensUserId());
 
-        AuthRecipeUserInfo linkedUser = EmailPassword.signUp(tenants[0], storages[0], main,
-                "linked@test.com", "password123");
-        AuthRecipe.linkAccounts(main, linkedUser.getSupertokensUserId(),
-                primaryUser.getSupertokensUserId());
+        for (int iter = 0; iter < RaceTestUtils.RACE_TEST_ITERATIONS; iter++) {
+            final int iterFinal = iter;
+            AuthRecipeUserInfo linkedUser = EmailPassword.signUp(tenants[0], storages[0], main,
+                    "linked" + iter + "@test.com", "password123");
+            AuthRecipe.linkAccounts(main, linkedUser.getSupertokensUserId(),
+                    primaryUser.getSupertokensUserId());
 
-        // Concurrent: add linked user to tenant1, update linked user's email
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        CountDownLatch startLatch = new CountDownLatch(1);
-
-        executor.submit(() -> {
+            // Reset: remove linked user from tenants[1] if present
             try {
-                startLatch.await();
-                Multitenancy.addUserIdToTenant(main, tenants[1], storages[1],
-                        linkedUser.getSupertokensUserId());
+                Multitenancy.removeUserIdFromTenant(main, tenants[1], storages[1],
+                        linkedUser.getSupertokensUserId(), null);
             } catch (Exception e) {
-                // Expected
+                // User might not be in tenant1 yet
             }
-        });
 
-        executor.submit(() -> {
-            try {
-                startLatch.await();
-                EmailPassword.updateUsersEmailOrPassword(main,
-                        linkedUser.getSupertokensUserId(), "newlinked@test.com", null);
-            } catch (Exception e) {
-                // Expected
-            }
-        });
+            // Concurrent: add linked user to tenant1, update linked user's email
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            CountDownLatch startLatch = new CountDownLatch(1);
 
-        startLatch.countDown();
-        executor.shutdown();
-        executor.awaitTermination(30, TimeUnit.SECONDS);
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    Multitenancy.addUserIdToTenant(main, tenants[1], storages[1],
+                            linkedUser.getSupertokensUserId());
+                } catch (Exception e) {
+                    // Expected
+                }
+            });
 
-        // Verify consistency
-        AuthRecipeUserInfo finalLinkedUser = AuthRecipe.getUserById(main,
-                linkedUser.getSupertokensUserId());
-        AuthRecipeUserInfo finalPrimaryUser = AuthRecipe.getUserById(main,
-                primaryUser.getSupertokensUserId());
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    EmailPassword.updateUsersEmailOrPassword(main,
+                            linkedUser.getSupertokensUserId(), "newlinked" + iterFinal + "@test.com", null);
+                } catch (Exception e) {
+                    // Expected
+                }
+            });
 
-        assertNotNull(finalLinkedUser);
-        assertNotNull(finalPrimaryUser);
+            startLatch.countDown();
+            executor.shutdown();
+            executor.awaitTermination(30, TimeUnit.SECONDS);
 
-        // Find the linked user's login method
-        String actualEmail = null;
-        for (var loginMethod : finalLinkedUser.loginMethods) {
-            if (loginMethod.getSupertokensUserId().equals(linkedUser.getSupertokensUserId())) {
-                actualEmail = loginMethod.email;
-                break;
-            }
-        }
+            // Verify consistency
+            AuthRecipeUserInfo finalLinkedUser = AuthRecipe.getUserById(main,
+                    linkedUser.getSupertokensUserId());
+            AuthRecipeUserInfo finalPrimaryUser = AuthRecipe.getUserById(main,
+                    primaryUser.getSupertokensUserId());
 
-        if (actualEmail != null) {
-            // Verify email in primary user's linked method matches
-            for (var lm : finalPrimaryUser.loginMethods) {
-                if (lm.getSupertokensUserId().equals(linkedUser.getSupertokensUserId())) {
-                    assertEquals("Email in linked method must match actual email", actualEmail, lm.email);
+            assertNotNull(finalLinkedUser);
+            assertNotNull(finalPrimaryUser);
+
+            // Find the linked user's login method
+            String actualEmail = null;
+            for (var loginMethod : finalLinkedUser.loginMethods) {
+                if (loginMethod.getSupertokensUserId().equals(linkedUser.getSupertokensUserId())) {
+                    actualEmail = loginMethod.email;
                     break;
                 }
             }
+
+            if (actualEmail != null) {
+                // Verify email in primary user's linked method matches
+                for (var lm : finalPrimaryUser.loginMethods) {
+                    if (lm.getSupertokensUserId().equals(linkedUser.getSupertokensUserId())) {
+                        assertEquals("Email in linked method must match actual email", actualEmail, lm.email);
+                        break;
+                    }
+                }
+            }
+
+            // Add consistency check
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(main, finalPrimaryUser);
+            assertTrue("Reservation consistency violated at iteration " + iter + ": " + result.issues, result.isConsistent);
         }
 
         process.kill();
@@ -786,6 +870,7 @@ public class MultitenancyRaceTest {
         int ITERATIONS = 30;
 
         for (int iter = 0; iter < ITERATIONS; iter++) {
+            final int iterFinal = iter;
             // Reset: remove from all tenants except 0
             for (int i = 1; i < NUM_TENANTS; i++) {
                 try {
@@ -824,7 +909,7 @@ public class MultitenancyRaceTest {
 
             // Multiple email updates
             for (int i = 0; i < 3; i++) {
-                final String newEmail = "updated" + iter + "_" + i + "@test.com";
+                final String newEmail = "updated" + iterFinal + "_" + i + "@test.com";
                 executor.submit(() -> {
                     try {
                         startLatch.await();
@@ -855,6 +940,10 @@ public class MultitenancyRaceTest {
                 }
             }
             assertNotNull("User should have an email", actualEmail);
+
+            // Add consistency check
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(main, finalUser);
+            assertTrue("Reservation consistency violated at iteration " + iter + ": " + result.issues, result.isConsistent);
         }
 
         process.kill();

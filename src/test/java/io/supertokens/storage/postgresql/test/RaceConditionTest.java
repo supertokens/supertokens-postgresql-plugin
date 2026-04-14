@@ -101,61 +101,65 @@ public class RaceConditionTest {
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(process.getProcess(), primaryUser.getSupertokensUserId());
 
-        // Create recipe user
-        AuthRecipeUserInfo recipeUser = EmailPassword.signUp(process.getProcess(), "recipe@test.com", "password123");
+        for (int iter = 0; iter < RaceTestUtils.RACE_TEST_ITERATIONS; iter++) {
+            final int iterFinal = iter;
+            // Create recipe user
+            AuthRecipeUserInfo recipeUser = EmailPassword.signUp(process.getProcess(), "recipe" + iter + "@test.com", "password123");
 
-        // Run concurrent operations
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        CountDownLatch startLatch = new CountDownLatch(1);
-        AtomicReference<Exception> linkException = new AtomicReference<>();
-        AtomicReference<Exception> updateException = new AtomicReference<>();
+            // Run concurrent operations
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            CountDownLatch startLatch = new CountDownLatch(1);
+            AtomicReference<Exception> linkException = new AtomicReference<>();
+            AtomicReference<Exception> updateException = new AtomicReference<>();
 
-        // Thread 1: Link accounts
-        Future<?> linkFuture = executor.submit(() -> {
-            try {
-                startLatch.await();
-                AuthRecipe.linkAccounts(process.getProcess(), recipeUser.getSupertokensUserId(),
-                        primaryUser.getSupertokensUserId());
-            } catch (Exception e) {
-                linkException.set(e);
+            // Thread 1: Link accounts
+            Future<?> linkFuture = executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    AuthRecipe.linkAccounts(process.getProcess(), recipeUser.getSupertokensUserId(),
+                            primaryUser.getSupertokensUserId());
+                } catch (Exception e) {
+                    linkException.set(e);
+                }
+            });
+
+            // Thread 2: Update email
+            Future<?> updateFuture = executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    EmailPassword.updateUsersEmailOrPassword(process.getProcess(),
+                            recipeUser.getSupertokensUserId(), "newemail" + iterFinal + "@test.com", null);
+                } catch (Exception e) {
+                    updateException.set(e);
+                }
+            });
+
+            // Start both threads simultaneously
+            startLatch.countDown();
+            linkFuture.get(30, TimeUnit.SECONDS);
+            updateFuture.get(30, TimeUnit.SECONDS);
+
+            // Verify consistency by directly querying reservation tables
+            AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(process.getProcess(), recipeUser.getSupertokensUserId());
+            assertNotNull(finalUser);
+
+            // Check reservation tables directly via SQL
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
+                    process.getProcess(), finalUser);
+
+            if (!result.isConsistent) {
+                System.out.println("RACE CONDITION DETECTED in testLinkAccountsDuringEmailPasswordEmailUpdate (iteration " + iter + "):");
+                for (String issue : result.issues) {
+                    System.out.println("  " + issue);
+                }
+                RaceTestUtils.printAllReservations(process.getProcess(), finalUser);
             }
-        });
 
-        // Thread 2: Update email
-        Future<?> updateFuture = executor.submit(() -> {
-            try {
-                startLatch.await();
-                EmailPassword.updateUsersEmailOrPassword(process.getProcess(),
-                        recipeUser.getSupertokensUserId(), "newemail@test.com", null);
-            } catch (Exception e) {
-                updateException.set(e);
-            }
-        });
+            assertTrue("Reservation consistency check failed at iteration " + iter + ": " + result.issues, result.isConsistent);
 
-        // Start both threads simultaneously
-        startLatch.countDown();
-        linkFuture.get(30, TimeUnit.SECONDS);
-        updateFuture.get(30, TimeUnit.SECONDS);
-
-        // Verify consistency by directly querying reservation tables
-        AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(process.getProcess(), recipeUser.getSupertokensUserId());
-        assertNotNull(finalUser);
-
-        // Check reservation tables directly via SQL
-        RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
-                process.getProcess(), finalUser);
-
-        if (!result.isConsistent) {
-            System.out.println("RACE CONDITION DETECTED in testLinkAccountsDuringEmailPasswordEmailUpdate:");
-            for (String issue : result.issues) {
-                System.out.println("  " + issue);
-            }
-            RaceTestUtils.printAllReservations(process.getProcess(), finalUser);
+            executor.shutdown();
         }
 
-        assertTrue("Reservation consistency check failed: " + result.issues, result.isConsistent);
-
-        executor.shutdown();
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
@@ -300,58 +304,62 @@ public class RaceConditionTest {
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(process.getProcess(), primaryUser.getSupertokensUserId());
 
-        // Create recipe user
-        AuthRecipeUserInfo recipeUser = EmailPassword.signUp(process.getProcess(), "old@test.com", "password123");
+        for (int iter = 0; iter < RaceTestUtils.RACE_TEST_ITERATIONS; iter++) {
+            final int iterFinal = iter;
+            // Create recipe user
+            AuthRecipeUserInfo recipeUser = EmailPassword.signUp(process.getProcess(), "old" + iter + "@test.com", "password123");
 
-        // Run concurrent operations
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        CountDownLatch startLatch = new CountDownLatch(1);
+            // Run concurrent operations
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            CountDownLatch startLatch = new CountDownLatch(1);
 
-        // Thread 1: Update email
-        Future<?> updateFuture = executor.submit(() -> {
-            try {
-                startLatch.await();
-                EmailPassword.updateUsersEmailOrPassword(process.getProcess(),
-                        recipeUser.getSupertokensUserId(), "new@test.com", null);
-            } catch (Exception e) {
-                // Expected if race is properly handled
+            // Thread 1: Update email
+            Future<?> updateFuture = executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    EmailPassword.updateUsersEmailOrPassword(process.getProcess(),
+                            recipeUser.getSupertokensUserId(), "new" + iterFinal + "@test.com", null);
+                } catch (Exception e) {
+                    // Expected if race is properly handled
+                }
+            });
+
+            // Thread 2: Link accounts
+            Future<?> linkFuture = executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    AuthRecipe.linkAccounts(process.getProcess(), recipeUser.getSupertokensUserId(),
+                            primaryUser.getSupertokensUserId());
+                } catch (Exception e) {
+                    // Expected if race is properly handled
+                }
+            });
+
+            startLatch.countDown();
+            updateFuture.get(30, TimeUnit.SECONDS);
+            linkFuture.get(30, TimeUnit.SECONDS);
+
+            // Verify state by directly querying reservation tables
+            AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(process.getProcess(), recipeUser.getSupertokensUserId());
+            assertNotNull(finalUser);
+
+            // Check reservation tables directly via SQL
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
+                    process.getProcess(), finalUser);
+
+            if (!result.isConsistent) {
+                System.out.println("RACE CONDITION DETECTED in testEmailUpdateDuringLinkAccounts (iteration " + iter + "):");
+                for (String issue : result.issues) {
+                    System.out.println("  " + issue);
+                }
+                RaceTestUtils.printAllReservations(process.getProcess(), finalUser);
             }
-        });
 
-        // Thread 2: Link accounts
-        Future<?> linkFuture = executor.submit(() -> {
-            try {
-                startLatch.await();
-                AuthRecipe.linkAccounts(process.getProcess(), recipeUser.getSupertokensUserId(),
-                        primaryUser.getSupertokensUserId());
-            } catch (Exception e) {
-                // Expected if race is properly handled
-            }
-        });
+            assertTrue("Reservation consistency check failed at iteration " + iter + ": " + result.issues, result.isConsistent);
 
-        startLatch.countDown();
-        updateFuture.get(30, TimeUnit.SECONDS);
-        linkFuture.get(30, TimeUnit.SECONDS);
-
-        // Verify state by directly querying reservation tables
-        AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(process.getProcess(), recipeUser.getSupertokensUserId());
-        assertNotNull(finalUser);
-
-        // Check reservation tables directly via SQL
-        RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
-                process.getProcess(), finalUser);
-
-        if (!result.isConsistent) {
-            System.out.println("RACE CONDITION DETECTED in testEmailUpdateDuringLinkAccounts:");
-            for (String issue : result.issues) {
-                System.out.println("  " + issue);
-            }
-            RaceTestUtils.printAllReservations(process.getProcess(), finalUser);
+            executor.shutdown();
         }
 
-        assertTrue("Reservation consistency check failed: " + result.issues, result.isConsistent);
-
-        executor.shutdown();
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }

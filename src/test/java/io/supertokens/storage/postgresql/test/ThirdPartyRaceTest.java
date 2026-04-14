@@ -100,74 +100,78 @@ public class ThirdPartyRaceTest {
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(process.getProcess(), primaryUser.getSupertokensUserId());
 
-        // Create ThirdParty user with initial email
-        ThirdParty.SignInUpResponse initialSignIn = ThirdParty.signInUp(
-                process.getProcess(), "google", "tp-user-123", "old@gmail.com");
-        String tpUserId = initialSignIn.user.getSupertokensUserId();
+        for (int iter = 0; iter < RaceTestUtils.RACE_TEST_ITERATIONS; iter++) {
+            final int iterFinal = iter;
+            // Create ThirdParty user with initial email
+            ThirdParty.SignInUpResponse initialSignIn = ThirdParty.signInUp(
+                    process.getProcess(), "google", "tp-user-" + iter, "old" + iter + "@gmail.com");
+            String tpUserId = initialSignIn.user.getSupertokensUserId();
 
-        // Concurrent operations
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        CountDownLatch startLatch = new CountDownLatch(1);
+            // Concurrent operations
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            CountDownLatch startLatch = new CountDownLatch(1);
 
-        // Thread 1: signInUp with NEW email from provider
-        Future<?> signInFuture = executor.submit(() -> {
-            try {
-                startLatch.await();
-                // Provider now returns different email
-                ThirdParty.signInUp(process.getProcess(), "google", "tp-user-123", "new@gmail.com");
-            } catch (Exception e) {
-                // Expected in race conditions
-            }
-        });
-
-        // Thread 2: Link to primary
-        Future<?> linkFuture = executor.submit(() -> {
-            try {
-                startLatch.await();
-                AuthRecipe.linkAccounts(process.getProcess(), tpUserId, primaryUser.getSupertokensUserId());
-            } catch (Exception e) {
-                // Expected in race conditions
-            }
-        });
-
-        startLatch.countDown();
-        signInFuture.get(30, TimeUnit.SECONDS);
-        linkFuture.get(30, TimeUnit.SECONDS);
-
-        // Verify
-        AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(process.getProcess(), tpUserId);
-        assertNotNull(finalUser);
-
-        // Find the third party user's login method
-        String currentEmail = null;
-        for (var loginMethod : finalUser.loginMethods) {
-            if (loginMethod.getSupertokensUserId().equals(tpUserId)) {
-                currentEmail = loginMethod.email;
-                break;
-            }
-        }
-        assertNotNull("Third party user's login method should be found", currentEmail);
-
-        // Check if linked (primary user ID differs from third party user ID)
-        boolean isLinked = !finalUser.getSupertokensUserId().equals(tpUserId);
-
-        if (isLinked) {
-            // CRITICAL: Check reservation tables directly via SQL
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
-                    process.getProcess(), finalUser);
-
-            if (!result.isConsistent) {
-                System.out.println("RACE CONDITION DETECTED in testLinkDuringThirdPartySignInUpEmailUpdate:");
-                for (String issue : result.issues) {
-                    System.out.println("  " + issue);
+            // Thread 1: signInUp with NEW email from provider
+            Future<?> signInFuture = executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    // Provider now returns different email
+                    ThirdParty.signInUp(process.getProcess(), "google", "tp-user-" + iterFinal, "new" + iterFinal + "@gmail.com");
+                } catch (Exception e) {
+                    // Expected in race conditions
                 }
-                RaceTestUtils.printAllReservations(process.getProcess(), finalUser);
+            });
+
+            // Thread 2: Link to primary
+            Future<?> linkFuture = executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    AuthRecipe.linkAccounts(process.getProcess(), tpUserId, primaryUser.getSupertokensUserId());
+                } catch (Exception e) {
+                    // Expected in race conditions
+                }
+            });
+
+            startLatch.countDown();
+            signInFuture.get(30, TimeUnit.SECONDS);
+            linkFuture.get(30, TimeUnit.SECONDS);
+
+            // Verify
+            AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(process.getProcess(), tpUserId);
+            assertNotNull(finalUser);
+
+            // Find the third party user's login method
+            String currentEmail = null;
+            for (var loginMethod : finalUser.loginMethods) {
+                if (loginMethod.getSupertokensUserId().equals(tpUserId)) {
+                    currentEmail = loginMethod.email;
+                    break;
+                }
+            }
+            assertNotNull("Third party user's login method should be found", currentEmail);
+
+            // Check if linked (primary user ID differs from third party user ID)
+            boolean isLinked = !finalUser.getSupertokensUserId().equals(tpUserId);
+
+            if (isLinked) {
+                // CRITICAL: Check reservation tables directly via SQL
+                RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
+                        process.getProcess(), finalUser);
+
+                if (!result.isConsistent) {
+                    System.out.println("RACE CONDITION DETECTED in testLinkDuringThirdPartySignInUpEmailUpdate (iteration " + iter + "):");
+                    for (String issue : result.issues) {
+                        System.out.println("  " + issue);
+                    }
+                    RaceTestUtils.printAllReservations(process.getProcess(), finalUser);
+                }
+
+                assertTrue("Reservation consistency check failed at iteration " + iter + ": " + result.issues, result.isConsistent);
             }
 
-            assertTrue("Reservation consistency check failed: " + result.issues, result.isConsistent);
+            executor.shutdown();
         }
 
-        executor.shutdown();
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
@@ -299,60 +303,63 @@ public class ThirdPartyRaceTest {
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(process.getProcess(), primaryUser.getSupertokensUserId());
 
-        // Create and link ThirdParty user
-        ThirdParty.SignInUpResponse initial = ThirdParty.signInUp(
-                process.getProcess(), "google", "g-123", "user@gmail.com");
-        String userId = initial.user.getSupertokensUserId();
-        AuthRecipe.linkAccounts(process.getProcess(), userId, primaryUser.getSupertokensUserId());
+        for (int iter = 0; iter < RaceTestUtils.RACE_TEST_ITERATIONS; iter++) {
+            final int iterFinal = iter;
+            // Create and link ThirdParty user
+            ThirdParty.SignInUpResponse initial = ThirdParty.signInUp(
+                    process.getProcess(), "google", "g-" + iter, "user" + iter + "@gmail.com");
+            String userId = initial.user.getSupertokensUserId();
+            AuthRecipe.linkAccounts(process.getProcess(), userId, primaryUser.getSupertokensUserId());
 
-        // Concurrent signInUp with email change and unlink
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        CountDownLatch startLatch = new CountDownLatch(1);
+            // Concurrent signInUp with email change and unlink
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            CountDownLatch startLatch = new CountDownLatch(1);
 
-        executor.submit(() -> {
-            try {
-                startLatch.await();
-                // Google returns updated email
-                ThirdParty.signInUp(process.getProcess(), "google", "g-123", "updated@gmail.com");
-            } catch (Exception e) {
-                // Expected
-            }
-        });
-
-        executor.submit(() -> {
-            try {
-                startLatch.await();
-                AuthRecipe.unlinkAccounts(process.getProcess(), userId);
-            } catch (Exception e) {
-                // Expected
-            }
-        });
-
-        startLatch.countDown();
-        executor.shutdown();
-        executor.awaitTermination(30, TimeUnit.SECONDS);
-
-        // Verify final state is consistent
-        AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(process.getProcess(), userId);
-        assertNotNull("User should still exist", finalUser);
-
-        // Check if linked (primary user ID differs from our user ID)
-        boolean isLinked = !finalUser.getSupertokensUserId().equals(userId);
-
-        if (isLinked) {
-            // CRITICAL: Check reservation tables directly via SQL
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
-                    process.getProcess(), finalUser);
-
-            if (!result.isConsistent) {
-                System.out.println("RACE CONDITION DETECTED in testThirdPartySignInUpWithUnlink:");
-                for (String issue : result.issues) {
-                    System.out.println("  " + issue);
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    // Google returns updated email
+                    ThirdParty.signInUp(process.getProcess(), "google", "g-" + iterFinal, "updated" + iterFinal + "@gmail.com");
+                } catch (Exception e) {
+                    // Expected
                 }
-                RaceTestUtils.printAllReservations(process.getProcess(), finalUser);
-            }
+            });
 
-            assertTrue("Reservation consistency check failed: " + result.issues, result.isConsistent);
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    AuthRecipe.unlinkAccounts(process.getProcess(), userId);
+                } catch (Exception e) {
+                    // Expected
+                }
+            });
+
+            startLatch.countDown();
+            executor.shutdown();
+            executor.awaitTermination(30, TimeUnit.SECONDS);
+
+            // Verify final state is consistent
+            AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(process.getProcess(), userId);
+            assertNotNull("User should still exist", finalUser);
+
+            // Check if linked (primary user ID differs from our user ID)
+            boolean isLinked = !finalUser.getSupertokensUserId().equals(userId);
+
+            if (isLinked) {
+                // CRITICAL: Check reservation tables directly via SQL
+                RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
+                        process.getProcess(), finalUser);
+
+                if (!result.isConsistent) {
+                    System.out.println("RACE CONDITION DETECTED in testThirdPartySignInUpWithUnlink (iteration " + iter + "):");
+                    for (String issue : result.issues) {
+                        System.out.println("  " + issue);
+                    }
+                    RaceTestUtils.printAllReservations(process.getProcess(), finalUser);
+                }
+
+                assertTrue("Reservation consistency check failed at iteration " + iter + ": " + result.issues, result.isConsistent);
+            }
         }
 
         process.kill();

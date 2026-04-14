@@ -102,88 +102,92 @@ public class UnlinkRaceTest {
             return;
         }
 
-        // Setup: Create and link users
+        // Setup: Create primary user
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(process.getProcess(), primaryUser.getSupertokensUserId());
 
-        AuthRecipeUserInfo linkedUser = EmailPassword.signUp(process.getProcess(), "linked@test.com", "password123");
-        AuthRecipe.linkAccounts(process.getProcess(), linkedUser.getSupertokensUserId(),
-                primaryUser.getSupertokensUserId());
-
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        CountDownLatch startLatch = new CountDownLatch(1);
-
-        // Update email
-        executor.submit(() -> {
-            try {
-                startLatch.await();
-                EmailPassword.updateUsersEmailOrPassword(process.getProcess(),
-                        linkedUser.getSupertokensUserId(), "newlinked@test.com", null);
-            } catch (Exception e) {
-                // Expected
-            }
-        });
-
-        // Unlink
-        executor.submit(() -> {
-            try {
-                startLatch.await();
-                AuthRecipe.unlinkAccounts(process.getProcess(), linkedUser.getSupertokensUserId());
-            } catch (Exception e) {
-                // Expected
-            }
-        });
-
-        startLatch.countDown();
-        executor.shutdown();
-        executor.awaitTermination(30, TimeUnit.SECONDS);
-
-        // Verify: No orphaned reservations
-        AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(process.getProcess(), linkedUser.getSupertokensUserId());
-        assertNotNull(finalUser);
-
-        // Check if linked (primary user ID differs from linked user ID)
-        boolean isLinked = !finalUser.getSupertokensUserId().equals(linkedUser.getSupertokensUserId());
-
-        // Find the linked user's login method
-        String userEmail = null;
-        for (var loginMethod : finalUser.loginMethods) {
-            if (loginMethod.getSupertokensUserId().equals(linkedUser.getSupertokensUserId())) {
-                userEmail = loginMethod.email;
-                break;
-            }
-        }
-
-        if (!isLinked) {
-            // User is unlinked - verify primary_user_tenants doesn't have orphaned entries
-            // Check that the primary user doesn't have this user's email reserved
-            AuthRecipeUserInfo primaryRefetch = AuthRecipe.getUserById(process.getProcess(),
+        for (int iter = 0; iter < RaceTestUtils.RACE_TEST_ITERATIONS; iter++) {
+            final int iterFinal = iter;
+            // Create and link users
+            AuthRecipeUserInfo linkedUser = EmailPassword.signUp(process.getProcess(), "linked" + iter + "@test.com", "password123");
+            AuthRecipe.linkAccounts(process.getProcess(), linkedUser.getSupertokensUserId(),
                     primaryUser.getSupertokensUserId());
 
-            // The unlinked user should NOT appear in primary's login methods
-            boolean foundInPrimary = false;
-            for (var lm : primaryRefetch.loginMethods) {
-                if (lm.getSupertokensUserId().equals(linkedUser.getSupertokensUserId())) {
-                    foundInPrimary = true;
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            CountDownLatch startLatch = new CountDownLatch(1);
+
+            // Update email
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    EmailPassword.updateUsersEmailOrPassword(process.getProcess(),
+                            linkedUser.getSupertokensUserId(), "newlinked" + iterFinal + "@test.com", null);
+                } catch (Exception e) {
+                    // Expected
+                }
+            });
+
+            // Unlink
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    AuthRecipe.unlinkAccounts(process.getProcess(), linkedUser.getSupertokensUserId());
+                } catch (Exception e) {
+                    // Expected
+                }
+            });
+
+            startLatch.countDown();
+            executor.shutdown();
+            executor.awaitTermination(30, TimeUnit.SECONDS);
+
+            // Verify: No orphaned reservations
+            AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(process.getProcess(), linkedUser.getSupertokensUserId());
+            assertNotNull(finalUser);
+
+            // Check if linked (primary user ID differs from linked user ID)
+            boolean isLinked = !finalUser.getSupertokensUserId().equals(linkedUser.getSupertokensUserId());
+
+            // Find the linked user's login method
+            String userEmail = null;
+            for (var loginMethod : finalUser.loginMethods) {
+                if (loginMethod.getSupertokensUserId().equals(linkedUser.getSupertokensUserId())) {
+                    userEmail = loginMethod.email;
                     break;
                 }
             }
-            assertFalse("Unlinked user should not be in primary's login methods", foundInPrimary);
-        } else {
-            // User is still linked - verify consistency using reservation tables
-            if (userEmail != null) {
-                RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
-                        process.getProcess(), finalUser);
 
-                if (!result.isConsistent) {
-                    System.out.println("RACE CONDITION DETECTED in testUnlinkDuringEmailUpdate:");
-                    for (String issue : result.issues) {
-                        System.out.println("  " + issue);
+            if (!isLinked) {
+                // User is unlinked - verify primary_user_tenants doesn't have orphaned entries
+                // Check that the primary user doesn't have this user's email reserved
+                AuthRecipeUserInfo primaryRefetch = AuthRecipe.getUserById(process.getProcess(),
+                        primaryUser.getSupertokensUserId());
+
+                // The unlinked user should NOT appear in primary's login methods
+                boolean foundInPrimary = false;
+                for (var lm : primaryRefetch.loginMethods) {
+                    if (lm.getSupertokensUserId().equals(linkedUser.getSupertokensUserId())) {
+                        foundInPrimary = true;
+                        break;
                     }
-                    RaceTestUtils.printAllReservations(process.getProcess(), finalUser);
                 }
+                assertFalse("Unlinked user should not be in primary's login methods", foundInPrimary);
+            } else {
+                // User is still linked - verify consistency using reservation tables
+                if (userEmail != null) {
+                    RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
+                            process.getProcess(), finalUser);
 
-                assertTrue("Reservation consistency check failed: " + result.issues, result.isConsistent);
+                    if (!result.isConsistent) {
+                        System.out.println("RACE CONDITION DETECTED in testUnlinkDuringEmailUpdate (iteration " + iter + "):");
+                        for (String issue : result.issues) {
+                            System.out.println("  " + issue);
+                        }
+                        RaceTestUtils.printAllReservations(process.getProcess(), finalUser);
+                    }
+
+                    assertTrue("Reservation consistency check failed at iteration " + iter + ": " + result.issues, result.isConsistent);
+                }
             }
         }
 

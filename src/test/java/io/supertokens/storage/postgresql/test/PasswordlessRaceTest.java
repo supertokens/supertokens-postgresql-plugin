@@ -113,71 +113,75 @@ public class PasswordlessRaceTest {
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(process.getProcess(), primaryUser.getSupertokensUserId());
 
-        // Create passwordless user with email
-        Passwordless.ConsumeCodeResponse response = createPasswordlessUser(process, "old@passwordless.com", null);
-        String userId = response.user.getSupertokensUserId();
+        for (int iter = 0; iter < RaceTestUtils.RACE_TEST_ITERATIONS; iter++) {
+            final int iterFinal = iter;
+            // Create passwordless user with email
+            Passwordless.ConsumeCodeResponse response = createPasswordlessUser(process, "old" + iter + "@passwordless.com", null);
+            String userId = response.user.getSupertokensUserId();
 
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        CountDownLatch startLatch = new CountDownLatch(1);
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            CountDownLatch startLatch = new CountDownLatch(1);
 
-        // Update email
-        Future<?> updateFuture = executor.submit(() -> {
-            try {
-                startLatch.await();
-                Passwordless.updateUser(process.getProcess(), userId,
-                        new Passwordless.FieldUpdate("new@passwordless.com"), null);
-            } catch (Exception e) {
-                // Expected in race conditions
-            }
-        });
-
-        // Link
-        Future<?> linkFuture = executor.submit(() -> {
-            try {
-                startLatch.await();
-                AuthRecipe.linkAccounts(process.getProcess(), userId, primaryUser.getSupertokensUserId());
-            } catch (Exception e) {
-                // Expected in race conditions
-            }
-        });
-
-        startLatch.countDown();
-        updateFuture.get(30, TimeUnit.SECONDS);
-        linkFuture.get(30, TimeUnit.SECONDS);
-
-        // Verify
-        AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(process.getProcess(), userId);
-        assertNotNull(finalUser);
-
-        // Find the passwordless user's login method
-        String actualEmail = null;
-        for (var loginMethod : finalUser.loginMethods) {
-            if (loginMethod.getSupertokensUserId().equals(userId)) {
-                actualEmail = loginMethod.email;
-                break;
-            }
-        }
-
-        // Check if linked (primary user ID differs from our user ID)
-        boolean isLinked = !finalUser.getSupertokensUserId().equals(userId);
-
-        if (isLinked && actualEmail != null) {
-            // CRITICAL: Check reservation tables directly via SQL
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
-                    process.getProcess(), finalUser);
-
-            if (!result.isConsistent) {
-                System.out.println("RACE CONDITION DETECTED in testLinkDuringPasswordlessEmailUpdate:");
-                for (String issue : result.issues) {
-                    System.out.println("  " + issue);
+            // Update email
+            Future<?> updateFuture = executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    Passwordless.updateUser(process.getProcess(), userId,
+                            new Passwordless.FieldUpdate("new" + iterFinal + "@passwordless.com"), null);
+                } catch (Exception e) {
+                    // Expected in race conditions
                 }
-                RaceTestUtils.printAllReservations(process.getProcess(), finalUser);
+            });
+
+            // Link
+            Future<?> linkFuture = executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    AuthRecipe.linkAccounts(process.getProcess(), userId, primaryUser.getSupertokensUserId());
+                } catch (Exception e) {
+                    // Expected in race conditions
+                }
+            });
+
+            startLatch.countDown();
+            updateFuture.get(30, TimeUnit.SECONDS);
+            linkFuture.get(30, TimeUnit.SECONDS);
+
+            // Verify
+            AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(process.getProcess(), userId);
+            assertNotNull(finalUser);
+
+            // Find the passwordless user's login method
+            String actualEmail = null;
+            for (var loginMethod : finalUser.loginMethods) {
+                if (loginMethod.getSupertokensUserId().equals(userId)) {
+                    actualEmail = loginMethod.email;
+                    break;
+                }
             }
 
-            assertTrue("Reservation consistency check failed: " + result.issues, result.isConsistent);
+            // Check if linked (primary user ID differs from our user ID)
+            boolean isLinked = !finalUser.getSupertokensUserId().equals(userId);
+
+            if (isLinked && actualEmail != null) {
+                // CRITICAL: Check reservation tables directly via SQL
+                RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
+                        process.getProcess(), finalUser);
+
+                if (!result.isConsistent) {
+                    System.out.println("RACE CONDITION DETECTED in testLinkDuringPasswordlessEmailUpdate (iteration " + iter + "):");
+                    for (String issue : result.issues) {
+                        System.out.println("  " + issue);
+                    }
+                    RaceTestUtils.printAllReservations(process.getProcess(), finalUser);
+                }
+
+                assertTrue("Reservation consistency check failed at iteration " + iter + ": " + result.issues, result.isConsistent);
+            }
+
+            executor.shutdown();
         }
 
-        executor.shutdown();
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
@@ -258,6 +262,10 @@ public class PasswordlessRaceTest {
                     break;
                 }
             }
+
+            // Add consistency check
+            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(process.getProcess(), finalUser);
+            assertTrue("Reservation consistency violated: " + result.issues, result.isConsistent);
         }
 
         process.kill();
@@ -387,96 +395,103 @@ public class PasswordlessRaceTest {
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(process.getProcess(), primaryUser.getSupertokensUserId());
 
-        // Passwordless user with both email and phone
-        Passwordless.CreateCodeResponse code = Passwordless.createCode(process.getProcess(),
-                "user@test.com", "+1111111111", null, null);
-        Passwordless.ConsumeCodeResponse response = Passwordless.consumeCode(process.getProcess(),
-                code.deviceId, code.deviceIdHash, code.userInputCode, null);
-        String userId = response.user.getSupertokensUserId();
+        for (int iter = 0; iter < RaceTestUtils.RACE_TEST_ITERATIONS; iter++) {
+            final int iterFinal = iter;
+            // Passwordless user with both email and phone
+            Passwordless.CreateCodeResponse code = Passwordless.createCode(process.getProcess(),
+                    "user" + iter + "@test.com", "+1" + (1111111111L + iter), null, null);
+            Passwordless.ConsumeCodeResponse response = Passwordless.consumeCode(process.getProcess(),
+                    code.deviceId, code.deviceIdHash, code.userInputCode, null);
+            String userId = response.user.getSupertokensUserId();
 
-        // Link first
-        AuthRecipe.linkAccounts(process.getProcess(), userId, primaryUser.getSupertokensUserId());
+            // Link first
+            AuthRecipe.linkAccounts(process.getProcess(), userId, primaryUser.getSupertokensUserId());
 
-        // Now concurrent email and phone updates
-        ExecutorService executor = Executors.newFixedThreadPool(4);
-        CountDownLatch startLatch = new CountDownLatch(1);
+            // Now concurrent email and phone updates
+            ExecutorService executor = Executors.newFixedThreadPool(4);
+            CountDownLatch startLatch = new CountDownLatch(1);
 
-        // Update email
-        executor.submit(() -> {
-            try {
-                startLatch.await();
-                Passwordless.updateUser(process.getProcess(), userId,
-                        new Passwordless.FieldUpdate("newemail@test.com"), null);
-            } catch (Exception e) {
-                // Expected
-            }
-        });
-
-        // Update phone
-        executor.submit(() -> {
-            try {
-                startLatch.await();
-                Passwordless.updateUser(process.getProcess(), userId, null,
-                        new Passwordless.FieldUpdate("+2222222222"));
-            } catch (Exception e) {
-                // Expected
-            }
-        });
-
-        // Another email update
-        executor.submit(() -> {
-            try {
-                startLatch.await();
-                Passwordless.updateUser(process.getProcess(), userId,
-                        new Passwordless.FieldUpdate("anotheremail@test.com"), null);
-            } catch (Exception e) {
-                // Expected
-            }
-        });
-
-        // Unlink/relink
-        executor.submit(() -> {
-            try {
-                startLatch.await();
-                AuthRecipe.unlinkAccounts(process.getProcess(), userId);
-                AuthRecipe.linkAccounts(process.getProcess(), userId, primaryUser.getSupertokensUserId());
-            } catch (Exception e) {
-                // Expected
-            }
-        });
-
-        startLatch.countDown();
-        executor.shutdown();
-        executor.awaitTermination(30, TimeUnit.SECONDS);
-
-        // Verify BOTH email and phone are correctly reserved
-        AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(process.getProcess(), userId);
-        assertNotNull(finalUser);
-
-        // Check if linked (primary user ID differs from our user ID)
-        boolean isLinked = !finalUser.getSupertokensUserId().equals(userId);
-
-        if (isLinked) {
-            // Find the passwordless user's login method
-            String actualEmail = null;
-            String actualPhone = null;
-            for (var loginMethod : finalUser.loginMethods) {
-                if (loginMethod.getSupertokensUserId().equals(userId)) {
-                    actualEmail = loginMethod.email;
-                    actualPhone = loginMethod.phoneNumber;
-                    break;
+            // Update email
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    Passwordless.updateUser(process.getProcess(), userId,
+                            new Passwordless.FieldUpdate("newemail" + iterFinal + "@test.com"), null);
+                } catch (Exception e) {
+                    // Expected
                 }
-            }
+            });
 
-            AuthRecipeUserInfo primaryRefetch = AuthRecipe.getUserById(process.getProcess(),
-                    primaryUser.getSupertokensUserId());
-
-            for (var lm : primaryRefetch.loginMethods) {
-                if (lm.getSupertokensUserId().equals(userId)) {
-                    assertEquals("Email must match", actualEmail, lm.email);
-                    assertEquals("Phone must match", actualPhone, lm.phoneNumber);
-                    break;
+            // Update phone
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    Passwordless.updateUser(process.getProcess(), userId, null,
+                            new Passwordless.FieldUpdate("+2" + (2222222222L + iterFinal)));
+                } catch (Exception e) {
+                    // Expected
                 }
+            });
+
+            // Another email update
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    Passwordless.updateUser(process.getProcess(), userId,
+                            new Passwordless.FieldUpdate("anotheremail" + iterFinal + "@test.com"), null);
+                } catch (Exception e) {
+                    // Expected
+                }
+            });
+
+            // Unlink/relink
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    AuthRecipe.unlinkAccounts(process.getProcess(), userId);
+                    AuthRecipe.linkAccounts(process.getProcess(), userId, primaryUser.getSupertokensUserId());
+                } catch (Exception e) {
+                    // Expected
+                }
+            });
+
+            startLatch.countDown();
+            executor.shutdown();
+            executor.awaitTermination(30, TimeUnit.SECONDS);
+
+            // Verify BOTH email and phone are correctly reserved
+            AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(process.getProcess(), userId);
+            assertNotNull(finalUser);
+
+            // Check if linked (primary user ID differs from our user ID)
+            boolean isLinked = !finalUser.getSupertokensUserId().equals(userId);
+
+            if (isLinked) {
+                // Find the passwordless user's login method
+                String actualEmail = null;
+                String actualPhone = null;
+                for (var loginMethod : finalUser.loginMethods) {
+                    if (loginMethod.getSupertokensUserId().equals(userId)) {
+                        actualEmail = loginMethod.email;
+                        actualPhone = loginMethod.phoneNumber;
+                        break;
+                    }
+                }
+
+                AuthRecipeUserInfo primaryRefetch = AuthRecipe.getUserById(process.getProcess(),
+                        primaryUser.getSupertokensUserId());
+
+                for (var lm : primaryRefetch.loginMethods) {
+                    if (lm.getSupertokensUserId().equals(userId)) {
+                        assertEquals("Email must match", actualEmail, lm.email);
+                        assertEquals("Phone must match", actualPhone, lm.phoneNumber);
+                        break;
+                    }
+                }
+
+                // Add consistency check
+                RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(process.getProcess(), finalUser);
+                assertTrue("Reservation consistency violated at iteration " + iter + ": " + result.issues, result.isConsistent);
             }
         }
 

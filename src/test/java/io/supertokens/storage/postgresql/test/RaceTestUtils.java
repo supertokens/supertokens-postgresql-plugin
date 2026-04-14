@@ -40,6 +40,14 @@ import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 public class RaceTestUtils {
 
     /**
+     * Default number of iterations for race condition tests.
+     * Lower in CI for speed, higher for manual stress testing.
+     * Override via -Dsupertokens.raceTestIterations=N
+     */
+    public static final int RACE_TEST_ITERATIONS = Integer.parseInt(
+            System.getProperty("supertokens.raceTestIterations", "20"));
+
+    /**
      * Result of a consistency check between user data and reservation tables
      */
     public static class ConsistencyCheckResult {

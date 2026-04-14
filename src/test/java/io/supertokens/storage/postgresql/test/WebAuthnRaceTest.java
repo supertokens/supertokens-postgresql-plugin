@@ -28,7 +28,10 @@ import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.multitenancy.*;
+import io.supertokens.pluginInterface.MigrationMode;
 import io.supertokens.storageLayer.StorageLayer;
+import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.webauthn.WebAuthN;
 
 import org.junit.AfterClass;
@@ -104,78 +107,86 @@ public class WebAuthnRaceTest {
         Storage storage = StorageLayer.getStorage(main);
         TenantIdentifier tenantIdentifier = TenantIdentifier.BASE_TENANT;
 
+        // Use DUAL_WRITE mode so all_auth_recipe_users gets populated
+        // (WebAuthN.saveUser queries JOIN on it)
+        Config.getConfig((Start) storage).setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
+
         // Create primary user (using EmailPassword is fine for the primary)
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(main, "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(main, primaryUser.getSupertokensUserId());
 
-        // Create WebAuthn user
-        String webauthnUserId = io.supertokens.utils.Utils.getUUID();
-        AuthRecipeUserInfo recipeUser = WebAuthN.saveUser(storage, tenantIdentifier,
-                "oldwebauthn@test.com", webauthnUserId, "example.com");
+        for (int iter = 0; iter < RaceTestUtils.RACE_TEST_ITERATIONS; iter++) {
+            // Create WebAuthn user
+            String webauthnUserId = io.supertokens.utils.Utils.getUUID();
+            AuthRecipeUserInfo recipeUser = WebAuthN.saveUser(storage, tenantIdentifier,
+                    "oldwebauthn" + iter + "@test.com", webauthnUserId, "example.com");
 
-        // Concurrent operations
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        CountDownLatch startLatch = new CountDownLatch(1);
+            // Concurrent operations
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            CountDownLatch startLatch = new CountDownLatch(1);
+            final int iterFinal = iter;
 
-        // Thread 1: Update email using WebAuthN
-        Future<?> updateFuture = executor.submit(() -> {
-            try {
-                startLatch.await();
-                WebAuthN.updateUserEmail(storage, tenantIdentifier,
-                        recipeUser.getSupertokensUserId(), "newwebauthn@test.com");
-            } catch (Exception e) {
-                // Expected in race conditions
-            }
-        });
-
-        // Thread 2: Link accounts
-        Future<?> linkFuture = executor.submit(() -> {
-            try {
-                startLatch.await();
-                AuthRecipe.linkAccounts(main, recipeUser.getSupertokensUserId(),
-                        primaryUser.getSupertokensUserId());
-            } catch (Exception e) {
-                // Expected in race conditions
-            }
-        });
-
-        startLatch.countDown();
-        updateFuture.get(30, TimeUnit.SECONDS);
-        linkFuture.get(30, TimeUnit.SECONDS);
-
-        // Verify
-        AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(main, recipeUser.getSupertokensUserId());
-        assertNotNull(finalUser);
-
-        // Find the recipe user's login method
-        String actualEmail = null;
-        for (var loginMethod : finalUser.loginMethods) {
-            if (loginMethod.getSupertokensUserId().equals(recipeUser.getSupertokensUserId())) {
-                actualEmail = loginMethod.email;
-                break;
-            }
-        }
-
-        // Check if linked (primary user ID differs from recipe user ID)
-        boolean isLinked = !finalUser.getSupertokensUserId().equals(recipeUser.getSupertokensUserId());
-
-        if (isLinked && actualEmail != null) {
-            // CRITICAL: Check reservation tables directly via SQL
-            RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
-                    main, finalUser);
-
-            if (!result.isConsistent) {
-                System.out.println("RACE CONDITION DETECTED in testLinkDuringEmailUpdate:");
-                for (String issue : result.issues) {
-                    System.out.println("  " + issue);
+            // Thread 1: Update email using WebAuthN
+            Future<?> updateFuture = executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    WebAuthN.updateUserEmail(storage, tenantIdentifier,
+                            recipeUser.getSupertokensUserId(), "newwebauthn" + iterFinal + "@test.com");
+                } catch (Exception e) {
+                    // Expected in race conditions
                 }
-                RaceTestUtils.printAllReservations(main, finalUser);
+            });
+
+            // Thread 2: Link accounts
+            Future<?> linkFuture = executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    AuthRecipe.linkAccounts(main, recipeUser.getSupertokensUserId(),
+                            primaryUser.getSupertokensUserId());
+                } catch (Exception e) {
+                    // Expected in race conditions
+                }
+            });
+
+            startLatch.countDown();
+            updateFuture.get(30, TimeUnit.SECONDS);
+            linkFuture.get(30, TimeUnit.SECONDS);
+
+            // Verify
+            AuthRecipeUserInfo finalUser = AuthRecipe.getUserById(main, recipeUser.getSupertokensUserId());
+            assertNotNull(finalUser);
+
+            // Find the recipe user's login method
+            String actualEmail = null;
+            for (var loginMethod : finalUser.loginMethods) {
+                if (loginMethod.getSupertokensUserId().equals(recipeUser.getSupertokensUserId())) {
+                    actualEmail = loginMethod.email;
+                    break;
+                }
             }
 
-            assertTrue("Reservation consistency check failed: " + result.issues, result.isConsistent);
+            // Check if linked (primary user ID differs from recipe user ID)
+            boolean isLinked = !finalUser.getSupertokensUserId().equals(recipeUser.getSupertokensUserId());
+
+            if (isLinked && actualEmail != null) {
+                // CRITICAL: Check reservation tables directly via SQL
+                RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(
+                        main, finalUser);
+
+                if (!result.isConsistent) {
+                    System.out.println("RACE CONDITION DETECTED in testLinkDuringEmailUpdate (iteration " + iter + "):");
+                    for (String issue : result.issues) {
+                        System.out.println("  " + issue);
+                    }
+                    RaceTestUtils.printAllReservations(main, finalUser);
+                }
+
+                assertTrue("Reservation consistency check failed at iteration " + iter + ": " + result.issues, result.isConsistent);
+            }
+
+            executor.shutdown();
         }
 
-        executor.shutdown();
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
@@ -199,6 +210,9 @@ public class WebAuthnRaceTest {
         }
 
         Main main = process.getProcess();
+
+        // Use DUAL_WRITE mode so all_auth_recipe_users gets populated
+        Config.getConfig((Start) StorageLayer.getStorage(main)).setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         // Create tenants
         TenantIdentifier tenant1 = new TenantIdentifier(null, null, "wat1");
@@ -259,6 +273,10 @@ public class WebAuthnRaceTest {
         System.out.println("User email: " + actualEmail);
         System.out.println("User tenants: " + Arrays.toString(finalUser.tenantIds.toArray()));
 
+        // Add consistency check
+        RaceTestUtils.ConsistencyCheckResult result = RaceTestUtils.checkReservationConsistency(main, finalUser);
+        assertTrue("Reservation consistency violated: " + result.issues, result.isConsistent);
+
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
@@ -284,6 +302,9 @@ public class WebAuthnRaceTest {
         Main main = process.getProcess();
         Storage storage = StorageLayer.getStorage(main);
         TenantIdentifier tenantIdentifier = TenantIdentifier.BASE_TENANT;
+
+        // Use DUAL_WRITE mode so all_auth_recipe_users gets populated
+        Config.getConfig((Start) storage).setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         // Create primary user
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(main, "primary@test.com", "password123");
@@ -414,6 +435,9 @@ public class WebAuthnRaceTest {
         Main main = process.getProcess();
         Storage storage = StorageLayer.getStorage(main);
         TenantIdentifier tenantIdentifier = TenantIdentifier.BASE_TENANT;
+
+        // Use DUAL_WRITE mode so all_auth_recipe_users gets populated
+        Config.getConfig((Start) storage).setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(main, "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(main, primaryUser.getSupertokensUserId());
