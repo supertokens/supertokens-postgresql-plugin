@@ -1724,8 +1724,8 @@ public class Start
                 AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(this, sqlCon,
                         appIdentifier, userId);
                 if (user != null && user.isPrimaryUser) {
-                    AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp(this,
-                            appIdentifier, newEmail);
+                    AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp_Transaction(
+                            this, sqlCon, appIdentifier, newEmail);
                     for (AuthRecipeUserInfo existingUser : existingUsers) {
                         if (existingUser.isPrimaryUser
                                 && !existingUser.getSupertokensUserId().equals(user.getSupertokensUserId())) {
@@ -2492,7 +2492,7 @@ public class Start
                     AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser, ACCOUNT_INFO_TYPE.EMAIL, email);
                 } else {
                     // Legacy email conflict check
-                    checkLegacyEmailConflict(appIdentifier, userId, email);
+                    checkLegacyEmailConflict(sqlCon, appIdentifier, userId, email);
                 }
                 int updated_rows = PasswordlessQueries.updateUserEmail_Transaction(this, sqlCon, appIdentifier, userId,
                         email);
@@ -2505,7 +2505,7 @@ public class Start
                     AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, appIdentifier, lockedUser, ACCOUNT_INFO_TYPE.PHONE_NUMBER, phoneNumber);
                 } else {
                     // Legacy phone conflict check
-                    checkLegacyPhoneConflict(appIdentifier, userId, phoneNumber);
+                    checkLegacyPhoneConflict(sqlCon, appIdentifier, userId, phoneNumber);
                 }
                 int updated_rows = PasswordlessQueries.updateUserPhoneNumber_Transaction(this, sqlCon, appIdentifier, userId,
                         phoneNumber);
@@ -3862,7 +3862,7 @@ public class Start
                             "This user ID is already linked to another user ID");
                 } else {
                     // Check for conflicting account info
-                    CanBecomePrimaryResult checkResult = checkIfLoginMethodCanBecomePrimary_legacy(appIdentifier, userId);
+                    CanBecomePrimaryResult checkResult = checkIfLoginMethodCanBecomePrimary_legacy(sqlCon, appIdentifier, userId);
                     if (checkResult.status == CanBecomePrimaryResult.RESULT.CONFLICTING_ACCOUNT_INFO) {
                         throw new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(
                                 checkResult.conflictingPrimaryUserId, checkResult.message);
@@ -3912,7 +3912,7 @@ public class Start
             } else {
                 // In LEGACY mode, check for conflicts using legacy tables
                 io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult checkResult =
-                        checkIfLoginMethodsCanBeLinked_legacy(appIdentifier, primaryUserId, recipeUserId);
+                        checkIfLoginMethodsCanBeLinked_legacy(sqlCon, appIdentifier, primaryUserId, recipeUserId);
                 switch (checkResult.status) {
                     case OK:
                         didLinkAccounts = true;
@@ -3924,8 +3924,8 @@ public class Start
                         throw new InputUserIdIsNotAPrimaryUserException(primaryUserId);
                     case RECIPE_USER_LINKED_TO_ANOTHER_PRIMARY_USER:
                         // Need to get the recipe user info for the exception
-                        AuthRecipeUserInfo recipeUserInfo = GeneralQueries.getPrimaryUserInfoForUserId(
-                                this, appIdentifier, recipeUserId);
+                        AuthRecipeUserInfo recipeUserInfo = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(
+                                this, sqlCon, appIdentifier, recipeUserId);
                         throw new CannotLinkSinceRecipeUserIdAlreadyLinkedWithAnotherPrimaryUserIdException(
                                 recipeUserInfo);
                     case ACCOUNT_INFO_ASSOCIATED_WITH_ANOTHER_PRIMARY_USER:
@@ -3983,16 +3983,21 @@ public class Start
         if (Config.getConfig(this).getMigrationMode().readsFromNewTables()) {
             return AccountInfoQueries.checkIfLoginMethodCanBecomePrimary(this, appIdentifier, recipeUserId);
         }
-        return checkIfLoginMethodCanBecomePrimary_legacy(appIdentifier, recipeUserId);
+        try (Connection sqlCon = ConnectionPool.getConnection(this)) {
+            return checkIfLoginMethodCanBecomePrimary_legacy(sqlCon, appIdentifier, recipeUserId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
-    private void checkLegacyEmailConflict(AppIdentifier appIdentifier, String userId, String newEmail)
+    private void checkLegacyEmailConflict(Connection sqlCon, AppIdentifier appIdentifier, String userId, String newEmail)
             throws StorageQueryException, EmailChangeNotAllowedException {
         try {
-            AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId(this, appIdentifier, userId);
+            AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(this, sqlCon,
+                    appIdentifier, userId);
             if (user != null && user.isPrimaryUser) {
-                AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp(this,
-                        appIdentifier, newEmail);
+                AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp_Transaction(
+                        this, sqlCon, appIdentifier, newEmail);
                 for (AuthRecipeUserInfo existingUser : existingUsers) {
                     if (existingUser.isPrimaryUser
                             && !existingUser.getSupertokensUserId().equals(user.getSupertokensUserId())) {
@@ -4009,13 +4014,14 @@ public class Start
         }
     }
 
-    private void checkLegacyPhoneConflict(AppIdentifier appIdentifier, String userId, String newPhone)
+    private void checkLegacyPhoneConflict(Connection sqlCon, AppIdentifier appIdentifier, String userId, String newPhone)
             throws StorageQueryException, PhoneNumberChangeNotAllowedException {
         try {
-            AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId(this, appIdentifier, userId);
+            AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(this, sqlCon,
+                    appIdentifier, userId);
             if (user != null && user.isPrimaryUser) {
-                AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByPhoneNumber_legacy_forApp(this,
-                        appIdentifier, newPhone);
+                AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByPhoneNumber_legacy_forApp_Transaction(
+                        this, sqlCon, appIdentifier, newPhone);
                 for (AuthRecipeUserInfo existingUser : existingUsers) {
                     if (existingUser.isPrimaryUser
                             && !existingUser.getSupertokensUserId().equals(user.getSupertokensUserId())) {
@@ -4032,11 +4038,13 @@ public class Start
         }
     }
 
-    private CanBecomePrimaryResult checkIfLoginMethodCanBecomePrimary_legacy(AppIdentifier appIdentifier,
+    private CanBecomePrimaryResult checkIfLoginMethodCanBecomePrimary_legacy(Connection sqlCon,
+                                                                             AppIdentifier appIdentifier,
                                                                              String recipeUserId)
             throws StorageQueryException, UnknownUserIdException {
         try {
-            AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId(this, appIdentifier, recipeUserId);
+            AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(this, sqlCon,
+                    appIdentifier, recipeUserId);
             if (user == null) {
                 throw new UnknownUserIdException();
             }
@@ -4054,8 +4062,8 @@ public class Start
                 if (!lm.getSupertokensUserId().equals(recipeUserId)) continue;
 
                 if (lm.email != null) {
-                    AuthRecipeUserInfo[] usersWithEmail = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp(this,
-                            appIdentifier, lm.email);
+                    AuthRecipeUserInfo[] usersWithEmail = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp_Transaction(
+                            this, sqlCon, appIdentifier, lm.email);
                     for (AuthRecipeUserInfo u : usersWithEmail) {
                         if (u.isPrimaryUser) {
                             for (String tenantId : user.tenantIds) {
@@ -4070,8 +4078,8 @@ public class Start
                 }
 
                 if (lm.phoneNumber != null) {
-                    AuthRecipeUserInfo[] usersWithPhone = GeneralQueries.listPrimaryUsersByPhoneNumber_legacy_forApp(
-                            this, appIdentifier, lm.phoneNumber);
+                    AuthRecipeUserInfo[] usersWithPhone = GeneralQueries.listPrimaryUsersByPhoneNumber_legacy_forApp_Transaction(
+                            this, sqlCon, appIdentifier, lm.phoneNumber);
                     for (AuthRecipeUserInfo u : usersWithPhone) {
                         if (u.isPrimaryUser) {
                             for (String tenantId : user.tenantIds) {
@@ -4086,13 +4094,13 @@ public class Start
                 }
 
                 if (lm.thirdParty != null) {
-                    List<String> tpUserIds = ThirdPartyQueries.listPrimaryUserIdsByThirdPartyInfo_legacy(this,
-                            appIdentifier, lm.thirdParty.id, lm.thirdParty.userId);
+                    List<String> tpUserIds = ThirdPartyQueries.listPrimaryUserIdsByThirdPartyInfo_legacy_Transaction(
+                            this, sqlCon, appIdentifier, lm.thirdParty.id, lm.thirdParty.userId);
                     for (String tpUserId : tpUserIds) {
                         if (!tpUserId.equals(recipeUserId)) {
                             // Check tenant overlap before declaring conflict
-                            AuthRecipeUserInfo tpUser = GeneralQueries.getPrimaryUserInfoForUserId(this,
-                                    appIdentifier, tpUserId);
+                            AuthRecipeUserInfo tpUser = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(
+                                    this, sqlCon, appIdentifier, tpUserId);
                             if (tpUser != null && tpUser.isPrimaryUser) {
                                 for (String tenantId : user.tenantIds) {
                                     if (tpUser.tenantIds.contains(tenantId)) {
@@ -4120,15 +4128,19 @@ public class Start
             return AccountInfoQueries.checkIfLoginMethodsCanBeLinked(this, appIdentifier,
                     primaryUserId, recipeUserId);
         }
-        return checkIfLoginMethodsCanBeLinked_legacy(appIdentifier, primaryUserId, recipeUserId);
+        try (Connection sqlCon = ConnectionPool.getConnection(this)) {
+            return checkIfLoginMethodsCanBeLinked_legacy(sqlCon, appIdentifier, primaryUserId, recipeUserId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     private io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult checkIfLoginMethodsCanBeLinked_legacy(
-            AppIdentifier appIdentifier, String inputPrimaryUserId, String recipeUserId)
+            Connection sqlCon, AppIdentifier appIdentifier, String inputPrimaryUserId, String recipeUserId)
             throws StorageQueryException, UnknownUserIdException {
         try {
-            AuthRecipeUserInfo primaryUser = GeneralQueries.getPrimaryUserInfoForUserId(this, appIdentifier,
-                    inputPrimaryUserId);
+            AuthRecipeUserInfo primaryUser = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(this, sqlCon,
+                    appIdentifier, inputPrimaryUserId);
             if (primaryUser == null) {
                 throw new UnknownUserIdException();
             }
@@ -4136,8 +4148,8 @@ public class Start
                 return io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult.inputUserIsNotPrimaryUserResult();
             }
 
-            AuthRecipeUserInfo recipeUser = GeneralQueries.getPrimaryUserInfoForUserId(this, appIdentifier,
-                    recipeUserId);
+            AuthRecipeUserInfo recipeUser = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(this, sqlCon,
+                    appIdentifier, recipeUserId);
             if (recipeUser == null) {
                 throw new UnknownUserIdException();
             }
@@ -4164,8 +4176,8 @@ public class Start
 
             for (LoginMethod lm : allLoginMethods) {
                 if (lm.email != null) {
-                    AuthRecipeUserInfo[] usersWithEmail = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp(this,
-                            appIdentifier, lm.email);
+                    AuthRecipeUserInfo[] usersWithEmail = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp_Transaction(
+                            this, sqlCon, appIdentifier, lm.email);
                     for (AuthRecipeUserInfo u : usersWithEmail) {
                         if (u.isPrimaryUser && !u.getSupertokensUserId().equals(primaryUser.getSupertokensUserId())) {
                             for (String tenantId : allTenantIds) {
@@ -4180,8 +4192,8 @@ public class Start
                 }
 
                 if (lm.phoneNumber != null) {
-                    AuthRecipeUserInfo[] usersWithPhone = GeneralQueries.listPrimaryUsersByPhoneNumber_legacy_forApp(
-                            this, appIdentifier, lm.phoneNumber);
+                    AuthRecipeUserInfo[] usersWithPhone = GeneralQueries.listPrimaryUsersByPhoneNumber_legacy_forApp_Transaction(
+                            this, sqlCon, appIdentifier, lm.phoneNumber);
                     for (AuthRecipeUserInfo u : usersWithPhone) {
                         if (u.isPrimaryUser && !u.getSupertokensUserId().equals(primaryUser.getSupertokensUserId())) {
                             for (String tenantId : allTenantIds) {
@@ -4196,15 +4208,15 @@ public class Start
                 }
 
                 if (lm.thirdParty != null) {
-                    List<String> tpUserIds = ThirdPartyQueries.listPrimaryUserIdsByThirdPartyInfo_legacy(this,
-                            appIdentifier, lm.thirdParty.id, lm.thirdParty.userId);
+                    List<String> tpUserIds = ThirdPartyQueries.listPrimaryUserIdsByThirdPartyInfo_legacy_Transaction(
+                            this, sqlCon, appIdentifier, lm.thirdParty.id, lm.thirdParty.userId);
                     for (String tpUserId : tpUserIds) {
                         // Exclude the primary user we're linking to AND the recipe user being linked
                         if (!tpUserId.equals(primaryUser.getSupertokensUserId())
                                 && !tpUserId.equals(recipeUserId)) {
                             // Also check tenant overlap
-                            AuthRecipeUserInfo tpUser = GeneralQueries.getPrimaryUserInfoForUserId(this,
-                                    appIdentifier, tpUserId);
+                            AuthRecipeUserInfo tpUser = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(
+                                    this, sqlCon, appIdentifier, tpUserId);
                             if (tpUser != null && tpUser.isPrimaryUser) {
                                 for (String tenantId : allTenantIds) {
                                     if (tpUser.tenantIds.contains(tenantId)) {
@@ -4238,14 +4250,16 @@ public class Start
         } else {
             // In LEGACY mode, check for email/phone/thirdparty conflicts with other primary users on this tenant
             try {
+                Connection sqlCon = (Connection) con.getConnection();
                 AppIdentifier appIdentifier = tenantIdentifier.toAppIdentifier();
                 String primaryUserId = primaryUser.getPrimaryUserId() != null ? primaryUser.getPrimaryUserId() : primaryUser.getRecipeUserId();
-                AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId(this, appIdentifier, primaryUserId);
+                AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(this, sqlCon,
+                        appIdentifier, primaryUserId);
                 if (user != null && user.isPrimaryUser) {
                     for (LoginMethod lm : user.loginMethods) {
                         if (lm.email != null) {
-                            AuthRecipeUserInfo[] usersWithEmail = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp(this,
-                                    appIdentifier, lm.email);
+                            AuthRecipeUserInfo[] usersWithEmail = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp_Transaction(
+                                    this, sqlCon, appIdentifier, lm.email);
                             for (AuthRecipeUserInfo u : usersWithEmail) {
                                 if (u.isPrimaryUser && !u.getSupertokensUserId().equals(primaryUserId)
                                         && u.tenantIds.contains(tenantIdentifier.getTenantId())) {
@@ -4254,8 +4268,8 @@ public class Start
                             }
                         }
                         if (lm.phoneNumber != null) {
-                            AuthRecipeUserInfo[] usersWithPhone = GeneralQueries.listPrimaryUsersByPhoneNumber_legacy_forApp(
-                                    this, appIdentifier, lm.phoneNumber);
+                            AuthRecipeUserInfo[] usersWithPhone = GeneralQueries.listPrimaryUsersByPhoneNumber_legacy_forApp_Transaction(
+                                    this, sqlCon, appIdentifier, lm.phoneNumber);
                             for (AuthRecipeUserInfo u : usersWithPhone) {
                                 if (u.isPrimaryUser && !u.getSupertokensUserId().equals(primaryUserId)
                                         && u.tenantIds.contains(tenantIdentifier.getTenantId())) {
@@ -4264,8 +4278,8 @@ public class Start
                             }
                         }
                         if (lm.thirdParty != null) {
-                            List<String> tpUserIds = ThirdPartyQueries.listPrimaryUserIdsByThirdPartyInfo_legacy(this,
-                                    appIdentifier, lm.thirdParty.id, lm.thirdParty.userId);
+                            List<String> tpUserIds = ThirdPartyQueries.listPrimaryUserIdsByThirdPartyInfo_legacy_Transaction(
+                                    this, sqlCon, appIdentifier, lm.thirdParty.id, lm.thirdParty.userId);
                             for (String tpUserId : tpUserIds) {
                                 if (!tpUserId.equals(primaryUserId)) {
                                     throw new AnotherPrimaryUserWithThirdPartyInfoAlreadyExistsException(tpUserId);
@@ -4336,12 +4350,13 @@ public class Start
             }
 
             try {
+                Connection sqlCon = (Connection) con.getConnection();
                 for (PrimaryUser pu : primaryUsers) {
                     for (PrimaryUser.AccountInfo ai : pu.accountInfos) {
                         for (String tenantId : pu.tenantIds) {
                             if (ai.type == ACCOUNT_INFO_TYPE.EMAIL) {
-                                AuthRecipeUserInfo[] users = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp(this,
-                                        pu.appIdentifier, ai.value);
+                                AuthRecipeUserInfo[] users = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp_Transaction(
+                                        this, sqlCon, pu.appIdentifier, ai.value);
                                 for (AuthRecipeUserInfo u : users) {
                                     if (u.isPrimaryUser && !u.getSupertokensUserId().equals(pu.primaryUserId)
                                             && u.tenantIds.contains(tenantId)) {
@@ -4354,8 +4369,8 @@ public class Start
                                     }
                                 }
                             } else if (ai.type == ACCOUNT_INFO_TYPE.PHONE_NUMBER) {
-                                AuthRecipeUserInfo[] users = GeneralQueries.listPrimaryUsersByPhoneNumber_legacy_forApp(this,
-                                        pu.appIdentifier, ai.value);
+                                AuthRecipeUserInfo[] users = GeneralQueries.listPrimaryUsersByPhoneNumber_legacy_forApp_Transaction(
+                                        this, sqlCon, pu.appIdentifier, ai.value);
                                 for (AuthRecipeUserInfo u : users) {
                                     if (u.isPrimaryUser && !u.getSupertokensUserId().equals(pu.primaryUserId)
                                             && u.tenantIds.contains(tenantId)) {
@@ -4371,12 +4386,12 @@ public class Start
                                 // Third party account info value is "thirdPartyId::thirdPartyUserId"
                                 String[] parts = ai.value.split("::", 2);
                                 if (parts.length == 2) {
-                                    List<String> tpUserIds = ThirdPartyQueries.listPrimaryUserIdsByThirdPartyInfo_legacy(
-                                            this, pu.appIdentifier, parts[0], parts[1]);
+                                    List<String> tpUserIds = ThirdPartyQueries.listPrimaryUserIdsByThirdPartyInfo_legacy_Transaction(
+                                            this, sqlCon, pu.appIdentifier, parts[0], parts[1]);
                                     for (String tpUserId : tpUserIds) {
                                         if (!tpUserId.equals(pu.primaryUserId)) {
-                                            AuthRecipeUserInfo tpUser = GeneralQueries.getPrimaryUserInfoForUserId(this,
-                                                    pu.appIdentifier, tpUserId);
+                                            AuthRecipeUserInfo tpUser = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(
+                                                    this, sqlCon, pu.appIdentifier, tpUserId);
                                             if (tpUser != null && tpUser.isPrimaryUser && tpUser.tenantIds.contains(tenantId)) {
                                                 throw new StorageTransactionLogicException(
                                                         new BulkImportBatchInsertException("conflict",
@@ -5228,7 +5243,7 @@ public class Start
                 AccountInfoQueries.updateAccountInfo_Transaction(this, sqlCon, tenantIdentifier.toAppIdentifier(), lockedUser, ACCOUNT_INFO_TYPE.EMAIL, newEmail);
             } else {
                 // Legacy email conflict check
-                checkLegacyEmailConflict(tenantIdentifier.toAppIdentifier(), userId, newEmail);
+                checkLegacyEmailConflict(sqlCon, tenantIdentifier.toAppIdentifier(), userId, newEmail);
             }
             WebAuthNQueries.updateUserEmail_Transaction(this, sqlCon, tenantIdentifier, userId, newEmail);
         } catch (StorageQueryException e) {

@@ -2196,6 +2196,95 @@ public class GeneralQueries {
         return result.toArray(new AuthRecipeUserInfo[0]);
     }
 
+    public static AuthRecipeUserInfo[] listPrimaryUsersByEmail_legacy_forApp_Transaction(Start start, Connection sqlCon,
+                                                                        AppIdentifier appIdentifier,
+                                                                        String email)
+            throws StorageQueryException, SQLException {
+        // App-scoped email lookup across all recipe tables (no tenant filter).
+        // Transaction variant that reuses the caller's connection to avoid pool exhaustion.
+        List<String> userIds = new ArrayList<>();
+
+        // emailpassword_users is app-scoped
+        String epQuery = "SELECT DISTINCT auid.primary_or_recipe_user_id AS user_id"
+                + " FROM " + getConfig(start).getEmailPasswordUsersTable() + " ep"
+                + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " auid"
+                + " ON ep.app_id = auid.app_id AND ep.user_id = auid.user_id"
+                + " WHERE ep.app_id = ? AND ep.email = ?";
+        List<String> epUserIds = execute(sqlCon, epQuery, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, email);
+        }, result -> {
+            List<String> ids = new ArrayList<>();
+            while (result.next()) {
+                ids.add(result.getString("user_id"));
+            }
+            return ids;
+        });
+        userIds.addAll(epUserIds);
+
+        // thirdparty_users is app-scoped
+        String tpQuery = "SELECT DISTINCT auid.primary_or_recipe_user_id AS user_id"
+                + " FROM " + getConfig(start).getThirdPartyUsersTable() + " tp"
+                + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " auid"
+                + " ON tp.app_id = auid.app_id AND tp.user_id = auid.user_id"
+                + " WHERE tp.app_id = ? AND tp.email = ?";
+        List<String> tpUserIds = execute(sqlCon, tpQuery, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, email);
+        }, result -> {
+            List<String> ids = new ArrayList<>();
+            while (result.next()) {
+                ids.add(result.getString("user_id"));
+            }
+            return ids;
+        });
+        userIds.addAll(tpUserIds);
+
+        // passwordless_users is app-scoped
+        String plQuery = "SELECT DISTINCT auid.primary_or_recipe_user_id AS user_id"
+                + " FROM " + getConfig(start).getPasswordlessUsersTable() + " pl"
+                + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " auid"
+                + " ON pl.app_id = auid.app_id AND pl.user_id = auid.user_id"
+                + " WHERE pl.app_id = ? AND pl.email = ?";
+        List<String> plUserIds = execute(sqlCon, plQuery, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, email);
+        }, result -> {
+            List<String> ids = new ArrayList<>();
+            while (result.next()) {
+                ids.add(result.getString("user_id"));
+            }
+            return ids;
+        });
+        userIds.addAll(plUserIds);
+
+        // webauthn_users is app-scoped
+        String waQuery = "SELECT DISTINCT auid.primary_or_recipe_user_id AS user_id"
+                + " FROM " + getConfig(start).getWebAuthNUsersTable() + " wa"
+                + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " auid"
+                + " ON wa.app_id = auid.app_id AND wa.user_id = auid.user_id"
+                + " WHERE wa.app_id = ? AND wa.email = ?";
+        List<String> waUserIds = execute(sqlCon, waQuery, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, email);
+        }, result -> {
+            List<String> ids = new ArrayList<>();
+            while (result.next()) {
+                ids.add(result.getString("user_id"));
+            }
+            return ids;
+        });
+        userIds.addAll(waUserIds);
+
+        // remove duplicates
+        Set<String> userIdsSet = new HashSet<>(userIds);
+        userIds = new ArrayList<>(userIdsSet);
+
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds_Transaction(start, sqlCon, appIdentifier, userIds);
+        result.sort(Comparator.comparingLong(o -> o.timeJoined));
+        return result.toArray(new AuthRecipeUserInfo[0]);
+    }
+
     public static AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber_legacy_forApp(Start start,
                                                                                     AppIdentifier appIdentifier,
                                                                                     String phoneNumber)
@@ -2218,6 +2307,34 @@ public class GeneralQueries {
         });
 
         List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, appIdentifier, userIds);
+        result.sort(Comparator.comparingLong(o -> o.timeJoined));
+        return result.toArray(new AuthRecipeUserInfo[0]);
+    }
+
+    public static AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber_legacy_forApp_Transaction(Start start,
+                                                                                    Connection sqlCon,
+                                                                                    AppIdentifier appIdentifier,
+                                                                                    String phoneNumber)
+            throws StorageQueryException, SQLException {
+        // App-scoped phone number lookup (passwordless_users is app-scoped)
+        // Transaction variant that reuses the caller's connection to avoid pool exhaustion.
+        String plQuery = "SELECT DISTINCT auid.primary_or_recipe_user_id AS user_id"
+                + " FROM " + getConfig(start).getPasswordlessUsersTable() + " pl"
+                + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " auid"
+                + " ON pl.app_id = auid.app_id AND pl.user_id = auid.user_id"
+                + " WHERE pl.app_id = ? AND pl.phone_number = ?";
+        List<String> userIds = execute(sqlCon, plQuery, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, phoneNumber);
+        }, result -> {
+            List<String> ids = new ArrayList<>();
+            while (result.next()) {
+                ids.add(result.getString("user_id"));
+            }
+            return ids;
+        });
+
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds_Transaction(start, sqlCon, appIdentifier, userIds);
         result.sort(Comparator.comparingLong(o -> o.timeJoined));
         return result.toArray(new AuthRecipeUserInfo[0]);
     }
