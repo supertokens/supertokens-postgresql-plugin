@@ -579,6 +579,42 @@ public class ThirdPartyQueries {
             return numRows > 0;
         }
 
+        if (mode.writesToNewTables()) { // recipe_user_tenants (email + tparty rows)
+            int totalRows = 0;
+            if (userInfo.email != null) {
+                String Q = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
+                        + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type,"
+                        + " third_party_id, third_party_user_id, account_info_value)"
+                        + " VALUES(?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING";
+                totalRows += update(sqlCon, Q, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, userInfo.id);
+                    pst.setString(3, tenantIdentifier.getTenantId());
+                    pst.setString(4, THIRD_PARTY.toString());
+                    pst.setString(5, ACCOUNT_INFO_TYPE.EMAIL.toString());
+                    pst.setString(6, userInfo.thirdParty.id);
+                    pst.setString(7, userInfo.thirdParty.userId);
+                    pst.setString(8, userInfo.email);
+                });
+            }
+            String Q2 = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
+                    + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type,"
+                    + " third_party_id, third_party_user_id, account_info_value)"
+                    + " VALUES(?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING";
+            totalRows += update(sqlCon, Q2, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, userInfo.id);
+                pst.setString(3, tenantIdentifier.getTenantId());
+                pst.setString(4, THIRD_PARTY.toString());
+                pst.setString(5, ACCOUNT_INFO_TYPE.THIRD_PARTY.toString());
+                pst.setString(6, "");
+                pst.setString(7, "");
+                pst.setString(8, new io.supertokens.pluginInterface.authRecipe.LoginMethod.ThirdParty(
+                        userInfo.thirdParty.id, userInfo.thirdParty.userId).getAccountInfoValue());
+            });
+            return totalRows > 0;
+        }
+
         return false;
     }
 
@@ -597,6 +633,19 @@ public class ThirdPartyQueries {
                 pst.setString(4, THIRD_PARTY.toString());
             });
 
+            return numRows > 0;
+        }
+
+        if (mode.writesToNewTables()) { // recipe_user_tenants
+            String QUERY = "DELETE FROM " + getConfig(start).getRecipeUserTenantsTable()
+                    + " WHERE app_id = ? AND tenant_id = ? AND recipe_user_id = ?"
+                    + "   AND recipe_id = ?";
+            int numRows = update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, userId);
+                pst.setString(4, THIRD_PARTY.toString());
+            });
             return numRows > 0;
         }
 

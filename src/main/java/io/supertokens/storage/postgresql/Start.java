@@ -3213,6 +3213,22 @@ public class Start
             String recipeId = GeneralQueries.getRecipeIdForUser_Transaction(lockedUser);
 
             MigrationMode mode = Config.getConfig(Start.this).getMigrationMode();
+
+            // In MIGRATED mode, check whether the user is already associated with this
+            // tenant BEFORE we call addTenantIdToRecipeUser_Transaction (which does an
+            // upsert). This lets us return the right "added" value to the caller.
+            boolean alreadyAssociatedInNew = false;
+            if (mode.writesToNewTables() && !mode.writesToOldTables()) {
+                String existsQuery = "SELECT 1 FROM " + Config.getConfig(this).getRecipeUserTenantsTable()
+                        + " WHERE app_id = ? AND tenant_id = ? AND recipe_user_id = ? LIMIT 1";
+                alreadyAssociatedInNew = io.supertokens.storage.postgresql.QueryExecutorTemplate.execute(
+                        sqlCon, existsQuery, pst -> {
+                            pst.setString(1, tenantIdentifier.getAppId());
+                            pst.setString(2, tenantIdentifier.getTenantId());
+                            pst.setString(3, userId);
+                        }, rs -> rs.next());
+            }
+
             if (mode.writesToNewTables()) {
                 AccountInfoQueries.addTenantIdToRecipeUser_Transaction(this, sqlCon, tenantIdentifier, lockedUser);
             }
@@ -3228,6 +3244,12 @@ public class Start
                         userId);
             } else {
                 throw new IllegalStateException("Should never come here!");
+            }
+
+            // In MIGRATED mode we compute `added` from pre-check: if no row existed
+            // before, this call inserted at least one via addTenantIdToRecipeUser_Transaction.
+            if (mode.writesToNewTables() && !mode.writesToOldTables()) {
+                added = !alreadyAssociatedInNew;
             }
 
             sqlCon.commit();

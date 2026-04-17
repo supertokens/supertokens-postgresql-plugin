@@ -1853,18 +1853,22 @@ public class GeneralQueries {
 
         if (mode.writesToOldTables()) {
             if (mode.writesToNewTables()) {
-                // DUAL_WRITE mode: get primary_user_id from reservation tables
+                // DUAL_WRITE mode: get primary_user_id from reservation tables.
+                // COALESCE fallback handles the case where the reservation row
+                // has been removed (see comment on the app_id_to_user_id branch).
                 String QUERY = "UPDATE " + getConfig(start).getUsersTable() +
-                        " SET is_linked_or_is_a_primary_user = true, primary_or_recipe_user_id = (" +
-                        "   SELECT primary_user_id FROM " + getConfig(start).getRecipeUserAccountInfosTable() +
-                        "   WHERE app_id = ? AND recipe_user_id = ? LIMIT 1" +
+                        " SET is_linked_or_is_a_primary_user = true, primary_or_recipe_user_id = COALESCE(" +
+                        "   (SELECT primary_user_id FROM " + getConfig(start).getRecipeUserAccountInfosTable() +
+                        "    WHERE app_id = ? AND recipe_user_id = ? LIMIT 1)," +
+                        "   ?" +
                         ") WHERE app_id = ? AND user_id = ?";
 
                 update(sqlCon, QUERY, pst -> {
                     pst.setString(1, appIdentifier.getAppId());
                     pst.setString(2, primaryUserId);
-                    pst.setString(3, appIdentifier.getAppId());
-                    pst.setString(4, recipeUserId);
+                    pst.setString(3, primaryUserId);
+                    pst.setString(4, appIdentifier.getAppId());
+                    pst.setString(5, recipeUserId);
                 });
             } else {
                 // LEGACY mode: use primaryUserId directly (reservation tables are empty)
@@ -1882,18 +1886,24 @@ public class GeneralQueries {
 
         {
             if (mode.writesToNewTables()) {
-                // DUAL_WRITE or MIGRATED: get primary_user_id from reservation tables
+                // DUAL_WRITE or MIGRATED: get primary_user_id from reservation tables.
+                // Fall back to the provided primaryUserId via COALESCE in case the
+                // reservation row has been removed (e.g. the previous primary was
+                // deleted during an unlink of the primary with length>1, leaving
+                // other group members referring to the deleted primary's id).
                 String QUERY = "UPDATE " + getConfig(start).getAppIdToUserIdTable() +
-                        " SET is_linked_or_is_a_primary_user = true, primary_or_recipe_user_id = (" +
-                        "   SELECT primary_user_id FROM " + getConfig(start).getRecipeUserAccountInfosTable() +
-                        "   WHERE app_id = ? AND recipe_user_id = ? LIMIT 1" +
+                        " SET is_linked_or_is_a_primary_user = true, primary_or_recipe_user_id = COALESCE(" +
+                        "   (SELECT primary_user_id FROM " + getConfig(start).getRecipeUserAccountInfosTable() +
+                        "    WHERE app_id = ? AND recipe_user_id = ? LIMIT 1)," +
+                        "   ?" +
                         ") WHERE app_id = ? AND user_id = ?";
 
                 update(sqlCon, QUERY, pst -> {
                     pst.setString(1, appIdentifier.getAppId());
                     pst.setString(2, primaryUserId);
-                    pst.setString(3, appIdentifier.getAppId());
-                    pst.setString(4, recipeUserId);
+                    pst.setString(3, primaryUserId);
+                    pst.setString(4, appIdentifier.getAppId());
+                    pst.setString(5, recipeUserId);
                 });
             } else {
                 // LEGACY mode: use primaryUserId directly

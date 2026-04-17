@@ -1057,6 +1057,43 @@ public class PasswordlessQueries {
             return numRows > 0;
         }
 
+        if (mode.writesToNewTables()) { // recipe_user_tenants (email and/or phone rows)
+            int totalRows = 0;
+            if (userInfo.email != null) {
+                String Q = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
+                        + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type,"
+                        + " third_party_id, third_party_user_id, account_info_value)"
+                        + " VALUES(?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING";
+                totalRows += update(sqlCon, Q, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, userInfo.id);
+                    pst.setString(3, tenantIdentifier.getTenantId());
+                    pst.setString(4, PASSWORDLESS.toString());
+                    pst.setString(5, ACCOUNT_INFO_TYPE.EMAIL.toString());
+                    pst.setString(6, "");
+                    pst.setString(7, "");
+                    pst.setString(8, userInfo.email);
+                });
+            }
+            if (userInfo.phoneNumber != null) {
+                String Q = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
+                        + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type,"
+                        + " third_party_id, third_party_user_id, account_info_value)"
+                        + " VALUES(?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING";
+                totalRows += update(sqlCon, Q, pst -> {
+                    pst.setString(1, tenantIdentifier.getAppId());
+                    pst.setString(2, userInfo.id);
+                    pst.setString(3, tenantIdentifier.getTenantId());
+                    pst.setString(4, PASSWORDLESS.toString());
+                    pst.setString(5, ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString());
+                    pst.setString(6, "");
+                    pst.setString(7, "");
+                    pst.setString(8, userInfo.phoneNumber);
+                });
+            }
+            return totalRows > 0;
+        }
+
         return true;
     }
 
@@ -1077,6 +1114,19 @@ public class PasswordlessQueries {
 
             return numRows > 0;
             // automatically deleted from passwordless_user_to_tenant because of foreign key constraint
+        }
+
+        if (mode.writesToNewTables()) { // recipe_user_tenants
+            String QUERY = "DELETE FROM " + getConfig(start).getRecipeUserTenantsTable()
+                    + " WHERE app_id = ? AND tenant_id = ? AND recipe_user_id = ?"
+                    + "   AND recipe_id = ?";
+            int numRows = update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, userId);
+                pst.setString(4, PASSWORDLESS.toString());
+            });
+            return numRows > 0;
         }
 
         return true;

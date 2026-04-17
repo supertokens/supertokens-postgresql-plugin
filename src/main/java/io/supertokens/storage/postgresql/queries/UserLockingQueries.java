@@ -25,10 +25,10 @@ import io.supertokens.storage.postgresql.LockedUserImpl;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 
-import io.supertokens.storage.postgresql.utils.Utils;
-
+import java.sql.Array;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.util.*;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
@@ -57,37 +57,51 @@ public class UserLockingQueries {
         }
 
         String table = Config.getConfig(start).getAppIdToUserIdTable();
-        String placeholders = Utils.generateCommaSeperatedQuestionMarks(userIds.size());
 
-        // Single query that locks both the requested users AND their primary users (if linked).
-        // The UNION ensures we lock primaries even if they weren't in the original request.
-        // ORDER BY ensures consistent lock ordering to prevent deadlocks.
+        // Locks the requested users AND their primary users (if linked) in one scan.
+        //
+        // The first branch of the WHERE (u.user_id = ANY(?)) covers every
+        // requested user. The second branch adds any primary_or_recipe_user_id
+        // for requested users that are linked — so that a linking primary gets
+        // locked too, even if the caller didn't name it.
+        //
+        // This replaces the former pattern of
+        //     u.user_id IN (SELECT user_id ... UNION SELECT primary_or_recipe_user_id ...)
+        // whose first UNION branch was redundant with the outer scan and forced
+        // an extra index access + Sort + Unique + Memoize. The OR form gives the
+        // planner a BitmapOr across one index, and when no user is linked (the
+        // common case) short-circuits to a single array-probe index scan.
+        //
+        // ORDER BY user_id keeps lock acquisition deterministic across
+        // concurrent callers (no deadlock cycles).
         String QUERY = "SELECT u.user_id, u.primary_or_recipe_user_id, u.is_linked_or_is_a_primary_user, u.recipe_id"
                 + " FROM " + table + " u"
-                + " WHERE u.app_id = ? AND u.user_id IN ("
-                + "   SELECT user_id FROM " + table + " WHERE app_id = ? AND user_id IN (" + placeholders + ")"
-                + "   UNION"
-                + "   SELECT primary_or_recipe_user_id FROM " + table
-                + "     WHERE app_id = ? AND user_id IN (" + placeholders + ")"
-                + "     AND is_linked_or_is_a_primary_user = TRUE"
-                + " )"
+                + " WHERE u.app_id = ?"
+                + "   AND ("
+                + "        u.user_id = ANY(?)"
+                + "     OR u.user_id IN ("
+                + "          SELECT primary_or_recipe_user_id FROM " + table
+                + "           WHERE app_id = ? AND user_id = ANY(?)"
+                + "             AND is_linked_or_is_a_primary_user = TRUE"
+                + "        )"
+                + "   )"
                 + " ORDER BY u.user_id"
                 + " FOR UPDATE";
 
-        // Build the result map from a single query
+        // Build a single VARCHAR[] from the input user_ids and bind it twice
+        // (once per array-probe in the query). Using = ANY(?) with an array
+        // keeps the prepared-statement plan cache stable regardless of N.
+        String appId = appIdentifier.getAppId();
+        Array userIdsArray = con.createArrayOf("VARCHAR", userIds.toArray(new String[0]));
+
         Map<String, LockedUser> lockedByUserId = execute(con, QUERY, pst -> {
-            int idx = 1;
-            pst.setString(idx++, appIdentifier.getAppId());
-            // First subquery params
-            pst.setString(idx++, appIdentifier.getAppId());
-            for (String uid : userIds) {
-                pst.setString(idx++, uid);
-            }
-            // Second subquery params
-            pst.setString(idx++, appIdentifier.getAppId());
-            for (String uid : userIds) {
-                pst.setString(idx++, uid);
-            }
+            // Explicit VARCHAR binds avoid the (app_id)::text = $N cast that
+            // JDBC's default `text` inference produces — that cast breaks
+            // index-only scans on the VARCHAR(64) app_id column.
+            pst.setObject(1, appId, Types.VARCHAR);
+            pst.setArray(2, userIdsArray);
+            pst.setObject(3, appId, Types.VARCHAR);
+            pst.setArray(4, userIdsArray);
         }, rs -> {
             Map<String, LockedUser> map = new HashMap<>();
             while (rs.next()) {

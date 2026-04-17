@@ -151,6 +151,15 @@ public class WebAuthNQueries {
     }
 
     public static String getQueryToCreateWebAuthNAccountRecoveryTokenTable(Start start) {
+        // FK references app_id_to_user_id, not all_auth_recipe_users. The latter is the old
+        // tenant-scoped table and is empty in MIGRATED mode — inserting recovery tokens would
+        // fail with a FK violation there. app_id_to_user_id is written in every migration mode
+        // (it's the always-populated root of the user identity graph), so this FK is stable
+        // across all modes. Matches the pattern used by emailpassword password_reset_tokens.
+        //
+        // tenant_id stays in the PK for query efficiency (recovery tokens are tenant-scoped
+        // for lookup purposes) but isn't part of the FK — tenant membership is enforced at
+        // the application layer, not at the DB level.
         return "CREATE TABLE IF NOT EXISTS " + getConfig(start).getWebAuthNAccountRecoveryTokenTable() + "(" +
                 " app_id VARCHAR(64) DEFAULT 'public' NOT NULL," +
                 " tenant_id VARCHAR(64) DEFAULT 'public' NOT NULL," +
@@ -159,8 +168,8 @@ public class WebAuthNQueries {
                 " token VARCHAR(256) NOT NULL," +
                 " expires_at BIGINT NOT NULL," +
                 " CONSTRAINT webauthn_account_recovery_token_pkey PRIMARY KEY (app_id, tenant_id, user_id, token)," +
-                " CONSTRAINT webauthn_account_recovery_token_user_id_fkey FOREIGN KEY (app_id, tenant_id, user_id) REFERENCES " +
-                getConfig(start).getUsersTable() + " (app_id, tenant_id, user_id) ON DELETE CASCADE" +
+                " CONSTRAINT webauthn_account_recovery_token_user_id_fkey FOREIGN KEY (app_id, user_id) REFERENCES " +
+                getConfig(start).getAppIdToUserIdTable() + " (app_id, user_id) ON DELETE CASCADE ON UPDATE CASCADE" +
                 ");";
     }
 
@@ -616,68 +625,99 @@ public class WebAuthNQueries {
 
     public static Collection<? extends LoginMethod> getUsersInfoUsingIdList_Transaction(Start start, Connection connection, Set<String> ids, AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
-        if (ids.size() > 0) {
-
-            String webauthnUsersTable = getConfig(start).getWebAuthNUsersTable();
-            String credentialTable = getConfig(start).getWebAuthNCredentialsTable();
-            String usersTable = getConfig(start).getUsersTable();
-            String userIdMappingTable = getConfig(start).getUserIdMappingTable();
-            String emailVerificationTable = getConfig(start).getEmailVerificationTable();
-
-            String queryAll = "SELECT webauthn.user_id as user_id, webauthn.email as email, webauthn.time_joined as time_joined, " +
-                    "credentials.id as credential_id, email_verification.email as email_verified, user_id_mapping.external_user_id as external_user_id," +
-                    "all_users.tenant_id as tenant_id " +
-                    "FROM " + webauthnUsersTable + " as webauthn " +
-                    "JOIN " + usersTable + " as all_users ON webauthn.app_id = all_users.app_id AND webauthn.user_id = all_users.user_id " +
-                    "LEFT JOIN " + credentialTable + " as credentials ON webauthn.user_id = credentials.user_id " +
-                    "LEFT JOIN " + userIdMappingTable + " as user_id_mapping ON webauthn.user_id = user_id_mapping.supertokens_user_id " +
-                    "LEFT JOIN " + emailVerificationTable + " as email_verification ON webauthn.app_id = " +
-                    "email_verification.app_id AND (user_id_mapping.external_user_id = email_verification.user_id OR user_id_mapping.supertokens_user_id = email_verification.user_id OR webauthn.user_id = email_verification.user_id OR webauthn.user_id = email_verification.user_id) " +
-                    " AND email_verification.email = webauthn.email " +
-                    "WHERE webauthn.app_id = ? AND webauthn.user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(ids.size()) + ")";
-
-            return execute(connection, queryAll, pst -> {
-                pst.setString(1, appIdentifier.getAppId());
-                int index = 2;
-                for (String id : ids) {
-                    pst.setString(index++, id);
-                }
-            }, result -> {
-                Map<String, LoginMethod> users = new HashMap<>();
-                while (result.next()) {
-                    String userId = result.getString("user_id");
-                    String email = result.getString("email");
-                    long timeJoined = result.getLong("time_joined");
-                    String credentialId = result.getString("credential_id");
-                    boolean emailVerified = result.getString("email_verified") != null;
-                    String externalUserId = result.getString("external_user_id");
-                    String tenantId = result.getString("tenant_id");
-                    if(users.containsKey(userId)) {
-                        users.get(userId).webauthN.addCredentialId(credentialId);
-                        users.get(userId).tenantIds.add(tenantId);
-                    } else {
-                        List<String> credentialIds = new ArrayList<>();
-                        credentialIds.add(credentialId);
-                        LoginMethod loginMethod = new LoginMethod(userId, timeJoined, emailVerified, email, new LoginMethod.WebAuthN(credentialIds), new String[]{tenantId});
-                        loginMethod.setExternalUserId(externalUserId);
-                        users.put(userId, loginMethod);
-                    }
-                }
-                return users.values();
-            });
-
+        if (ids.isEmpty()) {
+            return Collections.emptyList();
         }
-        return Collections.emptyList();
+
+        // Tenant membership is stored differently depending on migration mode:
+        // - legacy / dual-write: all_auth_recipe_users has one row per (user_id, tenant_id)
+        // - migrated / reads-from-new: recipe_user_tenants has one row per (recipe_user_id,
+        //   tenant_id, account_info_type). For webauthn there's only an 'email' row per tenant.
+        //
+        // In MIGRATED mode, all_auth_recipe_users isn't written to, so the legacy JOIN returns
+        // zero rows and getAuthRecipeUserInfo returns null — which cascades into NPEs at every
+        // webauthn call site. Read the source-of-truth table for whichever mode we're in.
+        boolean readNew = Config.getConfig(start).getMigrationMode().readsFromNewTables();
+
+        String webauthnUsersTable = getConfig(start).getWebAuthNUsersTable();
+        String credentialTable = getConfig(start).getWebAuthNCredentialsTable();
+        String userIdMappingTable = getConfig(start).getUserIdMappingTable();
+        String emailVerificationTable = getConfig(start).getEmailVerificationTable();
+
+        String tenantJoin = readNew
+                ? "JOIN " + getConfig(start).getRecipeUserTenantsTable() + " as all_users"
+                  + " ON webauthn.app_id = all_users.app_id"
+                  + " AND webauthn.user_id = all_users.recipe_user_id"
+                  + " AND all_users.recipe_id = 'webauthn'"
+                  + " AND all_users.account_info_type = 'email' "
+                : "JOIN " + getConfig(start).getUsersTable() + " as all_users"
+                  + " ON webauthn.app_id = all_users.app_id"
+                  + " AND webauthn.user_id = all_users.user_id ";
+
+        String queryAll = "SELECT webauthn.user_id as user_id, webauthn.email as email, webauthn.time_joined as time_joined, " +
+                "credentials.id as credential_id, email_verification.email as email_verified, user_id_mapping.external_user_id as external_user_id," +
+                "all_users.tenant_id as tenant_id " +
+                "FROM " + webauthnUsersTable + " as webauthn " +
+                tenantJoin +
+                "LEFT JOIN " + credentialTable + " as credentials ON webauthn.user_id = credentials.user_id " +
+                "LEFT JOIN " + userIdMappingTable + " as user_id_mapping ON webauthn.user_id = user_id_mapping.supertokens_user_id " +
+                "LEFT JOIN " + emailVerificationTable + " as email_verification ON webauthn.app_id = " +
+                "email_verification.app_id AND (user_id_mapping.external_user_id = email_verification.user_id OR user_id_mapping.supertokens_user_id = email_verification.user_id OR webauthn.user_id = email_verification.user_id OR webauthn.user_id = email_verification.user_id) " +
+                " AND email_verification.email = webauthn.email " +
+                "WHERE webauthn.app_id = ? AND webauthn.user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(ids.size()) + ")";
+
+        return execute(connection, queryAll, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            int index = 2;
+            for (String id : ids) {
+                pst.setString(index++, id);
+            }
+        }, result -> {
+            Map<String, LoginMethod> users = new HashMap<>();
+            while (result.next()) {
+                String userId = result.getString("user_id");
+                String email = result.getString("email");
+                long timeJoined = result.getLong("time_joined");
+                String credentialId = result.getString("credential_id");
+                boolean emailVerified = result.getString("email_verified") != null;
+                String externalUserId = result.getString("external_user_id");
+                String tenantId = result.getString("tenant_id");
+                if(users.containsKey(userId)) {
+                    users.get(userId).webauthN.addCredentialId(credentialId);
+                    users.get(userId).tenantIds.add(tenantId);
+                } else {
+                    List<String> credentialIds = new ArrayList<>();
+                    credentialIds.add(credentialId);
+                    LoginMethod loginMethod = new LoginMethod(userId, timeJoined, emailVerified, email, new LoginMethod.WebAuthN(credentialIds), new String[]{tenantId});
+                    loginMethod.setExternalUserId(externalUserId);
+                    users.put(userId, loginMethod);
+                }
+            }
+            return users.values();
+        });
     }
 
     public static AuthRecipeUserInfo getUserInfoByCredentialId_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String credentialId)
             throws SQLException, StorageQueryException {
 
+        // See note on getUsersInfoUsingIdList_Transaction: tenant membership must be sourced
+        // from recipe_user_tenants when in MIGRATED / reads-from-new modes.
+        boolean readNew = Config.getConfig(start).getMigrationMode().readsFromNewTables();
+        String tenantJoin = readNew
+                ? "JOIN " + getConfig(start).getRecipeUserTenantsTable() + " as all_users"
+                  + " ON webauthn.app_id = all_users.app_id"
+                  + " AND webauthn.user_id = all_users.recipe_user_id"
+                  + " AND all_users.recipe_id = 'webauthn'"
+                  + " AND all_users.account_info_type = 'email' "
+                : "JOIN " + getConfig(start).getUsersTable() + " as all_users"
+                  + " ON webauthn.app_id = all_users.app_id"
+                  + " AND webauthn.user_id = all_users.user_id ";
+
         String QUERY = "SELECT webauthn.user_id as user_id, webauthn.email as email, webauthn.time_joined as time_joined, " +
                 "credentials.id as credential_id, email_verification.email as email_verified, user_id_mapping.external_user_id as external_user_id," +
                 "all_users.tenant_id as tenant_id " +
                 "FROM " + getConfig(start).getWebAuthNUsersTable() + " as webauthn " +
-                "JOIN " + getConfig(start).getUsersTable() + " as all_users ON webauthn.app_id = all_users.app_id AND webauthn.user_id = all_users.user_id " +
+                tenantJoin +
                 "LEFT JOIN " + getConfig(start).getWebAuthNCredentialsTable() + " as credentials ON webauthn.user_id = credentials.user_id " +
                 "LEFT JOIN " + getConfig(start).getUserIdMappingTable() + " as user_id_mapping ON webauthn.user_id = user_id_mapping.supertokens_user_id " +
                 "LEFT JOIN " + getConfig(start).getEmailVerificationTable() + " as email_verification ON webauthn.app_id = email_verification.app_id AND (user_id_mapping.external_user_id = email_verification.user_id OR user_id_mapping.supertokens_user_id = email_verification.user_id OR webauthn.user_id = email_verification.user_id OR webauthn.user_id = email_verification.user_id) " +

@@ -1187,12 +1187,26 @@ try {
                 }
             } else {
                 {
-                    // Insert accountInfoType and accountInfoValue for all tenants that match app_id and user_id
+                    // Insert accountInfoType and accountInfoValue for all tenants that match app_id and user_id.
+                    //
+                    // Source-row filter: for thirdparty users, recipe_user_tenants holds TWO
+                    // rows per tenant — one 'email' row carrying the third_party_id/user_id,
+                    // and one 'tparty' row with empty tp_id/user_id. Without a filter, the
+                    // INSERT would derive two rows from each tenant (one per source row) that
+                    // differ only in tp_id/user_id, producing a spurious duplicate in
+                    // recipe_user_tenants (the PK includes third_party_id and
+                    // third_party_user_id, so both rows are distinct and both get inserted).
+                    //
+                    // Filter to the "canonical" account_info row per recipe: for thirdparty
+                    // that's the 'email' row (which carries the real tp_id); for any other
+                    // recipe type, all source rows have empty tp_id so DISTINCT collapses
+                    // them after projection, and the filter is a no-op.
                     String QUERY_2_INSERT = "INSERT INTO " + recipeUserTenantsTable
                             + " (app_id, recipe_user_id, tenant_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value)"
                             + " SELECT DISTINCT r.app_id, r.recipe_user_id, r.tenant_id, r.recipe_id, ?, r.third_party_id, r.third_party_user_id, ?"
                             + " FROM " + recipeUserTenantsTable + " r"
-                            + " WHERE r.app_id = ? AND r.recipe_user_id = ?";
+                            + " WHERE r.app_id = ? AND r.recipe_user_id = ?"
+                            + "   AND (r.recipe_id != 'thirdparty' OR r.account_info_type = 'email')";
                     update(sqlCon, QUERY_2_INSERT, pst -> {
                         pst.setString(1, accountInfoType.toString());
                         pst.setString(2, accountInfoValue);
@@ -1213,12 +1227,27 @@ try {
                 }
                 {
                     String schema = Config.getConfig(start).getTableSchema();
-                    // Upsert into recipe_user_account_infos
+                    // Upsert into recipe_user_account_infos.
+                    //
+                    // Same source-row hazard as QUERY_2_INSERT above: for thirdparty users
+                    // this table holds two rows (one 'email' with real tp_id, one 'tparty'
+                    // with empty tp_id). The SELECT ... LIMIT 1 has no ORDER BY, so Postgres
+                    // may pick either; if it picks the 'tparty' row, the INSERT overlays
+                    // account_info_type='email' onto empty tp_id/user_id, producing a row
+                    // whose PK (..., 'email', '', '') doesn't conflict with the existing
+                    // (..., 'email', 'google', 'tp1') row — ON CONFLICT doesn't fire and we
+                    // end up with a spurious 'email' row in recipe_user_account_infos.
+                    //
+                    // Filter source rows the same way QUERY_2_INSERT does: for thirdparty,
+                    // only use the 'email' source row; for any other recipe type, all source
+                    // rows have empty tp_id so the filter is a no-op.
                     String QUERY_2_UPSERT = "INSERT INTO " + recipeUserAccountInfosTable
                             + " (app_id, recipe_user_id, recipe_id, account_info_type, third_party_id, third_party_user_id, account_info_value, primary_user_id)"
                             + " SELECT ?, ?, recipe_id, ?, third_party_id, third_party_user_id, ?, primary_user_id"
                             + " FROM " + recipeUserAccountInfosTable
-                            + " WHERE app_id = ? AND recipe_user_id = ? LIMIT 1"
+                            + " WHERE app_id = ? AND recipe_user_id = ?"
+                            + "   AND (recipe_id != 'thirdparty' OR account_info_type = 'email')"
+                            + " LIMIT 1"
                             + " ON CONFLICT ON CONSTRAINT " + Utils.getConstraintName(schema, recipeUserAccountInfosTable, null, "pkey")
                             + " DO UPDATE SET account_info_value = EXCLUDED.account_info_value";
                     update(sqlCon, QUERY_2_UPSERT, pst -> {
