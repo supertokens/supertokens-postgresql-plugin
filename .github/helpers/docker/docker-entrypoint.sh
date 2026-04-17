@@ -46,10 +46,4 @@ then
     set -- "$@" --with-config="$CONFIG_FILE" --foreground
 fi
 
-
-# If container is started as root user, restart as dedicated supertokens user
-if [ "$(id -u)" = "0" ] && [ "$1" = 'supertokens' ]; then
-    exec gosu supertokens "$@"
-else
-    exec "$@"
-fi
+exec "$@"
