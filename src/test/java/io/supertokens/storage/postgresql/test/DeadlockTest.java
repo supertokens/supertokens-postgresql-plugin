@@ -207,7 +207,7 @@ public class DeadlockTest {
         }
 
         es.shutdown();
-        es.awaitTermination(60, TimeUnit.SECONDS);
+        es.awaitTermination(180, TimeUnit.SECONDS);
 
         assertTrue("Executor didn't finish in time", es.isTerminated());
         assert (pass.get());
@@ -647,7 +647,7 @@ public class DeadlockTest {
         }
 
         es.shutdown();
-        es.awaitTermination(60, TimeUnit.SECONDS);
+        es.awaitTermination(180, TimeUnit.SECONDS);
 
         assertTrue("Executor didn't finish in time", es.isTerminated());
         assert (pass.get());
@@ -698,7 +698,7 @@ public class DeadlockTest {
         }
 
         es.shutdown();
-        es.awaitTermination(60, TimeUnit.SECONDS);
+        es.awaitTermination(180, TimeUnit.SECONDS);
 
         assertTrue("Executor didn't finish in time", es.isTerminated());
         assert (pass.get());

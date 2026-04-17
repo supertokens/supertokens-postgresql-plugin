@@ -71,12 +71,16 @@ public class PostgresSQLConfigTest {
 
         // Match the descriptions in the devConfig.yaml file with the descriptions in
         // the CoreConfig class
-        String[] devConfigIgnoredProperties = Arrays.copyOf(ignoredProperties, ignoredProperties.length + 2);
+        String[] devConfigIgnoredProperties = Arrays.copyOf(ignoredProperties, ignoredProperties.length + 3);
         // We ignore these properties in devConfig.yaml because it has a different
         // description
         // in devConfig.yaml and has a default value
         devConfigIgnoredProperties[ignoredProperties.length] = "postgresql_user";
         devConfigIgnoredProperties[ignoredProperties.length + 1] = "postgresql_password";
+        // migration_mode is set to a non-default value in devConfig.yaml (MIGRATED
+        // for dev testing) which the parser (looking for lines ending with ':')
+        // cannot match to a description.
+        devConfigIgnoredProperties[ignoredProperties.length + 2] = "migration_mode";
         matchYamlAndConfigDescriptions("./devConfig.yaml", devConfigIgnoredProperties);
 
         process.kill();

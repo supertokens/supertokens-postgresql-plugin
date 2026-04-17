@@ -23,6 +23,7 @@ import io.supertokens.emailpassword.EmailPassword;
 import io.supertokens.featureflag.EE_FEATURES;
 import io.supertokens.featureflag.FeatureFlagTestContent;
 import io.supertokens.passwordless.Passwordless;
+import io.supertokens.pluginInterface.MigrationMode;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
@@ -70,6 +71,15 @@ public class BackfillTest {
                         new EE_FEATURES[]{EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY});
         process.startProcess();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        // Backfill sources from the legacy all_auth_recipe_users table. Switch to
+        // DUAL_WRITE_READ_OLD so new signups populate both the legacy table (for
+        // backfill to read) and the reservation tables (for simulateLegacyState
+        // to clear).
+        Storage storage = StorageLayer.getStorage(process.getProcess());
+        if (storage.getType() == STORAGE_TYPE.SQL) {
+            Config.getConfig((Start) storage).setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
+        }
         return process;
     }
 
@@ -423,14 +433,26 @@ public class BackfillTest {
             // Empty DB is consistent
             assertEquals(0, backfillStorage.verifyBackfillCompleteness(appIdentifier));
 
-            // Create user (LEGACY mode = no reservation table entries)
+            // Create user, then simulate legacy state. We additionally wipe
+            // recipe_user_account_infos for this recipe_user_id explicitly to
+            // guard against any lingering rows from dual-write signup.
             AuthRecipeUserInfo user = EmailPassword.signUp(main, "verify@example.com", "password123");
+            simulateLegacyState(storage, user.getSupertokensUserId());
+            final String uid = user.getSupertokensUserId();
+            final String accountInfosTable = Config.getConfig(storage).getRecipeUserAccountInfosTable();
+            storage.startTransaction(con -> {
+                Connection sqlCon = (Connection) con.getConnection();
+                try (Statement stmt = sqlCon.createStatement()) {
+                    stmt.executeUpdate("DELETE FROM " + accountInfosTable
+                            + " WHERE TRIM(recipe_user_id) = '" + uid + "'");
+                }
+                return null;
+            });
 
             // User exists in app_id_to_user_id but NOT in recipe_user_account_infos → inconsistent
             assertEquals(1, backfillStorage.verifyBackfillCompleteness(appIdentifier));
 
-            // Backfill the user (first simulate legacy by setting time_joined=0)
-            simulateLegacyState(storage, user.getSupertokensUserId());
+            // Backfill the user
             backfillStorage.backfillUsersBatch(appIdentifier, 100);
 
             // Now consistent
