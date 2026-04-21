@@ -43,6 +43,7 @@ import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.webauthn.AccountRecoveryTokenInfo;
 import io.supertokens.pluginInterface.webauthn.WebAuthNOptions;
 import io.supertokens.pluginInterface.webauthn.WebAuthNStoredCredential;
+import io.supertokens.storage.postgresql.ConnectionPool;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import io.supertokens.storage.postgresql.Start;
@@ -608,18 +609,9 @@ public class WebAuthNQueries {
     }
 
     public static Collection<? extends LoginMethod> getUsersInfoUsingIdList(Start start, Set<String> ids, AppIdentifier appIdentifier)
-            throws StorageQueryException {
-        try {
-            return start.startTransaction(con -> {
-                Connection sqlConnection = (Connection) con.getConnection();
-                try {
-                    return getUsersInfoUsingIdList_Transaction(start, sqlConnection, ids, appIdentifier);
-                } catch (SQLException e) {
-                    throw new StorageQueryException(e);
-                }
-            });
-        } catch (StorageTransactionLogicException e) {
-            throw new StorageQueryException(e);
+            throws SQLException, StorageQueryException {
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            return getUsersInfoUsingIdList_Transaction(start, con, ids, appIdentifier);
         }
     }
 
