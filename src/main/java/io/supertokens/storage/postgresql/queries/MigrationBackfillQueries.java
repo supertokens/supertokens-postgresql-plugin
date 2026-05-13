@@ -228,6 +228,17 @@ public class MigrationBackfillQueries {
                 });
                 break;
             }
+            default:
+                // A recipe that writes rows into app_id_to_user_id was added without a
+                // corresponding backfill case. Failing loudly here is intentional: silently
+                // skipping would mark the user as backfilled (time_joined updated) while
+                // leaving their reservation table rows empty, causing silent data loss once
+                // migration_mode advances to MIGRATED.
+                throw new IllegalStateException(
+                        "Unknown recipeId during backfill: '" + user.recipeId
+                        + "' for userId=" + user.userId
+                        + ". Add a backfill case to backfillAccountInfos() or explicitly"
+                        + " document why this recipe has no account info rows.");
         }
     }
 
