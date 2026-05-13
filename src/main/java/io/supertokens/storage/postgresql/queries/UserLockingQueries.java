@@ -86,15 +86,19 @@ public class UserLockingQueries {
         Array userIdsArray = con.createArrayOf("VARCHAR", userIds.toArray(new String[0]));
 
         Set<String> allIdsToLock = new LinkedHashSet<>(userIds);
-        execute(con, FIND_PRIMARIES, pst -> {
-            pst.setObject(1, appId, Types.VARCHAR);
-            pst.setArray(2, userIdsArray);
-        }, rs -> {
-            while (rs.next()) {
-                allIdsToLock.add(rs.getString("primary_or_recipe_user_id").trim());
-            }
-            return null;
-        });
+        try {
+            execute(con, FIND_PRIMARIES, pst -> {
+                pst.setObject(1, appId, Types.VARCHAR);
+                pst.setArray(2, userIdsArray);
+            }, rs -> {
+                while (rs.next()) {
+                    allIdsToLock.add(rs.getString("primary_or_recipe_user_id").trim());
+                }
+                return null;
+            });
+        } finally {
+            userIdsArray.free();
+        }
 
         // --- Round 2: lock all discovered user IDs ----------------------------
         // Simple ANY on PK — the planner always picks an Index Scan.
@@ -124,22 +128,25 @@ public class UserLockingQueries {
         Map<String, LockedUser> lockedByUserId = null;
         for (int attempt = 0; attempt < MAX_LOCK_EXPANSION_ATTEMPTS; attempt++) {
             Array allIdsArray = con.createArrayOf("VARCHAR", allIdsToLock.toArray(new String[0]));
-
-            lockedByUserId = execute(con, LOCK_QUERY, pst -> {
-                pst.setObject(1, appId, Types.VARCHAR);
-                pst.setArray(2, allIdsArray);
-            }, rs -> {
-                Map<String, LockedUser> map = new HashMap<>();
-                while (rs.next()) {
-                    String uid = rs.getString("user_id").trim();
-                    String recipeId = rs.getString("recipe_id");
-                    boolean isLinkedOrPrimary = rs.getBoolean("is_linked_or_is_a_primary_user");
-                    String primaryUid = isLinkedOrPrimary
-                            ? rs.getString("primary_or_recipe_user_id").trim() : null;
-                    map.put(uid, new LockedUserImpl(uid, recipeId, primaryUid, con));
-                }
-                return map;
-            });
+            try {
+                lockedByUserId = execute(con, LOCK_QUERY, pst -> {
+                    pst.setObject(1, appId, Types.VARCHAR);
+                    pst.setArray(2, allIdsArray);
+                }, rs -> {
+                    Map<String, LockedUser> map = new HashMap<>();
+                    while (rs.next()) {
+                        String uid = rs.getString("user_id").trim();
+                        String recipeId = rs.getString("recipe_id");
+                        boolean isLinkedOrPrimary = rs.getBoolean("is_linked_or_is_a_primary_user");
+                        String primaryUid = isLinkedOrPrimary
+                                ? rs.getString("primary_or_recipe_user_id").trim() : null;
+                        map.put(uid, new LockedUserImpl(uid, recipeId, primaryUid, con));
+                    }
+                    return map;
+                });
+            } finally {
+                allIdsArray.free();
+            }
 
             // Post-lock validation: check if any locked user's primary is
             // outside the lock set. If so, expand and re-lock.
