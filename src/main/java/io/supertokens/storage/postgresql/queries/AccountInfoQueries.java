@@ -160,7 +160,7 @@ public class AccountInfoQueries {
     static String getQueryToCreateAccountInfoIndexForRecipeUserTenantsTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_account_info ON "
                 + Config.getConfig(start).getRecipeUserTenantsTable()
-                + "(app_id, tenant_id, account_info_type, third_party_id, account_info_value);";
+                + "(app_id, tenant_id, account_info_type, account_info_value);";
     }
 
     static String getQueryToCreatePrimaryUserIndexForPrimaryUserTenantsTable(Start start) {
@@ -1454,7 +1454,7 @@ try {
                 + " FROM " + getConfig(start).getRecipeUserTenantsTable() + " rut"
                 + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " auid"
                 + " ON rut.app_id = auid.app_id AND rut.recipe_user_id = auid.user_id"
-                + " WHERE rut.app_id = ? AND rut.tenant_id = ?"
+                + " WHERE rut.app_id = ? AND rut.tenant_id = ? AND rut.third_party_id = ''"
                 + " AND rut.account_info_type = ? AND rut.account_info_value = ?"
                 + " LIMIT 1";
 
