@@ -5530,9 +5530,35 @@ public class Start
 
     // MigrationBackfillStorage implementation
 
+    // Cached migration mode — populated lazily from tenant_configs.core_config on first use,
+    // then kept in sync by setMigrationMode(). Falls back to the config-file value if
+    // no DB row exists. volatile so all threads see the write from setMigrationMode().
+    private volatile MigrationMode migrationModeCache = null;
+
     @Override
     public MigrationMode getMigrationMode() {
-        return Config.getConfig(this).getMigrationMode();
+        if (migrationModeCache != null) {
+            return migrationModeCache;
+        }
+        try {
+            MigrationMode fromDB = MigrationBackfillQueries.getMigrationModeFromDB(this);
+            migrationModeCache = (fromDB != null) ? fromDB : Config.getConfig(this).getMigrationMode();
+        } catch (SQLException | StorageQueryException e) {
+            // DB not ready yet (e.g. during schema initialisation) — use config value without caching,
+            // so we retry the DB on the next call once the schema is set up.
+            return Config.getConfig(this).getMigrationMode();
+        }
+        return migrationModeCache;
+    }
+
+    @Override
+    public void setMigrationMode(MigrationMode mode) throws StorageQueryException {
+        try {
+            MigrationBackfillQueries.setMigrationModeInDB(this, mode);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+        migrationModeCache = mode;
     }
 
     @Override

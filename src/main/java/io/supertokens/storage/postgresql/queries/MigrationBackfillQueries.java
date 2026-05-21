@@ -22,14 +22,66 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.google.gson.JsonObject;
+
+import io.supertokens.pluginInterface.MigrationMode;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.queries.utils.JsonUtils;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class MigrationBackfillQueries {
+
+    private static final String MIGRATION_MODE_JSON_KEY = "migration_mode";
+
+    /**
+     * Reads migration_mode from the core_config JSON in tenant_configs at the CUD level
+     * (app_id='public', tenant_id='public'). Each Start instance owns a single database,
+     * so this WHERE clause is unambiguous — no connection_uri_domain filter needed.
+     * Returns null if no row exists or the key is absent (caller falls back to config-file value).
+     */
+    public static MigrationMode getMigrationModeFromDB(Start start) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT core_config FROM " + getConfig(start).getTenantConfigsTable()
+                + " WHERE app_id = 'public' AND tenant_id = 'public'";
+
+        return execute(start, QUERY, pst -> {
+        }, result -> {
+            if (result.next()) {
+                JsonObject coreConfig = JsonUtils.stringToJsonObject(result.getString("core_config"));
+                if (coreConfig != null && coreConfig.has(MIGRATION_MODE_JSON_KEY)) {
+                    try {
+                        return MigrationMode.valueOf(coreConfig.get(MIGRATION_MODE_JSON_KEY).getAsString());
+                    } catch (IllegalArgumentException e) {
+                        return null; // unrecognised value — fall back to config
+                    }
+                }
+            }
+            return null;
+        });
+    }
+
+    /**
+     * Persists migration_mode into the core_config JSON of the CUD-level tenant_configs row.
+     * Uses PostgreSQL's jsonb merge to atomically update only the migration_mode key,
+     * leaving all other core_config values intact.
+     */
+    public static void setMigrationModeInDB(Start start, MigrationMode mode)
+            throws SQLException, StorageQueryException {
+        // COALESCE handles a NULL core_config column — merges into '{}' instead.
+        String QUERY = "UPDATE " + getConfig(start).getTenantConfigsTable()
+                + " SET core_config = ("
+                + "   COALESCE(core_config::jsonb, '{}'::jsonb)"
+                + "   || jsonb_build_object('" + MIGRATION_MODE_JSON_KEY + "', ?::text)"
+                + " )::text"
+                + " WHERE app_id = 'public' AND tenant_id = 'public'";
+
+        update(start, QUERY, pst -> {
+            pst.setString(1, mode.name());
+        });
+    }
 
     /**
      * Returns the count of users with time_joined = 0, indicating they need backfilling.
