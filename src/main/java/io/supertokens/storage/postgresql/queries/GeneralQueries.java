@@ -1399,17 +1399,21 @@ public class GeneralQueries {
                     recipeIdCondition = recipeIdCondition + " AND";
                 }
                 String timeJoinedOrderSymbol = timeJoinedOrder.equals("ASC") ? ">" : "<";
-                String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id,"
-                        + " auid.primary_or_recipe_user_time_joined"
+                // GROUP BY instead of DISTINCT so that a primary user whose linked recipe users
+                // have different primary_or_recipe_user_time_joined values still appears only once.
+                // Cursor filter moves to HAVING because it must operate on the aggregated MIN value.
+                String QUERY = "SELECT auid.primary_or_recipe_user_id,"
+                        + " MIN(auid.primary_or_recipe_user_time_joined) AS primary_or_recipe_user_time_joined"
                         + " FROM " + getConfig(start).getAppIdToUserIdTable() + " auid"
                         + " JOIN " + getConfig(start).getRecipeUserTenantsTable() + " rut"
                         + " ON auid.app_id = rut.app_id AND auid.user_id = rut.recipe_user_id"
                         + " WHERE " + recipeIdCondition
-                        + " (auid.primary_or_recipe_user_time_joined " + timeJoinedOrderSymbol
-                        + " ? OR (auid.primary_or_recipe_user_time_joined = ?"
+                        + " auid.app_id = ? AND rut.tenant_id = ?"
+                        + " GROUP BY auid.primary_or_recipe_user_id"
+                        + " HAVING (MIN(auid.primary_or_recipe_user_time_joined) " + timeJoinedOrderSymbol
+                        + " ? OR (MIN(auid.primary_or_recipe_user_time_joined) = ?"
                         + " AND auid.primary_or_recipe_user_id <= ?))"
-                        + " AND auid.app_id = ? AND rut.tenant_id = ?"
-                        + " ORDER BY auid.primary_or_recipe_user_time_joined " + timeJoinedOrder
+                        + " ORDER BY MIN(auid.primary_or_recipe_user_time_joined) " + timeJoinedOrder
                         + ", auid.primary_or_recipe_user_id DESC LIMIT ?";
                 usersFromQuery = execute(start, QUERY, pst -> {
                     if (includeRecipeIds != null) {
@@ -1418,11 +1422,11 @@ public class GeneralQueries {
                         }
                     }
                     int baseIndex = includeRecipeIds == null ? 0 : includeRecipeIds.length;
-                    pst.setLong(baseIndex + 1, timeJoined);
-                    pst.setLong(baseIndex + 2, timeJoined);
-                    pst.setString(baseIndex + 3, userId);
-                    pst.setString(baseIndex + 4, tenantIdentifier.getAppId());
-                    pst.setString(baseIndex + 5, tenantIdentifier.getTenantId());
+                    pst.setString(baseIndex + 1, tenantIdentifier.getAppId());
+                    pst.setString(baseIndex + 2, tenantIdentifier.getTenantId());
+                    pst.setLong(baseIndex + 3, timeJoined);
+                    pst.setLong(baseIndex + 4, timeJoined);
+                    pst.setString(baseIndex + 5, userId);
                     pst.setInt(baseIndex + 6, limit);
                 }, result -> {
                     List<String> temp = new ArrayList<>();
@@ -1433,8 +1437,10 @@ public class GeneralQueries {
                 });
             } else {
                 String recipeIdCondition = RECIPE_ID_CONDITION.toString();
-                String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id,"
-                        + " auid.primary_or_recipe_user_time_joined"
+                // GROUP BY instead of DISTINCT so that a primary user whose linked recipe users
+                // have different primary_or_recipe_user_time_joined values still appears only once.
+                String QUERY = "SELECT auid.primary_or_recipe_user_id,"
+                        + " MIN(auid.primary_or_recipe_user_time_joined) AS primary_or_recipe_user_time_joined"
                         + " FROM " + getConfig(start).getAppIdToUserIdTable() + " auid"
                         + " JOIN " + getConfig(start).getRecipeUserTenantsTable() + " rut"
                         + " ON auid.app_id = rut.app_id AND auid.user_id = rut.recipe_user_id"
@@ -1443,7 +1449,8 @@ public class GeneralQueries {
                     QUERY += recipeIdCondition + " AND";
                 }
                 QUERY += " auid.app_id = ? AND rut.tenant_id = ?"
-                        + " ORDER BY auid.primary_or_recipe_user_time_joined " + timeJoinedOrder
+                        + " GROUP BY auid.primary_or_recipe_user_id"
+                        + " ORDER BY MIN(auid.primary_or_recipe_user_time_joined) " + timeJoinedOrder
                         + ", auid.primary_or_recipe_user_id DESC LIMIT ?";
                 usersFromQuery = execute(start, QUERY, pst -> {
                     if (includeRecipeIds != null) {

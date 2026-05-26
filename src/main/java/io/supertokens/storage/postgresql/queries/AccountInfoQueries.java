@@ -16,28 +16,11 @@
 
 package io.supertokens.storage.postgresql.queries;
 
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
-
-import org.postgresql.util.PSQLException;
-import org.postgresql.util.ServerErrorMessage;
-
 import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.CanBecomePrimaryResult;
 import io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult;
-import io.supertokens.pluginInterface.authRecipe.exceptions.AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException;
-import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithEmailAlreadyExistsException;
-import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithPhoneNumberAlreadyExistsException;
-import io.supertokens.pluginInterface.authRecipe.exceptions.AnotherPrimaryUserWithThirdPartyInfoAlreadyExistsException;
-import io.supertokens.pluginInterface.authRecipe.exceptions.CannotBecomePrimarySinceRecipeUserIdAlreadyLinkedWithPrimaryUserIdException;
-import io.supertokens.pluginInterface.authRecipe.exceptions.CannotLinkSinceRecipeUserIdAlreadyLinkedWithAnotherPrimaryUserIdException;
-import io.supertokens.pluginInterface.authRecipe.exceptions.EmailChangeNotAllowedException;
-import io.supertokens.pluginInterface.authRecipe.exceptions.InputUserIdIsNotAPrimaryUserException;
-import io.supertokens.pluginInterface.authRecipe.exceptions.PhoneNumberChangeNotAllowedException;
-import io.supertokens.pluginInterface.authRecipe.exceptions.UnknownUserIdException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.*;
 import io.supertokens.pluginInterface.bulkimport.PrimaryUser;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
@@ -49,13 +32,19 @@ import io.supertokens.pluginInterface.sqlStorage.TransactionConnection;
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.pluginInterface.useridmapping.LockedUser;
 import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.executeBatch;
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
-import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import io.supertokens.storage.postgresql.utils.Utils;
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.ServerErrorMessage;
+
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
+import static io.supertokens.storage.postgresql.config.Config.getConfig;
 
 public class AccountInfoQueries {
 
@@ -1318,9 +1307,6 @@ try {
 
     public static void addRecipeUserTenantsToBatch(List<PreparedStatementValueSetter> recipeUserAccountInfoBatch, AppIdentifier appIdentifier, String recipeUserId, String recipeId, ACCOUNT_INFO_TYPE accountInfoType, String thirdPartyId, String thirdPartyUserId, String accountInfoValue,
                                                    List<String> recipeUserTenantIds) {
-        if (thirdPartyId.length() > 28) {
-            System.out.println(thirdPartyId);
-        }
         for (String tenantId : recipeUserTenantIds) {
             recipeUserAccountInfoBatch.add(pst -> {
                 pst.setString(1, appIdentifier.getAppId());

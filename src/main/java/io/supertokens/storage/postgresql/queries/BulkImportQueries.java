@@ -20,9 +20,9 @@ import io.supertokens.pluginInterface.RowMapper;
 import io.supertokens.pluginInterface.bulkimport.BulkImportStorage.BULK_IMPORT_USER_STATUS;
 import io.supertokens.pluginInterface.bulkimport.BulkImportUser;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
-import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
+import io.supertokens.storage.postgresql.ResultSetValueExtractor;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -143,59 +143,50 @@ public class BulkImportQueries {
     }
 
     public static List<BulkImportUser> getBulkImportUsersAndChangeStatusToProcessing(Start start,
+                                                                                     Connection sqlCon,
             AppIdentifier appIdentifier,
             @Nonnull Integer limit)
-            throws StorageQueryException, StorageTransactionLogicException {
+            throws StorageQueryException, SQLException {
 
-        return start.startTransaction(con -> {
-            Connection sqlCon = (Connection) con.getConnection();
-            try {
+        // FOR UPDATE SKIP LOCKED: concurrent cron jobs on the same database atomically claim
+        // disjoint row sets — no two workers can lock the same row simultaneously.
+        String selectQuery = "SELECT * FROM " + Config.getConfig(start).getBulkImportUsersTable()
+                + " WHERE app_id = ?"
+                + " AND (status = 'NEW' OR status = 'PROCESSING' )"
+                + " LIMIT ? FOR UPDATE SKIP LOCKED";
 
-                // "FOR UPDATE" ensures that multiple cron jobs don't read the same rows simultaneously.
-                // If one process locks the first 1000 rows, others will wait for the lock to be released.
-                // "SKIP LOCKED" allows other processes to skip locked rows and select the next 1000 available rows.
-                String selectQuery = "SELECT * FROM " + Config.getConfig(start).getBulkImportUsersTable()
-                        + " WHERE app_id = ?"
-                        //+ " AND (status = 'NEW' OR (status = 'PROCESSING' AND updated_at < (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000) -  10 * 60 * 1000))" /* 10 mins */
-                        + " AND (status = 'NEW' OR status = 'PROCESSING' )"
-                        + " LIMIT ? FOR UPDATE SKIP LOCKED";
+        List<BulkImportUser> bulkImportUsers = new ArrayList<>();
 
-                List<BulkImportUser> bulkImportUsers = new ArrayList<>();
-
-                execute(sqlCon, selectQuery, pst -> {
-                    pst.setString(1, appIdentifier.getAppId());
-                    pst.setInt(2, limit);
-                }, result -> {
-                    while (result.next()) {
-                        bulkImportUsers.add(BulkImportUserRowMapper.getInstance().mapOrThrow(result));
-                    }
-                    return null;
-                });
-
-                if (bulkImportUsers.isEmpty()) {
-                    return new ArrayList<>();
-                }
-
-                String updateQuery = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable()
-                        + " SET status = ?, updated_at = ? WHERE app_id = ? AND id = ?";
-
-                List<PreparedStatementValueSetter> updateSetters = new ArrayList<>();
-                for(BulkImportUser user : bulkImportUsers){
-                    updateSetters.add(pst -> {
-                        pst.setString(1, BULK_IMPORT_USER_STATUS.PROCESSING.toString());
-                        pst.setLong(2, System.currentTimeMillis());
-                        pst.setString(3, appIdentifier.getAppId());
-                        pst.setObject(4, user.id);
-                    });
-                }
-
-                executeBatch(sqlCon, updateQuery, updateSetters);
-
-                return bulkImportUsers;
-            } catch (SQLException throwables) {
-                throw new StorageTransactionLogicException(throwables);
+        execute(sqlCon, selectQuery, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setInt(2, limit);
+        }, result -> {
+            while (result.next()) {
+                bulkImportUsers.add(BulkImportUserRowMapper.getInstance().mapOrThrow(result));
             }
+            return null;
         });
+
+        if (bulkImportUsers.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        String updateQuery = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable()
+                + " SET status = ?, updated_at = ? WHERE app_id = ? AND id = ?";
+
+        List<PreparedStatementValueSetter> updateSetters = new ArrayList<>();
+        for (BulkImportUser user : bulkImportUsers) {
+            updateSetters.add(pst -> {
+                pst.setString(1, BULK_IMPORT_USER_STATUS.PROCESSING.toString());
+                pst.setLong(2, System.currentTimeMillis());
+                pst.setString(3, appIdentifier.getAppId());
+                pst.setObject(4, user.id);
+            });
+        }
+
+        executeBatch(sqlCon, updateQuery, updateSetters);
+
+        return bulkImportUsers;
     }
 
     public static List<BulkImportUser> getBulkImportUsers(Start start, AppIdentifier appIdentifier,
@@ -247,15 +238,27 @@ public class BulkImportQueries {
         if (bulkImportUserIds.length == 0) {
             return new ArrayList<>();
         }
+        return deleteBulkImportUsers(start, appIdentifier, bulkImportUserIds, null);
+    }
 
-        String baseQuery = "DELETE FROM " + Config.getConfig(start).getBulkImportUsersTable();
-        StringBuilder queryBuilder = new StringBuilder(baseQuery);
+    public static void deleteBulkImportUsers(Start start, Connection sqlCon, AppIdentifier appIdentifier,
+                                             @Nonnull String[] bulkImportUserIds)
+            throws SQLException, StorageQueryException {
+        if (bulkImportUserIds.length == 0) {
+            return;
+        }
+        deleteBulkImportUsers(start, appIdentifier, bulkImportUserIds, sqlCon);
+    }
+
+    private static List<String> deleteBulkImportUsers(Start start, AppIdentifier appIdentifier,
+                                                      @Nonnull String[] bulkImportUserIds, Connection sqlCon)
+            throws SQLException, StorageQueryException {
+        StringBuilder queryBuilder = new StringBuilder(
+                "DELETE FROM " + Config.getConfig(start).getBulkImportUsersTable());
 
         List<Object> parameters = new ArrayList<>();
-
         queryBuilder.append(" WHERE app_id = ?");
         parameters.add(appIdentifier.getAppId());
-
         queryBuilder.append(" AND id IN (");
         for (int i = 0; i < bulkImportUserIds.length; i++) {
             if (i != 0) {
@@ -267,18 +270,23 @@ public class BulkImportQueries {
         queryBuilder.append(") RETURNING id");
 
         String query = queryBuilder.toString();
-
-        return update(start, query, pst -> {
+        PreparedStatementValueSetter setter = pst -> {
             for (int i = 0; i < parameters.size(); i++) {
                 pst.setObject(i + 1, parameters.get(i));
             }
-        }, result -> {
+        };
+        ResultSetValueExtractor<List<String>> mapper = result -> {
             List<String> deletedIds = new ArrayList<>();
             while (result.next()) {
                 deletedIds.add(result.getString("id"));
             }
             return deletedIds;
-        });
+        };
+
+        if (sqlCon != null) {
+            return execute(sqlCon, query, setter, mapper);
+        }
+        return update(start, query, setter, mapper);
     }
 
     public static void updateBulkImportUserPrimaryUserId(Start start, AppIdentifier appIdentifier,
