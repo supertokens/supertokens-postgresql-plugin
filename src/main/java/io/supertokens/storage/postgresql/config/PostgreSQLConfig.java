@@ -390,6 +390,10 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("user_last_active");
     }
 
+    public String getActivityLogTable() {
+        return addSchemaAndPrefixToTableName("activity_log");
+    }
+
     public String getAccessTokenSigningKeysTable() {
         return addSchemaAndPrefixToTableName("session_access_token_signing_keys");
     }

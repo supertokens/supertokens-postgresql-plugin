@@ -381,6 +381,15 @@ public class GeneralQueries {
                             NO_OP_SETTER);
                 }
 
+                if (!doesTableExists(start, con, Config.getConfig(start).getActivityLogTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, ActivityLogQueries.getQueryToCreateActivityLogTable(start), NO_OP_SETTER);
+                    update(con, ActivityLogQueries.getQueryToCreateActivityLogDefaultPartition(start), NO_OP_SETTER);
+
+                    // index
+                    update(con, ActivityLogQueries.getQueryToCreateCreatedAtBrinIndex(start), NO_OP_SETTER);
+                }
+
                 if (!doesTableExists(start, con, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(con, getQueryToCreateAccessTokenSigningKeysTable(start), NO_OP_SETTER);
@@ -834,6 +843,7 @@ public class GeneralQueries {
             String DROP_QUERY = "DROP TABLE IF EXISTS "
                     + getConfig(start).getAppsTable() + ","
                     + getConfig(start).getUserLastActiveTable() + ","
+                    + getConfig(start).getActivityLogTable() + ","
                     + getConfig(start).getTenantsTable() + ","
                     + getConfig(start).getKeyValueTable() + ","
                     + getConfig(start).getAppIdToUserIdTable() + ","
