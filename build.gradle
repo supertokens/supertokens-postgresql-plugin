@@ -1,5 +1,6 @@
 plugins {
     id 'java-library'
+    id 'java-test-fixtures'
 }
 
 version = "9.4.0"
@@ -14,6 +15,11 @@ dependencies {
     compileOnly project(":supertokens-plugin-interface")
     testImplementation project(":supertokens-plugin-interface")
     testImplementation project(":supertokens-core")
+
+    // testFixtures: implements TestDatabaseHelper so core tests can create databases without
+    // a direct JDBC dependency in supertokens-core.
+    testFixturesImplementation project(":supertokens-plugin-interface")
+    testFixturesImplementation project(":supertokens-core")
 
     // https://mvnrepository.com/artifact/com.zaxxer/HikariCP
     implementation group: 'com.zaxxer', name: 'HikariCP', version: '6.3.0'
