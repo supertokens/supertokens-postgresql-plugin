@@ -330,20 +330,40 @@ public class PostgreSQLConfig {
         return postgresql_connection_uri;
     }
 
+    // Parsed-enum cache for migration_mode. Populated lazily on the first call to
+    // getMigrationMode() and never invalidated — it doesn't need to be, because the
+    // entire PostgreSQLConfig instance is reconstructed on every tenant-config refresh
+    // (Multitenancy.addNewOrUpdateAppOrTenant → MultitenancyHelper.refreshAfterKnownTenantChange
+    // → Config.loadConfig → new PostgreSQLConfig via ConfigMapper.mapConfig). A new instance
+    // starts with parsedMigrationMode = null and re-derives on first use.
+    //
+    // transient so Gson skips it in getValidFields() / getConfigFieldsInfoForDashboard.
+    // volatile so concurrent readers see the publication done by the first parser.
+    private transient volatile MigrationMode parsedMigrationMode = null;
+
     public MigrationMode getMigrationMode() {
+        MigrationMode cached = parsedMigrationMode;
+        if (cached != null) {
+            return cached;
+        }
+        MigrationMode parsed;
         if (migration_mode == null) {
-            return MigrationMode.LEGACY;
+            parsed = MigrationMode.LEGACY;
+        } else {
+            try {
+                parsed = MigrationMode.valueOf(migration_mode.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                parsed = MigrationMode.LEGACY;
+            }
         }
-        try {
-            return MigrationMode.valueOf(migration_mode.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            return MigrationMode.LEGACY;
-        }
+        parsedMigrationMode = parsed;
+        return parsed;
     }
 
     @TestOnly
     public void setMigrationModeForTesting(MigrationMode mode) {
         this.migration_mode = mode.name();
+        this.parsedMigrationMode = null; // force re-parse on next read
     }
 
     public String getUsersTable() {
