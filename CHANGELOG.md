@@ -7,6 +7,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.4.2]
+
+- Fixes concurrency issue with oauth refresh token
+
+## [9.4.1]
+
+- Fixes env var reading with specific types
+- Updates dependencies for testing
+
 ## [9.4.0]
 
 - Adds support for bulk query APIs for usermetadata and TOTP

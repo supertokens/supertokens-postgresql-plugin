@@ -73,6 +73,7 @@ import io.supertokens.pluginInterface.oauth.OAuthLogoutChallenge;
 import io.supertokens.pluginInterface.oauth.OAuthStorage;
 import io.supertokens.pluginInterface.oauth.exception.DuplicateOAuthLogoutChallengeException;
 import io.supertokens.pluginInterface.oauth.exception.OAuthClientNotFoundException;
+import io.supertokens.pluginInterface.oauth.sqlStorage.OAuthSQLStorage;
 import io.supertokens.pluginInterface.opentelemetry.OtelProvider;
 import io.supertokens.pluginInterface.opentelemetry.WithinOtelSpan;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
@@ -112,10 +113,7 @@ import io.supertokens.pluginInterface.userroles.sqlStorage.UserRolesSQLStorage;
 import io.supertokens.pluginInterface.webauthn.AccountRecoveryTokenInfo;
 import io.supertokens.pluginInterface.webauthn.WebAuthNOptions;
 import io.supertokens.pluginInterface.webauthn.WebAuthNStoredCredential;
-import io.supertokens.pluginInterface.webauthn.exceptions.DuplicateOptionsIdException;
-import io.supertokens.pluginInterface.webauthn.exceptions.DuplicateRecoverAccountTokenException;
-import io.supertokens.pluginInterface.webauthn.exceptions.WebauthNCredentialNotExistsException;
-import io.supertokens.pluginInterface.webauthn.exceptions.WebauthNOptionsNotExistsException;
+import io.supertokens.pluginInterface.webauthn.exceptions.*;
 import io.supertokens.pluginInterface.webauthn.slqStorage.WebAuthNSQLStorage;
 import io.supertokens.storage.postgresql.annotations.EnvName;
 import io.supertokens.storage.postgresql.config.Config;
@@ -141,8 +139,8 @@ public class Start
         implements SessionSQLStorage, EmailPasswordSQLStorage, EmailVerificationSQLStorage, ThirdPartySQLStorage,
         JWTRecipeSQLStorage, PasswordlessSQLStorage, UserMetadataSQLStorage, UserRolesSQLStorage, UserIdMappingStorage,
         UserIdMappingSQLStorage, MultitenancyStorage, MultitenancySQLStorage, DashboardSQLStorage, TOTPSQLStorage,
-        ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage, OAuthStorage, BulkImportSQLStorage,
-        WebAuthNSQLStorage, SAMLStorage, UserLockingStorage, AccountInfoStorage,
+        ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage, OAuthStorage, OAuthSQLStorage,
+        BulkImportSQLStorage, WebAuthNSQLStorage, SAMLStorage, UserLockingStorage, AccountInfoStorage,
         MigrationBackfillStorage {
 
     // these configs are protected from being modified / viewed by the dev using the SuperTokens
@@ -831,18 +829,24 @@ public class Start
                             .replace("\\\\", "\\");
                 }
 
+                // Empty/unset stringValue is already handled above (null/empty check),
+                // so boxed types (Integer, Long, etc.) can safely share branches
+                // with their primitive counterparts.
                 if (field.getType().equals(String.class)) {
                     configJson.addProperty(field.getName(), stringValue);
-                } else if (field.getType().equals(int.class)) {
+                } else if (field.getType().equals(int.class) || field.getType().equals(Integer.class)) {
                     configJson.addProperty(field.getName(), Integer.parseInt(stringValue));
-                } else if (field.getType().equals(long.class)) {
+                } else if (field.getType().equals(long.class) || field.getType().equals(Long.class)) {
                     configJson.addProperty(field.getName(), Long.parseLong(stringValue));
-                } else if (field.getType().equals(boolean.class)) {
+                } else if (field.getType().equals(boolean.class) || field.getType().equals(Boolean.class)) {
                     configJson.addProperty(field.getName(), Boolean.parseBoolean(stringValue));
-                } else if (field.getType().equals(float.class)) {
+                } else if (field.getType().equals(float.class) || field.getType().equals(Float.class)) {
                     configJson.addProperty(field.getName(), Float.parseFloat(stringValue));
-                } else if (field.getType().equals(double.class)) {
+                } else if (field.getType().equals(double.class) || field.getType().equals(Double.class)) {
                     configJson.addProperty(field.getName(), Double.parseDouble(stringValue));
+                } else {
+                    throw new RuntimeException(
+                            "Unknown field type " + field.getType().getName() + " for config field " + field.getName());
                 }
             }
         }
@@ -4828,6 +4832,31 @@ public class Start
             throws StorageQueryException {
         try {
             return OAuthQueries.getRefreshTokenMapping(this, appIdentifier, externalRefreshToken);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public String getRefreshTokenMappingForUpdate_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                              String externalRefreshToken)
+            throws StorageQueryException {
+        try {
+            return OAuthQueries.getRefreshTokenMappingForUpdate(this, (Connection) con.getConnection(),
+                    appIdentifier, externalRefreshToken);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void updateOAuthSessionInternal_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                       String gid, String newInternalRefreshToken,
+                                                       String sessionHandle, String jti, long exp)
+            throws StorageQueryException {
+        try {
+            OAuthQueries.updateOAuthSessionInternal(this, (Connection) con.getConnection(),
+                    appIdentifier, gid, newInternalRefreshToken, sessionHandle, jti, exp);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

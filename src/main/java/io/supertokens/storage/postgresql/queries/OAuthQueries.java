@@ -25,6 +25,7 @@ import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
 import org.jetbrains.annotations.NotNull;
 
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -425,6 +426,55 @@ public class OAuthQueries {
                 return result.getString("internal_refresh_token");
             }
             return null;
+        });
+    }
+
+    /**
+     * SELECT FOR UPDATE variant — must be called inside an open transaction.
+     * Locks the oauth_sessions row for the given externalRefreshToken so that no
+     * other DB client can read or write it until the transaction is committed or
+     * rolled back.
+     */
+    public static String getRefreshTokenMappingForUpdate(Start start, Connection con,
+                                                         AppIdentifier appIdentifier,
+                                                         String externalRefreshToken)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT internal_refresh_token FROM " + Config.getConfig(start).getOAuthSessionsTable() +
+                " WHERE app_id = ? AND external_refresh_token = ? FOR UPDATE";
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, externalRefreshToken);
+        }, result -> {
+            if (result.next()) {
+                return result.getString("internal_refresh_token");
+            }
+            return null;
+        });
+    }
+
+    /**
+     * Updates the internal token and metadata for a non-rotating refresh.
+     * Must be called inside the same transaction that previously called
+     * {@link #getRefreshTokenMappingForUpdate}.
+     */
+    public static void updateOAuthSessionInternal(Start start, Connection con,
+                                                   AppIdentifier appIdentifier,
+                                                   String gid,
+                                                   String newInternalRefreshToken,
+                                                   String sessionHandle,
+                                                   String jti,
+                                                   long exp)
+            throws SQLException, StorageQueryException {
+        String QUERY = "UPDATE " + Config.getConfig(start).getOAuthSessionsTable() +
+                " SET internal_refresh_token = ?, session_handle = ?, jti = CONCAT(jti, ?), exp = ?" +
+                " WHERE gid = ? AND app_id = ?";
+        update(con, QUERY, pst -> {
+            pst.setString(1, newInternalRefreshToken);
+            pst.setString(2, sessionHandle);
+            pst.setString(3, jti + ",");
+            pst.setLong(4, exp);
+            pst.setString(5, gid);
+            pst.setString(6, appIdentifier.getAppId());
         });
     }
 

@@ -3,7 +3,7 @@ plugins {
     id 'java-test-fixtures'
 }
 
-version = "9.4.0"
+version = "9.4.2"
 
 repositories {
     mavenCentral()
@@ -56,7 +56,7 @@ dependencies {
     // https://mvnrepository.com/artifact/com.google.code.gson/gson
     testImplementation group: 'com.google.code.gson', name: 'gson', version: '2.3.1'
 
-    testImplementation 'com.tngtech.archunit:archunit-junit4:0.22.0'
+    testImplementation 'com.tngtech.archunit:archunit-junit4:1.4.1'
 
     // https://mvnrepository.com/artifact/com.fasterxml.jackson.dataformat/jackson-dataformat-yaml
     testImplementation group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-yaml', version: '2.18.2'
@@ -88,7 +88,8 @@ tasks.register('generateMetaInf') {
 build.dependsOn(generateMetaInf)
 
 test {
-    jvmArgs '-Djava.security.egd=file:/dev/urandom'
+    jvmArgs '-Djava.security.egd=file:/dev/urandom',
+            '--add-opens=java.base/java.util=ALL-UNNAMED'
     minHeapSize = "128m" // initial heap size
     maxHeapSize = "1024m" // maximum heap size
     testLogging {
