@@ -797,15 +797,50 @@ public class GeneralQueries {
         }
     }
 
+    /**
+     * Executes the given DDL statements atomically: either all are applied, or none are.
+     *
+     * <p>PostgreSQL supports transactional DDL, but the connection arrives here in Hikari's
+     * default autocommit=true mode — under autocommit, each batched statement is implicitly
+     * committed when it succeeds, so a failure at statement N leaves 1..N-1 committed and
+     * the next call sees a half-built schema. Flipping autocommit off, running the batch,
+     * and committing makes the batch all-or-nothing; the existing retry-on-missing-schema
+     * loop in {@link #createTablesIfNotExists} then sees a clean state to retry against.
+     */
     private static void executeDDLBatch(Connection con, List<String> statements) throws SQLException {
         if (statements.isEmpty()) {
             return;
+        }
+        boolean previousAutoCommit = con.getAutoCommit();
+        if (previousAutoCommit) {
+            con.setAutoCommit(false);
         }
         try (var stmt = con.createStatement()) {
             for (String sql : statements) {
                 stmt.addBatch(sql);
             }
-            stmt.executeBatch();
+            try {
+                stmt.executeBatch();
+                con.commit();
+            } catch (SQLException e) {
+                try {
+                    con.rollback();
+                } catch (SQLException rollbackException) {
+                    // Surface the original failure but don't lose the rollback diagnostic.
+                    e.addSuppressed(rollbackException);
+                }
+                throw e;
+            }
+        } finally {
+            if (previousAutoCommit) {
+                // Best-effort restore. If this throws (e.g. connection was killed), the
+                // connection pool will discard it on close — safe to swallow rather than
+                // shadow whatever the caller is about to see.
+                try {
+                    con.setAutoCommit(true);
+                } catch (SQLException ignored) {
+                }
+            }
         }
     }
 
