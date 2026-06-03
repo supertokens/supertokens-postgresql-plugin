@@ -51,6 +51,10 @@ other in the planner, and the correctness story is auditable at compile time.
 - `AccountInfoQueries` (1500+ lines) — reservation-table mutations plus new-path conflict detection for
   `makePrimaryUser` / `linkAccounts` / `updateEmail` / `updatePhone` / `addUserIdToTenant`.
 - `MigrationBackfillQueries` — per-user batch backfill, pending count, completeness verification.
+- `migration-scripts/migration-backfill.sql` — idempotent set-based offline backfill, callable via
+  `psql -f`. `migration-scripts/dump_old_canonical.sql` and
+  `migration-scripts/dump_new_canonical.sql` produce a parity-comparable canonical dump from
+  the old and new table sets for end-to-end verification.
 - New tests: `BackfillTest`, `BackfillConcurrencyTest`, `BackfillIntegrationTest`, `MigrationModeTest`,
   `DualWriteConsistencyTest`, `LegacyModeRaceTest`, `ReservationTableIntegrityTest`, plus per-recipe `*RaceTest`
   files (`Passwordless`, `ThirdParty`, `WebAuthn`, `Unlink`, `DeleteUser`, `RaceCondition`, `Multitenancy`).
