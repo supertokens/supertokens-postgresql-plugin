@@ -3908,6 +3908,26 @@ public class Start
     }
 
     @Override
+    public List<BulkImportUser> getBulkImportUsersWithPlaintextPasswords(AppIdentifier appIdentifier, int limit)
+            throws StorageQueryException {
+        try {
+            return BulkImportQueries.getBulkImportUsersWithPlaintextPasswords(this, appIdentifier, limit);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void updateBulkImportUserRawData(AppIdentifier appIdentifier, @Nonnull String bulkImportUserId,
+            @Nonnull String rawData) throws StorageQueryException {
+        try {
+            BulkImportQueries.updateBulkImportUserRawData(this, appIdentifier, bulkImportUserId, rawData);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public void addOAuthM2MTokenForStats(AppIdentifier appIdentifier, String clientId, long iat, long exp)
             throws StorageQueryException, OAuthClientNotFoundException {
         try {

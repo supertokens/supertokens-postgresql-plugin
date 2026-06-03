@@ -154,10 +154,16 @@ public class BulkImportQueries {
                 // "FOR UPDATE" ensures that multiple cron jobs don't read the same rows simultaneously.
                 // If one process locks the first 1000 rows, others will wait for the lock to be released.
                 // "SKIP LOCKED" allows other processes to skip locked rows and select the next 1000 available rows.
+                // The NOT EXISTS subquery excludes users whose passwords haven't been hashed yet by
+                // HashPlaintextPasswordsInBulkImportUsers; those are handled by that cron first.
                 String selectQuery = "SELECT * FROM " + Config.getConfig(start).getBulkImportUsersTable()
                         + " WHERE app_id = ?"
                         //+ " AND (status = 'NEW' OR (status = 'PROCESSING' AND updated_at < (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000) -  10 * 60 * 1000))" /* 10 mins */
                         + " AND (status = 'NEW' OR status = 'PROCESSING' )"
+                        + " AND NOT EXISTS ("
+                        + "   SELECT 1 FROM jsonb_array_elements(raw_data::jsonb -> 'loginMethods') AS lm"
+                        + "   WHERE lm->>'plainTextPassword' IS NOT NULL"
+                        + " )"
                         + " LIMIT ? FOR UPDATE SKIP LOCKED";
 
                 List<BulkImportUser> bulkImportUsers = new ArrayList<>();
@@ -318,6 +324,40 @@ public class BulkImportQueries {
         }, result -> {
             result.next();
             return result.getLong(1);
+        });
+    }
+
+    public static List<BulkImportUser> getBulkImportUsersWithPlaintextPasswords(Start start,
+            AppIdentifier appIdentifier, int limit) throws SQLException, StorageQueryException {
+        String query = "SELECT * FROM " + Config.getConfig(start).getBulkImportUsersTable()
+                + " WHERE app_id = ?"
+                + " AND status = 'NEW'"
+                + " AND EXISTS ("
+                + "   SELECT 1 FROM jsonb_array_elements(raw_data::jsonb -> 'loginMethods') AS lm"
+                + "   WHERE lm->>'plainTextPassword' IS NOT NULL"
+                + " )"
+                + " ORDER BY created_at ASC LIMIT ?";
+        return execute(start, query, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setInt(2, limit);
+        }, result -> {
+            List<BulkImportUser> users = new ArrayList<>();
+            while (result.next()) {
+                users.add(BulkImportUserRowMapper.getInstance().mapOrThrow(result));
+            }
+            return users;
+        });
+    }
+
+    public static void updateBulkImportUserRawData(Start start, AppIdentifier appIdentifier,
+            @Nonnull String bulkImportUserId, @Nonnull String rawData) throws SQLException, StorageQueryException {
+        String query = "UPDATE " + Config.getConfig(start).getBulkImportUsersTable()
+                + " SET raw_data = ?, updated_at = ? WHERE app_id = ? AND id = ?";
+        update(start, query, pst -> {
+            pst.setString(1, rawData);
+            pst.setLong(2, System.currentTimeMillis());
+            pst.setString(3, appIdentifier.getAppId());
+            pst.setString(4, bulkImportUserId);
         });
     }
 
