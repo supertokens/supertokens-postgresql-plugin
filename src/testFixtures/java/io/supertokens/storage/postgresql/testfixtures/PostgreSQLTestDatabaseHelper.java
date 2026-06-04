@@ -45,7 +45,7 @@ public class PostgreSQLTestDatabaseHelper implements TestDatabaseHelper {
     private static final String PG_PORT     = cfg("TEST_PG_PORT", "5432");
     private static final String PG_USER     = cfg("TEST_PG_USER", "root");
     private static final String PG_PASSWORD = cfg("TEST_PG_PASSWORD", "root");
-    private static final String PG_ADMIN_DB = "postgres";
+    private static final String PG_ADMIN_DB = cfg("TEST_PG_ADMIN_DB", "postgres");
 
     private static String cfg(String name, String def) {
         String v = System.getenv(name);
