@@ -789,8 +789,8 @@ try {
      *
      * @param user The locked user to associate with the tenant
      */
-    public static void addTenantIdToRecipeUser_Transaction(Start start, Connection sqlCon,
-                                                            TenantIdentifier tenantIdentifier, LockedUser user)
+    public static boolean addTenantIdToRecipeUser_Transaction(Start start, Connection sqlCon,
+                                                               TenantIdentifier tenantIdentifier, LockedUser user)
             throws StorageQueryException, DuplicateEmailException, DuplicateThirdPartyUserException, DuplicatePhoneNumberException {
         // Validate that the lock is still valid for this connection
         if (!user.isValidForConnection(sqlCon)) {
@@ -839,6 +839,10 @@ try {
 
             // Throw conflict if any row had a different recipe_user_id
             throwRecipeUserTenantsConflict(conflictAccountInfoType, false);
+            // PostgreSQL uses ON CONFLICT DO UPDATE (upsert), so we can't cheaply distinguish
+            // "newly inserted" from "already existed" here. Callers in MIGRATED mode (Start.addUserIdToTenant_Transaction)
+            // use a pre-check for the wasAlreadyAssociated result instead.
+            return true;
         } catch (EmailChangeNotAllowedException | PhoneNumberChangeNotAllowedException e) {
             throw new IllegalStateException("should never happen", e);
         } catch (SQLException e) {
