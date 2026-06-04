@@ -73,7 +73,8 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
             attributes = "?" + attributes;
         }
 
-        config.setJdbcUrl("jdbc:" + scheme + "://" + hostName + port + "/" + databaseName + attributes);
+        String jdbcUrl = "jdbc:" + scheme + "://" + hostName + port + "/" + databaseName + attributes;
+        config.setJdbcUrl(jdbcUrl);
 
         if (userConfig.getUser() != null) {
             config.setUsername(userConfig.getUser());
@@ -92,6 +93,9 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         config.addDataSourceProperty("prepStmtCacheSize", "250");
         config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
         config.addDataSourceProperty("tcpKeepAlive", "true");
+        config.addDataSourceProperty("socketTimeout", "60");
+        config.setConnectionInitSql(
+                "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED");
         // TODO: set maxLifetimeValue to lesser than 10 mins so that the following error doesnt happen:
         // io.supertokens.storage.postgresql.HikariLoggingAppender.doAppend(HikariLoggingAppender.java:117) |
         // SuperTokens

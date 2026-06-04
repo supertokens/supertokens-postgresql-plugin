@@ -49,7 +49,8 @@ public class SuperTokensSaaSSecretTest {
             "postgresql_minimum_idle_connections", "postgresql_idle_connection_timeout"};
 
     private final Object[] PROTECTED_DB_CONFIG_VALUES = new Object[]{11,
-            "postgresql://root:root@localhost:5432/supertokens?currentSchema=myschema", "localhost", 5432, "root",
+            "postgresql://root:root@" + DatabaseTestHelper.getHost() + ":" + DatabaseTestHelper.getPort() + "/supertokens?currentSchema=myschema",
+            DatabaseTestHelper.getHost(), Integer.parseInt(DatabaseTestHelper.getPort()), "root",
             "root", "supertokens", "myschema", 5, 120000};
 
     @Rule

@@ -18,12 +18,14 @@
 package io.supertokens.storage.postgresql.test;
 
 import io.supertokens.ProcessState;
+import io.supertokens.authRecipe.AuthRecipe;
 import io.supertokens.pluginInterface.RECIPE_ID;
+import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.emailpassword.PasswordResetTokenInfo;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicatePasswordResetTokenException;
 import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateUserIdException;
-import io.supertokens.pluginInterface.emailpassword.exceptions.UnknownUserIdException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.UnknownUserIdException;
 import io.supertokens.pluginInterface.emailpassword.sqlStorage.EmailPasswordSQLStorage;
 import io.supertokens.pluginInterface.emailverification.EmailVerificationTokenInfo;
 import io.supertokens.pluginInterface.emailverification.exception.DuplicateEmailVerificationTokenException;
@@ -57,6 +59,7 @@ import java.security.spec.InvalidKeySpecException;
 
 import static junit.framework.TestCase.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 public class ExceptionParsingTest {
     @Rule
@@ -109,6 +112,13 @@ public class ExceptionParsingTest {
             assertEquals(storage.getUsersCount(new TenantIdentifier(null, null, null),
                     new RECIPE_ID[]{RECIPE_ID.THIRD_PARTY}), 1);
 
+            // Verify reservation table integrity for the successfully created user
+            AuthRecipeUserInfo tpUser = AuthRecipe.getUserById(process.getProcess(), userId);
+            assertNotNull(tpUser);
+            RaceTestUtils.ConsistencyCheckResult tpResult = RaceTestUtils.checkReservationConsistency(
+                    process.getProcess(), tpUser);
+            assertTrue("ThirdParty reservation inconsistency: " + tpResult.issues, tpResult.isConsistent);
+
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
         }
@@ -148,6 +158,13 @@ public class ExceptionParsingTest {
             assertEquals(storage.getUsersCount(new TenantIdentifier(null, null, null),
                     new RECIPE_ID[]{RECIPE_ID.EMAIL_PASSWORD}), 1);
 
+            // Verify reservation table integrity for the successfully created user
+            AuthRecipeUserInfo epUser = AuthRecipe.getUserById(process.getProcess(), userId);
+            assertNotNull(epUser);
+            RaceTestUtils.ConsistencyCheckResult epResult = RaceTestUtils.checkReservationConsistency(
+                    process.getProcess(), epUser);
+            assertTrue("EmailPassword reservation inconsistency: " + epResult.issues, epResult.isConsistent);
+
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
         }
@@ -159,7 +176,7 @@ public class ExceptionParsingTest {
             SignatureException, InvalidAlgorithmParameterException, NoSuchPaddingException, BadPaddingException,
             UnsupportedEncodingException, InvalidKeySpecException, IllegalBlockSizeException,
             StorageTransactionLogicException, DuplicateUserIdException, DuplicateEmailException,
-            TenantOrAppNotFoundException {
+            TenantOrAppNotFoundException, Exception {
         {
             String[] args = {"../"};
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -184,6 +201,8 @@ public class ExceptionParsingTest {
                     throw new StorageTransactionLogicException(new Exception("This should throw"));
                 } catch (DuplicateEmailException ex) {
                     // expected
+                } catch (Exception e) {
+                    throw new StorageTransactionLogicException(e);
                 }
                 return true;
             });
@@ -193,6 +212,8 @@ public class ExceptionParsingTest {
                     storage.updateUsersEmail_Transaction(new AppIdentifier(null, null), conn, userId, userEmail3);
                 } catch (DuplicateEmailException ex) {
                     throw new StorageQueryException(ex);
+                } catch (Exception e) {
+                    throw new StorageTransactionLogicException(e);
                 }
                 return true;
             });

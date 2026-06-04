@@ -45,3 +45,4 @@ addDevTag
 addReleaseTag
 .vscode
 *.iml
+pg_stat_monitor_output

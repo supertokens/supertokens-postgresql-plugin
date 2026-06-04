@@ -7,6 +7,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.5.0]
+
+- Adds reservation tables: `recipe_user_account_infos`, `recipe_user_tenants`, `primary_user_tenants`
+- Adds `time_joined` and `primary_or_recipe_user_time_joined` columns to `app_id_to_user_id` with four new pagination indexes
+- Adds `UserLockingQueries` and `LockedUser` token pattern (`SELECT ... FOR UPDATE` on `app_id_to_user_id`)
+- Adds `AccountInfoQueries` for reservation-table conflict detection on `makePrimaryUser`, `linkAccounts`, `updateEmail`, `addUserIdToTenant`
+- Adds `MigrationBackfillQueries` for online per-user batch backfill
+- Adds offline migration SQL scripts in `migration-scripts/`
+- Rewrites read/write paths to branch on `migration_mode` between legacy and new tables
+- Collapses startup DDL into a single atomic batch with a single `pg_tables` existence probe
+- Fixes ThirdParty email/phone queries to include `third_party_id = ''` for full index use
+
+### Migration
+
+Safe to upgrade: new tables are created on first boot; old tables are untouched; defaults to `LEGACY` mode.
+See [SCHEMA-REWORK.md](SCHEMA-REWORK.md) for the full schema details and the end-to-end cutover runbook.
+
 ## [9.4.2]
 
 - Fixes concurrency issue with oauth refresh token

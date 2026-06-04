@@ -52,6 +52,7 @@ public class UserRolesQueries {
         // @formatter:on
     }
 
+    // TODO: Add IF NOT EXISTS to prevent crash on dirty DB state from prior test failures
     public static String getQueryToCreateAppIdIndexForRolesTable(Start start) {
         return "CREATE INDEX roles_app_id_index ON " + getConfig(start).getRolesTable() + "(app_id);";
     }
@@ -73,11 +74,13 @@ public class UserRolesQueries {
         // @formatter:on
     }
 
+    // TODO: Add IF NOT EXISTS to prevent crash on dirty DB state from prior test failures
     public static String getQueryToCreateRoleIndexForRolePermissionsTable(Start start) {
         return "CREATE INDEX role_permissions_role_index ON " + getConfig(start).getUserRolesPermissionsTable()
                 + "(app_id, role);";
     }
 
+    // TODO: Add IF NOT EXISTS to prevent crash on dirty DB state from prior test failures
     static String getQueryToCreateRolePermissionsPermissionIndex(Start start) {
         return "CREATE INDEX role_permissions_permission_index ON " + getConfig(start).getUserRolesPermissionsTable()
                 + "(app_id, permission);";

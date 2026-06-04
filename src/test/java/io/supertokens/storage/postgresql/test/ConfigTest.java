@@ -153,18 +153,29 @@ public class ConfigTest {
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
 
-        // absolute path
-        File f = new File("../temp/config.yaml");
-        args = new String[]{"../", "configFile=" + f.getAbsolutePath()};
+        // absolute path - need to use a config file with the correct test database settings
+        // Copy the worker config (which has test-specific database) to a temp location for custom config test
+        String workerId = System.getProperty("org.gradle.test.worker");
+        File workerConfig = new File("../config" + workerId + ".yaml");
+        File customConfig = new File("../temp/config_custom_test.yaml");
+        java.nio.file.Files.copy(workerConfig.toPath(), customConfig.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 
-        process = TestingProcessManager.start(args);
-        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+        try {
+            args = new String[]{"../", "configFile=" + customConfig.getAbsolutePath()};
 
-        PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
-        checkConfig(config);
+            process = TestingProcessManager.start(args);
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-        process.kill();
-        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+            PostgreSQLConfig config = Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()));
+            checkConfig(config);
+
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        } finally {
+            // Clean up the temporary config file
+            customConfig.delete();
+        }
     }
 
     @Test
@@ -339,10 +350,17 @@ public class ConfigTest {
 
     @Test
     public void testAddingSchemaViaConnectionUriWorks() throws Exception {
+        final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+        String workerId = System.getProperty("org.gradle.test.worker");
+        PostgreSQLConfig userConfig = mapper.readValue(new File("../config" + workerId + ".yaml"), PostgreSQLConfig.class);
+        userConfig.validateAndNormalise();
+        String hostname = userConfig.getHostName();
+        String dbName = userConfig.getDatabaseName();
+
         String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_connection_uri",
-                "postgresql://root:root@localhost:5432/supertokens?currentSchema=myschema");
+                "postgresql://root:root@" + hostname + ":5432/" + dbName + "?currentSchema=myschema");
         Utils.setValueInConfig("postgresql_table_names_prefix", "some_prefix");
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -383,10 +401,17 @@ public class ConfigTest {
 
     @Test
     public void testAddingSchemaViaConnectionUriWorks2() throws Exception {
+        final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+        String workerId = System.getProperty("org.gradle.test.worker");
+        PostgreSQLConfig userConfig = mapper.readValue(new File("../config" + workerId + ".yaml"), PostgreSQLConfig.class);
+        userConfig.validateAndNormalise();
+        String hostname = userConfig.getHostName();
+        String dbName = userConfig.getDatabaseName();
+
         String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_connection_uri",
-                "postgresql://root:root@localhost:5432/supertokens?a=b&currentSchema=myschema");
+                "postgresql://root:root@" + hostname + ":5432/" + dbName + "?a=b&currentSchema=myschema");
         Utils.setValueInConfig("postgresql_table_names_prefix", "some_prefix");
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -427,10 +452,17 @@ public class ConfigTest {
 
     @Test
     public void testAddingSchemaViaConnectionUriWorks3() throws Exception {
+        final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+        String workerId = System.getProperty("org.gradle.test.worker");
+        PostgreSQLConfig userConfig = mapper.readValue(new File("../config" + workerId + ".yaml"), PostgreSQLConfig.class);
+        userConfig.validateAndNormalise();
+        String hostname = userConfig.getHostName();
+        String dbName = userConfig.getDatabaseName();
+
         String[] args = {"../"};
 
         Utils.setValueInConfig("postgresql_connection_uri",
-                "postgresql://root:root@localhost:5432/supertokens?e=f&currentSchema=myschema&a=b&c=d");
+                "postgresql://root:root@" + hostname + ":5432/" + dbName + "?e=f&currentSchema=myschema&a=b&c=d");
         Utils.setValueInConfig("postgresql_table_names_prefix", "some_prefix");
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -477,11 +509,12 @@ public class ConfigTest {
         userConfig.validateAndNormalise();
 
         String hostname = userConfig.getHostName();
+        String dbName = userConfig.getDatabaseName();
         {
             String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri",
-                    "postgresql://root:root@" + hostname + ":5432/supertokens");
+                    "postgresql://root:root@" + hostname + ":5432/" + dbName);
             Utils.commentConfigValue("postgresql_password");
             Utils.commentConfigValue("postgresql_user");
             Utils.commentConfigValue("postgresql_port");
@@ -501,7 +534,7 @@ public class ConfigTest {
             Utils.reset();
             String[] args = {"../"};
 
-            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@" + hostname + "/supertokens");
+            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@" + hostname + "/" + dbName);
             Utils.commentConfigValue("postgresql_password");
             Utils.commentConfigValue("postgresql_user");
             Utils.commentConfigValue("postgresql_port");
@@ -521,7 +554,7 @@ public class ConfigTest {
             Utils.reset();
             String[] args = {"../"};
 
-            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://" + hostname + ":5432/supertokens");
+            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://" + hostname + ":5432/" + dbName);
             Utils.commentConfigValue("postgresql_port");
             Utils.commentConfigValue("postgresql_host");
             Utils.commentConfigValue("postgresql_database_name");
@@ -539,7 +572,7 @@ public class ConfigTest {
             Utils.reset();
             String[] args = {"../"};
 
-            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root@" + hostname + ":5432/supertokens");
+            Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root@" + hostname + ":5432/" + dbName);
             Utils.commentConfigValue("postgresql_user");
             Utils.commentConfigValue("postgresql_port");
             Utils.commentConfigValue("postgresql_host");
@@ -556,14 +589,22 @@ public class ConfigTest {
 
         {
             Utils.reset();
+            // Re-read config after reset to get the new test database name
+            PostgreSQLConfig userConfig2 = mapper.readValue(new File("../config" + workerId + ".yaml"), PostgreSQLConfig.class);
+            userConfig2.validateAndNormalise();
+            String dbName2 = userConfig2.getDatabaseName();
+
             String[] args = {"../"};
 
+            // Use URI without database name, but keep postgresql_database_name in config
+            // so the test uses the isolated test database
             Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@" + hostname + ":5432");
             Utils.commentConfigValue("postgresql_password");
             Utils.commentConfigValue("postgresql_user");
             Utils.commentConfigValue("postgresql_port");
             Utils.commentConfigValue("postgresql_host");
-            Utils.commentConfigValue("postgresql_database_name");
+            // Keep postgresql_database_name set so it uses the test database
+            Utils.setValueInConfig("postgresql_database_name", "\"" + dbName2 + "\"");
 
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -583,10 +624,11 @@ public class ConfigTest {
         userConfig.validateAndNormalise();
 
         String hostname = userConfig.getHostName();
+        String dbName = userConfig.getDatabaseName();
         {
             String[] args = {"../"};
 
-            Utils.setValueInConfig("postgresql_connection_uri", ":/localhost:5432/supertokens");
+            Utils.setValueInConfig("postgresql_connection_uri", ":/localhost:5432/" + dbName);
 
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
@@ -605,7 +647,7 @@ public class ConfigTest {
             String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri",
-                    "postgresql://root:wrongPassword@" + hostname + ":5432/supertokens");
+                    "postgresql://root:wrongPassword@" + hostname + ":5432/" + dbName);
             Utils.commentConfigValue("postgresql_password");
             Utils.commentConfigValue("postgresql_user");
             Utils.commentConfigValue("postgresql_port");
@@ -630,11 +672,12 @@ public class ConfigTest {
         PostgreSQLConfig userConfig = mapper.readValue(new File("../config" + workerId + ".yaml"), PostgreSQLConfig.class);
         userConfig.validateAndNormalise();
         String hostname = userConfig.getHostName();
+        String dbName = userConfig.getDatabaseName();
         {
             String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri",
-                    "postgresql://root:root@" + hostname + ":5432/supertokens?key1=value1");
+                    "postgresql://root:root@" + hostname + ":5432/" + dbName + "?key1=value1");
 
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -650,7 +693,7 @@ public class ConfigTest {
             String[] args = {"../"};
 
             Utils.setValueInConfig("postgresql_connection_uri", "postgresql://root:root@" + hostname
-                    + ":5432/supertokens?key1=value1&allowPublicKeyRetrieval=false&key2" + "=value2");
+                    + ":5432/" + dbName + "?key1=value1&allowPublicKeyRetrieval=false&key2" + "=value2");
 
             TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -690,7 +733,7 @@ public class ConfigTest {
                 "allowPublicKeyRetrieval=true");
         assertEquals("Config getSchema did not match default", config.getConnectionScheme(), "postgresql");
         assertEquals("Config connectionPoolSize did not match default", config.getConnectionPoolSize(), 10);
-        assertEquals("Config databaseName does not match default", config.getDatabaseName(), "supertokens");
+        assertEquals("Config databaseName does not match default", config.getDatabaseName(), userConfig.getDatabaseName());
         assertEquals("Config keyValue table does not match default", config.getKeyValueTable(), "key_value");
         assertEquals("Config hostName does not match default ", config.getHostName(), hostname);
         assertEquals("Config port does not match default", config.getPort(), 5432);

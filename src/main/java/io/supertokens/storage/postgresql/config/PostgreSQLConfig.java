@@ -25,8 +25,10 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import io.supertokens.pluginInterface.ConfigFieldInfo;
+import io.supertokens.pluginInterface.MigrationMode;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.storage.postgresql.Start;
+import org.jetbrains.annotations.TestOnly;
 import io.supertokens.storage.postgresql.annotations.*;
 
 import java.lang.reflect.Field;
@@ -198,6 +200,16 @@ public class PostgreSQLConfig {
             defaultValue = "null", isOptional = true, isEditable = true)
     private Integer postgresql_minimum_idle_connections = null;
 
+
+    @EnvName("SUPERTOKENS_MIGRATION_MODE")
+    @JsonProperty
+    @IgnoreForAnnotationCheck
+    @DashboardInfo(
+            description = "Migration mode for all_auth_recipe_users table deprecation. " +
+                    "Values: LEGACY, DUAL_WRITE_READ_OLD, DUAL_WRITE_READ_NEW, MIGRATED",
+            defaultValue = "\"LEGACY\"", isOptional = true)
+    private String migration_mode = null;
+
     @IgnoreForAnnotationCheck
     boolean isValidAndNormalised = false;
 
@@ -318,6 +330,42 @@ public class PostgreSQLConfig {
         return postgresql_connection_uri;
     }
 
+    // Parsed-enum cache for migration_mode. Populated lazily on the first call to
+    // getMigrationMode() and never invalidated — it doesn't need to be, because the
+    // entire PostgreSQLConfig instance is reconstructed on every tenant-config refresh
+    // (Multitenancy.addNewOrUpdateAppOrTenant → MultitenancyHelper.refreshAfterKnownTenantChange
+    // → Config.loadConfig → new PostgreSQLConfig via ConfigMapper.mapConfig). A new instance
+    // starts with parsedMigrationMode = null and re-derives on first use.
+    //
+    // transient so Gson skips it in getValidFields() / getConfigFieldsInfoForDashboard.
+    // volatile so concurrent readers see the publication done by the first parser.
+    private transient volatile MigrationMode parsedMigrationMode = null;
+
+    public MigrationMode getMigrationMode() {
+        MigrationMode cached = parsedMigrationMode;
+        if (cached != null) {
+            return cached;
+        }
+        MigrationMode parsed;
+        if (migration_mode == null) {
+            parsed = MigrationMode.LEGACY;
+        } else {
+            try {
+                parsed = MigrationMode.valueOf(migration_mode.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                parsed = MigrationMode.LEGACY;
+            }
+        }
+        parsedMigrationMode = parsed;
+        return parsed;
+    }
+
+    @TestOnly
+    public void setMigrationModeForTesting(MigrationMode mode) {
+        this.migration_mode = mode.name();
+        this.parsedMigrationMode = null; // force re-parse on next read
+    }
+
     public String getUsersTable() {
         return addSchemaAndPrefixToTableName("all_auth_recipe_users");
     }
@@ -401,6 +449,7 @@ public class PostgreSQLConfig {
     public Integer getMinimumIdleConnections() {
         return postgresql_minimum_idle_connections;
     }
+
 
     public String getThirdPartyUserToTenantTable() {
         return addSchemaAndPrefixToTableName("thirdparty_user_to_tenant");
@@ -506,6 +555,17 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("bulk_import_users");
     }
 
+    public String getRecipeUserAccountInfosTable() {
+        return addSchemaAndPrefixToTableName("recipe_user_account_infos");
+    }
+
+    public String getRecipeUserTenantsTable() {
+        return addSchemaAndPrefixToTableName("recipe_user_tenants");
+    }
+
+    public String getPrimaryUserTenantsTable() {
+        return addSchemaAndPrefixToTableName("primary_user_tenants");
+    }
 
     private String addSchemaAndPrefixToTableName(String tableName) {
         return addSchemaToTableName(postgresql_table_names_prefix + tableName);
@@ -561,6 +621,16 @@ public class PostgreSQLConfig {
                     throw new InvalidConfigException(
                             "'postgresql_minimum_idle_connections' must be less than or equal to "
                                     + "'postgresql_connection_pool_size'");
+                }
+            }
+
+            if (migration_mode != null) {
+                try {
+                    MigrationMode.valueOf(migration_mode.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    throw new InvalidConfigException(
+                            "Invalid migration_mode value: '" + migration_mode +
+                            "'. Must be one of: LEGACY, DUAL_WRITE_READ_OLD, DUAL_WRITE_READ_NEW, MIGRATED");
                 }
             }
         }

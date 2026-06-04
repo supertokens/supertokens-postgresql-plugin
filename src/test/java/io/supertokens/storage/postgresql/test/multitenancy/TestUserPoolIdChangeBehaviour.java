@@ -32,6 +32,7 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.*;
 import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoundException;
 import io.supertokens.storage.postgresql.test.TestingProcessManager;
+import io.supertokens.storage.postgresql.test.DatabaseTestHelper;
 import io.supertokens.storage.postgresql.test.Utils;
 import io.supertokens.storageLayer.StorageLayer;
 import io.supertokens.thirdparty.InvalidProviderConfigException;
@@ -41,6 +42,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.net.InetAddress;
 
 import static org.junit.Assert.*;
 
@@ -96,7 +98,8 @@ public class TestUserPoolIdChangeBehaviour {
         AuthRecipeUserInfo userInfo = EmailPassword.signUp(
                 tenantIdentifier, storage, process.getProcess(), "user@example.com", "password");
 
-        coreConfig.addProperty("postgresql_host", "127.0.0.1");
+        coreConfig.addProperty("postgresql_host",
+                InetAddress.getByName(DatabaseTestHelper.getHost()).getHostAddress());
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                 tenantIdentifier,
                 new EmailPasswordConfig(true),
@@ -143,7 +146,8 @@ public class TestUserPoolIdChangeBehaviour {
         AuthRecipeUserInfo userInfo = EmailPassword.signUp(
                 tenantIdentifier, storage, process.getProcess(), "user@example.com", "password");
 
-        coreConfig.addProperty("postgresql_host", "127.0.0.1");
+        coreConfig.addProperty("postgresql_host",
+                InetAddress.getByName(DatabaseTestHelper.getHost()).getHostAddress());
         Multitenancy.addNewOrUpdateAppOrTenant(process.getProcess(), new TenantConfig(
                 tenantIdentifier,
                 new EmailPasswordConfig(true),

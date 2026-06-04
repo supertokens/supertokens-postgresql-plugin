@@ -16,16 +16,6 @@
 
 package io.supertokens.storage.postgresql.queries;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import io.supertokens.pluginInterface.exceptions.StorageQueryException;
-import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
-import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
-import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
-import io.supertokens.storage.postgresql.Start;
-import io.supertokens.storage.postgresql.config.Config;
-import io.supertokens.storage.postgresql.utils.Utils;
-
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -33,8 +23,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
+import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.executeBatch;
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 public class UserMetadataQueries {
 
@@ -55,6 +57,7 @@ public class UserMetadataQueries {
         // @formatter:on
     }
 
+    // TODO: Add IF NOT EXISTS to prevent crash on dirty DB state from prior test failures
     public static String getQueryToCreateAppIdIndexForUserMetadataTable(Start start) {
         return "CREATE INDEX user_metadata_app_id_index ON "
                 + Config.getConfig(start).getUserMetadataTable() + "(app_id);";
@@ -121,8 +124,10 @@ public class UserMetadataQueries {
     public static JsonObject getUserMetadata_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                          String userId)
             throws SQLException, StorageQueryException {
+        // Advisory lock provides user-level locking; FOR UPDATE removed as it's redundant with advisory lock
+        io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(con, appIdentifier.getAppId() + "~" + userId);
         String QUERY = "SELECT user_metadata FROM " + getConfig(start).getUserMetadataTable()
-                + " WHERE app_id = ? AND user_id = ? FOR UPDATE";
+                + " WHERE app_id = ? AND user_id = ?";
         return execute(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, userId);
@@ -141,9 +146,10 @@ public class UserMetadataQueries {
         if(userIds == null || userIds.isEmpty()){
             return new HashMap<>();
         }
+        // Note: FOR UPDATE removed - caller should obtain user locks via UserLockingStorage before calling this method
         String QUERY = "SELECT user_id, user_metadata FROM " + getConfig(start).getUserMetadataTable()
                 + " WHERE app_id = ? AND user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(userIds.size())
-                + ") FOR UPDATE";
+                + ")";
         return execute(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             for (int i = 0; i< userIds.size(); i++){

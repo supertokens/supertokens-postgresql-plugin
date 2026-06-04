@@ -35,6 +35,7 @@ import io.supertokens.session.accessToken.AccessToken;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.queries.MultitenancyQueries;
 import io.supertokens.storage.postgresql.test.TestingProcessManager;
+import io.supertokens.storage.postgresql.test.DatabaseTestHelper;
 import io.supertokens.storage.postgresql.test.Utils;
 import io.supertokens.storage.postgresql.test.httpRequest.HttpRequestForTesting;
 import io.supertokens.storage.postgresql.test.httpRequest.HttpResponseException;
@@ -125,17 +126,18 @@ public class TestForNoCrashDuringStartup {
 
     @Test
     public void testThatCUDRecoversWhenTheDbIsDownDuringCreationButDbComesUpLater() throws Exception {
+        JsonObject coreConfig = new JsonObject();
+        StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess())
+                .modifyConfigToAddANewUserPoolForTesting(coreConfig, 5000);
+        String dbName = coreConfig.get("postgresql_database_name").getAsString();
+
         Start start = ((Start) StorageLayer.getBaseStorage(process.getProcess()));
         try {
-            update(start, "DROP DATABASE st5000;", pst -> {
+            update(start, "DROP DATABASE " + dbName + ";", pst -> {
             });
         } catch (Exception e) {
             // ignore
         }
-
-        JsonObject coreConfig = new JsonObject();
-        StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess())
-                .modifyConfigToAddANewUserPoolForTesting(coreConfig, 5000);
 
         TenantIdentifier tenantIdentifier = new TenantIdentifier("127.0.0.1", null, null);
 
@@ -153,7 +155,7 @@ public class TestForNoCrashDuringStartup {
             // ignore
             assertEquals(
                     "java.sql.SQLException: com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to " +
-                            "initialize pool: FATAL: database \"st5000\" does not exist",
+                            "initialize pool: FATAL: database \"" + dbName + "\" does not exist",
                     e.getMessage());
         }
 
@@ -166,10 +168,10 @@ public class TestForNoCrashDuringStartup {
             fail();
         } catch (HttpResponseException e) {
             // ignore
-            assertEquals("Http error. Status Code: 500. Message: io.supertokens.pluginInterface.exceptions.StorageQueryException: java.sql.SQLException: com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to initialize pool: FATAL: database \"st5000\" does not exist", e.getMessage());
+            assertEquals("Http error. Status Code: 500. Message: io.supertokens.pluginInterface.exceptions.StorageQueryException: java.sql.SQLException: com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to initialize pool: FATAL: database \"" + dbName + "\" does not exist", e.getMessage());
         }
 
-        update(start, "CREATE DATABASE st5000;", pst -> {
+        update(start, "CREATE DATABASE " + dbName + ";", pst -> {
         });
 
         // this should succeed now
@@ -506,17 +508,18 @@ public class TestForNoCrashDuringStartup {
 
     @Test
     public void testThatTenantComesToLifeOnceTheTargetDbIsUpAfterCoreRestart() throws Exception {
+        JsonObject coreConfig = new JsonObject();
+        StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess())
+                .modifyConfigToAddANewUserPoolForTesting(coreConfig, 5000);
+        String dbName = coreConfig.get("postgresql_database_name").getAsString();
+
         Start start = ((Start) StorageLayer.getBaseStorage(process.getProcess()));
         try {
-            update(start, "DROP DATABASE st5000;", pst -> {
+            update(start, "DROP DATABASE " + dbName + ";", pst -> {
             });
         } catch (Exception e) {
             // ignore
         }
-
-        JsonObject coreConfig = new JsonObject();
-        StorageLayer.getStorage(new TenantIdentifier(null, null, null), process.getProcess())
-                .modifyConfigToAddANewUserPoolForTesting(coreConfig, 5000);
 
         TenantIdentifier tenantIdentifier = new TenantIdentifier("127.0.0.1", null, null);
 
@@ -534,7 +537,7 @@ public class TestForNoCrashDuringStartup {
             // ignore
             assertEquals(
                     "java.sql.SQLException: com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to " +
-                            "initialize pool: FATAL: database \"st5000\" does not exist",
+                            "initialize pool: FATAL: database \"" + dbName + "\" does not exist",
                     e.getMessage());
         }
 
@@ -547,7 +550,7 @@ public class TestForNoCrashDuringStartup {
             fail();
         } catch (HttpResponseException e) {
             // ignore
-            assertEquals("Http error. Status Code: 500. Message: io.supertokens.pluginInterface.exceptions.StorageQueryException: java.sql.SQLException: com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to initialize pool: FATAL: database \"st5000\" does not exist", e.getMessage());
+            assertEquals("Http error. Status Code: 500. Message: io.supertokens.pluginInterface.exceptions.StorageQueryException: java.sql.SQLException: com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to initialize pool: FATAL: database \"" + dbName + "\" does not exist", e.getMessage());
         }
 
         process.kill(false);
@@ -562,7 +565,7 @@ public class TestForNoCrashDuringStartup {
         // the process should start successfully even though the db is down
 
         start = ((Start) StorageLayer.getBaseStorage(process.getProcess()));
-        update(start, "CREATE DATABASE st5000;", pst -> {
+        update(start, "CREATE DATABASE " + dbName + ";", pst -> {
         });
 
         // this should succeed now
