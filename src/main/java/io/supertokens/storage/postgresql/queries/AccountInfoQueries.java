@@ -1375,17 +1375,12 @@ try {
     public static List<String> listPrimaryUserIdsByEmail(Start start, TenantIdentifier tenantIdentifier,
                                                           String email)
             throws SQLException, StorageQueryException {
-        // IMPORTANT: third_party_id = '' is required for the planner to use the full
-        // idx_recipe_user_tenants_account_info index (app_id, tenant_id, account_info_type,
-        // third_party_id, account_info_value) as a point lookup. Without it, the planner can
-        // only match the prefix up to account_info_type and must scan+filter the rest — 477x slower.
-        // For email/phone rows, third_party_id is always empty string.
         String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id"
                 + " FROM " + getConfig(start).getRecipeUserTenantsTable() + " rut"
                 + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " auid"
                 + " ON rut.app_id = auid.app_id AND rut.recipe_user_id = auid.user_id"
                 + " WHERE rut.app_id = ? AND rut.tenant_id = ?"
-                + " AND rut.account_info_type = ? AND rut.third_party_id = ''"
+                + " AND rut.account_info_type = ?"
                 + " AND rut.account_info_value = ?";
 
         return execute(start, QUERY, pst -> {
@@ -1409,7 +1404,7 @@ try {
     public static List<String> listPrimaryUserIdsByPhoneNumber(Start start, TenantIdentifier tenantIdentifier,
                                                                 String phoneNumber)
             throws SQLException, StorageQueryException {
-        // See comment in listPrimaryUserIdsByEmail for why third_party_id = '' is needed.
+        // Phone number rows always have third_party_id = '' (Passwordless has no ThirdParty concept).
         String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id"
                 + " FROM " + getConfig(start).getRecipeUserTenantsTable() + " rut"
                 + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " auid"
