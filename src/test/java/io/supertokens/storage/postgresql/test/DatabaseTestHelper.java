@@ -108,7 +108,8 @@ public class DatabaseTestHelper {
 
             // Drop any leftover DB of this name from a previous crashed run so CREATE is idempotent.
             // Terminate lingering backends first, otherwise DROP fails with "database is being accessed".
-            stmt.executeUpdate(
+            // Must use execute() not executeUpdate() — pg_terminate_backend returns a result set.
+            stmt.execute(
                 "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '" + dbName
                     + "' AND pid <> pg_backend_pid()");
             stmt.executeUpdate("DROP DATABASE IF EXISTS " + dbName);
@@ -159,8 +160,9 @@ public class DatabaseTestHelper {
         try (Connection conn = DriverManager.getConnection(adminUrl, PG_USER, PG_PASSWORD);
              Statement stmt = conn.createStatement()) {
 
-            // Terminate all connections to the database first
-            stmt.executeUpdate(
+            // Terminate all connections to the database first.
+            // Must use execute() not executeUpdate() — pg_terminate_backend returns a result set.
+            stmt.execute(
                 "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '" + dbName + "'"
             );
 
