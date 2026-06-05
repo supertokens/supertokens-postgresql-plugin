@@ -582,7 +582,7 @@ public class ThirdPartyQueries {
             return numRows > 0;
         }
 
-        if (mode.writesToNewTables()) { // recipe_user_tenants (email + tparty rows)
+        if (mode.writesToNewTables() && mode.writesToOldTables()) { // recipe_user_tenants (email + tparty rows)
             int totalRows = 0;
             if (userInfo.email != null) {
                 String Q = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
