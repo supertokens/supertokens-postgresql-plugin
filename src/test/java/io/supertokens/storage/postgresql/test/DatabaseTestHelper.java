@@ -50,7 +50,7 @@ public class DatabaseTestHelper {
     private static final Object workerDbLock = new Object();
 
     // PostgreSQL connection details - read from environment or use defaults
-    private static final String PG_HOST = getConfigValue("TEST_PG_HOST", "pg");
+    private static final String PG_HOST = getConfigValue("TEST_PG_HOST", "localhost");
     private static final String PG_PORT = getConfigValue("TEST_PG_PORT", "5432");
     private static final String PG_USER = getConfigValue("TEST_PG_USER", "root");
     private static final String PG_PASSWORD = getConfigValue("TEST_PG_PASSWORD", "root");
@@ -105,6 +105,13 @@ public class DatabaseTestHelper {
 
         try (Connection conn = DriverManager.getConnection(adminUrl, PG_USER, PG_PASSWORD);
              Statement stmt = conn.createStatement()) {
+
+            // Drop any leftover DB of this name from a previous crashed run so CREATE is idempotent.
+            // Terminate lingering backends first, otherwise DROP fails with "database is being accessed".
+            stmt.executeUpdate(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '" + dbName
+                    + "' AND pid <> pg_backend_pid()");
+            stmt.executeUpdate("DROP DATABASE IF EXISTS " + dbName);
 
             // Create the database
             stmt.executeUpdate("CREATE DATABASE " + dbName);

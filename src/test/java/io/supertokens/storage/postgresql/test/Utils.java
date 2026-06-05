@@ -99,6 +99,12 @@ public abstract class Utils extends Mockito {
         String installDir = "../";
         String workerId = System.getProperty("org.gradle.test.worker");
         try {
+            // Initialise the captured-stderr buffer FIRST, before any setup that can fail.
+            // Otherwise a failure below (e.g. DB connection) leaves byteArrayOutputStream null,
+            // and the getOnFailure() watcher NPEs while trying to print it — masking the real error.
+            byteArrayOutputStream = new ByteArrayOutputStream();
+            System.setErr(new PrintStream(byteArrayOutputStream));
+
             // Kill all processes WITHOUT dropping tables — TRUNCATE will handle data cleanup.
             // This preserves the schema so the next process startup's CREATE TABLE IF NOT EXISTS
             // are all no-ops, saving ~88 DDL statements per test.

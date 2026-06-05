@@ -24,7 +24,15 @@ jobs:
     name: Run tests
     runs-on: ubuntu-latest
     container: rishabhpoddar/supertokens_core_testing
-    
+
+    # Tell DatabaseTestHelper (and the core process) where Postgres lives.
+    # The service container below is reachable at hostname `postgres`.
+    env:
+      TEST_PG_HOST: postgres
+      TEST_PG_PORT: "5432"
+      TEST_PG_USER: root
+      TEST_PG_PASSWORD: root
+
     # Service containers to run with `test_job`
     services:
       # Label used to access the service container
