@@ -25,6 +25,9 @@ import io.supertokens.passwordless.Passwordless;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.storageLayer.StorageLayer;
+import io.supertokens.pluginInterface.MigrationMode;
+import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
 
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -108,6 +111,10 @@ public class PasswordlessRaceTest {
             process.kill();
             return;
         }
+
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         // Create primary user
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");
@@ -204,6 +211,10 @@ public class PasswordlessRaceTest {
             return;
         }
 
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
+
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(process.getProcess(), primaryUser.getSupertokensUserId());
 
@@ -292,6 +303,10 @@ public class PasswordlessRaceTest {
             process.kill();
             return;
         }
+
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(process.getProcess(), primaryUser.getSupertokensUserId());
@@ -391,6 +406,10 @@ public class PasswordlessRaceTest {
             process.kill();
             return;
         }
+
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(process.getProcess(), primaryUser.getSupertokensUserId());
@@ -516,6 +535,10 @@ public class PasswordlessRaceTest {
             process.kill();
             return;
         }
+
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(process.getProcess(), primaryUser.getSupertokensUserId());

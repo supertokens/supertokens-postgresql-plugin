@@ -25,6 +25,9 @@ import io.supertokens.featureflag.FeatureFlagTestContent;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.storageLayer.StorageLayer;
+import io.supertokens.pluginInterface.MigrationMode;
+import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
 
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -100,6 +103,10 @@ public class DeleteUserRaceTest {
         }
 
         Main main = process.getProcess();
+
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(main))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         for (int iter = 0; iter < RaceTestUtils.RACE_TEST_ITERATIONS; iter++) {
             // Create primary user
@@ -208,6 +215,10 @@ public class DeleteUserRaceTest {
 
         Main main = process.getProcess();
 
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(main))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
+
         for (int iter = 0; iter < RaceTestUtils.RACE_TEST_ITERATIONS; iter++) {
             // Create primary user
             AuthRecipeUserInfo primaryUser = EmailPassword.signUp(main,
@@ -294,6 +305,10 @@ public class DeleteUserRaceTest {
         }
 
         Main main = process.getProcess();
+
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(main))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         for (int iter = 0; iter < RaceTestUtils.RACE_TEST_ITERATIONS; iter++) {
             // Create primary user

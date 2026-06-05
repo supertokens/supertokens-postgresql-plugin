@@ -27,6 +27,9 @@ import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.dashboard.DashboardSearchTags;
 import io.supertokens.authRecipe.UserPaginationContainer;
 import io.supertokens.storageLayer.StorageLayer;
+import io.supertokens.pluginInterface.MigrationMode;
+import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.thirdparty.ThirdParty;
 
 import org.junit.AfterClass;
@@ -66,6 +69,9 @@ public class ReservationTableIntegrityTest {
                         EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY});
         process.startProcess();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
         return process;
     }
 

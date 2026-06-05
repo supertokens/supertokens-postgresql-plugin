@@ -29,6 +29,9 @@ import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.multitenancy.*;
 import io.supertokens.storageLayer.StorageLayer;
+import io.supertokens.pluginInterface.MigrationMode;
+import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
 
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -121,6 +124,10 @@ public class MultitenancyRaceTest {
         }
 
         Main main = process.getProcess();
+
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(main))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         // Create tenants
         TenantIdentifier tenant1 = new TenantIdentifier(null, null, "tenant1");
@@ -247,6 +254,10 @@ public class MultitenancyRaceTest {
         }
 
         Main main = process.getProcess();
+
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(main))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         // Create 5 tenants
         int NUM_TENANTS = 5;
@@ -392,6 +403,10 @@ public class MultitenancyRaceTest {
 
         Main main = process.getProcess();
 
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(main))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
+
         TenantIdentifier tenant1 = new TenantIdentifier(null, null, "tenant1");
         TenantIdentifier tenant2 = new TenantIdentifier(null, null, "tenant2");
         createTenant(main, tenant1);
@@ -502,6 +517,10 @@ public class MultitenancyRaceTest {
         }
 
         Main main = process.getProcess();
+
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(main))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         int NUM_TENANTS = 5;
         TenantIdentifier[] tenants = new TenantIdentifier[NUM_TENANTS];
@@ -641,6 +660,10 @@ public class MultitenancyRaceTest {
 
         Main main = process.getProcess();
 
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(main))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
+
         TenantIdentifier tenant1 = new TenantIdentifier(null, null, "tenant1");
         TenantIdentifier tenant2 = new TenantIdentifier(null, null, "tenant2");
         createTenant(main, tenant1);
@@ -741,6 +764,10 @@ public class MultitenancyRaceTest {
         }
 
         Main main = process.getProcess();
+
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(main))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         TenantIdentifier[] tenants = new TenantIdentifier[3];
         Storage[] storages = new Storage[3];
@@ -854,6 +881,10 @@ public class MultitenancyRaceTest {
         }
 
         Main main = process.getProcess();
+
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(main))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         int NUM_TENANTS = 5;
         TenantIdentifier[] tenants = new TenantIdentifier[NUM_TENANTS];
@@ -972,6 +1003,10 @@ public class MultitenancyRaceTest {
         }
 
         Main main = process.getProcess();
+
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(main))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         // Create many tenants
         int NUM_TENANTS = 10;
