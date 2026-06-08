@@ -151,7 +151,8 @@ public class ThirdPartyQueries {
                 }
 
                 if (mode.writesToNewTables()) { // recipe_user_tenants
-                    // Insert row for email
+                    // Insert row for email. Store the actual third-party provider values so the PK is
+                    // naturally unique even when two ThirdParty users share the same email address.
                     AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
                             THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.EMAIL, thirdParty.id, thirdParty.userId, email);
 
@@ -579,7 +580,7 @@ public class ThirdPartyQueries {
             return numRows > 0;
         }
 
-        if (mode.writesToNewTables()) { // recipe_user_tenants (email + tparty rows)
+        if (mode.writesToNewTables() && mode.writesToOldTables()) { // recipe_user_tenants (email + tparty rows)
             int totalRows = 0;
             if (userInfo.email != null) {
                 String Q = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
@@ -695,7 +696,7 @@ public class ThirdPartyQueries {
 
                 // Recipe User Tenants
                 AccountInfoQueries.addRecipeUserTenantsToBatch(recipeUserTenantsBatch, user.appIdentifier, user.userId, THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.THIRD_PARTY, "", "", new LoginMethod.ThirdParty(user.thirdpartyId, user.thirdpartyUserId).getAccountInfoValue(), user.recipeUserTenantIds);
-                AccountInfoQueries.addRecipeUserTenantsToBatch(recipeUserTenantsBatch, user.appIdentifier, user.userId, THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", user.email, user.recipeUserTenantIds);
+                AccountInfoQueries.addRecipeUserTenantsToBatch(recipeUserTenantsBatch, user.appIdentifier, user.userId, THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.EMAIL, user.thirdpartyId, user.thirdpartyUserId, user.email, user.recipeUserTenantIds);
             }
 
             appIdToUserIdBatch.add(pst -> {

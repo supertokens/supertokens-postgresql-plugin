@@ -5513,7 +5513,7 @@ public class Start
     }
 
     @Override
-    public void addTenantIdToRecipeUser_Transaction(
+    public boolean addTenantIdToRecipeUser_Transaction(
             TenantIdentifier tenantIdentifier,
             TransactionConnection con,
             LockedUser user)
@@ -5521,10 +5521,10 @@ public class Start
             DuplicateThirdPartyUserException, DuplicatePhoneNumberException {
         MigrationMode mode = Config.getConfig(this).getMigrationMode();
         if (!mode.writesToNewTables()) {
-            return;
+            return false;
         }
         Connection sqlCon = (Connection) con.getConnection();
-        AccountInfoQueries.addTenantIdToRecipeUser_Transaction(
+        return AccountInfoQueries.addTenantIdToRecipeUser_Transaction(
                 this, sqlCon, tenantIdentifier, user);
     }
 

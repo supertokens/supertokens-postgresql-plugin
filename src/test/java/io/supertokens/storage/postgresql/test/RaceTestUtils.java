@@ -114,6 +114,14 @@ public class RaceTestUtils {
             return new ConsistencyCheckResult(false, issues);
         }
 
+        // Reservation (new) tables are only populated when the active migration mode writes to
+        // them. In LEGACY mode they are intentionally empty, so checking their consistency is
+        // meaningless — treat as consistent rather than reporting spurious I1–I5 violations.
+        Start start = (Start) StorageLayer.getStorage(main);
+        if (!Config.getConfig(start).getMigrationMode().writesToNewTables()) {
+            return new ConsistencyCheckResult(true, issues);
+        }
+
         String primaryUserId = user.getSupertokensUserId();
         boolean shouldCheckPrimaryUserTenants = user.isPrimaryUser;
 

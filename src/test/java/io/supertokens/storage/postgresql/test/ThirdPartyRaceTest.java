@@ -24,6 +24,9 @@ import io.supertokens.featureflag.FeatureFlagTestContent;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.storageLayer.StorageLayer;
+import io.supertokens.pluginInterface.MigrationMode;
+import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.thirdparty.ThirdParty;
 
 import org.junit.AfterClass;
@@ -95,6 +98,10 @@ public class ThirdPartyRaceTest {
             process.kill();
             return;
         }
+
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         // Create primary user
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");
@@ -196,6 +203,10 @@ public class ThirdPartyRaceTest {
             process.kill();
             return;
         }
+
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         // Create primary user
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");
@@ -299,6 +310,10 @@ public class ThirdPartyRaceTest {
             return;
         }
 
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
+
         // Create primary user
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");
         AuthRecipe.createPrimaryUser(process.getProcess(), primaryUser.getSupertokensUserId());
@@ -385,6 +400,10 @@ public class ThirdPartyRaceTest {
             process.kill();
             return;
         }
+
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         // Create primary user
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");
@@ -502,6 +521,10 @@ public class ThirdPartyRaceTest {
             process.kill();
             return;
         }
+
+        // Use DUAL_WRITE mode so the reservation (new) tables get populated
+        Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()))
+                .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
         // Create primary user
         AuthRecipeUserInfo primaryUser = EmailPassword.signUp(process.getProcess(), "primary@test.com", "password123");

@@ -1311,6 +1311,12 @@ public class GeneralQueries {
                             .append(" ON auid.app_id = rut_phone.app_id AND auid.user_id = rut_phone.recipe_user_id")
                             .append(" AND rut_phone.tenant_id = rut.tenant_id");
                 }
+                if (hasProviders && (hasEmails || hasPhones)) {
+                    // Provider combined with email or phone: different rows in recipe_user_tenants
+                    query.append(" JOIN ").append(getConfig(start).getRecipeUserTenantsTable()).append(" rut_tp")
+                            .append(" ON auid.app_id = rut_tp.app_id AND auid.user_id = rut_tp.recipe_user_id")
+                            .append(" AND rut_tp.tenant_id = rut.tenant_id");
+                }
 
                 query.append(" WHERE rut.app_id = ? AND rut.tenant_id = ?");
                 queryParams.add(tenantIdentifier.getAppId());
@@ -1334,19 +1340,19 @@ public class GeneralQueries {
                         queryParams.add(dashboardSearchTags.phoneNumbers.get(i) + "%");
                     }
                     query.append(")");
-                    // Provider filter (if also present)
+                    // Provider filter (if also present) - uses rut_tp join (different row from email)
                     if (hasProviders) {
-                        query.append(" AND rut.third_party_id <> '' AND (");
+                        query.append(" AND rut_tp.account_info_type = 'tparty' AND (");
                         for (int i = 0; i < dashboardSearchTags.providers.size(); i++) {
                             if (i > 0) query.append(" OR");
-                            query.append(" rut.third_party_id ILIKE ?");
+                            query.append(" rut_tp.account_info_value ILIKE ?");
                             queryParams.add(dashboardSearchTags.providers.get(i) + "%");
                         }
                         query.append(")");
                     }
 
                 } else if (hasEmails && hasProviders) {
-                    // Email + Provider: single row match (email rows of thirdparty users have third_party_id)
+                    // Email on rut, provider on rut_tp (thirdparty users have separate email and tparty rows)
                     query.append(" AND rut.account_info_type = 'email' AND (");
                     for (int i = 0; i < dashboardSearchTags.emails.size(); i++) {
                         if (i > 0) query.append(" OR");
@@ -1354,26 +1360,26 @@ public class GeneralQueries {
                         queryParams.add(dashboardSearchTags.emails.get(i) + "%");
                         queryParams.add("%@" + dashboardSearchTags.emails.get(i) + "%");
                     }
-                    query.append(") AND (");
+                    query.append(") AND rut_tp.account_info_type = 'tparty' AND (");
                     for (int i = 0; i < dashboardSearchTags.providers.size(); i++) {
                         if (i > 0) query.append(" OR");
-                        query.append(" rut.third_party_id ILIKE ?");
+                        query.append(" rut_tp.account_info_value ILIKE ?");
                         queryParams.add(dashboardSearchTags.providers.get(i) + "%");
                     }
                     query.append(")");
 
                 } else if (hasPhones && hasProviders) {
-                    // Phone + Provider: no recipe has both, so this always returns empty
+                    // Phone on rut, provider on rut_tp - always empty (no recipe user has both)
                     query.append(" AND rut.account_info_type = 'phone' AND (");
                     for (int i = 0; i < dashboardSearchTags.phoneNumbers.size(); i++) {
                         if (i > 0) query.append(" OR");
                         query.append(" rut.account_info_value ILIKE ?");
                         queryParams.add(dashboardSearchTags.phoneNumbers.get(i) + "%");
                     }
-                    query.append(") AND rut.third_party_id <> '' AND (");
+                    query.append(") AND rut_tp.account_info_type = 'tparty' AND (");
                     for (int i = 0; i < dashboardSearchTags.providers.size(); i++) {
                         if (i > 0) query.append(" OR");
-                        query.append(" rut.third_party_id ILIKE ?");
+                        query.append(" rut_tp.account_info_value ILIKE ?");
                         queryParams.add(dashboardSearchTags.providers.get(i) + "%");
                     }
                     query.append(")");
@@ -1398,10 +1404,10 @@ public class GeneralQueries {
                     query.append(")");
 
                 } else if (hasProviders) {
-                    query.append(" AND rut.third_party_id <> '' AND (");
+                    query.append(" AND rut.account_info_type = 'tparty' AND (");
                     for (int i = 0; i < dashboardSearchTags.providers.size(); i++) {
                         if (i > 0) query.append(" OR");
-                        query.append(" rut.third_party_id ILIKE ?");
+                        query.append(" rut.account_info_value ILIKE ?");
                         queryParams.add(dashboardSearchTags.providers.get(i) + "%");
                     }
                     query.append(")");

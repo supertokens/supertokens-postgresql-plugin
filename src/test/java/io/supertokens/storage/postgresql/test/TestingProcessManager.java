@@ -141,7 +141,9 @@ public class TestingProcessManager {
                 try {
                     main.deleteAllInformationForTesting();
                 } catch (Exception e) {
-                    if (!e.getMessage().contains("Please call initPool before getConnection")) {
+                    String msg = e.getMessage() != null ? e.getMessage() : "";
+                    if (!msg.contains("Please call initPool before getConnection")
+                            && !msg.contains("has been closed")) {
                         // we ignore this type of message because it's due to tests in which the init failed
                         // and here we try and delete assuming that init had succeeded.
                         throw new RuntimeException(e);

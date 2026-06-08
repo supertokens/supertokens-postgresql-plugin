@@ -99,6 +99,12 @@ public abstract class Utils extends Mockito {
         String installDir = "../";
         String workerId = System.getProperty("org.gradle.test.worker");
         try {
+            // Initialise the captured-stderr buffer FIRST, before any setup that can fail.
+            // Otherwise a failure below (e.g. DB connection) leaves byteArrayOutputStream null,
+            // and the getOnFailure() watcher NPEs while trying to print it — masking the real error.
+            byteArrayOutputStream = new ByteArrayOutputStream();
+            System.setErr(new PrintStream(byteArrayOutputStream));
+
             // Kill all processes WITHOUT dropping tables — TRUNCATE will handle data cleanup.
             // This preserves the schema so the next process startup's CREATE TABLE IF NOT EXISTS
             // are all no-ops, saving ~88 DDL statements per test.
@@ -107,6 +113,16 @@ public abstract class Utils extends Mockito {
             // Close the storage layer (releases HikariCP pools etc.)
             StorageLayer.close();
 
+            // Copy base config file before DB setup so it always exists even if DB creation fails.
+            ProcessBuilder pb = new ProcessBuilder("cp", "temp/config.yaml", "./config" + workerId + ".yaml");
+            pb.directory(new File(installDir));
+            Process process = pb.start();
+            process.waitFor();
+
+            // Capture stderr before DB setup so test failures always have diagnostic output.
+            byteArrayOutputStream = new ByteArrayOutputStream();
+            System.setErr(new PrintStream(byteArrayOutputStream));
+
             // Get or create the per-worker test database (created once, reused across tests)
             String testDbName = DatabaseTestHelper.createTestDatabase();
             currentTestDatabaseName.set(testDbName);
@@ -114,21 +130,12 @@ public abstract class Utils extends Mockito {
             // Truncate all data in the test database (keeps tables intact for fast re-use)
             DatabaseTestHelper.truncateAllData();
 
-            // Copy base config file (tests may have modified it)
-            ProcessBuilder pb = new ProcessBuilder("cp", "temp/config.yaml", "./config" + workerId + ".yaml");
-            pb.directory(new File(installDir));
-            Process process = pb.start();
-            process.waitFor();
-
             // Update config with test-specific database name and connection details
             setValueInConfigDirectly("postgresql_database_name", "\"" + testDbName + "\"", workerId);
             setValueInConfigDirectly("postgresql_host", "\"" + DatabaseTestHelper.getHost() + "\"", workerId);
             setValueInConfigDirectly("postgresql_port", DatabaseTestHelper.getPort(), workerId);
             setValueInConfigDirectly("postgresql_user", "\"" + DatabaseTestHelper.getUser() + "\"", workerId);
             setValueInConfigDirectly("postgresql_password", "\"" + DatabaseTestHelper.getPassword() + "\"", workerId);
-
-            byteArrayOutputStream = new ByteArrayOutputStream();
-            System.setErr(new PrintStream(byteArrayOutputStream));
         } catch (Exception e) {
             e.printStackTrace();
         }

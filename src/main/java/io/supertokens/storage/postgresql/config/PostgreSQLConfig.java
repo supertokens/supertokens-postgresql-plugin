@@ -339,6 +339,7 @@ public class PostgreSQLConfig {
     //
     // transient so Gson skips it in getValidFields() / getConfigFieldsInfoForDashboard.
     // volatile so concurrent readers see the publication done by the first parser.
+    @IgnoreForAnnotationCheck
     private transient volatile MigrationMode parsedMigrationMode = null;
 
     public MigrationMode getMigrationMode() {

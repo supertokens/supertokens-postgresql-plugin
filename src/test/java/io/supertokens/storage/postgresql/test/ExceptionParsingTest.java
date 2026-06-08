@@ -41,6 +41,9 @@ import io.supertokens.pluginInterface.multitenancy.exceptions.TenantOrAppNotFoun
 import io.supertokens.pluginInterface.thirdparty.exception.DuplicateThirdPartyUserException;
 import io.supertokens.pluginInterface.thirdparty.sqlStorage.ThirdPartySQLStorage;
 import io.supertokens.storageLayer.StorageLayer;
+import io.supertokens.pluginInterface.MigrationMode;
+import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Rule;
@@ -83,6 +86,10 @@ public class ExceptionParsingTest {
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
             ThirdPartySQLStorage storage = (ThirdPartySQLStorage) StorageLayer.getStorage(process.getProcess());
+
+            // Use DUAL_WRITE mode so the reservation (new) tables get populated
+            Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()))
+                    .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
             String userId = "userId";
             String userId2 = "userId2";
@@ -132,6 +139,10 @@ public class ExceptionParsingTest {
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
             EmailPasswordSQLStorage storage = (EmailPasswordSQLStorage) StorageLayer.getStorage(process.getProcess());
+
+            // Use DUAL_WRITE mode so the reservation (new) tables get populated
+            Config.getConfig((Start) StorageLayer.getStorage(process.getProcess()))
+                    .setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
 
             String userId = "userId";
             String userId2 = "userId2";
