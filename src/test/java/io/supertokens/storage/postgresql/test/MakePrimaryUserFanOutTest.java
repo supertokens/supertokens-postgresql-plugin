@@ -21,6 +21,7 @@ import io.supertokens.authRecipe.AuthRecipe;
 import io.supertokens.emailpassword.EmailPassword;
 import io.supertokens.featureflag.EE_FEATURES;
 import io.supertokens.featureflag.FeatureFlagTestContent;
+import io.supertokens.pluginInterface.MigrationMode;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.exceptions.AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException;
@@ -34,6 +35,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestRule;
 
+import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static org.junit.Assert.*;
 
@@ -55,6 +57,9 @@ import static org.junit.Assert.*;
  * before they reach the ON CONFLICT clause.
  *
  * Test strategy:
+ *   0. Force MIGRATED mode so that makePrimaryUser_Transaction routes through
+ *      addPrimaryUserAccountInfo_Transaction.  Without this the process runs in
+ *      LEGACY mode and the buggy method is never called.
  *   1. Make an EmailPassword user primary → seeds primary_user_tenants with the
  *      conflict target (public, email, test@example.com, EP_USER).
  *   2. ThirdParty sign-up with the same email → adds the normal EMAIL row:
@@ -98,6 +103,13 @@ public class MakePrimaryUserFanOutTest {
             return;
         }
 
+        // Force MIGRATED mode so that makePrimaryUser_Transaction routes through
+        // addPrimaryUserAccountInfo_Transaction (the method containing the fan-out
+        // bug) rather than the legacy path.  Without this the test always passes
+        // because LEGACY mode never calls the buggy/fixed method.
+        Start start = (Start) StorageLayer.getStorage(process.getProcess());
+        Config.getConfig(start).setMigrationModeForTesting(MigrationMode.MIGRATED);
+
         // Step 1 — create EP primary user, seeding primary_user_tenants with
         //           (public, email, test@example.com, EP_USER).
         AuthRecipeUserInfo epUser = EmailPassword.signUp(
@@ -123,8 +135,12 @@ public class MakePrimaryUserFanOutTest {
         // Now recipe_user_account_infos has TWO rows matching
         // (recipe_user_id=TP_USER, recipe_id=thirdparty, account_info_type=email,
         //  account_info_value=test@example.com) — differing only in third_party_id.
-        Start start = (Start) StorageLayer.getStorage(process.getProcess());
         String accountInfoTable = Config.getConfig(start).getRecipeUserAccountInfosTable();
+        // Confirm migration mode is MIGRATED before injection — if this fails the
+        // test would pass for the wrong reason (legacy path, no fan-out possible).
+        assertEquals("MIGRATED mode must be active for this test to exercise the fan-out bug",
+                MigrationMode.MIGRATED, Config.getConfig(start).getMigrationMode());
+
         update(start,
                 "INSERT INTO " + accountInfoTable
                         + " (app_id, recipe_user_id, recipe_id, account_info_type,"
@@ -135,6 +151,18 @@ public class MakePrimaryUserFanOutTest {
                     pst.setString(2, tpUserId);
                     pst.setString(3, "test@example.com");
                 });
+
+        // Confirm both email rows are present — if this fails the injection silently
+        // did not create the second row and the test cannot demonstrate the fan-out.
+        int emailRowCount = execute(start,
+                "SELECT COUNT(*) FROM " + accountInfoTable
+                        + " WHERE app_id = 'public' AND recipe_user_id = ? AND account_info_type = 'email'",
+                pst -> pst.setString(1, tpUserId),
+                rs -> {
+                    rs.next();
+                    return rs.getInt(1);
+                });
+        assertEquals("Spurious injection must produce exactly 2 email rows to trigger fan-out", 2, emailRowCount);
 
         // Step 4 — attempt to make the ThirdParty user primary.
         //
