@@ -308,7 +308,7 @@ public class AccountInfoQueries {
             // Insert with ON CONFLICT to catch primary key violations
             String QUERY = "INSERT INTO " + primaryUserTenantsTable
                     + " (app_id, tenant_id, account_info_type, account_info_value, primary_user_id)"
-                    + " SELECT r.app_id, r.tenant_id, r.account_info_type, r.account_info_value, ?"
+                    + " SELECT DISTINCT r.app_id, r.tenant_id, r.account_info_type, r.account_info_value, ?"
                     + " FROM " + recipeUserTenantsTable + " r"
                     + " INNER JOIN " + recipeUserAccountInfosTable + " ai"
                     + "   ON r.app_id = ai.app_id"

@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.5.1]
+
+- Fixes possible fan-out with makePrimary
+
 ## [9.5.0]
 
 - Adds reservation tables: `recipe_user_account_infos`, `recipe_user_tenants`, `primary_user_tenants`
