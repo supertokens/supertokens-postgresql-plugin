@@ -777,6 +777,13 @@ public class GeneralQueries {
                     ddl.add(AccountInfoQueries.getQueryToCreatePrimaryUserIndexForPrimaryUserTenantsTable(start));
                 }
 
+                if (!doesTableExists(existingTables, Config.getConfig(start).getActivityLogTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    ddl.add(ActivityLogQueries.getQueryToCreateActivityLogTable(start));
+                    ddl.add(ActivityLogQueries.getQueryToCreateActivityLogDefaultPartition(start));
+                    ddl.add(ActivityLogQueries.getQueryToCreateCreatedAtBrinIndex(start));
+                }
+
                 executeDDLBatch(con, ddl);
 
             } catch (Exception e) {

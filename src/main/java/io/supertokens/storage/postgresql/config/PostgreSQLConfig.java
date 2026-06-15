@@ -568,6 +568,10 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("primary_user_tenants");
     }
 
+    public String getActivityLogTable() {
+        return addSchemaAndPrefixToTableName("activity_log");
+    }
+
     private String addSchemaAndPrefixToTableName(String tableName) {
         return addSchemaToTableName(postgresql_table_names_prefix + tableName);
     }
