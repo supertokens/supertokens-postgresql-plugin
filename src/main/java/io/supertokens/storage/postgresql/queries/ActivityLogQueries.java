@@ -24,6 +24,7 @@ import io.supertokens.storage.postgresql.config.Config;
 
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -39,9 +40,9 @@ import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
  * Append-only audit/activity log.
  *
  * The table is range-partitioned by {@code created_at} (epoch millis) into one partition per UTC
- * day. Upcoming days' partitions are pre-created — at table creation and daily by a maintenance
- * cron ({@code CleanupActivityLogPartitions}) — and partitions whose data is entirely older than
- * {@link #RETENTION_DAYS} days are dropped by that same cron. A DEFAULT partition is a backstop so
+ * calendar month. Upcoming months' partitions are pre-created — at table creation and by a daily
+ * maintenance cron ({@code CleanupActivityLogPartitions}) — and a monthly partition is dropped once
+ * its entire month is older than {@link #RETENTION_DAYS} days. A DEFAULT partition is a backstop so
  * inserts never fail if the cron lapses beyond the pre-created window.
  *
  * No primary key or foreign key — the identity sequence makes {@code id} unique by construction.
@@ -51,16 +52,21 @@ import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
  */
 public class ActivityLogQueries {
 
-    /** Partitions whose data is entirely older than this many days are dropped. */
+    /**
+     * A monthly partition is dropped only once its entire month is older than this many days, so no
+     * data younger than the window is ever removed (a partition is retained until its last day ages out).
+     */
     private static final int RETENTION_DAYS = 31;
 
-    /** Number of future days (beyond today) to pre-create partitions for, so DEFAULT stays empty. */
-    private static final int PREMAKE_DAYS = 2;
+    /** Number of future months (beyond the current one) to pre-create partitions for, so DEFAULT stays empty. */
+    private static final int PREMAKE_MONTHS = 1;
 
     private static final long MILLIS_PER_DAY = 24L * 60 * 60 * 1000;
 
-    /** Matches the {@code _pYYYYMMDD} suffix of a daily partition; the DEFAULT partition won't match. */
-    private static final Pattern PARTITION_DAY_PATTERN = Pattern.compile("_p(\\d{8})$");
+    private static final DateTimeFormatter MONTH_SUFFIX_FORMAT = DateTimeFormatter.ofPattern("yyyyMM");
+
+    /** Matches the {@code _pYYYYMM} suffix of a monthly partition; the DEFAULT partition won't match. */
+    private static final Pattern PARTITION_MONTH_PATTERN = Pattern.compile("_p(\\d{6})$");
 
     static String getQueryToCreateActivityLogTable(Start start) {
         String tableName = Config.getConfig(start).getActivityLogTable();
@@ -112,34 +118,34 @@ public class ActivityLogQueries {
     }
 
     /**
-     * DDL to pre-create the daily partitions for today and the next {@link #PREMAKE_DAYS} days.
-     * Each statement is {@code CREATE TABLE IF NOT EXISTS}, so it is safe to run repeatedly.
+     * DDL to pre-create the monthly partitions for the current month and the next {@link #PREMAKE_MONTHS}
+     * months. Each statement is {@code CREATE TABLE IF NOT EXISTS}, so it is safe to run repeatedly.
      * Returned as strings so they can be batched alongside the table-creation DDL at startup.
      */
-    public static List<String> getQueriesToCreateUpcomingDayPartitions(Start start) {
+    public static List<String> getQueriesToCreateUpcomingMonthPartitions(Start start) {
         List<String> queries = new ArrayList<>();
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
-        for (int i = 0; i <= PREMAKE_DAYS; i++) {
-            queries.add(getQueryToCreateDailyPartition(start, today.plusDays(i)));
+        YearMonth thisMonth = YearMonth.now(ZoneOffset.UTC);
+        for (int i = 0; i <= PREMAKE_MONTHS; i++) {
+            queries.add(getQueryToCreateMonthlyPartition(start, thisMonth.plusMonths(i)));
         }
         return queries;
     }
 
-    private static String getQueryToCreateDailyPartition(Start start, LocalDate day) {
+    private static String getQueryToCreateMonthlyPartition(Start start, YearMonth month) {
         String tableName = Config.getConfig(start).getActivityLogTable();
-        String partitionName = tableName + "_p" + day.format(DateTimeFormatter.BASIC_ISO_DATE);
-        long fromMillis = day.toEpochDay() * MILLIS_PER_DAY;
-        long toMillis = fromMillis + MILLIS_PER_DAY;
+        String partitionName = tableName + "_p" + month.format(MONTH_SUFFIX_FORMAT);
+        long fromMillis = month.atDay(1).toEpochDay() * MILLIS_PER_DAY;
+        long toMillis = month.plusMonths(1).atDay(1).toEpochDay() * MILLIS_PER_DAY;
         return "CREATE TABLE IF NOT EXISTS " + partitionName + " PARTITION OF " + tableName
                 + " FOR VALUES FROM (" + fromMillis + ") TO (" + toMillis + ");";
     }
 
     /**
-     * Pre-creates upcoming day partitions and drops any whose data is entirely older than
+     * Pre-creates upcoming month partitions and drops any whose entire month is older than
      * {@link #RETENTION_DAYS} days. Idempotent; intended to be run daily.
      */
     public static void maintainPartitions(Start start) throws SQLException, StorageQueryException {
-        for (String query : getQueriesToCreateUpcomingDayPartitions(start)) {
+        for (String query : getQueriesToCreateUpcomingMonthPartitions(start)) {
             update(start, query, pst -> {});
         }
         dropPartitionsOlderThanRetention(start);
@@ -161,18 +167,19 @@ public class ActivityLogQueries {
             List<String> toDrop = new ArrayList<>();
             while (result.next()) {
                 String partitionName = result.getString("partition_name");
-                Matcher matcher = PARTITION_DAY_PATTERN.matcher(partitionName);
+                Matcher matcher = PARTITION_MONTH_PATTERN.matcher(partitionName);
                 if (!matcher.find()) {
-                    // DEFAULT partition (or anything not following the daily naming scheme) — leave it.
+                    // DEFAULT partition (or anything not following the monthly naming scheme) — leave it.
                     continue;
                 }
-                LocalDate partitionDay;
+                YearMonth partitionMonth;
                 try {
-                    partitionDay = LocalDate.parse(matcher.group(1), DateTimeFormatter.BASIC_ISO_DATE);
+                    partitionMonth = YearMonth.parse(matcher.group(1), MONTH_SUFFIX_FORMAT);
                 } catch (DateTimeParseException e) {
                     continue;
                 }
-                if (partitionDay.isBefore(cutoff)) {
+                // Drop only once the whole month has aged past the window — its last day is before the cutoff.
+                if (partitionMonth.atEndOfMonth().isBefore(cutoff)) {
                     toDrop.add(result.getString("schema_name") + "." + partitionName);
                 }
             }

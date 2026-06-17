@@ -32,7 +32,7 @@ import org.junit.rules.TestRule;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
@@ -44,6 +44,7 @@ import static org.junit.Assert.assertTrue;
 public class ActivityLogPartitionTest {
 
     private static final long MILLIS_PER_DAY = 24L * 60 * 60 * 1000;
+    private static final DateTimeFormatter MONTH_SUFFIX_FORMAT = DateTimeFormatter.ofPattern("yyyyMM");
 
     @Rule
     public TestRule watchman = Utils.getOnFailure();
@@ -59,12 +60,13 @@ public class ActivityLogPartitionTest {
     }
 
     /**
-     * maintainActivityLogPartitions() must (a) pre-create the partitions for today and the next few
-     * days, and (b) drop partitions whose data is entirely older than the 31-day retention window,
-     * deleting their rows along with them — while keeping partitions still inside the window.
+     * maintainActivityLogPartitions() must (a) pre-create the partitions for the current and next
+     * months, and (b) drop a monthly partition once its entire month is older than the 31-day
+     * retention window — deleting its rows along with it — while keeping months still within the
+     * window (e.g. last month).
      */
     @Test
-    public void oldPartitionsAreDroppedAndUpcomingArePreCreated() throws Exception {
+    public void oldMonthPartitionsAreDroppedAndUpcomingArePreCreated() throws Exception {
         String[] args = {"../"};
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -79,49 +81,52 @@ public class ActivityLogPartitionTest {
         Start storage = (Start) StorageLayer.getStorage(process.getProcess());
         String table = Config.getConfig(storage).getActivityLogTable();
 
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
-        LocalDate oldDay = today.minusDays(40);    // outside retention -> must be dropped
-        LocalDate recentDay = today.minusDays(30);  // inside retention -> must be kept
+        YearMonth thisMonth = YearMonth.now(ZoneOffset.UTC);
+        YearMonth oldMonth = thisMonth.minusMonths(3);  // whole month outside retention -> must be dropped
+        YearMonth lastMonth = thisMonth.minusMonths(1);  // its tail is still within 31 days -> must be kept
 
-        // Set up a partition well outside the retention window, with a row in it, plus one that is
-        // still inside the window.
-        createDailyPartition(storage, table, oldDay);
-        createDailyPartition(storage, table, recentDay);
-        insertEventOn(storage, table, oldDay);
+        // Set up a month partition well outside the retention window, with a row in it, plus last
+        // month's partition which is still within the window.
+        createMonthlyPartition(storage, table, oldMonth);
+        createMonthlyPartition(storage, table, lastMonth);
+        insertEventIn(storage, table, oldMonth);
 
-        assertTrue(partitionExists(storage, table, oldDay));
-        assertEquals(1, countEventsOn(storage, table, oldDay));
+        assertTrue(partitionExists(storage, table, oldMonth));
+        assertEquals(1, countEventsIn(storage, table, oldMonth));
 
         // Run the maintenance the cron would run.
         ((ActivityLogStorage) storage).maintainActivityLogPartitions();
 
-        // The old partition (and the row it held) is gone; the recent one survives.
-        assertFalse(partitionExists(storage, table, oldDay));
-        assertEquals(0, countEventsOn(storage, table, oldDay));
-        assertTrue(partitionExists(storage, table, recentDay));
+        // The old partition (and the row it held) is gone; last month's survives.
+        assertFalse(partitionExists(storage, table, oldMonth));
+        assertEquals(0, countEventsIn(storage, table, oldMonth));
+        assertTrue(partitionExists(storage, table, lastMonth));
 
-        // Upcoming days were pre-created (today + the premake window).
-        assertTrue(partitionExists(storage, table, today));
-        assertTrue(partitionExists(storage, table, today.plusDays(1)));
-        assertTrue(partitionExists(storage, table, today.plusDays(2)));
+        // Upcoming months were pre-created (this month + the premake window).
+        assertTrue(partitionExists(storage, table, thisMonth));
+        assertTrue(partitionExists(storage, table, thisMonth.plusMonths(1)));
 
         // Running it again is a no-op (CREATE ... IF NOT EXISTS / nothing new to drop).
         ((ActivityLogStorage) storage).maintainActivityLogPartitions();
-        assertTrue(partitionExists(storage, table, today));
-        assertFalse(partitionExists(storage, table, oldDay));
+        assertTrue(partitionExists(storage, table, thisMonth));
+        assertFalse(partitionExists(storage, table, oldMonth));
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
 
-    private static String partitionFullName(String table, LocalDate day) {
-        return table + "_p" + day.format(DateTimeFormatter.BASIC_ISO_DATE);
+    private static String partitionFullName(String table, YearMonth month) {
+        return table + "_p" + month.format(MONTH_SUFFIX_FORMAT);
     }
 
-    private void createDailyPartition(Start storage, String table, LocalDate day) throws Exception {
-        long fromMillis = day.toEpochDay() * MILLIS_PER_DAY;
-        long toMillis = fromMillis + MILLIS_PER_DAY;
-        String query = "CREATE TABLE IF NOT EXISTS " + partitionFullName(table, day)
+    private static long monthStartMillis(YearMonth month) {
+        return month.atDay(1).toEpochDay() * MILLIS_PER_DAY;
+    }
+
+    private void createMonthlyPartition(Start storage, String table, YearMonth month) throws Exception {
+        long fromMillis = monthStartMillis(month);
+        long toMillis = monthStartMillis(month.plusMonths(1));
+        String query = "CREATE TABLE IF NOT EXISTS " + partitionFullName(table, month)
                 + " PARTITION OF " + table + " FOR VALUES FROM (" + fromMillis + ") TO (" + toMillis + ")";
         storage.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
@@ -132,8 +137,8 @@ public class ActivityLogPartitionTest {
         });
     }
 
-    private void insertEventOn(Start storage, String table, LocalDate day) throws Exception {
-        long createdAt = day.toEpochDay() * MILLIS_PER_DAY + 1000;
+    private void insertEventIn(Start storage, String table, YearMonth month) throws Exception {
+        long createdAt = monthStartMillis(month) + 1000;
         String query = "INSERT INTO " + table
                 + " (app_id, tenant_id, event_type, created_at) VALUES (?, ?, ?, ?)";
         storage.startTransaction(con -> {
@@ -149,9 +154,9 @@ public class ActivityLogPartitionTest {
         });
     }
 
-    private int countEventsOn(Start storage, String table, LocalDate day) throws Exception {
-        long fromMillis = day.toEpochDay() * MILLIS_PER_DAY;
-        long toMillis = fromMillis + MILLIS_PER_DAY;
+    private int countEventsIn(Start storage, String table, YearMonth month) throws Exception {
+        long fromMillis = monthStartMillis(month);
+        long toMillis = monthStartMillis(month.plusMonths(1));
         String query = "SELECT COUNT(*) FROM " + table + " WHERE created_at >= ? AND created_at < ?";
         return storage.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
@@ -166,12 +171,12 @@ public class ActivityLogPartitionTest {
         });
     }
 
-    private boolean partitionExists(Start storage, String table, LocalDate day) throws Exception {
+    private boolean partitionExists(Start storage, String table, YearMonth month) throws Exception {
         String query = "SELECT to_regclass(?) IS NOT NULL AS exists";
         return storage.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try (PreparedStatement pst = sqlCon.prepareStatement(query)) {
-                pst.setString(1, partitionFullName(table, day));
+                pst.setString(1, partitionFullName(table, month));
                 try (ResultSet rs = pst.executeQuery()) {
                     rs.next();
                     return rs.getBoolean("exists");
