@@ -782,6 +782,9 @@ public class GeneralQueries {
                     ddl.add(ActivityLogQueries.getQueryToCreateActivityLogTable(start));
                     ddl.add(ActivityLogQueries.getQueryToCreateActivityLogDefaultPartition(start));
                     ddl.add(ActivityLogQueries.getQueryToCreateCreatedAtBrinIndex(start));
+                    // Pre-create the partitions for today and the next few days so the first inserts
+                    // land in a daily partition rather than the DEFAULT backstop.
+                    ddl.addAll(ActivityLogQueries.getQueriesToCreateUpcomingDayPartitions(start));
                 }
 
                 executeDDLBatch(con, ddl);

@@ -5582,4 +5582,13 @@ public class Start
             throw new StorageQueryException(e);
         }
     }
+
+    @Override
+    public void maintainActivityLogPartitions() throws StorageQueryException {
+        try {
+            ActivityLogQueries.maintainPartitions(this);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
 }
