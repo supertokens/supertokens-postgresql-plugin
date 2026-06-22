@@ -7,6 +7,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.5.2]
+
+- Adds the `activity_log` table: an append-only audit log, range-partitioned by `created_at` into one partition per UTC month
+- Adds `ActivityLogStorage.maintainActivityLogPartitions()` — pre-creates upcoming month partitions and drops a partition once its whole month is older than 31 days
+- `activity_log.payload` is stored as `TEXT`
+
+### Migration
+
+The `activity_log` table DDL is in [SCHEMA-REWORK.md](SCHEMA-REWORK.md#pre-flight).
+
 ## [9.5.1]
 
 - Fixes possible fan-out with makePrimary
@@ -26,7 +36,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Migration
 
 Safe to upgrade: new tables are created on first boot; old tables are untouched; defaults to `LEGACY` mode.
-See [SCHEMA-REWORK.md](SCHEMA-REWORK.md) for the full schema details and the end-to-end cutover runbook.
+See [SCHEMA-REWORK.md](SCHEMA-REWORK.md) for the full schema details and the end-to-end cutover runbook; the full DDL is in its [Pre-flight](SCHEMA-REWORK.md#pre-flight) section.
 
 ## [9.4.2]
 

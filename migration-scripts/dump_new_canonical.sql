@@ -47,8 +47,11 @@ user_canonical AS (
 -- recipe_user_account_infos rows have a non-null primary_user_id.
 user_primary_flag AS (
     SELECT app_id, user_id,
-           bool_or(primary_user_id IS NOT NULL) AS is_primary,
-           MAX(primary_user_id)                  AS primary_user_id
+           bool_or(primary_user_id IS NOT NULL)    AS is_primary,
+           -- A standalone (unlinked) user is its own primary, mirroring the old side where
+           -- app_id_to_user_id.primary_or_recipe_user_id is NOT NULL and self-references. Without
+           -- this COALESCE, standalone users emit a NULL canonical_primary_id and break the diff.
+           MAX(COALESCE(primary_user_id, user_id)) AS primary_user_id
     FROM scoped_infos
     GROUP BY app_id, user_id
 )

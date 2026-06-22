@@ -777,6 +777,16 @@ public class GeneralQueries {
                     ddl.add(AccountInfoQueries.getQueryToCreatePrimaryUserIndexForPrimaryUserTenantsTable(start));
                 }
 
+                if (!doesTableExists(existingTables, Config.getConfig(start).getActivityLogTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    ddl.add(ActivityLogQueries.getQueryToCreateActivityLogTable(start));
+                    ddl.add(ActivityLogQueries.getQueryToCreateActivityLogDefaultPartition(start));
+                    ddl.add(ActivityLogQueries.getQueryToCreateCreatedAtBrinIndex(start));
+                    // Pre-create the partitions for the current and upcoming months so the first inserts
+                    // land in a monthly partition rather than the DEFAULT backstop.
+                    ddl.addAll(ActivityLogQueries.getQueriesToCreateUpcomingMonthPartitions(start));
+                }
+
                 executeDDLBatch(con, ddl);
 
             } catch (Exception e) {

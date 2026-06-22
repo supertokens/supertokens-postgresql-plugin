@@ -58,6 +58,8 @@ import io.supertokens.pluginInterface.jwt.JWTRecipeStorage;
 import io.supertokens.pluginInterface.jwt.JWTSigningKeyInfo;
 import io.supertokens.pluginInterface.jwt.exceptions.DuplicateKeyIdException;
 import io.supertokens.pluginInterface.jwt.sqlstorage.JWTRecipeSQLStorage;
+import io.supertokens.pluginInterface.auditlog.ActivityLogStorage;
+import io.supertokens.pluginInterface.auditlog.AuditLogEvent;
 import io.supertokens.pluginInterface.migration.MigrationBackfillStorage;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.MultitenancyStorage;
@@ -141,7 +143,7 @@ public class Start
         UserIdMappingSQLStorage, MultitenancyStorage, MultitenancySQLStorage, DashboardSQLStorage, TOTPSQLStorage,
         ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage, OAuthStorage, OAuthSQLStorage,
         BulkImportSQLStorage, WebAuthNSQLStorage, SAMLStorage, UserLockingStorage, AccountInfoStorage,
-        MigrationBackfillStorage {
+        MigrationBackfillStorage, ActivityLogStorage {
 
     // these configs are protected from being modified / viewed by the dev using the SuperTokens
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
@@ -5564,6 +5566,27 @@ public class Start
     public int verifyBackfillCompleteness(AppIdentifier appIdentifier) throws StorageQueryException {
         try {
             return MigrationBackfillQueries.verifyBackfillCompleteness(this, appIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    // ActivityLogStorage implementation
+
+    @Override
+    public void createActivityLogEntry(TenantIdentifier tenantIdentifier, AuditLogEvent event)
+            throws StorageQueryException {
+        try {
+            ActivityLogQueries.createActivityLogEntry(this, tenantIdentifier, event);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void maintainActivityLogPartitions() throws StorageQueryException {
+        try {
+            ActivityLogQueries.maintainPartitions(this);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
