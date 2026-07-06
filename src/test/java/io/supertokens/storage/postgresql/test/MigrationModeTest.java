@@ -70,7 +70,18 @@ public class MigrationModeTest {
     }
 
     private TestingProcessManager.TestingProcess startProcess() throws Exception {
+        return startProcess(null);
+    }
+
+    // Starts a process with an optional base-tenant migration_mode set through config.yaml — i.e.
+    // the same path production uses (persisted config), rather than the setMigrationModeForTesting
+    // backdoor. This matters when the test triggers a storage refresh (e.g. adding a tenant): the
+    // storage config is rebuilt from JSON, so a mode set via the backdoor would be reverted.
+    private TestingProcessManager.TestingProcess startProcess(MigrationMode baseMigrationMode) throws Exception {
         String[] args = {"../"};
+        if (baseMigrationMode != null) {
+            Utils.setValueInConfig("migration_mode", "\"" + baseMigrationMode.name() + "\"");
+        }
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
         FeatureFlagTestContent.getInstance(process.getProcess())
                 .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES,
@@ -374,13 +385,15 @@ public class MigrationModeTest {
      */
     @Test
     public void testAddRemoveTenantInDualWriteMode() throws Exception {
-        TestingProcessManager.TestingProcess process = startProcess();
+        // Base tenant starts in DUAL_WRITE_READ_OLD via persisted config (not the test setter), so
+        // the mode survives the storage refresh triggered by adding the tenant below.
+        TestingProcessManager.TestingProcess process = startProcess(MigrationMode.DUAL_WRITE_READ_OLD);
         try {
             Main main = process.getProcess();
             if (StorageLayer.getStorage(main).getType() != STORAGE_TYPE.SQL) return;
 
             Start storage = (Start) StorageLayer.getStorage(main);
-            Config.getConfig(storage).setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
+            assertEquals(MigrationMode.DUAL_WRITE_READ_OLD, Config.getConfig(storage).getMigrationMode());
 
             // Create a second tenant
             TenantIdentifier t1 = new TenantIdentifier(null, null, "t1");

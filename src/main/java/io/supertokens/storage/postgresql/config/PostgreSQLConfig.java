@@ -203,7 +203,11 @@ public class PostgreSQLConfig {
 
     @EnvName("SUPERTOKENS_MIGRATION_MODE")
     @JsonProperty
-    @IgnoreForAnnotationCheck
+    // migration_mode participates in the connection pool identity so that a mode change on an
+    // existing tenant yields a different connectionPoolId, which makes the storage layer build a
+    // fresh instance (with the new mode) instead of reusing the stale one. It is normalised to a
+    // canonical non-null value in validateAndNormalise so absent == LEGACY for the pool key.
+    @ConnectionPoolProperty
     @DashboardInfo(
             description = "Migration mode for all_auth_recipe_users table deprecation. " +
                     "Values: LEGACY, DUAL_WRITE_READ_OLD, DUAL_WRITE_READ_NEW, MIGRATED",
@@ -638,6 +642,16 @@ public class PostgreSQLConfig {
                             "'. Must be one of: LEGACY, DUAL_WRITE_READ_OLD, DUAL_WRITE_READ_NEW, MIGRATED");
                 }
             }
+        }
+
+        // migration_mode participates in the connectionPoolId (see the field annotation). Normalise
+        // it to a canonical non-null value so that a tenant that omits it and one that sets it
+        // explicitly to LEGACY resolve to the same pool: getConnectionPoolId skips null fields and
+        // compares raw strings, so "absent" and "LEGACY" must map to the same string here.
+        if (migration_mode == null) {
+            migration_mode = MigrationMode.LEGACY.name();
+        } else {
+            migration_mode = migration_mode.toUpperCase();
         }
 
         // Normalisation
