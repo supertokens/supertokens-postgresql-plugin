@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Makes `migration_mode` a connection-pool property so that changing it on an existing tenant (via the multitenancy CRUD endpoint) takes effect on the live storage instance without a core restart. Previously the storage layer reused the existing instance because `migration_mode` did not affect the pool identity, leaving the persisted mode dormant until the next restart. `migration_mode` is now normalised to a canonical value (absent → `LEGACY`, upper-cased) so it contributes consistently to `connectionPoolId`.
+
 ## [9.5.2]
 
 - Adds the `activity_log` table: an append-only audit log, range-partitioned by `created_at` into one partition per UTC month
