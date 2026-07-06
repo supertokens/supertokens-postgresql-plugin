@@ -647,18 +647,25 @@ public class AccountInfoQueries {
         }
 
         // Validate that the recipe user is not already a primary user themselves
-        // A primary user cannot be linked as a recipe user to another primary
+        // A primary user cannot be linked as a recipe user to another primary.
+        // However, if the recipe user IS the target primary user (e.g. linkAccounts(pUser, pUser),
+        // or linking a primary user to a user that is linked to it), the accounts are already
+        // linked, so this is a no-op instead of an error (matches pre-12.0 / legacy behaviour).
         if (recipeUser.isPrimary()) {
-try {
+            if (recipeUserId.equals(primaryUserId)) {
+                // already linked to the same primary user
+                return false;
+            }
+            try {
                 AuthRecipeUserInfo recipeUserInfo = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(
                         start, sqlCon, appIdentifier, recipeUserId);
                 if (recipeUserInfo == null) {
                     throw new UnknownUserIdException();
                 }
-            throw new CannotLinkSinceRecipeUserIdAlreadyLinkedWithAnotherPrimaryUserIdException(recipeUserInfo);
+                throw new CannotLinkSinceRecipeUserIdAlreadyLinkedWithAnotherPrimaryUserIdException(recipeUserInfo);
             } catch (SQLException e) {
                 throw new StorageQueryException(e);
-}
+            }
         }
 
         // Validate that the recipe user is not already linked to a different primary
