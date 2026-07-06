@@ -439,6 +439,11 @@ public class PasswordlessQueries {
                 MigrationMode mode = Config.getConfig(start).getMigrationMode();
 
                 { // app_id_to_user_id — ALWAYS
+                    // When writes don't reach the new tables, keep the time_joined = 0
+                    // sentinel so this user stays in the backfill pending set — the backfill
+                    // both restores the real timestamps (from the old tables) and creates the
+                    // reservation rows this mode skips.
+                    long sentinelOrTimeJoined = mode.writesToNewTables() ? timeJoined : 0;
                     String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
                             + "(app_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
                             + " VALUES(?, ?, ?, ?, ?, ?)";
@@ -447,8 +452,8 @@ public class PasswordlessQueries {
                         pst.setString(2, id);
                         pst.setString(3, id);
                         pst.setString(4, PASSWORDLESS.toString());
-                        pst.setLong(5, timeJoined);
-                        pst.setLong(6, timeJoined);
+                        pst.setLong(5, sentinelOrTimeJoined);
+                        pst.setLong(6, sentinelOrTimeJoined);
                     });
                 }
 
@@ -1303,14 +1308,17 @@ public class PasswordlessQueries {
                 }
             }
 
+            // See createUser: keep the time_joined = 0 sentinel while writes skip the new
+            // tables so the backfill later creates the missing reservation rows.
+            long sentinelOrTimeJoined = mode.writesToNewTables() ? user.timeJoinedMSSinceEpoch : 0;
             appIdToUserIdBatch.add(pst -> {
                 pst.setString(1, appId);
                 pst.setString(2, user.userId);
                 pst.setString(3, primaryOrRecipeUserId);
                 pst.setBoolean(4, isLinkedOrIsPrimaryUser);
                 pst.setString(5, PASSWORDLESS.toString());
-                pst.setLong(6, user.timeJoinedMSSinceEpoch);
-                pst.setLong(7, user.timeJoinedMSSinceEpoch);
+                pst.setLong(6, sentinelOrTimeJoined);
+                pst.setLong(7, sentinelOrTimeJoined);
             });
 
             passwordlessUsersBatch.add(pst -> {

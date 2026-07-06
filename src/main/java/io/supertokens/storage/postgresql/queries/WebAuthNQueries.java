@@ -313,6 +313,11 @@ public class WebAuthNQueries {
 
         try {
             // app_id_to_user_id
+            // When writes don't reach the new tables, keep the time_joined = 0 sentinel so
+            // this user stays in the backfill pending set — the backfill both restores the
+            // real timestamps (from the old tables) and creates the reservation rows this
+            // mode skips.
+            long sentinelOrTimeJoined = mode.writesToNewTables() ? timeJoined : 0;
             String insertAppIdToUserId = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
                     + "(app_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
                     + " VALUES(?, ?, ?, ?, ?, ?)";
@@ -321,8 +326,8 @@ public class WebAuthNQueries {
                 pst.setString(2, userId);
                 pst.setString(3, userId);
                 pst.setString(4, WEBAUTHN.toString());
-                pst.setLong(5, timeJoined);
-                pst.setLong(6, timeJoined);
+                pst.setLong(5, sentinelOrTimeJoined);
+                pst.setLong(6, sentinelOrTimeJoined);
             });
 
             if (mode.writesToOldTables()) { // all_auth_recipe_users

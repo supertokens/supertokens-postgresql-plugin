@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Fixes users signed up while `migration_mode` is `LEGACY` being permanently skipped by the reservation-tables
+  backfill: their `app_id_to_user_id` rows now keep the `time_joined = 0` sentinel (real timestamps stay in the
+  legacy tables), so they remain in the backfill pending set until their reservation rows are created
+
 ## [9.5.2]
 
 - Adds the `activity_log` table: an append-only audit log, range-partitioned by `created_at` into one partition per UTC month
