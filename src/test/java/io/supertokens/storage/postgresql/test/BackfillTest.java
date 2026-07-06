@@ -22,8 +22,10 @@ import io.supertokens.authRecipe.AuthRecipe;
 import io.supertokens.emailpassword.EmailPassword;
 import io.supertokens.featureflag.EE_FEATURES;
 import io.supertokens.featureflag.FeatureFlagTestContent;
+import io.supertokens.migration.MigrationModeTransition;
 import io.supertokens.passwordless.Passwordless;
 import io.supertokens.pluginInterface.MigrationMode;
+import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.Storage;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
@@ -457,6 +459,119 @@ public class BackfillTest {
 
             // Now consistent
             assertEquals(0, backfillStorage.verifyBackfillCompleteness(appIdentifier));
+        } finally {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
+    /**
+     * Users signed up while the core runs LEGACY mode have no reservation-table rows,
+     * so they must be part of the backfill pending set — otherwise they are permanently
+     * skipped by the backfill and surface as inconsistent once the tenant advances.
+     */
+    @Test
+    public void legacyModeSignupsAreCountedAsPendingAndBackfilled() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        try {
+            Main main = process.getProcess();
+            if (StorageLayer.getStorage(main).getType() != STORAGE_TYPE.SQL) {
+                return;
+            }
+
+            Start storage = (Start) StorageLayer.getStorage(main);
+            MigrationBackfillStorage backfillStorage = (MigrationBackfillStorage) storage;
+            AppIdentifier appIdentifier = new AppIdentifier(null, null);
+
+            Config.getConfig(storage).setMigrationModeForTesting(MigrationMode.LEGACY);
+
+            AuthRecipeUserInfo epUser = EmailPassword.signUp(main, "legacy-ep@example.com", "password123");
+
+            Passwordless.CreateCodeResponse code = Passwordless.createCode(
+                    main, "legacy-pl@example.com", null, null, null);
+            Passwordless.ConsumeCodeResponse plResponse = Passwordless.consumeCode(
+                    main, code.deviceId, code.deviceIdHash, code.userInputCode, null);
+
+            ThirdParty.SignInUpResponse tpResponse = ThirdParty.signInUp(
+                    main, "google", "legacy-g1", "legacy-tp@example.com");
+
+            // All three users lack reservation rows, so all three need backfilling
+            assertEquals(3, backfillStorage.getBackfillPendingUsersCount(appIdentifier));
+
+            // Activate dual-write and drain the backfill
+            Config.getConfig(storage).setMigrationModeForTesting(MigrationMode.DUAL_WRITE_READ_OLD);
+            int processed = backfillStorage.backfillUsersBatch(appIdentifier, 100);
+            assertEquals(3, processed);
+
+            assertEquals(0, backfillStorage.getBackfillPendingUsersCount(appIdentifier));
+            assertEquals(0, backfillStorage.verifyBackfillCompleteness(appIdentifier));
+
+            // Reservation rows exist and time_joined was repaired from the legacy tables
+            String accountInfosTable = Config.getConfig(storage).getRecipeUserAccountInfosTable();
+            String appIdToUserIdTable = Config.getConfig(storage).getAppIdToUserIdTable();
+            for (String uid : new String[]{
+                    epUser.getSupertokensUserId(),
+                    plResponse.user.getSupertokensUserId(),
+                    tpResponse.user.getSupertokensUserId()}) {
+                assertTrue(countRows(storage, accountInfosTable,
+                        "recipe_user_id = '" + uid + "'") >= 1);
+                assertEquals(1, countRows(storage, appIdToUserIdTable,
+                        "user_id = '" + uid + "' AND time_joined > 0"));
+            }
+        } finally {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
+    /**
+     * A user with a real time_joined but no reservation rows (the damage left behind by
+     * cores that ran before the LEGACY-sentinel fix) is invisible to pendingUsers. The
+     * → MIGRATED transition must still be refused: it is the last gate before the old
+     * tables leave the read path, after which such users become unreachable.
+     */
+    @Test
+    public void migratedTransitionRejectedWhenVerifyFindsInconsistentUsers() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        try {
+            Main main = process.getProcess();
+            if (StorageLayer.getStorage(main).getType() != STORAGE_TYPE.SQL) {
+                return;
+            }
+
+            Start storage = (Start) StorageLayer.getStorage(main);
+            MigrationBackfillStorage backfillStorage = (MigrationBackfillStorage) storage;
+            AppIdentifier appIdentifier = new AppIdentifier(null, null);
+
+            Config.getConfig(storage).setMigrationModeForTesting(MigrationMode.LEGACY);
+            AuthRecipeUserInfo user = EmailPassword.signUp(main, "orphan@example.com", "password123");
+            final String uid = user.getSupertokensUserId();
+
+            // Simulate the pre-fix write: real time_joined on app_id_to_user_id,
+            // no reservation rows.
+            String appIdToUserIdTable = Config.getConfig(storage).getAppIdToUserIdTable();
+            storage.startTransaction(con -> {
+                Connection sqlCon = (Connection) con.getConnection();
+                try (Statement stmt = sqlCon.createStatement()) {
+                    stmt.executeUpdate("UPDATE " + appIdToUserIdTable
+                            + " SET time_joined = 1234, primary_or_recipe_user_time_joined = 1234"
+                            + " WHERE user_id = '" + uid + "'");
+                }
+                return null;
+            });
+
+            // Invisible to the pending count, but the verify scan sees it
+            assertEquals(0, backfillStorage.getBackfillPendingUsersCount(appIdentifier));
+            assertEquals(1, backfillStorage.verifyBackfillCompleteness(appIdentifier));
+
+            try {
+                MigrationModeTransition.validate(main, appIdentifier,
+                        MigrationMode.DUAL_WRITE_READ_NEW, MigrationMode.MIGRATED);
+                fail("Expected transition to MIGRATED to be rejected while inconsistent users exist");
+            } catch (InvalidConfigException e) {
+                assertTrue("Expected message to mention inconsistent users, got: " + e.getMessage(),
+                        e.getMessage().toLowerCase().contains("inconsistent"));
+            }
         } finally {
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));

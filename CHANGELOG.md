@@ -7,6 +7,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.5.3]
+
+- Fixes users signed up while `migration_mode` is `LEGACY` being permanently skipped by the reservation-tables
+  backfill: their `app_id_to_user_id` rows now keep the `time_joined = 0` sentinel (real timestamps stay in the
+  legacy tables), so they remain in the backfill pending set until their reservation rows are created
 - Makes `migration_mode` a connection-pool property so that changing it on an existing tenant (via the multitenancy CRUD endpoint) takes effect on the live storage instance without a core restart. Previously the storage layer reused the existing instance because `migration_mode` did not affect the pool identity, leaving the persisted mode dormant until the next restart. `migration_mode` is now normalised to a canonical value (absent → `LEGACY`, upper-cased) so it contributes consistently to `connectionPoolId`.
 
 ## [9.5.2]

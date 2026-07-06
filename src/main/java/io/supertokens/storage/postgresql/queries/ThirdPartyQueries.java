@@ -120,6 +120,11 @@ public class ThirdPartyQueries {
                 MigrationMode mode = Config.getConfig(start).getMigrationMode();
 
                 { // app_id_to_user_id
+                    // When writes don't reach the new tables, keep the time_joined = 0
+                    // sentinel so this user stays in the backfill pending set — the backfill
+                    // both restores the real timestamps (from the old tables) and creates the
+                    // reservation rows this mode skips.
+                    long sentinelOrTimeJoined = mode.writesToNewTables() ? timeJoined : 0;
                     String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
                             + "(app_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
                             + " VALUES(?, ?, ?, ?, ?, ?)";
@@ -128,8 +133,8 @@ public class ThirdPartyQueries {
                         pst.setString(2, id);
                         pst.setString(3, id);
                         pst.setString(4, THIRD_PARTY.toString());
-                        pst.setLong(5, timeJoined);
-                        pst.setLong(6, timeJoined);
+                        pst.setLong(5, sentinelOrTimeJoined);
+                        pst.setLong(6, sentinelOrTimeJoined);
                     });
                 }
 
@@ -699,14 +704,17 @@ public class ThirdPartyQueries {
                 AccountInfoQueries.addRecipeUserTenantsToBatch(recipeUserTenantsBatch, user.appIdentifier, user.userId, THIRD_PARTY.toString(), ACCOUNT_INFO_TYPE.EMAIL, user.thirdpartyId, user.thirdpartyUserId, user.email, user.recipeUserTenantIds);
             }
 
+            // See signUp: keep the time_joined = 0 sentinel while writes skip the new
+            // tables so the backfill later creates the missing reservation rows.
+            long sentinelOrTimeJoined = mode.writesToNewTables() ? user.timeJoinedMSSinceEpoch : 0;
             appIdToUserIdBatch.add(pst -> {
                 pst.setString(1, appId);
                 pst.setString(2, user.userId);
                 pst.setString(3, primaryOrRecipeUserId);
                 pst.setBoolean(4, isLinkedOrIsPrimaryUser);
                 pst.setString(5, THIRD_PARTY.toString());
-                pst.setLong(6, user.timeJoinedMSSinceEpoch);
-                pst.setLong(7, user.timeJoinedMSSinceEpoch);
+                pst.setLong(6, sentinelOrTimeJoined);
+                pst.setLong(7, sentinelOrTimeJoined);
             });
 
             thirdPartyUsersBatch.add(pst -> {

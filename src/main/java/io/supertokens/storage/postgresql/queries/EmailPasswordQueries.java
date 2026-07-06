@@ -295,6 +295,11 @@ public class EmailPasswordQueries {
                 MigrationMode mode = Config.getConfig(start).getMigrationMode();
 
                 { // app_id_to_user_id — ALWAYS
+                    // When writes don't reach the new tables, keep the time_joined = 0
+                    // sentinel so this user stays in the backfill pending set — the backfill
+                    // both restores the real timestamps (from the old tables) and creates the
+                    // reservation rows this mode skips.
+                    long sentinelOrTimeJoined = mode.writesToNewTables() ? timeJoined : 0;
                     String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
                             + "(app_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
                             + " VALUES(?, ?, ?, ?, ?, ?)";
@@ -303,8 +308,8 @@ public class EmailPasswordQueries {
                         pst.setString(2, userId);
                         pst.setString(3, userId);
                         pst.setString(4, EMAIL_PASSWORD.toString());
-                        pst.setLong(5, timeJoined);
-                        pst.setLong(6, timeJoined);
+                        pst.setLong(5, sentinelOrTimeJoined);
+                        pst.setLong(6, sentinelOrTimeJoined);
                     });
                 }
 
@@ -409,14 +414,17 @@ public class EmailPasswordQueries {
                     AccountInfoQueries.addRecipeUserTenantsToBatch(recipeUserTenantsBatch, user.appIdentifier, user.userId, EMAIL_PASSWORD.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", user.email, user.recipeUserTenantIds);
                 }
 
+                // See signUp: keep the time_joined = 0 sentinel while writes skip the new
+                // tables so the backfill later creates the missing reservation rows.
+                long sentinelOrTimeJoined = mode.writesToNewTables() ? user.timeJoinedMSSinceEpoch : 0;
                 appIdToUserIdSetters.add(pst -> {
                     pst.setString(1, appId);
                     pst.setString(2, userId);
                     pst.setString(3, primaryOrRecipeUserId);
                     pst.setBoolean(4, isLinkedOrIsPrimaryUser);
                     pst.setString(5, EMAIL_PASSWORD.toString());
-                    pst.setLong(6, user.timeJoinedMSSinceEpoch);
-                    pst.setLong(7, user.timeJoinedMSSinceEpoch);
+                    pst.setLong(6, sentinelOrTimeJoined);
+                    pst.setLong(7, sentinelOrTimeJoined);
                 });
 
                 emailPasswordUsersSetters.add(pst -> {
