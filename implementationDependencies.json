@@ -15,6 +15,11 @@
 		"jar":"https://repo.maven.apache.org/maven2/org/postgresql/postgresql/42.7.2/postgresql-42.7.2.jar",
 		"name":"postgresql 42.7.2",
 		"src":"https://repo.maven.apache.org/maven2/org/postgresql/postgresql/42.7.2/postgresql-42.7.2-sources.jar"
+	},
+	{
+		"jar":"https://repo.maven.apache.org/maven2/org/checkerframework/checker-qual/3.42.0/checker-qual-3.42.0.jar",
+		"name":"checker-qual 3.42.0",
+		"src":"https://repo.maven.apache.org/maven2/org/checkerframework/checker-qual/3.42.0/checker-qual-3.42.0-sources.jar"
 	}
 ]
 }
