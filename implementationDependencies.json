@@ -12,14 +12,14 @@
 		"src":"https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36-sources.jar"
 	},
 	{
-		"jar":"https://repo.maven.apache.org/maven2/org/postgresql/postgresql/42.7.2/postgresql-42.7.2.jar",
-		"name":"postgresql 42.7.2",
-		"src":"https://repo.maven.apache.org/maven2/org/postgresql/postgresql/42.7.2/postgresql-42.7.2-sources.jar"
+		"jar":"https://repo.maven.apache.org/maven2/org/postgresql/postgresql/42.7.13/postgresql-42.7.13.jar",
+		"name":"postgresql 42.7.13",
+		"src":"https://repo.maven.apache.org/maven2/org/postgresql/postgresql/42.7.13/postgresql-42.7.13-sources.jar"
 	},
 	{
-		"jar":"https://repo.maven.apache.org/maven2/org/checkerframework/checker-qual/3.42.0/checker-qual-3.42.0.jar",
-		"name":"checker-qual 3.42.0",
-		"src":"https://repo.maven.apache.org/maven2/org/checkerframework/checker-qual/3.42.0/checker-qual-3.42.0-sources.jar"
+		"jar":"https://repo.maven.apache.org/maven2/org/checkerframework/checker-qual/3.55.1/checker-qual-3.55.1.jar",
+		"name":"checker-qual 3.55.1",
+		"src":"https://repo.maven.apache.org/maven2/org/checkerframework/checker-qual/3.55.1/checker-qual-3.55.1-sources.jar"
 	}
 ]
 }
