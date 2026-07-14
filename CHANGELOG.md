@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.5.4]
+
+- Upgrade dependencies to fix vulnerabilities in dependencies
+
 ## [9.5.3]
 
 - Fixes users signed up while `migration_mode` is `LEGACY` being permanently skipped by the reservation-tables
