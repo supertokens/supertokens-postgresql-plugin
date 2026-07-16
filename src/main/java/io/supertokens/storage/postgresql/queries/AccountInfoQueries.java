@@ -1138,6 +1138,23 @@ public class AccountInfoQueries {
             String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
             String recipeUserAccountInfosTable = getConfig(start).getRecipeUserAccountInfosTable();
 
+            // 0. No-op guard: updating to the current value must be idempotent. The write
+            // choreography below only works for actual changes — QUERY_2_INSERT derives
+            // replacement recipe_user_tenants rows whose PK includes account_info_value,
+            // so a same-value update collides with the user's own existing rows and the
+            // PK error is misreported as a duplicate-email/phone conflict. The user is
+            // locked, so this read is race-safe.
+            String QUERY_0 = "SELECT DISTINCT account_info_value FROM " + recipeUserAccountInfosTable
+                    + " WHERE app_id = ? AND recipe_user_id = ? AND account_info_type = ?";
+            String currentValue = execute(sqlCon, QUERY_0, pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, userId);
+                pst.setString(3, accountInfoType.toString());
+            }, result -> result.next() ? result.getString("account_info_value") : null);
+            if (accountInfoValue != null && accountInfoValue.equals(currentValue)) {
+                return;
+            }
+
             // Note: No need to query for primaryUserId - we already have it from LockedUser.
             // The lock guarantees the state hasn't changed since lock acquisition.
 
