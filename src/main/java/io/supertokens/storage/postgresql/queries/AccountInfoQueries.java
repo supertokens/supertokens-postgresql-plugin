@@ -1138,6 +1138,54 @@ public class AccountInfoQueries {
             String recipeUserTenantsTable = getConfig(start).getRecipeUserTenantsTable();
             String recipeUserAccountInfosTable = getConfig(start).getRecipeUserAccountInfosTable();
 
+            // 0. No-op guard: updating to the current value must be idempotent. The write
+            // choreography below only works for actual changes — QUERY_2_INSERT derives
+            // replacement recipe_user_tenants rows whose PK includes account_info_value,
+            // so a same-value update collides with the user's own existing rows and the
+            // PK error is misreported as a duplicate-email/phone conflict. The user is
+            // locked, so these reads are race-safe.
+            //
+            // We only skip when rows of this account_info_type already exist AND no row in
+            // EITHER table differs from the new value. recipe_user_tenants is the table
+            // whose PK actually self-collides, so it is the source of truth here; checking
+            // all rows (rather than one arbitrary row) means an inconsistent state — e.g.
+            // a stale value left behind by a partial failure — is repaired by the normal
+            // write path below instead of being skipped over. The null (removal) path is
+            // naturally idempotent and needs no guard.
+            if (accountInfoValue != null) {
+                String QUERY_0_ANY_ROWS = "SELECT 1 FROM " + recipeUserTenantsTable
+                        + " WHERE app_id = ? AND recipe_user_id = ? AND account_info_type = ? LIMIT 1";
+                boolean hasExistingRows = execute(sqlCon, QUERY_0_ANY_ROWS, pst -> {
+                    pst.setString(1, appIdentifier.getAppId());
+                    pst.setString(2, userId);
+                    pst.setString(3, accountInfoType.toString());
+                }, result -> result.next());
+
+                if (hasExistingRows) {
+                    String QUERY_0_ANY_DIFFERS = "SELECT 1 FROM " + recipeUserTenantsTable
+                            + " WHERE app_id = ? AND recipe_user_id = ? AND account_info_type = ?"
+                            + "   AND account_info_value != ?"
+                            + " UNION ALL"
+                            + " SELECT 1 FROM " + recipeUserAccountInfosTable
+                            + " WHERE app_id = ? AND recipe_user_id = ? AND account_info_type = ?"
+                            + "   AND account_info_value != ?"
+                            + " LIMIT 1";
+                    boolean anyRowDiffers = execute(sqlCon, QUERY_0_ANY_DIFFERS, pst -> {
+                        pst.setString(1, appIdentifier.getAppId());
+                        pst.setString(2, userId);
+                        pst.setString(3, accountInfoType.toString());
+                        pst.setString(4, accountInfoValue);
+                        pst.setString(5, appIdentifier.getAppId());
+                        pst.setString(6, userId);
+                        pst.setString(7, accountInfoType.toString());
+                        pst.setString(8, accountInfoValue);
+                    }, result -> result.next());
+                    if (!anyRowDiffers) {
+                        return;
+                    }
+                }
+            }
+
             // Note: No need to query for primaryUserId - we already have it from LockedUser.
             // The lock guarantees the state hasn't changed since lock acquisition.
 
