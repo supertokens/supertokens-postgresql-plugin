@@ -51,7 +51,7 @@ public class MigrationBackfillQueries {
 
     /**
      * Backfills a batch of users within a transaction.
-     * Locks users with SELECT FOR UPDATE, then populates all reservation tables.
+     * Locks users with SELECT FOR UPDATE SKIP LOCKED, then populates all reservation tables.
      *
      * @return Number of users processed
      */
@@ -63,7 +63,7 @@ public class MigrationBackfillQueries {
                 + " WHERE app_id = ? AND time_joined = 0"
                 + " ORDER BY user_id"
                 + " LIMIT ?"
-                + " FOR UPDATE";
+                + " FOR UPDATE SKIP LOCKED";
 
         List<UserToBackfill> users = execute(con, lockQuery, pst -> {
             pst.setString(1, appIdentifier.getAppId());
