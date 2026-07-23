@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.5.6]
+
+- Adds `SKIP LOCKED` to the backfill batch locking query to improve performance
+
 ## [9.5.5]
 
 - Fix no-op account info updates
