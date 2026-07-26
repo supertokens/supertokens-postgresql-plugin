@@ -7,6 +7,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [10.0.0]
+
+- Adds support for plugin interface version 9.0
+- Adds nullable `prev_refresh_token_hash_2` (`VARCHAR(128)`) and `refresh_token_rotated_at` (`BIGINT`, ms epoch)
+  columns to the `session_info` table to record refresh-token rotation state. Both `NULL` means "no rotation
+  recorded" (no backfill required).
+- Adds `prevRefreshTokenHash2` and `refreshTokenRotatedAt` params to `updateSessionInfo_Transaction` and reads
+  the new columns back into `SessionInfo`.
+
+### Migration
+
+Make sure the core is already upgraded to the version that supports plugin interface 9.0 before migrating.
+
+```sql
+ALTER TABLE session_info ADD COLUMN prev_refresh_token_hash_2 VARCHAR(128);
+ALTER TABLE session_info ADD COLUMN refresh_token_rotated_at BIGINT;
+```
+
 ## [9.5.5]
 
 - Fix no-op account info updates

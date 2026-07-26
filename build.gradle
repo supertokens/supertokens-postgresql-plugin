@@ -3,7 +3,7 @@ plugins {
     id 'java-test-fixtures'
 }
 
-version = "9.5.5"
+version = "10.0.0"
 
 repositories {
     mavenCentral()
