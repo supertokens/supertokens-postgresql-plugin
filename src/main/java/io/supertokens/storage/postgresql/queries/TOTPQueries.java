@@ -271,6 +271,18 @@ public class TOTPQueries {
         });
     }
 
+    public static boolean doesUserHaveAnyDevice(Start start, AppIdentifier appIdentifier, String userId)
+            throws StorageQueryException, SQLException {
+        // existence check only — see doesNonExpiredSessionExistForUser
+        String QUERY = "SELECT 1 FROM " + Config.getConfig(start).getTotpUserDevicesTable()
+                + " WHERE app_id = ? AND user_id = ? LIMIT 1";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, ResultSet::next);
+    }
+
     public static TOTPDevice[] getDevices(Start start, AppIdentifier appIdentifier, String userId)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT * FROM " + Config.getConfig(start).getTotpUserDevicesTable()

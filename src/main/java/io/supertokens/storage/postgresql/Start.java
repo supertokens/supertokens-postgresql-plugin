@@ -859,11 +859,17 @@ public class Start
             throws StorageQueryException {
         // check if the input userId is being used in nonAuthRecipes.
         if (className.equals(SessionStorage.class.getName())) {
-            String[] sessionHandlesForUser = getAllNonExpiredSessionHandlesForUser(appIdentifier, userId);
-            return sessionHandlesForUser.length > 0;
+            try {
+                return SessionQueries.doesNonExpiredSessionExistForUser(this, appIdentifier, userId);
+            } catch (SQLException e) {
+                throw new StorageQueryException(e);
+            }
         } else if (className.equals(UserRolesStorage.class.getName())) {
-            String[] roles = getRolesForUser(appIdentifier, userId);
-            return roles.length > 0;
+            try {
+                return UserRolesQueries.doesUserHaveAnyRole(this, appIdentifier, userId);
+            } catch (SQLException e) {
+                throw new StorageQueryException(e);
+            }
         } else if (className.equals(UserMetadataStorage.class.getName())) {
             JsonObject userMetadata = getUserMetadata(appIdentifier, userId);
             return userMetadata != null;
@@ -875,8 +881,7 @@ public class Start
             }
         } else if (className.equals(TOTPStorage.class.getName())) {
             try {
-                TOTPDevice[] devices = TOTPQueries.getDevices(this, appIdentifier, userId);
-                return devices.length > 0;
+                return TOTPQueries.doesUserHaveAnyDevice(this, appIdentifier, userId);
             } catch (SQLException e) {
                 throw new StorageQueryException(e);
             }
