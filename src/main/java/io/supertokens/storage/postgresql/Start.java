@@ -1884,6 +1884,16 @@ public class Start
     }
 
     @Override
+    public Map<Integer, Integer> countUsersActiveSinceGroupedByDay(AppIdentifier appIdentifier, long sinceTime,
+                                                                   long now) throws StorageQueryException {
+        try {
+            return ActiveUsersQueries.countUsersActiveSinceGroupedByDay(this, appIdentifier, sinceTime, now);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public void deleteUserActive_Transaction(TransactionConnection con, AppIdentifier appIdentifier, String userId)
             throws StorageQueryException {
         try {

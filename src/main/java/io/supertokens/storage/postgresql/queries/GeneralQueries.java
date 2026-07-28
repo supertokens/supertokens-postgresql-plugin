@@ -19,6 +19,7 @@ package io.supertokens.storage.postgresql.queries;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import io.supertokens.storage.postgresql.output.Logging;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -394,6 +395,23 @@ public class GeneralQueries {
                     // Index
                     ddl.add(ActiveUsersQueries.getQueryToCreateAppIdIndexForUserLastActiveTable(start));
                     ddl.add(ActiveUsersQueries.getQueryToCreateLastActiveTimeIndexForUserLastActiveTable(start));
+                    ddl.add(ActiveUsersQueries.getQueryToCreateAppIdLastActiveTimeIndexForUserLastActiveTable(start));
+                }
+
+                // Backfill indexes for tables that ALREADY exist: the index DDL inside the blocks
+                // above only ever runs when a table is first created, so databases provisioned
+                // before an index was introduced never receive it.
+                //
+                // These are deliberately NOT added to `ddl`: executeDDLBatch runs the whole list in
+                // one transaction and rolls back on any failure, so a slow index build hitting a
+                // lock/statement timeout on a large table would abort table creation for everyone
+                // else and prevent the core from starting. They are executed separately and
+                // failures are logged, not propagated - a missing index degrades performance, it
+                // does not break correctness, and the next boot retries.
+                List<String> backfillIndexDdl = new ArrayList<>();
+                if (doesTableExists(existingTables, Config.getConfig(start).getUserLastActiveTable())) {
+                    backfillIndexDdl.add(
+                            ActiveUsersQueries.getQueryToCreateAppIdLastActiveTimeIndexForUserLastActiveTable(start));
                 }
 
                 if (!doesTableExists(existingTables, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
@@ -788,6 +806,7 @@ public class GeneralQueries {
                 }
 
                 executeDDLBatch(con, ddl);
+                executeBackfillIndexDDL(con, backfillIndexDdl, start);
 
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
@@ -849,6 +868,37 @@ public class GeneralQueries {
                 try {
                     con.setAutoCommit(true);
                 } catch (SQLException ignored) {
+                }
+            }
+        }
+    }
+
+    /**
+     * Runs "CREATE INDEX IF NOT EXISTS" statements that backfill indexes onto pre-existing tables.
+     * Each statement gets its own transaction and its own error handling: these are optimisations,
+     * so a failure (lock timeout on a big table, insufficient privileges, ...) must never prevent
+     * the core from starting or roll back the main DDL batch. The next boot retries.
+     */
+    private static void executeBackfillIndexDDL(Connection con, List<String> statements, Start start) {
+        for (String sql : statements) {
+            boolean previousAutoCommit;
+            try {
+                previousAutoCommit = con.getAutoCommit();
+                con.setAutoCommit(true);
+            } catch (SQLException e) {
+                Logging.debug(start, "Skipping index backfill, could not set autocommit: " + e.getMessage());
+                return;
+            }
+            try (var stmt = con.createStatement()) {
+                stmt.execute(sql);
+            } catch (SQLException e) {
+                Logging.debug(start, "Index backfill skipped (will retry on next start): " + sql
+                        + " - " + e.getMessage());
+            } finally {
+                try {
+                    con.setAutoCommit(previousAutoCommit);
+                } catch (SQLException ignored) {
+                    // best effort
                 }
             }
         }

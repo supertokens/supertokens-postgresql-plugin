@@ -28,6 +28,7 @@ import ch.qos.logback.core.status.Status;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.opentelemetry.OtelProvider;
 import io.supertokens.storage.postgresql.output.Logging;
+import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.util.List;
 import java.util.Map;
@@ -149,7 +150,9 @@ public class HikariLoggingAppender implements Appender<ILoggingEvent> {
 
     private void appendToOtel(ILoggingEvent event) {
         if (otelProvider != null) {
-            String logMessage = event.getFormattedMessage();
+            // must mask here too: unlike the file/console appenders (CustomLayout), this path
+            // does not go through Utils.maskDBPassword
+            String logMessage = Utils.maskDBPassword(event.getFormattedMessage());
             String logLevel = event.getLevel().toString();
             otelProvider.createLogEvent(TenantIdentifier.BASE_TENANT, logMessage, logLevel,
                     Map.of("loggerName", event.getLoggerName(),
