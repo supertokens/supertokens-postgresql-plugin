@@ -644,15 +644,6 @@ public class Start
         }
     }
 
-    private String[] getAllNonExpiredSessionHandlesForUser(AppIdentifier appIdentifier, String userId)
-            throws StorageQueryException {
-        try {
-            return SessionQueries.getAllNonExpiredSessionHandlesForUser(this, appIdentifier, userId);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
     @Override
     public void deleteAllExpiredSessions() throws StorageQueryException {
         try {
@@ -859,11 +850,17 @@ public class Start
             throws StorageQueryException {
         // check if the input userId is being used in nonAuthRecipes.
         if (className.equals(SessionStorage.class.getName())) {
-            String[] sessionHandlesForUser = getAllNonExpiredSessionHandlesForUser(appIdentifier, userId);
-            return sessionHandlesForUser.length > 0;
+            try {
+                return SessionQueries.doesNonExpiredSessionExistForUser(this, appIdentifier, userId);
+            } catch (SQLException e) {
+                throw new StorageQueryException(e);
+            }
         } else if (className.equals(UserRolesStorage.class.getName())) {
-            String[] roles = getRolesForUser(appIdentifier, userId);
-            return roles.length > 0;
+            try {
+                return UserRolesQueries.doesUserHaveAnyRole(this, appIdentifier, userId);
+            } catch (SQLException e) {
+                throw new StorageQueryException(e);
+            }
         } else if (className.equals(UserMetadataStorage.class.getName())) {
             JsonObject userMetadata = getUserMetadata(appIdentifier, userId);
             return userMetadata != null;
@@ -875,8 +872,7 @@ public class Start
             }
         } else if (className.equals(TOTPStorage.class.getName())) {
             try {
-                TOTPDevice[] devices = TOTPQueries.getDevices(this, appIdentifier, userId);
-                return devices.length > 0;
+                return TOTPQueries.doesUserHaveAnyDevice(this, appIdentifier, userId);
             } catch (SQLException e) {
                 throw new StorageQueryException(e);
             }
@@ -1888,6 +1884,16 @@ public class Start
     }
 
     @Override
+    public Map<Integer, Integer> countUsersActiveSinceGroupedByDay(AppIdentifier appIdentifier, long sinceTime,
+                                                                   long now) throws StorageQueryException {
+        try {
+            return ActiveUsersQueries.countUsersActiveSinceGroupedByDay(this, appIdentifier, sinceTime, now);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public void deleteUserActive_Transaction(TransactionConnection con, AppIdentifier appIdentifier, String userId)
             throws StorageQueryException {
         try {
@@ -2710,15 +2716,6 @@ public class Start
             StorageQueryException {
         try {
             return UserRolesQueries.getRolesForUser(this, tenantIdentifier, userId);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    private String[] getRolesForUser(AppIdentifier appIdentifier, String userId) throws
-            StorageQueryException {
-        try {
-            return UserRolesQueries.getRolesForUser(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -5136,6 +5133,17 @@ public class Start
         try {
             Connection sqlCon = (Connection) con.getConnection();
             WebAuthNQueries.updateCounter_Transaction(this, sqlCon, tenantIdentifier, credentialId, counter);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void removeOptions_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
+                                          String optionsId) throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            WebAuthNQueries.removeOptions_Transaction(this, sqlCon, tenantIdentifier, optionsId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
