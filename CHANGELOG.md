@@ -7,6 +7,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Fixes `isUserIdBeingUsedInNonAuthRecipe` to use O(1) existence probes (`SELECT 1 ... LIMIT 1`) for sessions,
+  user roles and TOTP devices instead of loading every matching row
+
 ## [9.5.6]
 
 - Adds `SKIP LOCKED` to the backfill batch locking query to improve performance

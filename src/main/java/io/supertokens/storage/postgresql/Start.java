@@ -644,15 +644,6 @@ public class Start
         }
     }
 
-    private String[] getAllNonExpiredSessionHandlesForUser(AppIdentifier appIdentifier, String userId)
-            throws StorageQueryException {
-        try {
-            return SessionQueries.getAllNonExpiredSessionHandlesForUser(this, appIdentifier, userId);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
     @Override
     public void deleteAllExpiredSessions() throws StorageQueryException {
         try {
@@ -2715,15 +2706,6 @@ public class Start
             StorageQueryException {
         try {
             return UserRolesQueries.getRolesForUser(this, tenantIdentifier, userId);
-        } catch (SQLException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
-    private String[] getRolesForUser(AppIdentifier appIdentifier, String userId) throws
-            StorageQueryException {
-        try {
-            return UserRolesQueries.getRolesForUser(this, appIdentifier, userId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
