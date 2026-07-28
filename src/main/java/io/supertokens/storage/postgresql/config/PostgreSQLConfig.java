@@ -33,6 +33,9 @@ import io.supertokens.storage.postgresql.annotations.*;
 
 import java.lang.reflect.Field;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -863,6 +866,21 @@ public class PostgreSQLConfig {
         return userPoolId.toString();
     }
 
+    private static String hashPassword(String password) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(password.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            // 12 hex chars (48 bits) is ample to keep distinct credentials in distinct pools
+            for (int i = 0; i < 6; i++) {
+                hex.append(String.format("%02x", hash[i]));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public String getConnectionPoolId() {
         StringBuilder connectionPoolId = new StringBuilder();
         for (Field field : PostgreSQLConfig.class.getDeclaredFields()) {
@@ -873,11 +891,12 @@ public class PostgreSQLConfig {
                     if (fieldValue == null) {
                         continue;
                     }
-                    // To ensure a unique connectionPoolId we include the database password and use the "|db_pass|"
-                    // identifier.
-                    // This facilitates easy removal of the password from logs when necessary.
+                    // The password must contribute to the uniqueness of the connectionPoolId, but must
+                    // never appear in it verbatim: this id becomes the HikariCP pool name, which is
+                    // included in Hikari log lines, exception messages and telemetry exports.
+                    // A hash preserves uniqueness without exposing the secret.
                     if (fieldName.equals("postgresql_password")) {
-                        connectionPoolId.append("|db_pass|" + fieldValue + "|db_pass");
+                        connectionPoolId.append("|db_pass|" + hashPassword(fieldValue) + "|db_pass");
                     } else {
                         connectionPoolId.append("|" + fieldValue);
                     }
