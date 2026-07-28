@@ -38,9 +38,38 @@ public class ActiveUsersQueries {
                 + Config.getConfig(start).getUserLastActiveTable() + "(app_id);";
     }
 
+    public static String getQueryToCreateAppIdLastActiveTimeIndexForUserLastActiveTable(Start start) {
+        // (app_id, last_active_time): the MAU queries filter on both columns; the time-leading
+        // index below cannot serve them, so they degrade to sequential scans.
+        return "CREATE INDEX IF NOT EXISTS user_last_active_app_id_last_active_time_index ON "
+                + Config.getConfig(start).getUserLastActiveTable() + "(app_id, last_active_time);";
+    }
+
     public static String getQueryToCreateLastActiveTimeIndexForUserLastActiveTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS user_last_active_last_active_time_index ON "
                 + Config.getConfig(start).getUserLastActiveTable() + "(last_active_time DESC, app_id DESC);";
+    }
+
+    public static Map<Integer, Integer> countUsersActiveSinceGroupedByDay(Start start, AppIdentifier appIdentifier,
+                                                                          long sinceTime, long now)
+            throws SQLException, StorageQueryException {
+        // One bounded pass instead of one COUNT(*) per threshold: bucket users by whole days since
+        // last activity. Callers rebuild the cumulative series in memory.
+        String QUERY = "SELECT FLOOR((? - last_active_time) / 86400000) AS days_ago, COUNT(*) AS c FROM "
+                + Config.getConfig(start).getUserLastActiveTable()
+                + " WHERE app_id = ? AND last_active_time >= ? GROUP BY days_ago";
+
+        return execute(start, QUERY, pst -> {
+            pst.setLong(1, now);
+            pst.setString(2, appIdentifier.getAppId());
+            pst.setLong(3, sinceTime);
+        }, result -> {
+            Map<Integer, Integer> buckets = new HashMap<>();
+            while (result.next()) {
+                buckets.put(result.getInt("days_ago"), result.getInt("c"));
+            }
+            return buckets;
+        });
     }
 
     public static int countUsersActiveSince(Start start, AppIdentifier appIdentifier, long sinceTime)

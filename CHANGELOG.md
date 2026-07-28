@@ -10,6 +10,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Fixes the raw database password being embedded verbatim in the HikariCP connection pool name (which is
   included in Hikari log lines, exception messages and telemetry exports): the pool id now uses a truncated
   SHA-256 hash of the password instead. Also masks the password on the OpenTelemetry log appender path.
+- Adds `countUsersActiveSinceGroupedByDay` (implements the new `ActiveUsersStorage` method): the MAU series is
+  now computed with a single bucketed query instead of one `COUNT(*)` per day threshold
+- Adds a composite `(app_id, last_active_time)` index on `user_last_active`, created on fresh databases and
+  backfilled (best-effort, outside the main DDL transaction) on databases provisioned before it existed
 
 ## [9.5.6]
 
