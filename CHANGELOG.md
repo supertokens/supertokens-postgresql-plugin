@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.6.0]
+
 - Fixes `isUserIdBeingUsedInNonAuthRecipe` to use O(1) existence probes (`SELECT 1 ... LIMIT 1`) for sessions,
   user roles and TOTP devices instead of loading every matching row
 - Fixes the raw database password being embedded verbatim in the HikariCP connection pool name (which is
