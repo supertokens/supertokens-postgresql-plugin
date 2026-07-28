@@ -256,6 +256,18 @@ public class UserRolesQueries {
         });
     }
 
+    public static boolean doesUserHaveAnyRole(Start start, AppIdentifier appIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+        // existence check only — see doesNonExpiredSessionExistForUser
+        String QUERY = "SELECT 1 FROM " + getConfig(start).getUserRolesTable()
+                + " WHERE app_id = ? AND user_id = ? LIMIT 1";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, ResultSet::next);
+    }
+
     public static String[] getRolesForUser(Start start, AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT role FROM " + getConfig(start).getUserRolesTable()
