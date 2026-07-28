@@ -395,6 +395,7 @@ public class GeneralQueries {
                     // Index
                     ddl.add(ActiveUsersQueries.getQueryToCreateAppIdIndexForUserLastActiveTable(start));
                     ddl.add(ActiveUsersQueries.getQueryToCreateLastActiveTimeIndexForUserLastActiveTable(start));
+                    ddl.add(ActiveUsersQueries.getQueryToCreateAppIdLastActiveTimeIndexForUserLastActiveTable(start));
                 }
 
                 // Backfill indexes for tables that ALREADY exist: the index DDL inside the blocks
@@ -835,7 +836,6 @@ public class GeneralQueries {
      * and committing makes the batch all-or-nothing; the existing retry-on-missing-schema
      * loop in {@link #createTablesIfNotExists} then sees a clean state to retry against.
      */
-
     private static void executeDDLBatch(Connection con, List<String> statements) throws SQLException {
         if (statements.isEmpty()) {
             return;

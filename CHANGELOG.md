@@ -7,6 +7,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Adds `countUsersActiveSinceGroupedByDay` (implements the new `ActiveUsersStorage` method): the MAU series is
+  now computed with a single bucketed query instead of one `COUNT(*)` per day threshold
+- Adds a composite `(app_id, last_active_time)` index on `user_last_active`, created on fresh databases and
+  backfilled (best-effort, outside the main DDL transaction) on databases provisioned before it existed
+
 ## [9.5.6]
 
 - Adds `SKIP LOCKED` to the backfill batch locking query to improve performance
