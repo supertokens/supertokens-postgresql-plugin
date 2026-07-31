@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Fixes activity log partition maintenance failing forever when rows for a not-yet-created month landed in the
+  DEFAULT partition (e.g. after the core was paused across a month boundary): the rows are now moved into the
+  newly created monthly partition, and DEFAULT rows older than the retention window are purged
+
 ## [9.6.0]
 
 - Fixes `isUserIdBeingUsedInNonAuthRecipe` to use O(1) existence probes (`SELECT 1 ... LIMIT 1`) for sessions,
