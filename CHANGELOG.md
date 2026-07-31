@@ -7,6 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Rewrites the migrated-schema paginated user listing (`getUsers_new`, plain and cursor variants) to stream
+  over the pagination indexes: instead of joining `app_id_to_user_id` to `recipe_user_tenants` and
+  `GROUP BY`-ing every user of the tenant before the `LIMIT` can apply, the two non-search variants now use
+  `SELECT DISTINCT ... WHERE EXISTS (...)`, moving the cursor filter from a `HAVING` on `MIN(...)` to a plain
+  indexable `WHERE`. Pagination cost now scales with page size instead of tenant size. Rows, ordering and
+  cursor semantics are unchanged (relies on the same per-group `primary_or_recipe_user_time_joined` invariant
+  the dashboard-search branch already depends on)
+
 ## [9.6.0]
 
 - Fixes `isUserIdBeingUsedInNonAuthRecipe` to use O(1) existence probes (`SELECT 1 ... LIMIT 1`) for sessions,
