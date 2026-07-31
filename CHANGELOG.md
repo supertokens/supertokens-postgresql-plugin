@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Fixes the reservation-table backfill getting stuck on users removed from all tenants: their `time_joined`
+  now falls back to the per-app recipe table instead of staying 0, which kept them permanently in the
+  pending set and looped the backfill cron forever
+
 ## [9.6.0]
 
 - Fixes `isUserIdBeingUsedInNonAuthRecipe` to use O(1) existence probes (`SELECT 1 ... LIMIT 1`) for sessions,
