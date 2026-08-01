@@ -254,6 +254,76 @@ public class MigratedUserCountTest {
     }
 
     /**
+     * The case that most directly exercises the {@code G} term: a linked group split across
+     * tenants. Link a group in the public tenant, then associate ONLY the member (not the primary)
+     * into t1. In t1 the member contributes {@code D=1} and {@code L=1} (it is linked), so the
+     * whole count of the group in t1 rests entirely on {@code G} finding the {@code (t1, primary)}
+     * {@code primary_user_tenants} reservation row that {@code addTenantIdToPrimaryUser_Transaction}
+     * writes when a linked member is added to a tenant. This is exactly where {@code D - L + G}
+     * would diverge from the old join + GROUP BY if the presence invariant were ever off. Both
+     * tenants must count the group exactly once; each count is cross-checked against its listing
+     * length (the independent oracle). Run under both read-from-new migration modes.
+     */
+    @Test
+    public void testLinkedGroupSplitAcrossTenants() throws Exception {
+        for (MigrationMode mode : new MigrationMode[]{MigrationMode.MIGRATED, MigrationMode.DUAL_WRITE_READ_NEW}) {
+            TestingProcessManager.TestingProcess process = startProcess();
+            try {
+                Main main = process.getProcess();
+                if (StorageLayer.getStorage(main).getType() != STORAGE_TYPE.SQL) return;
+
+                // Create t1 before capturing the storage handle: addNewOrUpdateAppOrTenant reloads the
+                // storage layer, so a handle captured earlier would go stale (see
+                // testMultiTenantCountAndDisassociation).
+                TenantIdentifier publicTenant = ResourceDistributor.getAppForTesting();
+                TenantIdentifier t1 = new TenantIdentifier(null, null, "t1");
+                Multitenancy.addNewOrUpdateAppOrTenant(main, new TenantConfig(
+                        t1,
+                        new EmailPasswordConfig(true),
+                        new ThirdPartyConfig(true, null),
+                        new PasswordlessConfig(true),
+                        null, null, new JsonObject()
+                ), false);
+
+                Start storage = (Start) StorageLayer.getStorage(main);
+                Config.getConfig(storage).setMigrationModeForTesting(mode);
+                Storage t1Storage = StorageLayer.getStorage(t1, main);
+
+                // A linked group in public: primary P + a second login method m linked into it.
+                AuthRecipeUserInfo gPrimary = signUp(main, "split-primary-" + mode + "@test.com");
+                AuthRecipeUserInfo gMember = signUp(main, "split-member-" + mode + "@test.com");
+                String memberRecipeUserId = gMember.getSupertokensUserId();
+                AuthRecipe.createPrimaryUser(main, gPrimary.getSupertokensUserId());
+                AuthRecipe.linkAccounts(main, memberRecipeUserId, gPrimary.getSupertokensUserId());
+
+                // A plain singleton that stays in public only, so the public count is a non-trivial 2.
+                signUp(main, "split-singleton-" + mode + "@test.com");
+
+                // Associate ONLY the member into t1 (the primary is never added to t1). This writes the
+                // member's recipe_user_tenants row for t1 AND the (t1, P) primary_user_tenants reservation
+                // that the G term relies on.
+                Multitenancy.addUserIdToTenant(main, t1, t1Storage, memberRecipeUserId);
+
+                // public: linked group (once) + singleton = 2.
+                assertEquals("public counts the split group once (" + mode + ")", 2,
+                        tenantCount(publicTenant, storage));
+                assertEquals("public count == public listing (" + mode + ")",
+                        tenantListingLength(publicTenant, storage), tenantCount(publicTenant, storage));
+
+                // t1: only the member is present (D=1, L=1); the group must still count once, restored
+                // entirely by the G term's (t1, P) reservation row.
+                assertEquals("t1 counts the split group once via G (" + mode + ")", 1,
+                        tenantCount(t1, storage));
+                assertEquals("t1 count == t1 listing (" + mode + ")",
+                        tenantListingLength(t1, storage), tenantCount(t1, storage));
+            } finally {
+                process.kill();
+                assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+            }
+        }
+    }
+
+    /**
      * Equivalence on randomized seeded data: a mix of singletons, linked groups, singleton
      * primaries and both auth recipes, then assert the rewritten count equals the independent
      * listing length (and the app-scoped streaming count matches, since every user lives in the
