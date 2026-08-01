@@ -28,6 +28,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **Operators of very large deployments should pre-create these three indexes with
   `CREATE INDEX CONCURRENTLY` before upgrading**, so the startup DDL is a no-op and does not hold a table lock
   during a long index build.
+- Adds `MigratedUserScaleRegressionTest`: plan-shape regression tests over a ~200k-user fixture seeded directly
+  with SQL, asserting on `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` that the rewritten pagination feeds only a
+  small multiple of the page size into its top `Unique` node (vs the old query aggregating the whole tenant)
+  and that the `D - L + G` and app-scoped counts write zero temp blocks and use no `HashAggregate` / `Hash Join`
+  at `work_mem = 64kB` (vs the old join + `GROUP BY` spilling), plus new-vs-old result equality. Heavy fixture;
+  runs in CI, skippable locally via `SKIP_SCALE_REGRESSION_TESTS=true`
 
 ## [9.6.0]
 
