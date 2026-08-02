@@ -3913,6 +3913,17 @@ public class Start
     }
 
     @Override
+    public void updateTimeJoinedForPrimaryUsers_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                            List<String> primaryUserIds) throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            GeneralQueries.updateTimeJoinedForPrimaryUsers_Transaction(this, sqlCon, appIdentifier, primaryUserIds);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public boolean doesUserIdExist_Transaction(TransactionConnection con, AppIdentifier appIdentifier,
                                                String externalUserId) throws StorageQueryException {
         try {

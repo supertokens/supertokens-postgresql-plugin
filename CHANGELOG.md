@@ -7,6 +7,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.6.1]
+
+- Implements the new plugin-interface `updateTimeJoinedForPrimaryUsers_Transaction` method (delegating to the
+  existing batch `GeneralQueries.updateTimeJoinedForPrimaryUsers_Transaction`), so callers such as bulk import
+  can normalize `primary_or_recipe_user_time_joined` to the group minimum after inserting linked members —
+  restoring the linked-group invariant that user-list pagination depends on
+
 ## [9.6.0]
 
 - Fixes `isUserIdBeingUsedInNonAuthRecipe` to use O(1) existence probes (`SELECT 1 ... LIMIT 1`) for sessions,
