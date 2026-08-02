@@ -3913,6 +3913,19 @@ public class Start
     }
 
     @Override
+    public void updateTimeJoinedForPrimaryUsers_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                            List<String> primaryUserIds) throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            // The internal query batch-normalizes primary_or_recipe_user_time_joined to the group MIN across
+            // every table carrying the column, respecting the storage's migration-mode branching.
+            GeneralQueries.updateTimeJoinedForPrimaryUsers_Transaction(this, sqlCon, appIdentifier, primaryUserIds);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public boolean doesUserIdExist_Transaction(TransactionConnection con, AppIdentifier appIdentifier,
                                                String externalUserId) throws StorageQueryException {
         try {
