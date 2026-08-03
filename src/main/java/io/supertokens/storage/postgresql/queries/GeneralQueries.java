@@ -306,6 +306,17 @@ public class GeneralQueries {
                 + Config.getConfig(start).getAppIdToUserIdTable() + "(user_id, app_id);";
     }
 
+    // Backs the "L" term of the per-tenant user-count decomposition (count = D - L + G, documented
+    // in full in getUsersCount_new below): L is how many of the tenant's distinct recipe users are
+    // linked-or-a-primary. This index is a covering companion to the (app_id, user_id) PK so the
+    // is_linked_or_is_a_primary_user flag lookup for each recipe user of the tenant is index-only,
+    // never touching the heap.
+    static String getQueryToCreateLinkedFlagIndexForAppIdToUserIdTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS app_id_to_user_id_linked_flag_index ON "
+                + Config.getConfig(start).getAppIdToUserIdTable()
+                + "(app_id, user_id, is_linked_or_is_a_primary_user);";
+    }
+
     static String getQueryToCreateAppIdToUserIdPaginationIndex1(Start start) {
         return "CREATE INDEX IF NOT EXISTS app_id_to_user_id_pagination_index1 ON "
                 + Config.getConfig(start).getAppIdToUserIdTable()
@@ -369,6 +380,7 @@ public class GeneralQueries {
                     ddl.add(getQueryToCreateAppIdIndexForAppIdToUserIdTable(start));
                     ddl.add(getQueryToCreatePrimaryUserIdIndexForAppIdToUserIdTable(start));
                     ddl.add(getQueryToCreateUserIdIndexForAppIdToUserIdTable(start));
+                    ddl.add(getQueryToCreateLinkedFlagIndexForAppIdToUserIdTable(start));
                     ddl.add(getQueryToCreateAppIdToUserIdPaginationIndex1(start));
                     ddl.add(getQueryToCreateAppIdToUserIdPaginationIndex2(start));
                     ddl.add(getQueryToCreateAppIdToUserIdPaginationIndex3(start));
@@ -412,6 +424,22 @@ public class GeneralQueries {
                 if (doesTableExists(existingTables, Config.getConfig(start).getUserLastActiveTable())) {
                     backfillIndexDdl.add(
                             ActiveUsersQueries.getQueryToCreateAppIdLastActiveTimeIndexForUserLastActiveTable(start));
+                }
+
+                // Indexes backing the spill-free per-tenant user count (getUsersCount_new's D - L + G
+                // decomposition) and the streaming app-scoped count. Additive and idempotent; on large
+                // deployments operators should pre-create them with CREATE INDEX CONCURRENTLY before
+                // upgrading so this startup DDL is a no-op (see CHANGELOG).
+                if (doesTableExists(existingTables, Config.getConfig(start).getRecipeUserTenantsTable())) {
+                    backfillIndexDdl.add(
+                            AccountInfoQueries.getQueryToCreateTenantRecipeUserIndexForRecipeUserTenantsTable(start));
+                }
+                if (doesTableExists(existingTables, Config.getConfig(start).getAppIdToUserIdTable())) {
+                    backfillIndexDdl.add(getQueryToCreateLinkedFlagIndexForAppIdToUserIdTable(start));
+                }
+                if (doesTableExists(existingTables, Config.getConfig(start).getPrimaryUserTenantsTable())) {
+                    backfillIndexDdl.add(
+                            AccountInfoQueries.getQueryToCreateTenantPrimaryUserIndexForPrimaryUserTenantsTable(start));
                 }
 
                 if (!doesTableExists(existingTables, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
@@ -785,6 +813,7 @@ public class GeneralQueries {
                     ddl.add(AccountInfoQueries.getQueryToCreateRecipeUserIdIndexForRecipeUserTenantsTable(start));
                     ddl.add(AccountInfoQueries.getQueryToCreateRecipeUserIdIndexForRecipeUserAccountInfoTable(start));
                     ddl.add(AccountInfoQueries.getQueryToCreateAccountInfoIndexForRecipeUserTenantsTable(start));
+                    ddl.add(AccountInfoQueries.getQueryToCreateTenantRecipeUserIndexForRecipeUserTenantsTable(start));
                 }
 
                 if (!doesTableExists(existingTables, Config.getConfig(start).getPrimaryUserTenantsTable())) {
@@ -793,6 +822,7 @@ public class GeneralQueries {
 
                     // indexes
                     ddl.add(AccountInfoQueries.getQueryToCreatePrimaryUserIndexForPrimaryUserTenantsTable(start));
+                    ddl.add(AccountInfoQueries.getQueryToCreateTenantPrimaryUserIndexForPrimaryUserTenantsTable(start));
                 }
 
                 if (!doesTableExists(existingTables, Config.getConfig(start).getActivityLogTable())) {
@@ -1082,30 +1112,56 @@ public class GeneralQueries {
 
     private static long getUsersCount_new(Start start, AppIdentifier appIdentifier, RECIPE_ID[] includeRecipeIds)
             throws SQLException, StorageQueryException {
+        if (includeRecipeIds != null && includeRecipeIds.length > 0) {
+            // Recipe-filtered variant (rare path): keep the existing GROUP BY over the filtered rows.
+            return getUsersCountByRecipe_new(start, appIdentifier, includeRecipeIds);
+        }
+
+        // Unfiltered app-scoped count. Grouping by (primary_or_recipe_user_time_joined,
+        // primary_or_recipe_user_id) instead of the id alone lets the aggregate stream straight off
+        // app_id_to_user_id_pagination_index2 (app_id, primary_or_recipe_user_time_joined,
+        // primary_or_recipe_user_id) as a GroupAggregate - no hash-aggregate, no temp spill. The
+        // count is unchanged because every row of a linked group carries the same
+        // primary_or_recipe_user_time_joined (invariant I6), so distinct (time, id) pairs are in
+        // one-to-one correspondence with distinct primary ids.
+        String QUERY = "SELECT COUNT(*) AS total FROM ("
+                + "SELECT primary_or_recipe_user_time_joined, primary_or_recipe_user_id FROM "
+                + getConfig(start).getAppIdToUserIdTable()
+                + " WHERE app_id = ? GROUP BY 1, 2) AS uniq_users";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+        }, result -> {
+            if (result.next()) {
+                return result.getLong("total");
+            }
+            return 0L;
+        });
+    }
+
+    private static long getUsersCountByRecipe_new(Start start, AppIdentifier appIdentifier,
+                                                  RECIPE_ID[] includeRecipeIds)
+            throws SQLException, StorageQueryException {
         StringBuilder QUERY = new StringBuilder(
                 "SELECT COUNT(*) AS total FROM (");
         QUERY.append("SELECT primary_or_recipe_user_id FROM " + getConfig(start).getAppIdToUserIdTable());
         QUERY.append(" WHERE app_id = ?");
-        if (includeRecipeIds != null && includeRecipeIds.length > 0) {
-            QUERY.append(" AND recipe_id IN (");
-            for (int i = 0; i < includeRecipeIds.length; i++) {
-                QUERY.append("?");
-                if (i != includeRecipeIds.length - 1) {
-                    // not the last element
-                    QUERY.append(",");
-                }
+        QUERY.append(" AND recipe_id IN (");
+        for (int i = 0; i < includeRecipeIds.length; i++) {
+            QUERY.append("?");
+            if (i != includeRecipeIds.length - 1) {
+                // not the last element
+                QUERY.append(",");
             }
-            QUERY.append(")");
         }
+        QUERY.append(")");
         QUERY.append(" GROUP BY primary_or_recipe_user_id) AS uniq_users");
 
         return execute(start, QUERY.toString(), pst -> {
             pst.setString(1, appIdentifier.getAppId());
-            if (includeRecipeIds != null) {
-                for (int i = 0; i < includeRecipeIds.length; i++) {
-                    // i+2 cause this starts with 1 and not 0, and 1 is appId
-                    pst.setString(i + 2, includeRecipeIds[i].toString());
-                }
+            for (int i = 0; i < includeRecipeIds.length; i++) {
+                // i+2 cause this starts with 1 and not 0, and 1 is appId
+                pst.setString(i + 2, includeRecipeIds[i].toString());
             }
         }, result -> {
             if (result.next()) {
@@ -1160,33 +1216,93 @@ public class GeneralQueries {
 
     private static long getUsersCount_new(Start start, TenantIdentifier tenantIdentifier, RECIPE_ID[] includeRecipeIds)
             throws SQLException, StorageQueryException {
+        if (includeRecipeIds != null && includeRecipeIds.length > 0) {
+            // Recipe-filtered variant (rare path): keep the existing join + GROUP BY, which the new
+            // indexes do not cover (they carry no recipe_id).
+            return getUsersCountByRecipe_new(start, tenantIdentifier, includeRecipeIds);
+        }
+
+        // Unfiltered per-tenant count via the D - L + G decomposition (PLAN-005 N4). Each term is an
+        // index-only streaming computation, so we never build the tenant-wide hash aggregate that the
+        // old join + GROUP BY spilled on for large tenants:
+        //
+        //   D = distinct recipe users in the tenant
+        //   L = of those, how many are linked-or-a-primary (i.e. members of a linked group)
+        //   G = distinct primary users (groups) with at least one member in the tenant
+        //
+        //   count(tenant) = D - L + G
+        //
+        // An unlinked recipe user contributes +1 via D (not in L, not in G). Every member of a linked
+        // group (and a singleton primary) cancels out of D - L and the group is restored exactly once
+        // by G. This does NOT rely on invariant I6 - it leans only on the primary_user_tenants
+        // per-tenant presence invariant (a group has rows in exactly the tenants it is present in),
+        // which is the table's linking-conflict reservation purpose.
+
+        // D and L in one merge-join pass; both inputs are index-only and pre-sorted on recipe_user_id
+        // (idx_recipe_user_tenants_tenant_recipe_user and the app_id_to_user_id PK /
+        // app_id_to_user_id_linked_flag_index covering companion).
+        String QUERY_DL = "SELECT COUNT(*) AS d,"
+                + " COUNT(*) FILTER (WHERE a.is_linked_or_is_a_primary_user) AS l"
+                + " FROM (SELECT DISTINCT recipe_user_id FROM " + getConfig(start).getRecipeUserTenantsTable()
+                + " WHERE app_id = ? AND tenant_id = ?) r"
+                + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " a"
+                + " ON a.app_id = ? AND a.user_id = r.recipe_user_id";
+
+        long[] dl = execute(start, QUERY_DL, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, tenantIdentifier.getAppId());
+        }, result -> {
+            if (result.next()) {
+                return new long[]{result.getLong("d"), result.getLong("l")};
+            }
+            return new long[]{0L, 0L};
+        });
+
+        // G: streaming distinct off idx_primary_user_tenants_tenant_primary.
+        String QUERY_G = "SELECT COUNT(*) AS g FROM ("
+                + "SELECT DISTINCT primary_user_id FROM " + getConfig(start).getPrimaryUserTenantsTable()
+                + " WHERE app_id = ? AND tenant_id = ?) g";
+
+        long g = execute(start, QUERY_G, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+        }, result -> {
+            if (result.next()) {
+                return result.getLong("g");
+            }
+            return 0L;
+        });
+
+        return dl[0] - dl[1] + g;
+    }
+
+    private static long getUsersCountByRecipe_new(Start start, TenantIdentifier tenantIdentifier,
+                                                  RECIPE_ID[] includeRecipeIds)
+            throws SQLException, StorageQueryException {
         StringBuilder QUERY = new StringBuilder(
                 "SELECT COUNT(*) AS total FROM (");
         QUERY.append("SELECT auid.primary_or_recipe_user_id FROM " + getConfig(start).getRecipeUserTenantsTable() + " rut");
         QUERY.append(" JOIN " + getConfig(start).getAppIdToUserIdTable() + " auid ON rut.app_id = auid.app_id AND rut.recipe_user_id = auid.user_id");
         QUERY.append(" WHERE rut.app_id = ? AND rut.tenant_id = ?");
-        if (includeRecipeIds != null && includeRecipeIds.length > 0) {
-            QUERY.append(" AND rut.recipe_id IN (");
-            for (int i = 0; i < includeRecipeIds.length; i++) {
-                QUERY.append("?");
-                if (i != includeRecipeIds.length - 1) {
-                    // not the last element
-                    QUERY.append(",");
-                }
+        QUERY.append(" AND rut.recipe_id IN (");
+        for (int i = 0; i < includeRecipeIds.length; i++) {
+            QUERY.append("?");
+            if (i != includeRecipeIds.length - 1) {
+                // not the last element
+                QUERY.append(",");
             }
-            QUERY.append(")");
         }
+        QUERY.append(")");
 
         QUERY.append(" GROUP BY auid.primary_or_recipe_user_id) AS uniq_users");
 
         return execute(start, QUERY.toString(), pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
-            if (includeRecipeIds != null) {
-                for (int i = 0; i < includeRecipeIds.length; i++) {
-                    // i+3 cause this starts with 1 and not 0, and 1 is appId, 2 is tenantId
-                    pst.setString(i + 3, includeRecipeIds[i].toString());
-                }
+            for (int i = 0; i < includeRecipeIds.length; i++) {
+                // i+3 cause this starts with 1 and not 0, and 1 is appId, 2 is tenantId
+                pst.setString(i + 3, includeRecipeIds[i].toString());
             }
         }, result -> {
             if (result.next()) {

@@ -14,6 +14,27 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   indexable `WHERE`. Pagination cost now scales with page size instead of tenant size. Rows, ordering and
   cursor semantics are unchanged (relies on the same per-group `primary_or_recipe_user_time_joined` invariant
   the dashboard-search branch already depends on)
+- Rewrites the migrated-schema unfiltered per-tenant user count (`getUsersCount_new`) to avoid the
+  tenant-wide hash-aggregating join that spilled to disk on very large tenants. The count is now computed as
+  the `D - L + G` decomposition (distinct recipe users in the tenant, minus those that are linked-or-primary,
+  plus the distinct primary users present in the tenant), where each term is an index-only streaming scan
+  over one of the three additive indexes noted in the Migration section below. The unfiltered app-scoped
+  count now streams a `GROUP BY (primary_or_recipe_user_time_joined, primary_or_recipe_user_id)` off
+  `app_id_to_user_id_pagination_index2` instead of hash-aggregating. Counts are unchanged; the
+  recipe-id-filtered variants keep their existing queries.
+
+### Migration
+
+Adds three additive indexes, created on fresh databases and backfilled on existing ones at startup via
+`CREATE INDEX IF NOT EXISTS`:
+
+- `idx_recipe_user_tenants_tenant_recipe_user` on `recipe_user_tenants (app_id, tenant_id, recipe_user_id)`
+- `app_id_to_user_id_linked_flag_index` on `app_id_to_user_id (app_id, user_id, is_linked_or_is_a_primary_user)`
+- `idx_primary_user_tenants_tenant_primary` on `primary_user_tenants (app_id, tenant_id, primary_user_id)`
+
+No table or column changes. **Operators of very large deployments should pre-create these three indexes with
+`CREATE INDEX CONCURRENTLY` before upgrading**, so the startup DDL is a no-op and does not hold a table lock
+during a long index build.
 
 ## [9.6.0]
 
