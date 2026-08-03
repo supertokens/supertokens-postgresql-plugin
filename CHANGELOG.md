@@ -7,6 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+
 ## [9.6.1]
 
 - Implements `updateTimeJoinedForPrimaryUsers_Transaction` (new in plugin-interface `8.7.1`) by delegating to
@@ -14,6 +15,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   minimum across every table carrying the column (respecting migration-mode branching). This lets callers that
   insert linked members without normalizing — notably bulk import — restore the invariant that user-list
   pagination relies on.
+- Fixes the reservation-table backfill getting stuck on users removed from all tenants: their `time_joined`
+  now falls back to the per-app recipe table instead of staying 0, which kept them permanently in the
+  pending set and looped the backfill cron forever
 
 ## [9.6.0]
 
