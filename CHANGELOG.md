@@ -45,11 +45,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Migration
 
 Adds three additive indexes, created on fresh databases and backfilled on existing ones at startup via
-`CREATE INDEX IF NOT EXISTS`:
 
-- `idx_recipe_user_tenants_tenant_recipe_user` on `recipe_user_tenants (app_id, tenant_id, recipe_user_id)`
-- `app_id_to_user_id_linked_flag_index` on `app_id_to_user_id (app_id, user_id, is_linked_or_is_a_primary_user)`
-- `idx_primary_user_tenants_tenant_primary` on `primary_user_tenants (app_id, tenant_id, primary_user_id)`
+``` sql
+
+CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_tenant_recipe_user on recipe_user_tenants (app_id, tenant_id, 
+recipe_user_id);
+
+CREATE INDEX IF NOT EXISTS app_id_to_user_id_linked_flag_index on app_id_to_user_id (app_id, user_id, 
+is_linked_or_is_a_primary_user);
+
+CREATE INDEX IF NOT EXISTS idx_primary_user_tenants_tenant_primary on primary_user_tenants (app_id, tenant_id, 
+primary_user_id);
+
+```
 
 No table or column changes. **Operators of very large deployments should pre-create these three indexes with
 `CREATE INDEX CONCURRENTLY` before upgrading**, so the startup DDL is a no-op and does not hold a table lock
