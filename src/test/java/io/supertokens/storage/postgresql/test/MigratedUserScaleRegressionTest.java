@@ -173,8 +173,28 @@ public class MigratedUserScaleRegressionTest {
                 try {
                     // New per-tenant count: D - L in one merge pass, G a streaming Unique. Both must be
                     // spill-free and hash-free even at 64kB.
-                    JsonObject dlPlan = explain(con, tenantCountDL(auid, rut, appId, tenantId));
-                    assertSpillFreeAndHashFree("per-tenant D - L", dlPlan);
+                    // The plugin runs the D - L statement with hash joins disabled for the
+                    // statement's own transaction (GeneralQueries.executeWithHashJoinDisabled) so the
+                    // plan is always the streaming merge join over the pre-sorted indexes, never the
+                    // hash join that spills once the planner's row estimates drift at scale. Assert
+                    // the guarded plan is exactly that: a spill-free, hash-free merge join at 64kB.
+                    JsonObject dlPlan = explainWithLocalSettings(con, tenantCountDL(auid, rut, appId, tenantId),
+                            "SET LOCAL enable_hashjoin = off");
+                    assertSpillFreeAndHashFree("per-tenant D - L (hash joins disabled, as the plugin runs it)",
+                            dlPlan);
+                    assertTrue("per-tenant D - L must plan as a streaming Merge Join under the guard",
+                            containsMergeJoin(dlPlan));
+
+                    // Teeth: strip the guard and push the planner onto the hash join (what stale
+                    // estimates do at production scale) and the same query spills temp to disk at
+                    // work_mem=64kB - the multi-GB spill the guard exists to prevent. This makes the
+                    // guard load-bearing: without enable_hashjoin=off the assertion above would not hold.
+                    JsonObject dlHashed = explainWithLocalSettings(con, tenantCountDL(auid, rut, appId, tenantId),
+                            "SET LOCAL enable_mergejoin = off", "SET LOCAL enable_nestloop = off");
+                    assertTrue("teeth: the forced hash-join D - L must spill at work_mem=64kB "
+                                    + "(temp=" + sumTempWritten(dlHashed) + ", hash=" + containsHash(dlHashed) + ")",
+                            containsHash(dlHashed) && sumTempWritten(dlHashed) > 0);
+
                     JsonObject gPlan = explain(con, tenantCountG(put, appId, tenantId));
                     assertSpillFreeAndHashFree("per-tenant G", gPlan);
 
@@ -402,6 +422,25 @@ public class MigratedUserScaleRegressionTest {
         }
     }
 
+    // EXPLAIN a query with one or more transaction-local planner settings applied first (SET LOCAL),
+    // mirroring how GeneralQueries wraps the D - L statement. The settings are discarded on rollback,
+    // so the session-level work_mem set by the caller is untouched.
+    private JsonObject explainWithLocalSettings(Connection con, String sql, String... settings) throws Exception {
+        boolean prevAutoCommit = con.getAutoCommit();
+        con.setAutoCommit(false);
+        try {
+            try (Statement st = con.createStatement()) {
+                for (String setting : settings) {
+                    st.execute(setting);
+                }
+            }
+            return explain(con, sql);
+        } finally {
+            con.rollback();
+            con.setAutoCommit(prevAutoCommit);
+        }
+    }
+
     // Rows flowing INTO the topmost grouping node (Unique for DISTINCT, Aggregate for GROUP BY) —
     // i.e. the sum of that node's children's actual output rows.
     private double rowsIntoTopGroupingNode(JsonObject node) {
@@ -426,6 +465,16 @@ public class MigratedUserScaleRegressionTest {
             total += sumTempWritten(child);
         }
         return total;
+    }
+
+    private boolean containsMergeJoin(JsonObject node) {
+        if (node.get("Node Type").getAsString().equals("Merge Join")) {
+            return true;
+        }
+        for (JsonObject child : children(node)) {
+            if (containsMergeJoin(child)) return true;
+        }
+        return false;
     }
 
     private boolean containsHash(JsonObject node) {

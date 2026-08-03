@@ -19,6 +19,7 @@ package io.supertokens.storage.postgresql.queries;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import io.supertokens.storage.postgresql.output.Logging;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -48,6 +49,7 @@ import io.supertokens.pluginInterface.useridmapping.LockedUser;
 import io.supertokens.pluginInterface.opentelemetry.WithinOtelSpan;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
+import io.supertokens.storage.postgresql.ResultSetValueExtractor;
 import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
 import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.CREATING_NEW_TABLE;
 import static io.supertokens.storage.postgresql.ProcessState.getInstance;
@@ -1238,9 +1240,19 @@ public class GeneralQueries {
         // per-tenant presence invariant (a group has rows in exactly the tenants it is present in),
         // which is the table's linking-conflict reservation purpose.
 
-        // D and L in one merge-join pass; both inputs are index-only and pre-sorted on recipe_user_id
-        // (idx_recipe_user_tenants_tenant_recipe_user and the app_id_to_user_id PK /
+        // D and L in one streaming merge-join pass; both inputs are index-only and pre-sorted on
+        // recipe_user_id (idx_recipe_user_tenants_tenant_recipe_user and the app_id_to_user_id PK /
         // app_id_to_user_id_linked_flag_index covering companion).
+        //
+        // The plan MUST stay a merge join. If the planner instead hash-joins, it builds a hash table
+        // over the app-wide app_id_to_user_id side (millions of rows on large deployments); that
+        // exceeds work_mem and spills gigabytes of temp to disk - the exact failure the D - L + G
+        // decomposition was designed to avoid. The count is correct either way; this is purely a
+        // plan/resource problem, and it cannot be left to estimate luck: the hash plan wins whenever
+        // the row estimates drift (e.g. autoanalyze lag right after a large import). So we disable
+        // hash joins for just this statement (executeWithHashJoinDisabled). The planner is still free
+        // to pick a nested loop for genuinely small tenants - both remaining plans stream over the
+        // pre-sorted indexes and never spill.
         String QUERY_DL = "SELECT COUNT(*) AS d,"
                 + " COUNT(*) FILTER (WHERE a.is_linked_or_is_a_primary_user) AS l"
                 + " FROM (SELECT DISTINCT recipe_user_id FROM " + getConfig(start).getRecipeUserTenantsTable()
@@ -1248,7 +1260,7 @@ public class GeneralQueries {
                 + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " a"
                 + " ON a.app_id = ? AND a.user_id = r.recipe_user_id";
 
-        long[] dl = execute(start, QUERY_DL, pst -> {
+        long[] dl = executeWithHashJoinDisabled(start, QUERY_DL, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, tenantIdentifier.getAppId());
@@ -1275,6 +1287,33 @@ public class GeneralQueries {
         });
 
         return dl[0] - dl[1] + g;
+    }
+
+    // Runs a read-only query with hash joins disabled for the duration of the statement's own
+    // transaction, forcing the planner onto a streaming merge join (or a nested loop for small
+    // inputs) over pre-sorted index scans rather than a hash join whose build side can overflow
+    // work_mem and spill to disk. SET LOCAL is scoped to the transaction and reverts on COMMIT, so
+    // the pooled connection is handed back with its normal planner settings and autocommit state.
+    private static <T> T executeWithHashJoinDisabled(Start start, String QUERY,
+            PreparedStatementValueSetter setter, ResultSetValueExtractor<T> mapper)
+            throws SQLException, StorageQueryException {
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            boolean prevAutoCommit = con.getAutoCommit();
+            con.setAutoCommit(false);
+            try {
+                try (Statement st = con.createStatement()) {
+                    st.execute("SET LOCAL enable_hashjoin = off");
+                }
+                T result = execute(con, QUERY, setter, mapper);
+                con.commit();
+                return result;
+            } catch (SQLException | StorageQueryException | RuntimeException e) {
+                con.rollback();
+                throw e;
+            } finally {
+                con.setAutoCommit(prevAutoCommit);
+            }
+        }
     }
 
     private static long getUsersCountByRecipe_new(Start start, TenantIdentifier tenantIdentifier,

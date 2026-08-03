@@ -7,6 +7,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Pins the migrated-schema per-tenant user count's `D - L` statement (`getUsersCount_new`) to its
+  intended streaming merge join by disabling hash joins for that statement's transaction
+  (`SET LOCAL enable_hashjoin = off`). Both join inputs are already index-only and pre-sorted on
+  `recipe_user_id`, but the planner would flip to a hash join whenever its row estimates drifted
+  (e.g. autoanalyze lag right after a large import), building a hash over the app-wide
+  `app_id_to_user_id` and spilling gigabytes of temp to disk under a normal `work_mem`. The count
+  result is unchanged; this only removes the plan/resource regression. `enable_hashjoin = off` still
+  lets the planner pick a nested loop for small tenants, and `SET LOCAL` reverts on commit so the
+  pooled connection is unaffected
+
 ## [9.6.1]
 
 - Implements `updateTimeJoinedForPrimaryUsers_Transaction` (new in plugin-interface `8.7.1`) by delegating to
