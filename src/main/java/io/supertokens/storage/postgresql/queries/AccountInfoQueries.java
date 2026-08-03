@@ -152,9 +152,10 @@ public class AccountInfoQueries {
                 + "(app_id, tenant_id, account_info_type, account_info_value);";
     }
 
-    // Backs the D term of the per-tenant user count (GeneralQueries.getUsersCount_new): a
-    // streaming, index-only DISTINCT of the recipe users of a tenant, pre-sorted by
-    // recipe_user_id so the join to app_id_to_user_id is a merge join with no hash/spill.
+    // Backs the "D" term of the per-tenant user-count decomposition (count = D - L + G, documented
+    // in full in GeneralQueries.getUsersCount_new): D is the count of distinct recipe users in a
+    // tenant. This index makes that a streaming, index-only DISTINCT pre-sorted by recipe_user_id,
+    // so the join to app_id_to_user_id is a merge join with no hash/spill.
     static String getQueryToCreateTenantRecipeUserIndexForRecipeUserTenantsTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_tenant_recipe_user ON "
                 + Config.getConfig(start).getRecipeUserTenantsTable() + "(app_id, tenant_id, recipe_user_id);";
@@ -165,9 +166,10 @@ public class AccountInfoQueries {
                 + Config.getConfig(start).getPrimaryUserTenantsTable() + "(primary_user_id);";
     }
 
-    // Backs the G term of the per-tenant user count (GeneralQueries.getUsersCount_new): the
-    // distinct primary users present in a tenant, computed as a streaming Unique straight off
-    // this index with no heap access.
+    // Backs the "G" term of the per-tenant user-count decomposition (count = D - L + G, documented
+    // in full in GeneralQueries.getUsersCount_new): G is the count of distinct primary users
+    // present in a tenant, computed as a streaming Unique straight off this index with no heap
+    // access.
     static String getQueryToCreateTenantPrimaryUserIndexForPrimaryUserTenantsTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS idx_primary_user_tenants_tenant_primary ON "
                 + Config.getConfig(start).getPrimaryUserTenantsTable() + "(app_id, tenant_id, primary_user_id);";

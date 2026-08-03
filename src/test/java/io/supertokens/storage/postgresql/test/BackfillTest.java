@@ -161,6 +161,83 @@ public class BackfillTest {
         }
     }
 
+    /**
+     * A user removed from every tenant has no rows left in all_auth_recipe_users — only in the
+     * per-app recipe table. The backfill used to COALESCE their time_joined back to 0, keeping
+     * them in the pending set forever and wedging the backfill cron in an endless batch loop.
+     * It must fall back to the recipe table's time_joined and complete.
+     */
+    @Test
+    public void backfillCompletesForUsersRemovedFromAllTenants() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        try {
+            Main main = process.getProcess();
+            if (StorageLayer.getStorage(main).getType() != STORAGE_TYPE.SQL) {
+                return;
+            }
+
+            Start storage = (Start) StorageLayer.getStorage(main);
+            MigrationBackfillStorage backfillStorage = (MigrationBackfillStorage) storage;
+            AppIdentifier appIdentifier = new AppIdentifier(null, null);
+
+            AuthRecipeUserInfo user = EmailPassword.signUp(main, "tenantless@example.com", "password123");
+            String userId = user.getSupertokensUserId();
+
+            simulateLegacyState(storage, userId);
+
+            // Remove the user from every tenant: only the per-app recipe table row remains.
+            storage.startTransaction(con -> {
+                Connection sqlCon = (Connection) con.getConnection();
+                try (Statement stmt = sqlCon.createStatement()) {
+                    stmt.executeUpdate("DELETE FROM " + Config.getConfig(storage).getUsersTable()
+                            + " WHERE user_id = '" + userId + "'");
+                }
+                return null;
+            });
+
+            assertEquals(1, backfillStorage.getBackfillPendingUsersCount(appIdentifier));
+
+            int processed = backfillStorage.backfillUsersBatch(appIdentifier, 100);
+            assertEquals(1, processed);
+
+            // Previously the user stayed pending forever.
+            assertEquals(0, backfillStorage.getBackfillPendingUsersCount(appIdentifier));
+
+            // time_joined was taken from the recipe table, not zeroed or invented.
+            long expectedTimeJoined = queryLong(storage,
+                    "SELECT time_joined FROM " + Config.getConfig(storage).getEmailPasswordUsersTable()
+                            + " WHERE user_id = '" + userId + "'");
+            assertEquals(expectedTimeJoined, queryLong(storage,
+                    "SELECT time_joined FROM " + Config.getConfig(storage).getAppIdToUserIdTable()
+                            + " WHERE user_id = '" + userId + "'"));
+            assertEquals(expectedTimeJoined, queryLong(storage,
+                    "SELECT primary_or_recipe_user_time_joined FROM "
+                            + Config.getConfig(storage).getAppIdToUserIdTable()
+                            + " WHERE user_id = '" + userId + "'"));
+
+            // The app-level email reservation is still backfilled even without tenant rows.
+            assertEquals(1, countRows(storage, Config.getConfig(storage).getRecipeUserAccountInfosTable(),
+                    "recipe_user_id = '" + userId + "'"));
+
+            // Nothing left to process.
+            assertEquals(0, backfillStorage.backfillUsersBatch(appIdentifier, 100));
+        } finally {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
+    private long queryLong(Start storage, String query) throws Exception {
+        return storage.startTransaction(con -> {
+            Connection sqlCon = (Connection) con.getConnection();
+            try (Statement stmt = sqlCon.createStatement();
+                 ResultSet rs = stmt.executeQuery(query)) {
+                rs.next();
+                return rs.getLong(1);
+            }
+        });
+    }
+
     @Test
     public void backfillPopulatesEmailPasswordAccountInfo() throws Exception {
         TestingProcessManager.TestingProcess process = startProcess();

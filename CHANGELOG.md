@@ -7,6 +7,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.6.1]
+
+- Implements `updateTimeJoinedForPrimaryUsers_Transaction` (new in plugin-interface `8.7.1`) by delegating to
+  the existing internal batch query, which normalizes `primary_or_recipe_user_time_joined` to the linked-group
+  minimum across every table carrying the column (respecting migration-mode branching). This lets callers that
+  insert linked members without normalizing — notably bulk import — restore the invariant that user-list
+  pagination relies on.
+- Fixes the reservation-table backfill getting stuck on users removed from all tenants: their `time_joined`
+  now falls back to the per-app recipe table instead of staying 0, which kept them permanently in the
+  pending set and looped the backfill cron forever
+- Fixes activity log partition maintenance failing forever when rows for a not-yet-created month landed in the
+  DEFAULT partition (e.g. after the core was paused across a month boundary): the rows are now moved into the
+  newly created monthly partition, and DEFAULT rows older than the retention window are purged
 - Rewrites the migrated-schema paginated user listing (`getUsers_new`, plain and cursor variants) to stream
   over the pagination indexes: instead of joining `app_id_to_user_id` to `recipe_user_tenants` and
   `GROUP BY`-ing every user of the tenant before the `LIMIT` can apply, the two non-search variants now use
@@ -17,23 +30,30 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Rewrites the migrated-schema unfiltered per-tenant user count (`getUsersCount_new`) to avoid the
   tenant-wide hash-aggregating join that spilled to disk on very large tenants. The count is now computed as
   the `D - L + G` decomposition (distinct recipe users in the tenant, minus those that are linked-or-primary,
-  plus the distinct primary users present in the tenant), where each term is an index-only streaming scan.
-  The unfiltered app-scoped count now streams a `GROUP BY (primary_or_recipe_user_time_joined,
-  primary_or_recipe_user_id)` off `app_id_to_user_id_pagination_index2` instead of hash-aggregating. Counts
-  are unchanged; the recipe-id-filtered variants keep their existing queries. Adds three additive indexes,
-  created at startup via `CREATE INDEX IF NOT EXISTS`: `idx_recipe_user_tenants_tenant_recipe_user` on
-  `recipe_user_tenants (app_id, tenant_id, recipe_user_id)`, `app_id_to_user_id_linked_flag_index` on
-  `app_id_to_user_id (app_id, user_id, is_linked_or_is_a_primary_user)`, and
-  `idx_primary_user_tenants_tenant_primary` on `primary_user_tenants (app_id, tenant_id, primary_user_id)`.
-  **Operators of very large deployments should pre-create these three indexes with
-  `CREATE INDEX CONCURRENTLY` before upgrading**, so the startup DDL is a no-op and does not hold a table lock
-  during a long index build.
+  plus the distinct primary users present in the tenant), where each term is an index-only streaming scan
+  over one of the three additive indexes noted in the Migration section below. The unfiltered app-scoped
+  count now streams a `GROUP BY (primary_or_recipe_user_time_joined, primary_or_recipe_user_id)` off
+  `app_id_to_user_id_pagination_index2` instead of hash-aggregating. Counts are unchanged; the
+  recipe-id-filtered variants keep their existing queries.
 - Adds `MigratedUserScaleRegressionTest`: plan-shape regression tests over a ~200k-user fixture seeded directly
   with SQL, asserting on `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` that the rewritten pagination feeds only a
   small multiple of the page size into its top `Unique` node (vs the old query aggregating the whole tenant)
   and that the `D - L + G` and app-scoped counts write zero temp blocks and use no `HashAggregate` / `Hash Join`
   at `work_mem = 64kB` (vs the old join + `GROUP BY` spilling), plus new-vs-old result equality. Heavy fixture;
   runs in CI, skippable locally via `SKIP_SCALE_REGRESSION_TESTS=true`
+
+### Migration
+
+Adds three additive indexes, created on fresh databases and backfilled on existing ones at startup via
+`CREATE INDEX IF NOT EXISTS`:
+
+- `idx_recipe_user_tenants_tenant_recipe_user` on `recipe_user_tenants (app_id, tenant_id, recipe_user_id)`
+- `app_id_to_user_id_linked_flag_index` on `app_id_to_user_id (app_id, user_id, is_linked_or_is_a_primary_user)`
+- `idx_primary_user_tenants_tenant_primary` on `primary_user_tenants (app_id, tenant_id, primary_user_id)`
+
+No table or column changes. **Operators of very large deployments should pre-create these three indexes with
+`CREATE INDEX CONCURRENTLY` before upgrading**, so the startup DDL is a no-op and does not hold a table lock
+during a long index build.
 
 ## [9.6.0]
 

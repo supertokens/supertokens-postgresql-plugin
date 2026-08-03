@@ -38,6 +38,8 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestRule;
 
+import java.sql.Connection;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -139,6 +141,27 @@ public class MigratedUserPaginationTest {
     private static void assertNoDuplicates(List<String> ids) {
         Set<String> seen = new HashSet<>(ids);
         assertEquals("listing must not contain duplicate users", ids.size(), seen.size());
+    }
+
+    // Directly rewrites one app_id_to_user_id row's primary_or_recipe_user_time_joined, bypassing the
+    // transactional updater that normally keeps a linked group's values equal (invariant I6). This is
+    // the only way to synthesise an I6 violation from a test — the public linking API cannot produce
+    // one — and it reproduces the concrete production window the rewrite depends on NOT occurring: a
+    // group left with mixed times mid-migration (e.g. a member still carrying the LEGACY `0` sentinel
+    // because the MIGRATED backfill has not yet reached it) while a read-from-new mode is live.
+    private static void forceTimeJoinedForRow(Start storage, String userId, long timeJoined) throws Exception {
+        String table = Config.getConfig(storage).getAppIdToUserIdTable();
+        storage.startTransaction(con -> {
+            Connection sqlCon = (Connection) con.getConnection();
+            try (Statement stmt = sqlCon.createStatement()) {
+                stmt.executeUpdate("UPDATE " + table + " SET primary_or_recipe_user_time_joined = "
+                        + timeJoined + " WHERE app_id = 'public' AND user_id = '" + userId + "'");
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            storage.commitTransaction(con);
+            return null;
+        });
     }
 
     /**
@@ -275,6 +298,74 @@ public class MigratedUserPaginationTest {
         } finally {
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
+    /**
+     * Characterises what the streaming rewrite does when its load-bearing precondition — invariant I6,
+     * "every row of a linked group shares one {@code primary_or_recipe_user_time_joined}" — is
+     * violated. The old GROUP BY/MIN form collapsed a mixed-time group to a single (mis-sorted) row
+     * via MIN; the DISTINCT form cannot, so the group's primary surfaces once per distinct time value,
+     * i.e. a duplicate listing entry.
+     *
+     * This is not a reachable production state: I6 is transactionally enforced on link/unlink/bulk-link
+     * and the MIGRATED backfill copies the already-consistent group time, so a read-from-new mode never
+     * observes a mixed-time group — and PLAN-005's rollout adds a pre-deploy I6 data check + repair as a
+     * belt-and-braces guard. The test forces the violation directly (raw UPDATE, bypassing the updater)
+     * purely to PIN the failure mode so it is not silent: if a future change regresses I6 enforcement,
+     * or reintroduces a defensive query shape, this assertion changes and forces a conscious decision.
+     * It also documents that the damage is bounded — only the offending group duplicates; every
+     * consistent user in the same listing is untouched, nothing is dropped, and no login method leaks as
+     * its own row.
+     */
+    @Test
+    public void testI6ViolationYieldsBoundedDuplicateNotCorruption() throws Exception {
+        for (MigrationMode mode : new MigrationMode[]{MigrationMode.MIGRATED, MigrationMode.DUAL_WRITE_READ_NEW}) {
+            TestingProcessManager.TestingProcess process = startProcess();
+            try {
+                Main main = process.getProcess();
+                if (StorageLayer.getStorage(main).getType() != STORAGE_TYPE.SQL) return;
+
+                Start storage = (Start) StorageLayer.getStorage(main);
+                Config.getConfig(storage).setMigrationModeForTesting(mode);
+
+                AuthRecipeUserInfo before = signUp(main, "before-" + mode + "@test.com"); // singleton
+                AuthRecipeUserInfo primary = signUp(main, "primary-" + mode + "@test.com"); // group primary
+                AuthRecipeUserInfo member = signUp(main, "member-" + mode + "@test.com"); // linked into the group
+                AuthRecipeUserInfo after = signUp(main, "after-" + mode + "@test.com"); // singleton
+
+                AuthRecipe.createPrimaryUser(main, primary.getSupertokensUserId());
+                AuthRecipe.linkAccounts(main, member.getSupertokensUserId(), primary.getSupertokensUserId());
+
+                // Baseline: while I6 holds the group is a single, non-duplicated row.
+                List<String> healthy = idsFrom(AuthRecipe.getUsers(main, 1000, "ASC", null, null, null).users);
+                assertNoDuplicates(healthy);
+                assertEquals("group is one row while I6 holds", 1,
+                        Collections.frequency(healthy, primary.getSupertokensUserId()));
+
+                // Break I6: leave the member's row at the LEGACY `0` sentinel while the primary keeps its
+                // real time — the exact shape of a group the MIGRATED backfill has only partially reached.
+                forceTimeJoinedForRow(storage, member.getSupertokensUserId(), 0L);
+
+                for (String order : new String[]{"ASC", "DESC"}) {
+                    List<String> ids = idsFrom(AuthRecipe.getUsers(main, 1000, order, null, null, null).users);
+
+                    // The group's primary now appears once per distinct time in the group (here: 2).
+                    assertEquals("mixed-time group duplicates the primary (" + mode + " " + order + ")", 2,
+                            Collections.frequency(ids, primary.getSupertokensUserId()));
+                    // Damage is confined to the offending group: singletons stay single, and no login
+                    // method leaks as its own row (both duplicate rows carry the primary's id).
+                    assertEquals("unaffected singleton stays single: before (" + mode + " " + order + ")", 1,
+                            Collections.frequency(ids, before.getSupertokensUserId()));
+                    assertEquals("unaffected singleton stays single: after (" + mode + " " + order + ")", 1,
+                            Collections.frequency(ids, after.getSupertokensUserId()));
+                    assertFalse("linked login method never appears as its own row",
+                            ids.contains(member.getSupertokensUserId()));
+                }
+            } finally {
+                process.kill();
+                assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+            }
         }
     }
 }
