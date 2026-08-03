@@ -7,6 +7,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Makes the user-listing and bulk-import keyset pagination cursors sargable: the exact cursor
+  predicate `A < ? OR (A = ? AND B <= ?)` cannot be used as a B-tree seek, so on deep pages Postgres
+  scanned each pagination index from the top of the `(app_id[, tenant_id])` range and filtered every
+  row up to the cursor (per-page cost linear in page depth, full walk quadratic). A redundant range
+  bound on the leading sort column (`AND A >= ?` for ASC, `AND A <= ?` for DESC) — implied by the OR,
+  so rows, order and cursor tokens are unchanged — now lets the planner seek straight to the cursor.
+  Applied to `getUsers_new` (migrated schema, both directions and the recipe-filtered variant),
+  `getUsers_legacy`, and the bulk-import users listing
+
 ## [9.6.1]
 
 - Implements `updateTimeJoinedForPrimaryUsers_Transaction` (new in plugin-interface `8.7.1`) by delegating to
