@@ -7,7 +7,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-
 ## [9.6.1]
 
 - Implements `updateTimeJoinedForPrimaryUsers_Transaction` (new in plugin-interface `8.7.1`) by delegating to
@@ -18,6 +17,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Fixes the reservation-table backfill getting stuck on users removed from all tenants: their `time_joined`
   now falls back to the per-app recipe table instead of staying 0, which kept them permanently in the
   pending set and looped the backfill cron forever
+- Fixes activity log partition maintenance failing forever when rows for a not-yet-created month landed in the
+  DEFAULT partition (e.g. after the core was paused across a month boundary): the rows are now moved into the
+  newly created monthly partition, and DEFAULT rows older than the retention window are purged
 
 ## [9.6.0]
 
