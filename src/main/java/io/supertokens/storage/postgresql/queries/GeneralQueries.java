@@ -442,6 +442,17 @@ public class GeneralQueries {
                             AccountInfoQueries.getQueryToCreateTenantPrimaryUserIndexForPrimaryUserTenantsTable(start));
                 }
 
+                // Indexes backing the reservation-cleanup subqueries (WHERE primary_user_id = ?) and the
+                // third-party / webauthn account-info-value sign-in lookups on recipe_user_account_infos.
+                // Additive and idempotent; on large deployments operators should pre-create them with
+                // CREATE INDEX CONCURRENTLY before upgrading so this startup DDL is a no-op (see CHANGELOG).
+                if (doesTableExists(existingTables, Config.getConfig(start).getRecipeUserAccountInfosTable())) {
+                    backfillIndexDdl.add(
+                            AccountInfoQueries.getQueryToCreatePrimaryUserIdIndexForRecipeUserAccountInfoTable(start));
+                    backfillIndexDdl.add(
+                            AccountInfoQueries.getQueryToCreateAccountInfoIndexForRecipeUserAccountInfoTable(start));
+                }
+
                 if (!doesTableExists(existingTables, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     ddl.add(getQueryToCreateAccessTokenSigningKeysTable(start));
@@ -801,7 +812,8 @@ public class GeneralQueries {
                     ddl.add(AccountInfoQueries.getQueryToCreateRecipeUserAccountInfosTable(start));
 
                     // indexes
-                    // TODO
+                    ddl.add(AccountInfoQueries.getQueryToCreatePrimaryUserIdIndexForRecipeUserAccountInfoTable(start));
+                    ddl.add(AccountInfoQueries.getQueryToCreateAccountInfoIndexForRecipeUserAccountInfoTable(start));
                 }
 
                 if (!doesTableExists(existingTables, Config.getConfig(start).getRecipeUserTenantsTable())) {

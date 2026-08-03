@@ -7,6 +7,45 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Adds the two missing secondary indexes on `recipe_user_account_infos`: `(app_id, primary_user_id)` and
+  `(app_id, account_info_type, account_info_value)`. The table previously had only the `(app_id, recipe_user_id)`
+  index, so the reservation-cleanup subqueries that filter by `primary_user_id` (tenant disassociation, unlink,
+  user delete, and email/phone update) and the third-party / webauthn sign-in lookups that resolve a user from
+  an account-info value all seq-scanned the whole app's rows. The indexes are created on fresh databases and
+  backfilled on existing ones at startup (see the Migration section below)
+- Restores the `app_id` condition on the nested subqueries of two reservation-cleanup statements in
+  `AccountInfoQueries` — the tenant-removal cleanup
+  (`removeAccountInfoReservationForPrimaryUserWhileRemovingTenant_Transaction`) and
+  `updateAccountInfo_Transaction`'s `primary_user_tenants` delete. Both had subqueries that dropped `app_id`,
+  which left the leading column of `idx_recipe_user_tenants_recipe_user_id` (and the new
+  `recipe_user_account_infos` indexes) unusable, forcing app-wide table scans. Every column reference in the
+  two statements is now alias-qualified; the tenant-removal cleanup's correlated `rut.tenant_id` (which
+  `recipe_user_account_infos` has no column for, so it intentionally references the enclosing
+  `recipe_user_tenants` scope) is preserved and documented. Results are unchanged
+- Adds `AccountInfoIndexScaleRegressionTest`: an `EXPLAIN`-based plan-shape regression test over a seeded
+  dataset asserting that the third-party sign-in lookup and each reservation-cleanup statement scan
+  `recipe_user_account_infos` / `recipe_user_tenants` via the intended indexes (no sequential scan), with the
+  pre-fix `app_id`-dropped / no-index query shapes kept alongside as teeth. Skippable locally via
+  `SKIP_SCALE_REGRESSION_TESTS=true`
+
+### Migration
+
+Adds two additive indexes, created on fresh databases and backfilled on existing ones at startup via
+
+``` sql
+
+CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_app_primary_user on recipe_user_account_infos (app_id, 
+primary_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_account_info on recipe_user_account_infos (app_id, 
+account_info_type, account_info_value);
+
+```
+
+No table or column changes. **Operators of very large deployments should pre-create these two indexes with
+`CREATE INDEX CONCURRENTLY` before upgrading**, so the startup DDL is a no-op and does not hold a table lock
+during a long index build.
+
 ## [9.6.1]
 
 - Implements `updateTimeJoinedForPrimaryUsers_Transaction` (new in plugin-interface `8.7.1`) by delegating to
