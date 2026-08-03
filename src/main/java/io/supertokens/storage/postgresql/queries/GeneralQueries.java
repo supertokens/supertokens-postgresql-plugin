@@ -306,9 +306,11 @@ public class GeneralQueries {
                 + Config.getConfig(start).getAppIdToUserIdTable() + "(user_id, app_id);";
     }
 
-    // Backs the L term of the per-tenant user count (getUsersCount_new): a covering companion to
-    // the (app_id, user_id) PK so the is_linked_or_is_a_primary_user flag lookup for each recipe
-    // user of the tenant is index-only, never touching the heap.
+    // Backs the "L" term of the per-tenant user-count decomposition (count = D - L + G, documented
+    // in full in getUsersCount_new below): L is how many of the tenant's distinct recipe users are
+    // linked-or-a-primary. This index is a covering companion to the (app_id, user_id) PK so the
+    // is_linked_or_is_a_primary_user flag lookup for each recipe user of the tenant is index-only,
+    // never touching the heap.
     static String getQueryToCreateLinkedFlagIndexForAppIdToUserIdTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS app_id_to_user_id_linked_flag_index ON "
                 + Config.getConfig(start).getAppIdToUserIdTable()
