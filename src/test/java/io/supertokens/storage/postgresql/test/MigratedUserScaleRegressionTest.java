@@ -309,10 +309,13 @@ public class MigratedUserScaleRegressionTest {
     private String paginationNew(String order, boolean cursor, String auid, String rut,
                                  String appId, String tenantId) {
         String sym = order.equals("ASC") ? ">" : "<";
+        // The redundant sargable bound on the sort column (issue #351): implied by the OR, it lets the
+        // planner seek to the cursor instead of filtering from the top. Kept here in sync with source.
         String cursorClause = cursor
                 ? " AND (auid.primary_or_recipe_user_time_joined " + sym + " " + CURSOR_TIME
                 + " OR (auid.primary_or_recipe_user_time_joined = " + CURSOR_TIME
                 + " AND auid.primary_or_recipe_user_id <= " + q(CURSOR_ID) + "))"
+                + " AND auid.primary_or_recipe_user_time_joined " + sym + "= " + CURSOR_TIME
                 : "";
         return "SELECT DISTINCT auid.primary_or_recipe_user_id, auid.primary_or_recipe_user_time_joined"
                 + " FROM " + auid + " auid"

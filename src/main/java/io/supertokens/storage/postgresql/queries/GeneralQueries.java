@@ -1673,6 +1673,13 @@ public class GeneralQueries {
                 // index can seek on (deep pages become index seeks instead of full re-aggregations).
                 // The tie-break and inclusive bound are kept byte-identical so existing client
                 // pagination tokens stay valid across the deploy.
+                // The OR keyset predicate below is exact but not sargable: Postgres cannot turn an
+                // OR of conjuncts into a B-tree seek, so on a deep cursor page it scans the (app_id)
+                // pagination range from the top and filters up to the cursor, making a full walk
+                // quadratic in page depth. Add a redundant range bound on the leading sort column
+                // (primary_or_recipe_user_time_joined) so the planner seeks straight to the cursor;
+                // the bound is implied by the OR (same cursor time, no rows added or removed), and
+                // the residual OR then only resolves the equal-time tie run.
                 String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id,"
                         + " auid.primary_or_recipe_user_time_joined"
                         + " FROM " + getConfig(start).getAppIdToUserIdTable() + " auid"
@@ -1681,6 +1688,7 @@ public class GeneralQueries {
                         + " AND (auid.primary_or_recipe_user_time_joined " + timeJoinedOrderSymbol
                         + " ? OR (auid.primary_or_recipe_user_time_joined = ?"
                         + " AND auid.primary_or_recipe_user_id <= ?))"
+                        + " AND auid.primary_or_recipe_user_time_joined " + timeJoinedOrderSymbol + "= ?"
                         + " AND EXISTS (SELECT 1 FROM " + getConfig(start).getRecipeUserTenantsTable() + " rut"
                         + " WHERE rut.app_id = auid.app_id AND rut.recipe_user_id = auid.user_id"
                         + " AND rut.tenant_id = ?)"
@@ -1697,8 +1705,9 @@ public class GeneralQueries {
                     pst.setLong(baseIndex + 2, timeJoined);
                     pst.setLong(baseIndex + 3, timeJoined);
                     pst.setString(baseIndex + 4, userId);
-                    pst.setString(baseIndex + 5, tenantIdentifier.getTenantId());
-                    pst.setInt(baseIndex + 6, limit);
+                    pst.setLong(baseIndex + 5, timeJoined);
+                    pst.setString(baseIndex + 6, tenantIdentifier.getTenantId());
+                    pst.setInt(baseIndex + 7, limit);
                 }, result -> {
                     List<String> temp = new ArrayList<>();
                     while (result.next()) {
@@ -1992,11 +2001,16 @@ public class GeneralQueries {
                     recipeIdCondition = recipeIdCondition + " AND";
                 }
                 String timeJoinedOrderSymbol = timeJoinedOrder.equals("ASC") ? ">" : "<";
+                // Redundant sargable bound on the leading sort column so the OR keyset predicate
+                // becomes an index seek instead of a from-the-top filter on deep pages (same
+                // reasoning as getUsers_new above); the bound is implied by the OR, so rows, order
+                // and cursor tokens are unchanged.
                 String QUERY = "SELECT DISTINCT primary_or_recipe_user_id, primary_or_recipe_user_time_joined FROM " +
                         getConfig(start).getUsersTable() + " WHERE "
                         + recipeIdCondition + " (primary_or_recipe_user_time_joined " + timeJoinedOrderSymbol
                         +
                         " ? OR (primary_or_recipe_user_time_joined = ? AND primary_or_recipe_user_id <= ?)) AND " +
+                        "primary_or_recipe_user_time_joined " + timeJoinedOrderSymbol + "= ? AND " +
                         "app_id = ? AND tenant_id = ?"
                         + " ORDER BY primary_or_recipe_user_time_joined " + timeJoinedOrder
                         + ", primary_or_recipe_user_id DESC LIMIT ?";
@@ -2011,9 +2025,10 @@ public class GeneralQueries {
                     pst.setLong(baseIndex + 1, timeJoined);
                     pst.setLong(baseIndex + 2, timeJoined);
                     pst.setString(baseIndex + 3, userId);
-                    pst.setString(baseIndex + 4, tenantIdentifier.getAppId());
-                    pst.setString(baseIndex + 5, tenantIdentifier.getTenantId());
-                    pst.setInt(baseIndex + 6, limit);
+                    pst.setLong(baseIndex + 4, timeJoined);
+                    pst.setString(baseIndex + 5, tenantIdentifier.getAppId());
+                    pst.setString(baseIndex + 6, tenantIdentifier.getTenantId());
+                    pst.setInt(baseIndex + 7, limit);
                 }, result -> {
                     List<String> temp = new ArrayList<>();
                     while (result.next()) {
