@@ -7,6 +7,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Fixes `listUserIdsByMultipleThirdPartyInfo_Transaction` matching the cross-product of its two inputs:
+  it filtered with `third_party_id IN (...) AND third_party_user_id IN (...)`, so a batch could return
+  users whose provider id and provider-user-id came from different requested pairs. It now matches each
+  `(third_party_id, third_party_user_id)` pair exactly using a row-value `IN` list, so the bulk-import
+  path no longer reports spurious "already exists" hits for unrelated users in the same batch.
+
 ## [9.6.1]
 
 - Implements `updateTimeJoinedForPrimaryUsers_Transaction` (new in plugin-interface `8.7.1`) by delegating to
