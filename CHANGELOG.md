@@ -7,6 +7,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Fixes the legacy WebAuthN email lookup (`getPrimaryUserIdForAppUsingEmail_Transaction`) joining
+  `webauthn_user_to_tenant` to `all_auth_recipe_users` on `user_id` alone: `app_id` is now part of
+  the join condition so the lookup can no longer match another app's row that happens to carry the
+  same `user_id`. Also removes a duplicated `webauthn.user_id = email_verification.user_id` predicate
+  in the WebAuthN user-info queries (no behavioral change).
+
 ## [9.6.1]
 
 - Implements `updateTimeJoinedForPrimaryUsers_Transaction` (new in plugin-interface `8.7.1`) by delegating to
