@@ -442,6 +442,16 @@ public class GeneralQueries {
                             AccountInfoQueries.getQueryToCreateTenantPrimaryUserIndexForPrimaryUserTenantsTable(start));
                 }
 
+                // Indexes backing the oauth_sessions revoke-by-client (also the FK-cascade path on
+                // client delete) and revoke-by-session-handle deletes, which otherwise scan the whole
+                // table (it is keyed by gid only). Additive and idempotent; on large deployments
+                // operators should pre-create them with CREATE INDEX CONCURRENTLY before upgrading so
+                // this startup DDL is a no-op (see CHANGELOG).
+                if (doesTableExists(existingTables, Config.getConfig(start).getOAuthSessionsTable())) {
+                    backfillIndexDdl.add(OAuthQueries.getQueryToCreateOAuthSessionsClientIdIndex(start));
+                    backfillIndexDdl.add(OAuthQueries.getQueryToCreateOAuthSessionsSessionHandleIndex(start));
+                }
+
                 if (!doesTableExists(existingTables, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     ddl.add(getQueryToCreateAccessTokenSigningKeysTable(start));
@@ -712,6 +722,8 @@ public class GeneralQueries {
                     // index
                     ddl.add(OAuthQueries.getQueryToCreateOAuthSessionsExpIndex(start));
                     ddl.add(OAuthQueries.getQueryToCreateOAuthSessionsExternalRefreshTokenIndex(start));
+                    ddl.add(OAuthQueries.getQueryToCreateOAuthSessionsClientIdIndex(start));
+                    ddl.add(OAuthQueries.getQueryToCreateOAuthSessionsSessionHandleIndex(start));
                 }
 
                 if (!doesTableExists(existingTables, Config.getConfig(start).getOAuthM2MTokensTable())) {
