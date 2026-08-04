@@ -7,61 +7,29 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- Adds the two missing secondary indexes on `recipe_user_account_infos`: `(app_id, primary_user_id)` and
-  `(app_id, account_info_type, account_info_value)`. The table previously had only the `(app_id, recipe_user_id)`
-  index, so the reservation-cleanup subqueries that filter by `primary_user_id` (tenant disassociation, unlink,
-  user delete, and email/phone update) and the third-party / webauthn sign-in lookups that resolve a user from
-  an account-info value all seq-scanned the whole app's rows. The indexes are created on fresh databases and
-  backfilled on existing ones at startup (see the Migration section below)
-- Restores the `app_id` condition on the nested subqueries of two reservation-cleanup statements in
-  `AccountInfoQueries` — the tenant-removal cleanup
-  (`removeAccountInfoReservationForPrimaryUserWhileRemovingTenant_Transaction`) and
-  `updateAccountInfo_Transaction`'s `primary_user_tenants` delete. Both had subqueries that dropped `app_id`,
-  which left the leading column of `idx_recipe_user_tenants_recipe_user_id` (and the new
-  `recipe_user_account_infos` indexes) unusable, forcing app-wide table scans. Every column reference in the
-  two statements is now alias-qualified; the tenant-removal cleanup's correlated `rut.tenant_id` (which
-  `recipe_user_account_infos` has no column for, so it intentionally references the enclosing
-  `recipe_user_tenants` scope) is preserved and documented. Results are unchanged
-- Adds `AccountInfoIndexScaleRegressionTest`: an `EXPLAIN`-based plan-shape regression test over a seeded
-  dataset asserting that the third-party sign-in lookup and each reservation-cleanup statement scan
-  `recipe_user_account_infos` / `recipe_user_tenants` via the intended indexes (no sequential scan), with the
-  pre-fix `app_id`-dropped / no-index query shapes kept alongside as teeth. Skippable locally via
-  `SKIP_SCALE_REGRESSION_TESTS=true`
+- Adds two secondary indexes on `recipe_user_account_infos` — `(app_id, primary_user_id)` and
+  `(app_id, account_info_type, account_info_value)` — so the reservation-cleanup subqueries and the
+  third-party/webauthn sign-in lookups no longer seq-scan the whole app's rows. Created on fresh databases
+  and backfilled at startup (see Migration below).
+- Restores the `app_id` condition on the nested subqueries of two `AccountInfoQueries` reservation-cleanup
+  statements (tenant-removal cleanup and `updateAccountInfo_Transaction`'s tenant delete), which had dropped
+  it and so forced app-wide table scans. Results unchanged.
+- Pins `getUsersCount_new`'s `D - L` statement to its streaming merge join
+  (`SET LOCAL enable_hashjoin = off`) so the planner can no longer flip to a hash join that spills the
+  app-wide table to disk when its row estimates drift. Count result unchanged.
+- Makes the user-listing and bulk-import keyset pagination cursors sargable by adding a redundant
+  leading-sort-column bound to the cursor predicate, so deep pages seek straight to the cursor instead of
+  scanning the pagination index from the top. Applies to `getUsers_new`, `getUsers_legacy`, and the
+  bulk-import listing; rows, order and cursor tokens are unchanged.
 
 ### Migration
 
-Adds two additive indexes, created on fresh databases and backfilled on existing ones at startup via
-
-``` sql
-
-CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_app_primary_user on recipe_user_account_infos (app_id, 
-primary_user_id);
-
-CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_account_info on recipe_user_account_infos (app_id, 
-account_info_type, account_info_value);
-
-```
-
-No table or column changes. **Operators of very large deployments should pre-create these two indexes with
-`CREATE INDEX CONCURRENTLY` before upgrading**, so the startup DDL is a no-op and does not hold a table lock
-during a long index build.
-- Pins the migrated-schema per-tenant user count's `D - L` statement (`getUsersCount_new`) to its
-  intended streaming merge join by disabling hash joins for that statement's transaction
-  (`SET LOCAL enable_hashjoin = off`). Both join inputs are already index-only and pre-sorted on
-  `recipe_user_id`, but the planner would flip to a hash join whenever its row estimates drifted
-  (e.g. autoanalyze lag right after a large import), building a hash over the app-wide
-  `app_id_to_user_id` and spilling gigabytes of temp to disk under a normal `work_mem`. The count
-  result is unchanged; this only removes the plan/resource regression. `enable_hashjoin = off` still
-  lets the planner pick a nested loop for small tenants, and `SET LOCAL` reverts on commit so the
-  pooled connection is unaffected
-- Makes the user-listing and bulk-import keyset pagination cursors sargable: the exact cursor
-  predicate `A < ? OR (A = ? AND B <= ?)` cannot be used as a B-tree seek, so on deep pages Postgres
-  scanned each pagination index from the top of the `(app_id[, tenant_id])` range and filtered every
-  row up to the cursor (per-page cost linear in page depth, full walk quadratic). A redundant range
-  bound on the leading sort column (`AND A >= ?` for ASC, `AND A <= ?` for DESC) — implied by the OR,
-  so rows, order and cursor tokens are unchanged — now lets the planner seek straight to the cursor.
-  Applied to `getUsers_new` (migrated schema, both directions and the recipe-filtered variant),
-  `getUsers_legacy`, and the bulk-import users listing
+Adds two additive indexes on `recipe_user_account_infos`, created on fresh databases and backfilled at
+startup: `idx_recipe_user_account_infos_app_primary_user` on `(app_id, primary_user_id)` and
+`idx_recipe_user_account_infos_account_info` on `(app_id, account_info_type, account_info_value)`. No table
+or column changes. Operators of very large deployments should pre-create both with `CREATE INDEX
+CONCURRENTLY` before upgrading, so the startup DDL is a no-op and does not hold a table lock during a long
+index build.
 
 ## [9.6.1]
 
