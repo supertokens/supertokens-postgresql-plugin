@@ -24,12 +24,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Migration
 
-Adds two additive indexes on `recipe_user_account_infos`, created on fresh databases and backfilled at
-startup: `idx_recipe_user_account_infos_app_primary_user` on `(app_id, primary_user_id)` and
-`idx_recipe_user_account_infos_account_info` on `(app_id, account_info_type, account_info_value)`. No table
-or column changes. Operators of very large deployments should pre-create both with `CREATE INDEX
-CONCURRENTLY` before upgrading, so the startup DDL is a no-op and does not hold a table lock during a long
-index build.
+Adds two additive indexes on `recipe_user_account_infos`, created on fresh databases and backfilled on
+existing ones at startup via
+
+``` sql
+
+CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_app_primary_user ON recipe_user_account_infos 
+(app_id, primary_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_account_info ON recipe_user_account_infos 
+(app_id, account_info_type, account_info_value);
+
+```
+
+No table or column changes. **Operators of very large deployments should pre-create both indexes with
+`CREATE INDEX CONCURRENTLY` before upgrading**, so the startup DDL is a no-op and does not hold a table lock
+during a long index build.
 
 ## [9.6.1]
 
