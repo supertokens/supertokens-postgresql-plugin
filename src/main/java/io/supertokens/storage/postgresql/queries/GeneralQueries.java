@@ -19,6 +19,7 @@ package io.supertokens.storage.postgresql.queries;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import io.supertokens.storage.postgresql.output.Logging;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -48,6 +49,7 @@ import io.supertokens.pluginInterface.useridmapping.LockedUser;
 import io.supertokens.pluginInterface.opentelemetry.WithinOtelSpan;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
+import io.supertokens.storage.postgresql.ResultSetValueExtractor;
 import static io.supertokens.storage.postgresql.PreparedStatementValueSetter.NO_OP_SETTER;
 import static io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.CREATING_NEW_TABLE;
 import static io.supertokens.storage.postgresql.ProcessState.getInstance;
@@ -452,6 +454,17 @@ public class GeneralQueries {
                     backfillIndexDdl.add(OAuthQueries.getQueryToCreateOAuthSessionsSessionHandleIndex(start));
                 }
 
+                // Indexes backing the reservation-cleanup subqueries (WHERE primary_user_id = ?) and the
+                // third-party / webauthn account-info-value sign-in lookups on recipe_user_account_infos.
+                // Additive and idempotent; on large deployments operators should pre-create them with
+                // CREATE INDEX CONCURRENTLY before upgrading so this startup DDL is a no-op (see CHANGELOG).
+                if (doesTableExists(existingTables, Config.getConfig(start).getRecipeUserAccountInfosTable())) {
+                    backfillIndexDdl.add(
+                            AccountInfoQueries.getQueryToCreatePrimaryUserIdIndexForRecipeUserAccountInfoTable(start));
+                    backfillIndexDdl.add(
+                            AccountInfoQueries.getQueryToCreateAccountInfoIndexForRecipeUserAccountInfoTable(start));
+                }
+
                 if (!doesTableExists(existingTables, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     ddl.add(getQueryToCreateAccessTokenSigningKeysTable(start));
@@ -813,7 +826,8 @@ public class GeneralQueries {
                     ddl.add(AccountInfoQueries.getQueryToCreateRecipeUserAccountInfosTable(start));
 
                     // indexes
-                    // TODO
+                    ddl.add(AccountInfoQueries.getQueryToCreatePrimaryUserIdIndexForRecipeUserAccountInfoTable(start));
+                    ddl.add(AccountInfoQueries.getQueryToCreateAccountInfoIndexForRecipeUserAccountInfoTable(start));
                 }
 
                 if (!doesTableExists(existingTables, Config.getConfig(start).getRecipeUserTenantsTable())) {
@@ -1250,9 +1264,19 @@ public class GeneralQueries {
         // per-tenant presence invariant (a group has rows in exactly the tenants it is present in),
         // which is the table's linking-conflict reservation purpose.
 
-        // D and L in one merge-join pass; both inputs are index-only and pre-sorted on recipe_user_id
-        // (idx_recipe_user_tenants_tenant_recipe_user and the app_id_to_user_id PK /
+        // D and L in one streaming merge-join pass; both inputs are index-only and pre-sorted on
+        // recipe_user_id (idx_recipe_user_tenants_tenant_recipe_user and the app_id_to_user_id PK /
         // app_id_to_user_id_linked_flag_index covering companion).
+        //
+        // The plan MUST stay a merge join. If the planner instead hash-joins, it builds a hash table
+        // over the app-wide app_id_to_user_id side (millions of rows on large deployments); that
+        // exceeds work_mem and spills gigabytes of temp to disk - the exact failure the D - L + G
+        // decomposition was designed to avoid. The count is correct either way; this is purely a
+        // plan/resource problem, and it cannot be left to estimate luck: the hash plan wins whenever
+        // the row estimates drift (e.g. autoanalyze lag right after a large import). So we disable
+        // hash joins for just this statement (executeWithHashJoinDisabled). The planner is still free
+        // to pick a nested loop for genuinely small tenants - both remaining plans stream over the
+        // pre-sorted indexes and never spill.
         String QUERY_DL = "SELECT COUNT(*) AS d,"
                 + " COUNT(*) FILTER (WHERE a.is_linked_or_is_a_primary_user) AS l"
                 + " FROM (SELECT DISTINCT recipe_user_id FROM " + getConfig(start).getRecipeUserTenantsTable()
@@ -1260,7 +1284,7 @@ public class GeneralQueries {
                 + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " a"
                 + " ON a.app_id = ? AND a.user_id = r.recipe_user_id";
 
-        long[] dl = execute(start, QUERY_DL, pst -> {
+        long[] dl = executeWithHashJoinDisabled(start, QUERY_DL, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, tenantIdentifier.getAppId());
@@ -1287,6 +1311,33 @@ public class GeneralQueries {
         });
 
         return dl[0] - dl[1] + g;
+    }
+
+    // Runs a read-only query with hash joins disabled for the duration of the statement's own
+    // transaction, forcing the planner onto a streaming merge join (or a nested loop for small
+    // inputs) over pre-sorted index scans rather than a hash join whose build side can overflow
+    // work_mem and spill to disk. SET LOCAL is scoped to the transaction and reverts on COMMIT, so
+    // the pooled connection is handed back with its normal planner settings and autocommit state.
+    private static <T> T executeWithHashJoinDisabled(Start start, String QUERY,
+            PreparedStatementValueSetter setter, ResultSetValueExtractor<T> mapper)
+            throws SQLException, StorageQueryException {
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            boolean prevAutoCommit = con.getAutoCommit();
+            con.setAutoCommit(false);
+            try {
+                try (Statement st = con.createStatement()) {
+                    st.execute("SET LOCAL enable_hashjoin = off");
+                }
+                T result = execute(con, QUERY, setter, mapper);
+                con.commit();
+                return result;
+            } catch (SQLException | StorageQueryException | RuntimeException e) {
+                con.rollback();
+                throw e;
+            } finally {
+                con.setAutoCommit(prevAutoCommit);
+            }
+        }
     }
 
     private static long getUsersCountByRecipe_new(Start start, TenantIdentifier tenantIdentifier,
@@ -1646,6 +1697,13 @@ public class GeneralQueries {
                 // index can seek on (deep pages become index seeks instead of full re-aggregations).
                 // The tie-break and inclusive bound are kept byte-identical so existing client
                 // pagination tokens stay valid across the deploy.
+                // The OR keyset predicate below is exact but not sargable: Postgres cannot turn an
+                // OR of conjuncts into a B-tree seek, so on a deep cursor page it scans the (app_id)
+                // pagination range from the top and filters up to the cursor, making a full walk
+                // quadratic in page depth. Add a redundant range bound on the leading sort column
+                // (primary_or_recipe_user_time_joined) so the planner seeks straight to the cursor;
+                // the bound is implied by the OR (same cursor time, no rows added or removed), and
+                // the residual OR then only resolves the equal-time tie run.
                 String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id,"
                         + " auid.primary_or_recipe_user_time_joined"
                         + " FROM " + getConfig(start).getAppIdToUserIdTable() + " auid"
@@ -1654,6 +1712,7 @@ public class GeneralQueries {
                         + " AND (auid.primary_or_recipe_user_time_joined " + timeJoinedOrderSymbol
                         + " ? OR (auid.primary_or_recipe_user_time_joined = ?"
                         + " AND auid.primary_or_recipe_user_id <= ?))"
+                        + " AND auid.primary_or_recipe_user_time_joined " + timeJoinedOrderSymbol + "= ?"
                         + " AND EXISTS (SELECT 1 FROM " + getConfig(start).getRecipeUserTenantsTable() + " rut"
                         + " WHERE rut.app_id = auid.app_id AND rut.recipe_user_id = auid.user_id"
                         + " AND rut.tenant_id = ?)"
@@ -1670,8 +1729,9 @@ public class GeneralQueries {
                     pst.setLong(baseIndex + 2, timeJoined);
                     pst.setLong(baseIndex + 3, timeJoined);
                     pst.setString(baseIndex + 4, userId);
-                    pst.setString(baseIndex + 5, tenantIdentifier.getTenantId());
-                    pst.setInt(baseIndex + 6, limit);
+                    pst.setLong(baseIndex + 5, timeJoined);
+                    pst.setString(baseIndex + 6, tenantIdentifier.getTenantId());
+                    pst.setInt(baseIndex + 7, limit);
                 }, result -> {
                     List<String> temp = new ArrayList<>();
                     while (result.next()) {
@@ -1965,11 +2025,16 @@ public class GeneralQueries {
                     recipeIdCondition = recipeIdCondition + " AND";
                 }
                 String timeJoinedOrderSymbol = timeJoinedOrder.equals("ASC") ? ">" : "<";
+                // Redundant sargable bound on the leading sort column so the OR keyset predicate
+                // becomes an index seek instead of a from-the-top filter on deep pages (same
+                // reasoning as getUsers_new above); the bound is implied by the OR, so rows, order
+                // and cursor tokens are unchanged.
                 String QUERY = "SELECT DISTINCT primary_or_recipe_user_id, primary_or_recipe_user_time_joined FROM " +
                         getConfig(start).getUsersTable() + " WHERE "
                         + recipeIdCondition + " (primary_or_recipe_user_time_joined " + timeJoinedOrderSymbol
                         +
                         " ? OR (primary_or_recipe_user_time_joined = ? AND primary_or_recipe_user_id <= ?)) AND " +
+                        "primary_or_recipe_user_time_joined " + timeJoinedOrderSymbol + "= ? AND " +
                         "app_id = ? AND tenant_id = ?"
                         + " ORDER BY primary_or_recipe_user_time_joined " + timeJoinedOrder
                         + ", primary_or_recipe_user_id DESC LIMIT ?";
@@ -1984,9 +2049,10 @@ public class GeneralQueries {
                     pst.setLong(baseIndex + 1, timeJoined);
                     pst.setLong(baseIndex + 2, timeJoined);
                     pst.setString(baseIndex + 3, userId);
-                    pst.setString(baseIndex + 4, tenantIdentifier.getAppId());
-                    pst.setString(baseIndex + 5, tenantIdentifier.getTenantId());
-                    pst.setInt(baseIndex + 6, limit);
+                    pst.setLong(baseIndex + 4, timeJoined);
+                    pst.setString(baseIndex + 5, tenantIdentifier.getAppId());
+                    pst.setString(baseIndex + 6, tenantIdentifier.getTenantId());
+                    pst.setInt(baseIndex + 7, limit);
                 }, result -> {
                     List<String> temp = new ArrayList<>();
                     while (result.next()) {
