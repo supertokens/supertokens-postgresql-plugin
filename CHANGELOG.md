@@ -7,6 +7,40 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Adds two secondary indexes on `recipe_user_account_infos` — `(app_id, primary_user_id)` and
+  `(app_id, account_info_type, account_info_value)` — so the reservation-cleanup subqueries and the
+  third-party/webauthn sign-in lookups no longer seq-scan the whole app's rows. Created on fresh databases
+  and backfilled at startup (see Migration below).
+- Restores the `app_id` condition on the nested subqueries of two `AccountInfoQueries` reservation-cleanup
+  statements (tenant-removal cleanup and `updateAccountInfo_Transaction`'s tenant delete), which had dropped
+  it and so forced app-wide table scans. Results unchanged.
+- Pins `getUsersCount_new`'s `D - L` statement to its streaming merge join
+  (`SET LOCAL enable_hashjoin = off`) so the planner can no longer flip to a hash join that spills the
+  app-wide table to disk when its row estimates drift. Count result unchanged.
+- Makes the user-listing and bulk-import keyset pagination cursors sargable by adding a redundant
+  leading-sort-column bound to the cursor predicate, so deep pages seek straight to the cursor instead of
+  scanning the pagination index from the top. Applies to `getUsers_new`, `getUsers_legacy`, and the
+  bulk-import listing; rows, order and cursor tokens are unchanged.
+
+### Migration
+
+Adds two additive indexes on `recipe_user_account_infos`, created on fresh databases and backfilled on
+existing ones at startup via
+
+``` sql
+
+CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_app_primary_user ON recipe_user_account_infos 
+(app_id, primary_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_account_info ON recipe_user_account_infos 
+(app_id, account_info_type, account_info_value);
+
+```
+
+No table or column changes. **Operators of very large deployments should pre-create both indexes with
+`CREATE INDEX CONCURRENTLY` before upgrading**, so the startup DDL is a no-op and does not hold a table lock
+during a long index build.
+
 ## [9.6.1]
 
 - Implements `updateTimeJoinedForPrimaryUsers_Transaction` (new in plugin-interface `8.7.1`) by delegating to
