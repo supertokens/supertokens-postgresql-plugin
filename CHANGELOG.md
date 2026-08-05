@@ -9,18 +9,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [9.6.2]
 
-- Fixes a connection pool leak in `UserIdMappingQueries.createBulkUserIdMapping`: the pooled connection used
-  for the batch insert was obtained without try-with-resources and never returned to the pool, so every
-  bulk-import batch that created user-id mappings permanently consumed one connection and a large import could
-  exhaust the pool
-- Fixes `ActiveUsersQueries.getLastActiveByMultipleUserIds` returning at most one user's last-active time: the
-  result handler used `if (res.next())` where the `IN (...)` batch query needs `while (res.next())`, so all but
-  one of the requested users read as never-active
-- Takes a row lock (`SELECT ... FOR UPDATE`) on the role inside a transaction before deleting it in
-  `UserRolesQueries.deleteRole`, mirroring the in-memory implementation and the coordination the rest of the
-  role queries do via `doesRoleExist_transaction`. The previous plain autocommit `DELETE` could interleave with
-  an assign-role flow between its exists-check and its insert, leaving a role assignment referencing a deleted
-  role
+- Fixes a connection pool leak in `UserIdMappingQueries.createBulkUserIdMapping`, which never returned its
+  pooled connection and could exhaust the pool on large bulk imports
+- Fixes `ActiveUsersQueries.getLastActiveByMultipleUserIds` reading its `IN (...)` batch result with
+  `if` instead of `while`, so all but one requested user read as never-active
+- Runs `UserRolesQueries.deleteRole` inside a transaction with a `FOR UPDATE` row lock, matching the other
+  role queries, so it can no longer interleave with a concurrent assign-role flow
 
 ## [9.6.1]
 
