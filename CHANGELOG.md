@@ -7,14 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- Replaces the per-token `oauth_m2m_tokens` rows behind the two M2M feature-flag stats with an hourly
-  bucketed rollup table `oauth_m2m_token_stats (app_id, iat_bucket, exp_bucket, count)`.
-  `addOAuthM2MTokenForStats` now upserts a per-bucket counter, so bursty issuers are counted exactly
-  (the old per-second primary key with `ON CONFLICT DO NOTHING` undercounted them), and both
-  `countTotalNumberOfOAuthM2MTokensCreatedSince` and `countTotalNumberOfOAuthM2MTokensAlive` become
-  index-range `SUM`s bounded by the number of live buckets, independent of issuance volume. Additive
-  DDL only; existing rows are bucketed into the rollup once on upgrade and the legacy table drains via
-  the existing 31-day retention cron.
+- Replaces the per-token `oauth_m2m_tokens` stats rows with an hourly bucketed rollup table
+  `oauth_m2m_token_stats`: the stats write now upserts a per-bucket counter (fixing undercounting of
+  bursty issuers), and the M2M token count queries become bounded index-range `SUM`s instead of scaling
+  with issuance volume. Additive DDL only; existing rows are bucketed into the rollup on upgrade.
 
 ## [9.6.1]
 
