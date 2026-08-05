@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.6.2]
+
 - Adds two additive indexes on `oauth_sessions`, `(app_id, client_id)` and `(app_id, session_handle)`, so the
   revoke paths no longer scan the whole table on session-heavy deployments. The table is keyed by `gid` only,
   so `deleteOAuthSessionByClientId` (`DELETE ... WHERE app_id = ? AND client_id = ?` — revoke-all-for-client,
@@ -34,8 +36,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Migration
 
-Adds two additive indexes on `recipe_user_account_infos`, created on fresh databases and backfilled on
-existing ones at startup via
+Adds additive indexes, created on fresh databases and backfilled on existing ones at startup via
 
 ``` sql
 
