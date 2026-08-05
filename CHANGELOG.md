@@ -7,14 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- Removes the redundant recipe-level `recipe_user_tenants` inserts from the `addUserIdToTenant_Transaction`
-  methods of `EmailPasswordQueries`, `PasswordlessQueries` and `ThirdPartyQueries`. On the migrated schema
-  those rows are already seeded by the single orchestration-level writer
-  `Start.addUserIdToTenant_Transaction` -> `AccountInfoQueries.addTenantIdToRecipeUser_Transaction`, which
-  runs for every `writesToNewTables()` mode and materializes the user's rows into the target tenant from the
-  app-scoped `recipe_user_account_infos`. This also drops the `ThirdParty` variant's divergent
-  `writesToNewTables() && writesToOldTables()` gate (which was in fact unreachable). No behavior change:
-  table contents and the `wasAlreadyAssociated` result are identical, and no data repair is required
+- Removes redundant recipe-level `recipe_user_tenants` inserts from `addUserIdToTenant_Transaction` in the
+  EmailPassword, Passwordless and ThirdParty query classes; on the migrated schema those rows are already
+  written by the orchestration-level `Start.addUserIdToTenant_Transaction`. No behavior change and no data
+  repair required.
 
 ## [9.6.1]
 
