@@ -7,6 +7,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Adds two additive indexes on `oauth_sessions`, `(app_id, client_id)` and `(app_id, session_handle)`, so the
+  revoke paths no longer scan the whole table on session-heavy deployments. The table is keyed by `gid` only,
+  so `deleteOAuthSessionByClientId` (`DELETE ... WHERE app_id = ? AND client_id = ?` — revoke-all-for-client,
+  and the FK-cascade path when an oauth client is deleted) and `deleteOAuthSessionBySessionHandle`
+  (`DELETE ... WHERE app_id = ? AND session_handle = ?` — revoke on SuperTokens-session logout) previously did
+  a sequential scan per call. No query or behaviour changes; both deletes now use an index scan.
+- Adds `OAuthSessionRevokeIndexRegressionTest`: seeds ~50k oauth sessions across many clients directly with SQL
+  and asserts on `EXPLAIN (FORMAT JSON)` that both revoke-by-client and revoke-by-session-handle deletes plan
+  an index scan on the new indexes, and (teeth) that dropping the indexes forces a sequential scan. Skippable
+  locally via `SKIP_SCALE_REGRESSION_TESTS=true`
 - Adds two secondary indexes on `recipe_user_account_infos` — `(app_id, primary_user_id)` and
   `(app_id, account_info_type, account_info_value)` — so the reservation-cleanup subqueries and the
   third-party/webauthn sign-in lookups no longer seq-scan the whole app's rows. Created on fresh databases
@@ -35,9 +45,12 @@ CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_app_primary_user ON rec
 CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_account_info ON recipe_user_account_infos 
 (app_id, account_info_type, account_info_value);
 
+CREATE INDEX IF NOT EXISTS oauth_session_client_id_index on oauth_sessions (app_id, client_id);
+
+CREATE INDEX IF NOT EXISTS oauth_session_session_handle_index on oauth_sessions (app_id, session_handle);
 ```
 
-No table or column changes. **Operators of very large deployments should pre-create both indexes with
+No table or column changes. **Operators of large deployments should pre-create these indexes with
 `CREATE INDEX CONCURRENTLY` before upgrading**, so the startup DDL is a no-op and does not hold a table lock
 during a long index build.
 
