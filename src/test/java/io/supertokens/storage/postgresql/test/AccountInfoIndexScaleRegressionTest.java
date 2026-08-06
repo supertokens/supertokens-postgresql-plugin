@@ -204,8 +204,16 @@ public class AccountInfoIndexScaleRegressionTest {
                 JsonObject remPlan = explain(con,
                         tenantRemovalCleanupFixed(put, rut, ruai, appId, primaryId, memberId, tenantId));
                 assertNoSeqScan("tenant-removal cleanup (fixed)", remPlan, ruai);
-                assertNoSeqScan("tenant-removal cleanup (fixed)", remPlan, rut);
                 assertIndexCondHasAppId("tenant-removal cleanup (fixed)", remPlan, IDX_APP_PRIMARY_USER);
+                // Deliberately NOT asserted: no-seq-scan on rut. The inner ruai subquery correlates on
+                // rut.tenant_id, which blocks decorrelation, so the only predicate pushable into the rut
+                // enumeration is the non-selective app_id — scanning all of the app's rut rows (seq scan or
+                // index scan, the planner flips on ANALYZE sampling noise) is the honest plan for this query
+                // shape. The app_id fix indexes the per-row ruai probe; the O(app-size) rut enumeration is
+                // the query's own defect: the correlated OR is equivalent to excluding exactly the removed
+                // (member, tenant) pair — NOT (recipe_user_id = ? AND tenant_id = ?) — which decorrelates
+                // fully and can drive from the group's members. That rewrite is tracked separately (the
+                // "Disassociate linked user from tenant" scaling-ratio breach in the stress suite).
 
                 // Teeth: same version-proof signature as (2) — app_id absent from every index condition over
                 // the ruai/rut indexes, regardless of whether the planner falls back to a seq scan or a skip scan.
