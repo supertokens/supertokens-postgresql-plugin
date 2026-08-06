@@ -63,10 +63,18 @@ import static org.junit.Assert.*;
  *
  * <p>These tests seed a synthetic single-app / single-tenant dataset directly with SQL, then run each query
  * under {@code EXPLAIN (FORMAT JSON)} and assert on the chosen plan: the fixed queries reach the seeded tables
- * via the intended indexes with <b>no sequential scan</b>; the pre-fix query shapes (kept alongside as teeth —
- * {@code app_id} dropped, or the account-info index removed) sequential-scan, proving the test would catch a
- * regression. {@code EXPLAIN} without {@code ANALYZE} plans but does not execute, so the {@code DELETE}
- * statements never mutate the fixture.
+ * via the intended indexes with <b>no sequential scan</b>, and — the load-bearing property — with {@code app_id}
+ * present in the <b>Index Cond</b> of those index scans. The pre-fix shapes (kept alongside as teeth) are
+ * asserted the other way around: {@code app_id} absent from any Index Cond over these indexes.
+ *
+ * <p>Deliberately NOT asserted: that the pre-fix shape sequential-scans. That was true up to PostgreSQL 17
+ * (a dropped leading index column made the index unusable), but PostgreSQL 18's B-tree skip scan can service
+ * a query that omits the leading {@code app_id} column — cheaply so at low app_id cardinality — so "the broken
+ * shape must plan badly" is a planner-version-dependent claim. The presence/absence of {@code app_id} in the
+ * index condition is the version-proof signature of the fix, and is what these teeth pin. (Production runs
+ * PG &le; 16 where the pre-fix shape still degrades to a sequential scan; on 18+ it degrades with app_id
+ * cardinality instead.) {@code EXPLAIN} without {@code ANALYZE} plans but does not execute, so the
+ * {@code DELETE} statements never mutate the fixture.
  *
  * <p>The SQL strings below are copies of the statements {@code AccountInfoQueries} builds (kept in sync with
  * that source, with the bind parameters inlined as literals). Heavy-ish fixture; set the environment variable
@@ -181,24 +189,30 @@ public class AccountInfoIndexScaleRegressionTest {
                         usesIndex(updPlan, IDX_APP_PRIMARY_USER));
                 assertTrue("updateAccountInfo cleanup must probe rut via " + IDX_RUT_RECIPE_USER + "; plan=" + updPlan,
                         usesIndex(updPlan, IDX_RUT_RECIPE_USER));
+                assertIndexCondHasAppId("updateAccountInfo cleanup (fixed)", updPlan, IDX_APP_PRIMARY_USER);
+                assertIndexCondHasAppId("updateAccountInfo cleanup (fixed)", updPlan, IDX_RUT_RECIPE_USER);
 
-                // Teeth: the pre-fix shape drops app_id from both subqueries -> the leading index column is
-                // absent -> at least one of ruai / rut must be sequential-scanned.
+                // Teeth: the pre-fix shape drops app_id from both subqueries. Whether the planner then
+                // sequential-scans (PG <= 17) or rescues the query with a B-tree skip scan over the missing
+                // leading column (PG 18+), app_id cannot appear in the index condition — its absence is the
+                // version-proof signature of the regression. (Do NOT assert a seq scan here; see class doc.)
                 JsonObject updTeeth = explain(con, updateCleanupPreFix(put, rut, ruai, appId, primaryId, memberId));
-                assertTrue("teeth: app_id-dropped updateAccountInfo cleanup must seq-scan ruai or rut; plan=" + updTeeth,
-                        hasSeqScan(updTeeth, ruai) || hasSeqScan(updTeeth, rut));
+                assertIndexCondLacksAppId("teeth: app_id-dropped updateAccountInfo cleanup", updTeeth,
+                        IDX_APP_PRIMARY_USER, IDX_RUT_RECIPE_USER);
 
                 // ---- (3) tenant-removal reservation cleanup (correlated rut.tenant_id preserved) ----
                 JsonObject remPlan = explain(con,
                         tenantRemovalCleanupFixed(put, rut, ruai, appId, primaryId, memberId, tenantId));
                 assertNoSeqScan("tenant-removal cleanup (fixed)", remPlan, ruai);
                 assertNoSeqScan("tenant-removal cleanup (fixed)", remPlan, rut);
+                assertIndexCondHasAppId("tenant-removal cleanup (fixed)", remPlan, IDX_APP_PRIMARY_USER);
 
-                // Teeth: pre-fix shape (app_id dropped) must seq-scan ruai or rut.
+                // Teeth: same version-proof signature as (2) — app_id absent from every index condition over
+                // the ruai/rut indexes, regardless of whether the planner falls back to a seq scan or a skip scan.
                 JsonObject remTeeth = explain(con,
                         tenantRemovalCleanupPreFix(put, rut, ruai, appId, primaryId, memberId, tenantId));
-                assertTrue("teeth: app_id-dropped tenant-removal cleanup must seq-scan ruai or rut; plan=" + remTeeth,
-                        hasSeqScan(remTeeth, ruai) || hasSeqScan(remTeeth, rut));
+                assertIndexCondLacksAppId("teeth: app_id-dropped tenant-removal cleanup", remTeeth,
+                        IDX_APP_PRIMARY_USER, IDX_RUT_RECIPE_USER);
             } finally {
                 con.close();
             }
@@ -378,6 +392,44 @@ public class AccountInfoIndexScaleRegressionTest {
             if (usesIndex(child, indexName)) return true;
         }
         return false;
+    }
+
+    // The "Index Cond" text of the first node scanning via the given index, or null if the index is unused
+    // (covers Index Scan, Index Only Scan, and Bitmap Index Scan nodes — all carry "Index Name"/"Index Cond").
+    private String indexCond(JsonObject node, String indexName) {
+        if (indexName.equals(str(node, "Index Name"))) {
+            String cond = str(node, "Index Cond");
+            return cond != null ? cond : "";
+        }
+        for (JsonObject child : children(node)) {
+            String cond = indexCond(child, indexName);
+            if (cond != null) return cond;
+        }
+        return null;
+    }
+
+    // Fixed-shape assertion: the query supplies app_id, so any scan via this index must carry app_id in its
+    // index condition. This is the planner-version-proof signature of the fix (see class doc).
+    private void assertIndexCondHasAppId(String label, JsonObject plan, String indexName) {
+        String cond = indexCond(plan, indexName);
+        assertNotNull(label + ": expected a scan via " + indexName + "; plan=" + plan, cond);
+        assertTrue(label + ": app_id must appear in the " + indexName + " index condition; cond=" + cond
+                + "; plan=" + plan, cond.contains("app_id"));
+    }
+
+    // Teeth assertion for the pre-fix shape: the query drops app_id, so no scan over these indexes can carry
+    // app_id in its index condition — whether the planner seq-scans (PG <= 17, index unused: vacuously true)
+    // or skip-scans the missing leading column (PG 18+). Filters are intentionally ignored: app_id may appear
+    // there, but a filter does not bound the index traversal.
+    private void assertIndexCondLacksAppId(String label, JsonObject plan, String... indexNames) {
+        for (String indexName : indexNames) {
+            String cond = indexCond(plan, indexName);
+            if (cond != null) {
+                assertFalse(label + ": app_id cannot appear in the " + indexName
+                                + " index condition when the query drops it; cond=" + cond + "; plan=" + plan,
+                        cond.contains("app_id"));
+            }
+        }
     }
 
     private boolean indexExists(Connection con, String indexName) throws Exception {
