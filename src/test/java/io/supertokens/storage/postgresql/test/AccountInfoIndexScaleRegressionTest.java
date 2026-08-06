@@ -67,6 +67,13 @@ import static org.junit.Assert.*;
  * present in the <b>Index Cond</b> of those index scans. The pre-fix shapes (kept alongside as teeth) are
  * asserted the other way around: {@code app_id} absent from any Index Cond over these indexes.
  *
+ * <p>The tenant-removal cleanup ({@code removeAccountInfoReservationForPrimaryUserWhileRemovingTenant_Transaction})
+ * additionally pins the issue #369 decorrelation: the rewritten query drives from the group members and joins
+ * to {@code recipe_user_tenants} by {@code recipe_user_id}, so {@code rut} must be reached via
+ * {@code idx_recipe_user_tenants_recipe_user_id} with both {@code app_id} and {@code recipe_user_id} in its
+ * Index Cond. The correlated pre-fix shape (kept as teeth) cannot bind {@code recipe_user_id} into that index
+ * condition even with {@code app_id} restored — the load-bearing signature of the decorrelation.
+ *
  * <p>Deliberately NOT asserted: that the pre-fix shape sequential-scans. That was true up to PostgreSQL 17
  * (a dropped leading index column made the index unusable), but PostgreSQL 18's B-tree skip scan can service
  * a query that omits the leading {@code app_id} column — cheaply so at low app_id cardinality — so "the broken
@@ -200,15 +207,36 @@ public class AccountInfoIndexScaleRegressionTest {
                 assertIndexCondLacksAppId("teeth: app_id-dropped updateAccountInfo cleanup", updTeeth,
                         IDX_APP_PRIMARY_USER, IDX_RUT_RECIPE_USER);
 
-                // ---- (3) tenant-removal reservation cleanup (correlated rut.tenant_id preserved) ----
+                // ---- (3) tenant-removal reservation cleanup — decorrelated (issue #369) ----
+                // The rewrite drives from the group members (ruai by primary_user_id) and joins to rut by
+                // recipe_user_id. So rut must be reached via idx_recipe_user_tenants_recipe_user_id with BOTH
+                // app_id (flowed through the join equivalence) and recipe_user_id in its Index Cond, and with
+                // no sequential scan of rut — stable now that the query is driven from the members.
                 JsonObject remPlan = explain(con,
                         tenantRemovalCleanupFixed(put, rut, ruai, appId, primaryId, memberId, tenantId));
-                assertNoSeqScan("tenant-removal cleanup (fixed)", remPlan, ruai);
-                assertNoSeqScan("tenant-removal cleanup (fixed)", remPlan, rut);
-                assertIndexCondHasAppId("tenant-removal cleanup (fixed)", remPlan, IDX_APP_PRIMARY_USER);
+                assertNoSeqScan("tenant-removal cleanup (decorrelated)", remPlan, ruai);
+                assertNoSeqScan("tenant-removal cleanup (decorrelated)", remPlan, rut);
+                assertTrue("tenant-removal cleanup must probe ruai via " + IDX_APP_PRIMARY_USER + "; plan=" + remPlan,
+                        usesIndex(remPlan, IDX_APP_PRIMARY_USER));
+                assertTrue("tenant-removal cleanup must probe rut via " + IDX_RUT_RECIPE_USER + "; plan=" + remPlan,
+                        usesIndex(remPlan, IDX_RUT_RECIPE_USER));
+                assertIndexCondHasAppId("tenant-removal cleanup (decorrelated)", remPlan, IDX_APP_PRIMARY_USER);
+                assertIndexCondContains("tenant-removal cleanup (decorrelated)", remPlan, IDX_RUT_RECIPE_USER, "app_id");
+                assertIndexCondContains("tenant-removal cleanup (decorrelated)", remPlan, IDX_RUT_RECIPE_USER,
+                        "recipe_user_id");
 
-                // Teeth: same version-proof signature as (2) — app_id absent from every index condition over
-                // the ruai/rut indexes, regardless of whether the planner falls back to a seq scan or a skip scan.
+                // Teeth A (this fix's signature): the correlated pre-fix shape — even with app_id restored —
+                // cannot push recipe_user_id into rut's index condition, because the correlated rut.tenant_id
+                // forces rut to be enumerated first and the subquery re-evaluated per row. recipe_user_id is
+                // absent from any rut index scan's Index Cond (either rut is not reached via this index at all,
+                // or it is reached with only app_id bound).
+                JsonObject remCorrelated = explain(con,
+                        tenantRemovalCleanupCorrelated(put, rut, ruai, appId, primaryId, memberId, tenantId));
+                assertIndexCondLacksToken("teeth: correlated tenant-removal cleanup cannot bind recipe_user_id",
+                        remCorrelated, IDX_RUT_RECIPE_USER, "recipe_user_id");
+
+                // Teeth B: same version-proof app_id signature as (2) — with app_id dropped entirely, it is
+                // absent from every index condition over the ruai/rut indexes (seq scan or skip scan).
                 JsonObject remTeeth = explain(con,
                         tenantRemovalCleanupPreFix(put, rut, ruai, appId, primaryId, memberId, tenantId));
                 assertIndexCondLacksAppId("teeth: app_id-dropped tenant-removal cleanup", remTeeth,
@@ -317,9 +345,29 @@ public class AccountInfoIndexScaleRegressionTest {
                 + " )";
     }
 
-    // removeAccountInfoReservationForPrimaryUserWhileRemovingTenant_Transaction — fixed.
+    // removeAccountInfoReservationForPrimaryUserWhileRemovingTenant_Transaction — fixed (decorrelated:
+    // driven from the group members, joining ruai to rut on recipe_user_id, with the single removed
+    // (member, tenant) pair excluded). No correlated subquery, so rut is probed by recipe_user_id.
     private String tenantRemovalCleanupFixed(String put, String rut, String ruai, String appId,
                                              String primaryId, String memberId, String tenantId) {
+        return "DELETE FROM " + put + " put"
+                + " WHERE put.app_id = " + q(appId) + " AND put.primary_user_id = " + q(primaryId)
+                + " AND (put.tenant_id) NOT IN ("
+                + "     SELECT DISTINCT rut.tenant_id"
+                + "     FROM " + ruai + " ruai"
+                + "     JOIN " + rut + " rut"
+                + "         ON rut.app_id = ruai.app_id AND rut.recipe_user_id = ruai.recipe_user_id"
+                + "     WHERE ruai.app_id = " + q(appId) + " AND ruai.primary_user_id = " + q(primaryId)
+                + "         AND NOT (rut.recipe_user_id = " + q(memberId) + " AND rut.tenant_id = " + q(tenantId) + ")"
+                + " )";
+    }
+
+    // removeAccountInfoReservationForPrimaryUserWhileRemovingTenant_Transaction — correlated pre-fix shape
+    // (app_id already restored, but the innermost `rut.tenant_id != ?` still correlates to the enclosing rut
+    // scope). This is the shape issue #369 replaces: the correlation blocks decorrelation, so recipe_user_id
+    // cannot be pushed into the rut index condition even though app_id can.
+    private String tenantRemovalCleanupCorrelated(String put, String rut, String ruai, String appId,
+                                                  String primaryId, String memberId, String tenantId) {
         return "DELETE FROM " + put + " put"
                 + " WHERE put.app_id = " + q(appId) + " AND put.primary_user_id = " + q(primaryId)
                 + " AND (put.tenant_id) NOT IN ("
@@ -415,6 +463,26 @@ public class AccountInfoIndexScaleRegressionTest {
         assertNotNull(label + ": expected a scan via " + indexName + "; plan=" + plan, cond);
         assertTrue(label + ": app_id must appear in the " + indexName + " index condition; cond=" + cond
                 + "; plan=" + plan, cond.contains("app_id"));
+    }
+
+    // Fixed-shape assertion: a scan via this index must carry the given column token in its index condition.
+    private void assertIndexCondContains(String label, JsonObject plan, String indexName, String token) {
+        String cond = indexCond(plan, indexName);
+        assertNotNull(label + ": expected a scan via " + indexName + "; plan=" + plan, cond);
+        assertTrue(label + ": " + token + " must appear in the " + indexName + " index condition; cond=" + cond
+                + "; plan=" + plan, cond.contains(token));
+    }
+
+    // Teeth assertion: no scan over this index may carry the given column token in its index condition —
+    // whether the index is unused entirely (indexCond == null, vacuously true) or used with only other
+    // columns bound. Filters are intentionally ignored: a token may appear there, but a filter does not
+    // bound the index traversal.
+    private void assertIndexCondLacksToken(String label, JsonObject plan, String indexName, String token) {
+        String cond = indexCond(plan, indexName);
+        if (cond != null) {
+            assertFalse(label + ": " + token + " must not appear in the " + indexName + " index condition; cond="
+                    + cond + "; plan=" + plan, cond.contains(token));
+        }
     }
 
     // Teeth assertion for the pre-fix shape: the query drops app_id, so no scan over these indexes can carry

@@ -999,37 +999,41 @@ public class AccountInfoQueries {
             //   3. Effectively, this ensures that account info reservations in primary_user_tenants only remain on tenants
             //      where the primary user (or any linked user) is still active after this tenant of user is removed.
             String recipeUserId = user.getRecipeUserId();
-            // app_id is restored on both nested subqueries (and every column is alias-qualified) so the
-            // leading index column is present: rut can use idx_recipe_user_tenants_recipe_user_id and ruai
-            // can use idx_recipe_user_account_infos_app_primary_user instead of app-wide table scans.
+            // The "still-associated tenants" set is computed by driving from the primary user's group
+            // members (recipe_user_account_infos filtered by primary_user_id) and joining to their tenant
+            // rows, rather than by scanning recipe_user_tenants app-wide and correlating back per row.
             //
-            // Correlated tenant_id: recipe_user_account_infos (ruai) has NO tenant_id column, so the
-            // `rut.tenant_id != ?` predicate in the innermost subquery intentionally correlates to the
-            // ENCLOSING recipe_user_tenants (rut) scope. That correlation is load-bearing — it is what
-            // restricts the "still-associated tenants" set to tenants other than the one being removed for
-            // the recipe user being removed. It is qualified as rut.tenant_id deliberately; do NOT rewrite
-            // it as a ruai column (ruai has none).
+            // The previous shape enumerated every rut row of the app and re-ran a per-row subquery whose
+            // `rut.tenant_id != ?` predicate correlated to the enclosing rut scope. That correlation blocked
+            // decorrelation: the only predicate pushable into the rut enumeration was the non-selective
+            // app_id, so rut was scanned in full on every tenant disassociation (the A3 scaling breach).
+            //
+            // The correlated OR was an obfuscated pair-exclusion. For a rut row with recipe user `ru` and
+            // tenant `t`, the old condition
+            //     (ru = <removedMember> AND t != <removedTenant>) OR ru != <removedMember>
+            // admits every group member's row EXCEPT the exact (removedMember, removedTenant) pair, i.e. it
+            // is precisely NOT (ru = <removedMember> AND t = <removedTenant>). Rewritten decorrelated: join
+            // the group members (ruai by primary_user_id) to their tenant rows (rut by recipe_user_id) and
+            // drop only that one pair. Same result set; cost is now O(group members x their tenants) via
+            // idx_recipe_user_account_infos_app_primary_user on ruai and idx_recipe_user_tenants_recipe_user_id
+            // on rut (app_id flows to rut through the join's app_id equivalence), independent of app size.
             String QUERY = "DELETE FROM " + primaryUserTenantsTable + " put"
                     + " WHERE put.app_id = ? AND put.primary_user_id = ? AND (put.tenant_id) NOT IN ("
                     + "     SELECT DISTINCT rut.tenant_id"
-                    + "     FROM " + recipeUserTenantsTable + " rut"
-                    + "     WHERE rut.app_id = ? AND rut.recipe_user_id IN ("
-                    + "         SELECT ruai.recipe_user_id"
-                    + "         FROM " + recipeUserAccountInfosTable + " ruai"
-                    + "         WHERE ruai.app_id = ? AND ruai.primary_user_id = ?"
-                    + "             AND ((ruai.recipe_user_id = ? AND rut.tenant_id != ?) OR ruai.recipe_user_id != ?)"
-                    + "     )"
+                    + "     FROM " + recipeUserAccountInfosTable + " ruai"
+                    + "     JOIN " + recipeUserTenantsTable + " rut"
+                    + "         ON rut.app_id = ruai.app_id AND rut.recipe_user_id = ruai.recipe_user_id"
+                    + "     WHERE ruai.app_id = ? AND ruai.primary_user_id = ?"
+                    + "         AND NOT (rut.recipe_user_id = ? AND rut.tenant_id = ?)"
                     + " )";
 
             update(sqlCon, QUERY, pst -> {
                 pst.setString(1, tenantIdentifier.getAppId());   // put.app_id
                 pst.setString(2, primaryUserId);                 // put.primary_user_id
-                pst.setString(3, tenantIdentifier.getAppId());   // rut.app_id
-                pst.setString(4, tenantIdentifier.getAppId());   // ruai.app_id
-                pst.setString(5, primaryUserId);                 // ruai.primary_user_id
-                pst.setString(6, recipeUserId);                  // ruai.recipe_user_id = ?
-                pst.setString(7, tenantIdentifier.getTenantId());// rut.tenant_id != ? (removed tenant)
-                pst.setString(8, recipeUserId);                  // ruai.recipe_user_id != ?
+                pst.setString(3, tenantIdentifier.getAppId());   // ruai.app_id
+                pst.setString(4, primaryUserId);                 // ruai.primary_user_id
+                pst.setString(5, recipeUserId);                  // rut.recipe_user_id = ? (removed member)
+                pst.setString(6, tenantIdentifier.getTenantId());// rut.tenant_id = ? (removed tenant)
             });
         } catch (SQLException e) {
             throw new StorageQueryException(e);
