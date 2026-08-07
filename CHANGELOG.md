@@ -7,6 +7,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Implements the approximate tenant user-count storage contract added in plugin-interface (PLAN-009):
+  `computeTenantUserCountAnchor` and `countTenantUsersJoinedSince` on `AuthRecipeSQLStorage`. The anchor runs
+  the existing exact per-tenant count plus a "joined since" delta inside one read-only `REPEATABLE READ`
+  snapshot and returns `C - d0`; the delta counts distinct primary users in the tenant whose group-minimum
+  join time is after the boundary via a sargable seek on `app_id_to_user_id_pagination_index2`. Together they
+  serve an exact-for-creations user count in ms instead of the multi-second exact merge. The exact-count
+  statements are unchanged (the D − L + G merge and its `enable_hashjoin` guard are extracted into shared
+  helpers so the anchor reuses them verbatim). Adds `ApproximateTenantUserCountTest` (anchor + delta equals
+  the exact count including a post-anchor insert; the three delta scenarios; legacy-mode consistency; and a
+  scale plan-shape check that the delta seeks the time bound on the pagination index).
+
 ## [9.6.2]
 
 - Adds two additive indexes on `oauth_sessions`, `(app_id, client_id)` and `(app_id, session_handle)`, so the
