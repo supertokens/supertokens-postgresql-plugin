@@ -7,7 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [9.6.2]
+## [9.6.3]
 
 - Fixes a connection pool leak in `UserIdMappingQueries.createBulkUserIdMapping`, which never returned its
   pooled connection and could exhaust the pool on large bulk imports
@@ -15,6 +15,54 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `if` instead of `while`, so all but one requested user read as never-active
 - Runs `UserRolesQueries.deleteRole` inside a transaction with a `FOR UPDATE` row lock, matching the other
   role queries, so it can no longer interleave with a concurrent assign-role flow
+
+## [9.6.2]
+
+- Adds two additive indexes on `oauth_sessions`, `(app_id, client_id)` and `(app_id, session_handle)`, so the
+  revoke paths no longer scan the whole table on session-heavy deployments. The table is keyed by `gid` only,
+  so `deleteOAuthSessionByClientId` (`DELETE ... WHERE app_id = ? AND client_id = ?` — revoke-all-for-client,
+  and the FK-cascade path when an oauth client is deleted) and `deleteOAuthSessionBySessionHandle`
+  (`DELETE ... WHERE app_id = ? AND session_handle = ?` — revoke on SuperTokens-session logout) previously did
+  a sequential scan per call. No query or behaviour changes; both deletes now use an index scan.
+- Adds `OAuthSessionRevokeIndexRegressionTest`: seeds ~50k oauth sessions across many clients directly with SQL
+  and asserts on `EXPLAIN (FORMAT JSON)` that both revoke-by-client and revoke-by-session-handle deletes plan
+  an index scan on the new indexes, and (teeth) that dropping the indexes forces a sequential scan. Skippable
+  locally via `SKIP_SCALE_REGRESSION_TESTS=true`
+- Adds two secondary indexes on `recipe_user_account_infos` — `(app_id, primary_user_id)` and
+  `(app_id, account_info_type, account_info_value)` — so the reservation-cleanup subqueries and the
+  third-party/webauthn sign-in lookups no longer seq-scan the whole app's rows. Created on fresh databases
+  and backfilled at startup (see Migration below).
+- Restores the `app_id` condition on the nested subqueries of two `AccountInfoQueries` reservation-cleanup
+  statements (tenant-removal cleanup and `updateAccountInfo_Transaction`'s tenant delete), which had dropped
+  it and so forced app-wide table scans. Results unchanged.
+- Pins `getUsersCount_new`'s `D - L` statement to its streaming merge join
+  (`SET LOCAL enable_hashjoin = off`) so the planner can no longer flip to a hash join that spills the
+  app-wide table to disk when its row estimates drift. Count result unchanged.
+- Makes the user-listing and bulk-import keyset pagination cursors sargable by adding a redundant
+  leading-sort-column bound to the cursor predicate, so deep pages seek straight to the cursor instead of
+  scanning the pagination index from the top. Applies to `getUsers_new`, `getUsers_legacy`, and the
+  bulk-import listing; rows, order and cursor tokens are unchanged.
+
+### Migration
+
+Adds additive indexes, created on fresh databases and backfilled on existing ones at startup via
+
+``` sql
+
+CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_app_primary_user ON recipe_user_account_infos 
+(app_id, primary_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_account_info ON recipe_user_account_infos 
+(app_id, account_info_type, account_info_value);
+
+CREATE INDEX IF NOT EXISTS oauth_session_client_id_index on oauth_sessions (app_id, client_id);
+
+CREATE INDEX IF NOT EXISTS oauth_session_session_handle_index on oauth_sessions (app_id, session_handle);
+```
+
+No table or column changes. **Operators of large deployments should pre-create these indexes with
+`CREATE INDEX CONCURRENTLY` before upgrading**, so the startup DDL is a no-op and does not hold a table lock
+during a long index build.
 
 ## [9.6.1]
 

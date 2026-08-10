@@ -208,11 +208,18 @@ public class BulkImportQueries {
         }
 
         if (bulkImportUserId != null && createdAt != null) {
+            // Redundant sargable upper bound on the leading sort column: the OR keyset predicate is
+            // not usable as a B-tree seek, so on deep pages Postgres scans the (app_id[, status])
+            // range from the top and filters up to the cursor. The added bound is implied by the OR
+            // (created_at <= createdAt in both branches, no rows added or removed) and lets the
+            // planner seek to the cursor; the residual OR only resolves the equal-time tie run.
             queryBuilder
-                    .append(" AND (created_at < ? OR (created_at = ? AND id <= ?))");
+                    .append(" AND (created_at < ? OR (created_at = ? AND id <= ?))")
+                    .append(" AND created_at <= ?");
             parameters.add(createdAt);
             parameters.add(createdAt);
             parameters.add(bulkImportUserId);
+            parameters.add(createdAt);
         }
 
         queryBuilder.append(" ORDER BY created_at DESC, id DESC LIMIT ?");
