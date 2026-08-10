@@ -27,10 +27,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   statements (tenant-removal cleanup and `updateAccountInfo_Transaction`'s tenant delete), which had dropped
   it and so forced app-wide table scans. Results unchanged.
 - Decorrelates the tenant-removal reservation cleanup in
-  `removeAccountInfoReservationForPrimaryUserWhileRemovingTenant_Transaction`, whose correlated subquery
-  kept an app-wide `recipe_user_tenants` scan even after the `app_id` restoration. Rewritten to drive from
-  the primary user's group members, so cost scales with the group's size rather than the app's. Result set
-  is unchanged.
+  `removeAccountInfoReservationForPrimaryUserWhileRemovingTenant_Transaction` so it scans the primary user's
+  group members instead of the whole app's `recipe_user_tenants`. Result set unchanged.
 - Pins `getUsersCount_new`'s `D - L` statement to its streaming merge join
   (`SET LOCAL enable_hashjoin = off`) so the planner can no longer flip to a hash join that spills the
   app-wide table to disk when its row estimates drift. Count result unchanged.
