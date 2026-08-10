@@ -89,6 +89,23 @@ public class OAuthQueries {
                 + oAuth2SessionTable + "(app_id, external_refresh_token DESC);";
     }
 
+    // Backs deleteOAuthSessionByClientId (revoke-all-for-client, and the FK-cascade path when an
+    // oauth client is deleted): DELETE ... WHERE app_id = ? AND client_id = ?. The table is keyed by
+    // gid only, so without this the delete scans the whole table per call.
+    public static String getQueryToCreateOAuthSessionsClientIdIndex(Start start) {
+        String oAuth2SessionTable = Config.getConfig(start).getOAuthSessionsTable();
+        return "CREATE INDEX IF NOT EXISTS oauth_session_client_id_index ON "
+                + oAuth2SessionTable + "(app_id, client_id);";
+    }
+
+    // Backs deleteOAuthSessionBySessionHandle (revoke on SuperTokens-session logout):
+    // DELETE ... WHERE app_id = ? AND session_handle = ?. Same rationale as above.
+    public static String getQueryToCreateOAuthSessionsSessionHandleIndex(Start start) {
+        String oAuth2SessionTable = Config.getConfig(start).getOAuthSessionsTable();
+        return "CREATE INDEX IF NOT EXISTS oauth_session_session_handle_index ON "
+                + oAuth2SessionTable + "(app_id, session_handle);";
+    }
+
     public static String getQueryToCreateOAuthM2MTokensTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String oAuth2M2MTokensTable = Config.getConfig(start).getOAuthM2MTokensTable();
