@@ -7,10 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- Replaces the per-token `oauth_m2m_tokens` stats rows with an hourly bucketed rollup table
-  `oauth_m2m_token_stats`: the stats write now upserts a per-bucket counter (fixing undercounting of
-  bursty issuers), and the M2M token count queries become bounded index-range `SUM`s instead of scaling
-  with issuance volume. Additive DDL only; existing rows are bucketed into the rollup on upgrade.
+- Replaces the per-token `oauth_m2m_tokens` stats table with an hourly bucketed `oauth_m2m_token_stats`
+  rollup, fixing M2M token undercounting for bursty issuers (additive DDL; existing rows migrated on upgrade)
 
 ## [9.6.1]
 
