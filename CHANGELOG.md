@@ -7,7 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [9.6.3]
+## [9.7.0]
 
 - Fixes a connection pool leak in `UserIdMappingQueries.createBulkUserIdMapping`, which never returned its
   pooled connection and could exhaust the pool on large bulk imports
