@@ -88,17 +88,18 @@ public class UserIdMappingQueries {
         String QUERY = "INSERT INTO " + Config.getConfig(start).getUserIdMappingTable()
                 + " (app_id, supertokens_user_id, external_user_id)" + " VALUES(?, ?, ?)";
 
-        Connection sqlConnection = ConnectionPool.getConnection(start);
-        List<PreparedStatementValueSetter> setters = new ArrayList<>();
+        try (Connection sqlConnection = ConnectionPool.getConnection(start)) {
+            List<PreparedStatementValueSetter> setters = new ArrayList<>();
 
-        for(String superTokensUserId : superTokensUserIdToExternalUserId.keySet()) {
-            setters.add(pst -> {
-                pst.setString(1, appIdentifier.getAppId());
-                pst.setString(2, superTokensUserId);
-                pst.setString(3, superTokensUserIdToExternalUserId.get(superTokensUserId));
-            });
+            for (String superTokensUserId : superTokensUserIdToExternalUserId.keySet()) {
+                setters.add(pst -> {
+                    pst.setString(1, appIdentifier.getAppId());
+                    pst.setString(2, superTokensUserId);
+                    pst.setString(3, superTokensUserIdToExternalUserId.get(superTokensUserId));
+                });
+            }
+            executeBatch(sqlConnection, QUERY, setters);
         }
-        executeBatch(sqlConnection, QUERY, setters);
     }
 
     public static UserIdMapping getuseraIdMappingWithSuperTokensUserId(Start start, AppIdentifier appIdentifier,
