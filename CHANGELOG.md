@@ -20,6 +20,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   are already written by `Start.addUserIdToTenant_Transaction`. No behavior change.
 - Replaces the per-token `oauth_m2m_tokens` stats table with an hourly bucketed `oauth_m2m_token_stats`
   rollup, fixing M2M token undercounting for bursty issuers (additive DDL; existing rows migrated on upgrade)
+- Decorrelates the tenant-removal reservation cleanup to scan the primary user's group members instead of the
+  whole app's `recipe_user_tenants` (result set unchanged).
 
 ## [9.6.2]
 
@@ -40,8 +42,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Restores the `app_id` condition on the nested subqueries of two `AccountInfoQueries` reservation-cleanup
   statements (tenant-removal cleanup and `updateAccountInfo_Transaction`'s tenant delete), which had dropped
   it and so forced app-wide table scans. Results unchanged.
-- Decorrelates the tenant-removal reservation cleanup to scan the primary user's group members instead of the
-  whole app's `recipe_user_tenants` (result set unchanged).
 - Pins `getUsersCount_new`'s `D - L` statement to its streaming merge join
   (`SET LOCAL enable_hashjoin = off`) so the planner can no longer flip to a hash join that spills the
   app-wide table to disk when its row estimates drift. Count result unchanged.
