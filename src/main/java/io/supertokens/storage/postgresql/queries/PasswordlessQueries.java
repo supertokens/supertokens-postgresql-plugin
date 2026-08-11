@@ -1062,42 +1062,12 @@ public class PasswordlessQueries {
             return numRows > 0;
         }
 
-        if (mode.writesToNewTables()) { // recipe_user_tenants (email and/or phone rows)
-            int totalRows = 0;
-            if (userInfo.email != null) {
-                String Q = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
-                        + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type,"
-                        + " third_party_id, third_party_user_id, account_info_value)"
-                        + " VALUES(?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING";
-                totalRows += update(sqlCon, Q, pst -> {
-                    pst.setString(1, tenantIdentifier.getAppId());
-                    pst.setString(2, userInfo.id);
-                    pst.setString(3, tenantIdentifier.getTenantId());
-                    pst.setString(4, PASSWORDLESS.toString());
-                    pst.setString(5, ACCOUNT_INFO_TYPE.EMAIL.toString());
-                    pst.setString(6, "");
-                    pst.setString(7, "");
-                    pst.setString(8, userInfo.email);
-                });
-            }
-            if (userInfo.phoneNumber != null) {
-                String Q = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
-                        + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type,"
-                        + " third_party_id, third_party_user_id, account_info_value)"
-                        + " VALUES(?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING";
-                totalRows += update(sqlCon, Q, pst -> {
-                    pst.setString(1, tenantIdentifier.getAppId());
-                    pst.setString(2, userInfo.id);
-                    pst.setString(3, tenantIdentifier.getTenantId());
-                    pst.setString(4, PASSWORDLESS.toString());
-                    pst.setString(5, ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString());
-                    pst.setString(6, "");
-                    pst.setString(7, "");
-                    pst.setString(8, userInfo.phoneNumber);
-                });
-            }
-            return totalRows > 0;
-        }
+        // recipe_user_tenants (email and/or phone rows) is seeded by the orchestration-level writer
+        // Start.addUserIdToTenant_Transaction -> AccountInfoQueries.addTenantIdToRecipeUser_Transaction,
+        // which runs for every writesToNewTables() mode and materialises this user's rows into the
+        // target tenant from the app-scoped recipe_user_account_infos. A recipe-level insert here would
+        // be redundant, so it is intentionally omitted. In writesToNewTables()-only (MIGRATED) mode the
+        // return value below is discarded: Start computes wasAlreadyAssociated from a pre-check instead.
 
         return true;
     }

@@ -535,6 +535,10 @@ public class PostgreSQLConfig {
         return addSchemaAndPrefixToTableName("oauth_m2m_tokens");
     }
 
+    public String getOAuthM2MTokenStatsTable() {
+        return addSchemaAndPrefixToTableName("oauth_m2m_token_stats");
+    }
+
     public String getOAuthSessionsTable() {
         return addSchemaAndPrefixToTableName("oauth_sessions");
     }

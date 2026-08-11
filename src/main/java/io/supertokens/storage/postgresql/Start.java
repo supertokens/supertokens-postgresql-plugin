@@ -4763,18 +4763,12 @@ public class Start
     @Override
     public void addOAuthM2MTokenForStats(AppIdentifier appIdentifier, String clientId, long iat, long exp)
             throws StorageQueryException, OAuthClientNotFoundException {
+        // The rollup stats table carries no client_id foreign key (client_id is not part of either
+        // stat), so there is no longer an OAuthClientNotFoundException to translate here. The throws
+        // clause is retained to keep the OAuthStorage signature unchanged.
         try {
             OAuthQueries.addOAuthM2MTokenForStats(this, appIdentifier, clientId, iat, exp);
         } catch (SQLException e) {
-            ServerErrorMessage errorMessage = ((PSQLException) e).getServerErrorMessage();
-            PostgreSQLConfig config = Config.getConfig(this);
-
-            if (isForeignKeyConstraintError(
-                    errorMessage,
-                    config.getOAuthM2MTokensTable(),
-                    "client_id")) {
-                throw new OAuthClientNotFoundException();
-            }
             throw new StorageQueryException(e);
         }
     }
