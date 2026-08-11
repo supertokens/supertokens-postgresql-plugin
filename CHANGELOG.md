@@ -28,6 +28,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Adds `app_id` to the join in the legacy WebAuthN email lookup
   (`getPrimaryUserIdForAppUsingEmail_Transaction`) so it can no longer match another app's
   `all_auth_recipe_users` row carrying the same `user_id`.
+- Fixes `listUserIdsByMultipleThirdPartyInfo_Transaction` matching the cross-product of its inputs instead of 
+  the requested `(third_party_id, third_party_user_id)` pairs.
 
 ## [9.6.2]
 

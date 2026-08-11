@@ -357,23 +357,33 @@ public class ThirdPartyQueries {
         if(thirdPartyUserIdToThirdPartyId == null || thirdPartyUserIdToThirdPartyId.isEmpty()){
             return new ArrayList<>();
         }
+        // Match each (third_party_id, third_party_user_id) pair exactly, not the cross-product of the
+        // two lists. Using two independent IN clauses would also match unrelated pairings that happen
+        // to share a third_party_id or third_party_user_id with a requested pair (e.g. asking for
+        // (google, u1) and (facebook, u2) would spuriously match (google, u2) and (facebook, u1)).
+        StringBuilder pairPlaceholders = new StringBuilder();
+        for (int i = 0; i < thirdPartyUserIdToThirdPartyId.size(); i++) {
+            if (i > 0) {
+                pairPlaceholders.append(", ");
+            }
+            pairPlaceholders.append("(?, ?)");
+        }
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getThirdPartyUsersTable() + " AS tp" +
                 " JOIN " + getConfig(start).getUsersTable() + " AS all_users" +
                 " ON tp.app_id = all_users.app_id AND tp.user_id = all_users.user_id" +
-                " WHERE tp.app_id = ? AND tp.third_party_id IN ( " + Utils.generateCommaSeperatedQuestionMarks(
-                thirdPartyUserIdToThirdPartyId.size()) + " ) AND tp.third_party_user_id IN ( " + Utils.generateCommaSeperatedQuestionMarks(
-                thirdPartyUserIdToThirdPartyId.size()) + " )";
+                " WHERE tp.app_id = ? AND (tp.third_party_id, tp.third_party_user_id) IN ( "
+                + pairPlaceholders + " )";
 
         return execute(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             int counter = 2;
-            for (String thirdpartId : thirdPartyUserIdToThirdPartyId.values()){
-                pst.setString(counter, thirdpartId);
+            // The map is keyed by third_party_user_id with third_party_id as the value; bind each
+            // entry as the (third_party_id, third_party_user_id) tuple in the row-value list above.
+            for (Map.Entry<String, String> entry : thirdPartyUserIdToThirdPartyId.entrySet()) {
+                pst.setString(counter, entry.getValue());
                 counter++;
-            }
-            for (String thirdparyUserId : thirdPartyUserIdToThirdPartyId.keySet()){
-                pst.setString(counter, thirdparyUserId);
+                pst.setString(counter, entry.getKey());
                 counter++;
             }
         }, result -> {
