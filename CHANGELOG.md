@@ -25,6 +25,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   path that serves an exact-for-creations per-tenant user count in ms via a snapshot anchor plus a "joined
   since" delta, instead of the multi-second exact merge. The exact-count SQL is unchanged. Adds
   `ApproximateTenantUserCountTest`.
+- Adds `app_id` to the join in the legacy WebAuthN email lookup
+  (`getPrimaryUserIdForAppUsingEmail_Transaction`) so it can no longer match another app's
+  `all_auth_recipe_users` row carrying the same `user_id`.
 
 ## [9.6.2]
 
