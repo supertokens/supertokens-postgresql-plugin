@@ -7,6 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.7.0]
+
+- Fixes a connection pool leak in `UserIdMappingQueries.createBulkUserIdMapping`, which never returned its
+  pooled connection and could exhaust the pool on large bulk imports
+- Fixes `ActiveUsersQueries.getLastActiveByMultipleUserIds` reading its `IN (...)` batch result with
+  `if` instead of `while`, so all but one requested user read as never-active
+- Runs `UserRolesQueries.deleteRole` inside a transaction with a `FOR UPDATE` row lock, matching the other
+  role queries, so it can no longer interleave with a concurrent assign-role flow
 - Removes redundant recipe-level `recipe_user_tenants` inserts in `addUserIdToTenant_Transaction`; those rows
   are already written by `Start.addUserIdToTenant_Transaction`. No behavior change.
 

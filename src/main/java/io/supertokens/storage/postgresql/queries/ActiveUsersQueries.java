@@ -180,7 +180,7 @@ public class ActiveUsersQueries {
                 }
             }, res -> {
                 Map<String, Long> lastActiveByUserIds = new HashMap<>();
-                if (res.next()) {
+                while (res.next()) {
                     String userId = res.getString("user_id");
                     lastActiveByUserIds.put(userId, res.getLong("last_active_time"));
                 }
