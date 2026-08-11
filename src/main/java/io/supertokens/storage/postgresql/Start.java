@@ -3926,6 +3926,26 @@ public class Start
     }
 
     @Override
+    public long countTenantUsersJoinedSince(TenantIdentifier tenantIdentifier, long sinceMs)
+            throws StorageQueryException {
+        try {
+            return GeneralQueries.countTenantUsersJoinedSince(this, tenantIdentifier, sinceMs);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public long computeTenantUserCountAnchor(TenantIdentifier tenantIdentifier, long sinceMs)
+            throws StorageQueryException {
+        try {
+            return GeneralQueries.computeTenantUserCountAnchor(this, tenantIdentifier, sinceMs);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public boolean doesUserIdExist_Transaction(TransactionConnection con, AppIdentifier appIdentifier,
                                                String externalUserId) throws StorageQueryException {
         try {

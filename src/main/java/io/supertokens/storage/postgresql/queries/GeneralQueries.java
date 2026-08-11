@@ -1278,27 +1278,46 @@ public class GeneralQueries {
         // per-tenant presence invariant (a group has rows in exactly the tenants it is present in),
         // which is the table's linking-conflict reservation purpose.
 
-        // D and L in one streaming merge-join pass; both inputs are index-only and pre-sorted on
-        // recipe_user_id (idx_recipe_user_tenants_tenant_recipe_user and the app_id_to_user_id PK /
-        // app_id_to_user_id_linked_flag_index covering companion).
-        //
-        // The plan MUST stay a merge join. If the planner instead hash-joins, it builds a hash table
-        // over the app-wide app_id_to_user_id side (millions of rows on large deployments); that
-        // exceeds work_mem and spills gigabytes of temp to disk - the exact failure the D - L + G
-        // decomposition was designed to avoid. The count is correct either way; this is purely a
-        // plan/resource problem, and it cannot be left to estimate luck: the hash plan wins whenever
-        // the row estimates drift (e.g. autoanalyze lag right after a large import). So we disable
-        // hash joins for just this statement (executeWithHashJoinDisabled). The planner is still free
-        // to pick a nested loop for genuinely small tenants - both remaining plans stream over the
-        // pre-sorted indexes and never spill.
+        // D and L in one streaming merge-join pass, evaluated with hash joins disabled for the
+        // statement (see runTenantExactCountDL for why the merge plan is load-bearing).
+        long[] dl = executeWithHashJoinDisabled(start,
+                con -> runTenantExactCountDL(start, con, tenantIdentifier));
+
+        // G: streaming distinct off idx_primary_user_tenants_tenant_primary. Join-free, so it needs no
+        // hash-join guard and runs on its own pooled connection as before.
+        long g;
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            g = runTenantExactCountG(start, con, tenantIdentifier);
+        }
+
+        return dl[0] - dl[1] + g;
+    }
+
+    // The D and L terms of the per-tenant exact count (see getUsersCount_new), evaluated on the
+    // supplied connection so the same statement backs both the standalone count and the anchor's
+    // single read-only snapshot (computeTenantUserCountAnchor).
+    //
+    // Both inputs are index-only and pre-sorted on recipe_user_id
+    // (idx_recipe_user_tenants_tenant_recipe_user and the app_id_to_user_id PK /
+    // app_id_to_user_id_linked_flag_index covering companion).
+    //
+    // The plan MUST stay a merge join. If the planner instead hash-joins, it builds a hash table over
+    // the app-wide app_id_to_user_id side (millions of rows on large deployments); that exceeds
+    // work_mem and spills gigabytes of temp to disk - the exact failure the D - L + G decomposition
+    // was designed to avoid. The count is correct either way; this is purely a plan/resource problem,
+    // and it cannot be left to estimate luck: the hash plan wins whenever the row estimates drift
+    // (e.g. autoanalyze lag right after a large import). So callers run this with hash joins disabled
+    // for the statement's transaction. The planner is still free to pick a nested loop for genuinely
+    // small tenants - both remaining plans stream over the pre-sorted indexes and never spill.
+    private static long[] runTenantExactCountDL(Start start, Connection con, TenantIdentifier tenantIdentifier)
+            throws SQLException, StorageQueryException {
         String QUERY_DL = "SELECT COUNT(*) AS d,"
                 + " COUNT(*) FILTER (WHERE a.is_linked_or_is_a_primary_user) AS l"
                 + " FROM (SELECT DISTINCT recipe_user_id FROM " + getConfig(start).getRecipeUserTenantsTable()
                 + " WHERE app_id = ? AND tenant_id = ?) r"
                 + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " a"
                 + " ON a.app_id = ? AND a.user_id = r.recipe_user_id";
-
-        long[] dl = executeWithHashJoinDisabled(start, QUERY_DL, pst -> {
+        return execute(con, QUERY_DL, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, tenantIdentifier.getAppId());
@@ -1308,13 +1327,16 @@ public class GeneralQueries {
             }
             return new long[]{0L, 0L};
         });
+    }
 
-        // G: streaming distinct off idx_primary_user_tenants_tenant_primary.
+    // The G term of the per-tenant exact count (see getUsersCount_new), evaluated on the supplied
+    // connection so it can share the anchor's snapshot.
+    private static long runTenantExactCountG(Start start, Connection con, TenantIdentifier tenantIdentifier)
+            throws SQLException, StorageQueryException {
         String QUERY_G = "SELECT COUNT(*) AS g FROM ("
                 + "SELECT DISTINCT primary_user_id FROM " + getConfig(start).getPrimaryUserTenantsTable()
                 + " WHERE app_id = ? AND tenant_id = ?) g";
-
-        long g = execute(start, QUERY_G, pst -> {
+        return execute(con, QUERY_G, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
         }, result -> {
@@ -1323,17 +1345,14 @@ public class GeneralQueries {
             }
             return 0L;
         });
-
-        return dl[0] - dl[1] + g;
     }
 
-    // Runs a read-only query with hash joins disabled for the duration of the statement's own
-    // transaction, forcing the planner onto a streaming merge join (or a nested loop for small
-    // inputs) over pre-sorted index scans rather than a hash join whose build side can overflow
-    // work_mem and spill to disk. SET LOCAL is scoped to the transaction and reverts on COMMIT, so
-    // the pooled connection is handed back with its normal planner settings and autocommit state.
-    private static <T> T executeWithHashJoinDisabled(Start start, String QUERY,
-            PreparedStatementValueSetter setter, ResultSetValueExtractor<T> mapper)
+    // Runs a read-only unit of work with hash joins disabled for the duration of its transaction,
+    // forcing the planner onto a streaming merge join (or a nested loop for small inputs) over
+    // pre-sorted index scans rather than a hash join whose build side can overflow work_mem and spill
+    // to disk. SET LOCAL is scoped to the transaction and reverts on COMMIT, so the pooled connection
+    // is handed back with its normal planner settings and autocommit state.
+    private static <T> T executeWithHashJoinDisabled(Start start, ConnectionCallable<T> callable)
             throws SQLException, StorageQueryException {
         try (Connection con = ConnectionPool.getConnection(start)) {
             boolean prevAutoCommit = con.getAutoCommit();
@@ -1342,7 +1361,7 @@ public class GeneralQueries {
                 try (Statement st = con.createStatement()) {
                     st.execute("SET LOCAL enable_hashjoin = off");
                 }
-                T result = execute(con, QUERY, setter, mapper);
+                T result = callable.call(con);
                 con.commit();
                 return result;
             } catch (SQLException | StorageQueryException | RuntimeException e) {
@@ -1352,6 +1371,11 @@ public class GeneralQueries {
                 con.setAutoCommit(prevAutoCommit);
             }
         }
+    }
+
+    @FunctionalInterface
+    private interface ConnectionCallable<T> {
+        T call(Connection con) throws SQLException, StorageQueryException;
     }
 
     private static long getUsersCountByRecipe_new(Start start, TenantIdentifier tenantIdentifier,
@@ -1418,6 +1442,121 @@ public class GeneralQueries {
                     pst.setString(i + 3, includeRecipeIds[i].toString());
                 }
             }
+        }, result -> {
+            if (result.next()) {
+                return result.getLong("total");
+            }
+            return 0L;
+        });
+    }
+
+    // ---- Approximate tenant user count: snapshot anchor + live joined-since delta (PLAN-009). ----
+    //
+    // The exact per-tenant count (getUsersCount above) is acceptable as a background cost but too slow
+    // interactively on the largest tenants. The approximate fast path serves a cached exact anchor
+    // (computeTenantUserCountAnchor) plus a live "joined since" delta (countTenantUsersJoinedSince)
+    // that is cheap because it scans only the users who joined since the anchor's boundary. See
+    // AuthRecipeSQLStorage for the full contract and exactness argument.
+
+    public static long countTenantUsersJoinedSince(Start start, TenantIdentifier tenantIdentifier, long sinceMs)
+            throws SQLException, StorageQueryException {
+        boolean readsFromNewTables = Config.getConfig(start).getMigrationMode().readsFromNewTables();
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            return countTenantUsersJoinedSince(start, con, tenantIdentifier, sinceMs, readsFromNewTables);
+        }
+    }
+
+    // Delta evaluated on the supplied connection, so the anchor can compute it inside the same
+    // read-only snapshot as its exact count. Counts distinct primary users in the tenant whose
+    // group-minimum join time is strictly after sinceMs. Because that time is the MIN over the group's
+    // members (updateTimeJoinedForPrimaryUsers_Transaction / invariant I6), a user linked into a
+    // pre-existing group inherits a time <= sinceMs and correctly drops out of this window - the group
+    // was already counted in the anchor.
+    private static long countTenantUsersJoinedSince(Start start, Connection con,
+            TenantIdentifier tenantIdentifier, long sinceMs, boolean readsFromNewTables)
+            throws SQLException, StorageQueryException {
+        String QUERY;
+        if (readsFromNewTables) {
+            // Sargable range seek on app_id_to_user_id_pagination_index2 (app_id,
+            // primary_or_recipe_user_time_joined ASC, ...): only the rows joined after the bound are
+            // scanned, and the tenant-membership EXISTS probes just those rows. Distinct (id, time)
+            // pairs collapse to distinct primaries by I6.
+            QUERY = "SELECT COUNT(*) FROM ("
+                    + "SELECT DISTINCT auid.primary_or_recipe_user_id, auid.primary_or_recipe_user_time_joined"
+                    + " FROM " + getConfig(start).getAppIdToUserIdTable() + " auid"
+                    + " WHERE auid.app_id = ? AND auid.primary_or_recipe_user_time_joined > ?"
+                    + " AND EXISTS (SELECT 1 FROM " + getConfig(start).getRecipeUserTenantsTable() + " rut"
+                    + " WHERE rut.app_id = auid.app_id AND rut.recipe_user_id = auid.user_id"
+                    + " AND rut.tenant_id = ?)) u";
+        } else {
+            // Legacy read path: the same distinct-primary count restricted to the joined-since window,
+            // over all_auth_recipe_users (the table getUsersCount_legacy counts), so that anchor +
+            // delta stays consistent with the exact count in this mode too.
+            QUERY = "SELECT COUNT(*) FROM ("
+                    + "SELECT DISTINCT primary_or_recipe_user_id FROM " + getConfig(start).getUsersTable()
+                    + " WHERE app_id = ? AND primary_or_recipe_user_time_joined > ? AND tenant_id = ?) u";
+        }
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setLong(2, sinceMs);
+            pst.setString(3, tenantIdentifier.getTenantId());
+        }, result -> {
+            if (result.next()) {
+                return result.getLong(1);
+            }
+            return 0L;
+        });
+    }
+
+    public static long computeTenantUserCountAnchor(Start start, TenantIdentifier tenantIdentifier, long sinceMs)
+            throws SQLException, StorageQueryException {
+        boolean readsFromNewTables = Config.getConfig(start).getMigrationMode().readsFromNewTables();
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            boolean prevAutoCommit = con.getAutoCommit();
+            con.setAutoCommit(false);
+            try {
+                try (Statement st = con.createStatement()) {
+                    // One read-only REPEATABLE READ snapshot for BOTH the exact count and the delta.
+                    // Taking them at the same snapshot is what makes C - d0 a timestamp-relative
+                    // anchor: every user partitions on group-minimum join time <= sinceMs (anchor) vs
+                    // > sinceMs (delta) with no dependence on commit-vs-snapshot ordering. SET
+                    // TRANSACTION is scoped to this transaction only, so the pooled connection reverts
+                    // to its session defaults on COMMIT.
+                    st.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY");
+                    // Same hash-join guard as the standalone exact count (see runTenantExactCountDL).
+                    st.execute("SET LOCAL enable_hashjoin = off");
+                }
+                long exactCount;
+                if (readsFromNewTables) {
+                    long[] dl = runTenantExactCountDL(start, con, tenantIdentifier);
+                    long g = runTenantExactCountG(start, con, tenantIdentifier);
+                    exactCount = dl[0] - dl[1] + g;
+                } else {
+                    exactCount = runTenantExactCount_legacy(start, con, tenantIdentifier);
+                }
+                long delta = countTenantUsersJoinedSince(start, con, tenantIdentifier, sinceMs, readsFromNewTables);
+                con.commit();
+                return exactCount - delta;
+            } catch (SQLException | StorageQueryException | RuntimeException e) {
+                con.rollback();
+                throw e;
+            } finally {
+                con.setAutoCommit(prevAutoCommit);
+            }
+        }
+    }
+
+    // Legacy exact per-tenant count (matches getUsersCount_legacy's unfiltered statement), evaluated on
+    // the supplied connection for the anchor's single-snapshot computation in legacy read mode.
+    private static long runTenantExactCount_legacy(Start start, Connection con, TenantIdentifier tenantIdentifier)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT COUNT(*) AS total FROM ("
+                + "SELECT primary_or_recipe_user_id FROM " + getConfig(start).getUsersTable()
+                + " WHERE app_id = ? AND tenant_id = ?"
+                + " GROUP BY primary_or_recipe_user_id) AS uniq_users";
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
         }, result -> {
             if (result.next()) {
                 return result.getLong("total");
