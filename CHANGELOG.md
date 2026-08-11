@@ -32,6 +32,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `all_auth_recipe_users` row carrying the same `user_id`.
 - Fixes `listUserIdsByMultipleThirdPartyInfo_Transaction` matching the cross-product of its inputs instead of 
   the requested `(third_party_id, third_party_user_id)` pairs.
+- Adds support for plugin interface version 9.0
+- Adds nullable `prev_refresh_token_hash_2` (`VARCHAR(128)`) and `refresh_token_rotated_at` (`BIGINT`, ms epoch)
+  columns to the `session_info` table to record refresh-token rotation state. Both `NULL` means "no rotation
+  recorded" (no backfill required).
+- Adds `prevRefreshTokenHash2` and `refreshTokenRotatedAt` params to `updateSessionInfo_Transaction` and reads
+  the new columns back into `SessionInfo`.
+
+### Migration
+
+Make sure the core is already upgraded to the version that supports plugin interface 9.0 before migrating.
+
+```sql
+ALTER TABLE session_info ADD COLUMN prev_refresh_token_hash_2 VARCHAR(128);
+ALTER TABLE session_info ADD COLUMN refresh_token_rotated_at BIGINT;
+```
+
 
 ## [9.6.2]
 
