@@ -15,6 +15,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `if` instead of `while`, so all but one requested user read as never-active
 - Runs `UserRolesQueries.deleteRole` inside a transaction with a `FOR UPDATE` row lock, matching the other
   role queries, so it can no longer interleave with a concurrent assign-role flow
+- Removes redundant recipe-level `recipe_user_tenants` inserts in `addUserIdToTenant_Transaction`; those rows
+  are already written by `Start.addUserIdToTenant_Transaction`. No behavior change.
 
 ## [9.6.2]
 
