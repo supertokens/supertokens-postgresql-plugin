@@ -20,6 +20,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   are already written by `Start.addUserIdToTenant_Transaction`. No behavior change.
 - Replaces the per-token `oauth_m2m_tokens` stats table with an hourly bucketed `oauth_m2m_token_stats`
   rollup, fixing M2M token undercounting for bursty issuers (additive DDL; existing rows migrated on upgrade)
+- Implements the approximate tenant user-count storage contract added in plugin-interface
+  (`computeTenantUserCountAnchor` and `countTenantUsersJoinedSince` on `AuthRecipeSQLStorage`): an opt-in fast
+  path that serves an exact-for-creations per-tenant user count in ms via a snapshot anchor plus a "joined
+  since" delta, instead of the multi-second exact merge. The exact-count SQL is unchanged. Adds
+  `ApproximateTenantUserCountTest`.
 
 ## [9.6.2]
 
