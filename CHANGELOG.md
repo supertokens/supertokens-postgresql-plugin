@@ -7,7 +7,29 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- Fixes `listUserIdsByMultipleThirdPartyInfo_Transaction` matching the cross-product of its inputs instead of the requested `(third_party_id, third_party_user_id)` pairs.
+
+## [9.7.0]
+
+- Fixes a connection pool leak in `UserIdMappingQueries.createBulkUserIdMapping`, which never returned its
+  pooled connection and could exhaust the pool on large bulk imports
+- Fixes `ActiveUsersQueries.getLastActiveByMultipleUserIds` reading its `IN (...)` batch result with
+  `if` instead of `while`, so all but one requested user read as never-active
+- Runs `UserRolesQueries.deleteRole` inside a transaction with a `FOR UPDATE` row lock, matching the other
+  role queries, so it can no longer interleave with a concurrent assign-role flow
+- Removes redundant recipe-level `recipe_user_tenants` inserts in `addUserIdToTenant_Transaction`; those rows
+  are already written by `Start.addUserIdToTenant_Transaction`. No behavior change.
+- Replaces the per-token `oauth_m2m_tokens` stats table with an hourly bucketed `oauth_m2m_token_stats`
+  rollup, fixing M2M token undercounting for bursty issuers (additive DDL; existing rows migrated on upgrade)
+- Implements the approximate tenant user-count storage contract added in plugin-interface
+  (`computeTenantUserCountAnchor` and `countTenantUsersJoinedSince` on `AuthRecipeSQLStorage`): an opt-in fast
+  path that serves an exact-for-creations per-tenant user count in ms via a snapshot anchor plus a "joined
+  since" delta, instead of the multi-second exact merge. The exact-count SQL is unchanged. Adds
+  `ApproximateTenantUserCountTest`.
+- Adds `app_id` to the join in the legacy WebAuthN email lookup
+  (`getPrimaryUserIdForAppUsingEmail_Transaction`) so it can no longer match another app's
+  `all_auth_recipe_users` row carrying the same `user_id`.
+- Fixes `listUserIdsByMultipleThirdPartyInfo_Transaction` matching the cross-product of its inputs instead of 
+  the requested `(third_party_id, third_party_user_id)` pairs.
 
 ## [9.6.2]
 
