@@ -51,7 +51,7 @@ public class MigrationBackfillQueries {
 
     /**
      * Backfills a batch of users within a transaction.
-     * Locks users with SELECT FOR UPDATE, then populates all reservation tables.
+     * Locks users with SELECT FOR UPDATE SKIP LOCKED, then populates all reservation tables.
      *
      * @return Number of users processed
      */
@@ -63,7 +63,7 @@ public class MigrationBackfillQueries {
                 + " WHERE app_id = ? AND time_joined = 0"
                 + " ORDER BY user_id"
                 + " LIMIT ?"
-                + " FOR UPDATE";
+                + " FOR UPDATE SKIP LOCKED";
 
         List<UserToBackfill> users = execute(con, lockQuery, pst -> {
             pst.setString(1, appIdentifier.getAppId());
@@ -96,25 +96,51 @@ public class MigrationBackfillQueries {
                                             UserToBackfill user) throws SQLException, StorageQueryException {
         String appId = appIdentifier.getAppId();
 
-        // Step 2: Backfill time_joined from all_auth_recipe_users
+        // Step 2: Backfill time_joined. all_auth_recipe_users has one row per tenant association,
+        // so a user removed from every tenant has no rows there — falling back to 0 would keep the
+        // user in the pending set (time_joined = 0) and wedge the backfill loop on them forever.
+        // The per-app recipe table still has the user's row (with the exact same time_joined), so
+        // fall back to it; the final constant 1 is a liveness backstop for dangling rows with no
+        // recipe row at all, so a row can never stay 0 once processed.
+        String recipeUsersTable = getRecipeUsersTable(start, user.recipeId);
+        String recipeFallback = recipeUsersTable == null ? ""
+                : ", (SELECT MIN(time_joined) FROM " + recipeUsersTable + " WHERE app_id = ? AND user_id = ?)";
+
         String updateTimeJoined = "UPDATE " + getConfig(start).getAppIdToUserIdTable()
                 + " SET time_joined = COALESCE(("
                 + "   SELECT MIN(time_joined) FROM " + getConfig(start).getUsersTable()
                 + "   WHERE app_id = ? AND user_id = ?"
-                + " ), 0),"
+                + " )" + recipeFallback + ", 1),"
                 + " primary_or_recipe_user_time_joined = COALESCE(("
                 + "   SELECT MIN(primary_or_recipe_user_time_joined) FROM " + getConfig(start).getUsersTable()
                 + "   WHERE app_id = ? AND user_id = ?"
-                + " ), 0)"
+                + " ), ("
+                // A tenant-less linked user can still inherit the value from the rest of its
+                // primary-user group's tenant rows.
+                + "   SELECT MIN(primary_or_recipe_user_time_joined) FROM " + getConfig(start).getUsersTable()
+                + "   WHERE app_id = ? AND primary_or_recipe_user_id = ?"
+                + " )" + recipeFallback + ", 1)"
                 + " WHERE app_id = ? AND user_id = ? AND time_joined = 0";
 
+        boolean hasRecipeFallback = recipeUsersTable != null;
         update(con, updateTimeJoined, pst -> {
-            pst.setString(1, appId);
-            pst.setString(2, user.userId);
-            pst.setString(3, appId);
-            pst.setString(4, user.userId);
-            pst.setString(5, appId);
-            pst.setString(6, user.userId);
+            int i = 1;
+            pst.setString(i++, appId);
+            pst.setString(i++, user.userId);
+            if (hasRecipeFallback) {
+                pst.setString(i++, appId);
+                pst.setString(i++, user.userId);
+            }
+            pst.setString(i++, appId);
+            pst.setString(i++, user.userId);
+            pst.setString(i++, appId);
+            pst.setString(i++, user.primaryOrRecipeUserId);
+            if (hasRecipeFallback) {
+                pst.setString(i++, appId);
+                pst.setString(i++, user.userId);
+            }
+            pst.setString(i++, appId);
+            pst.setString(i++, user.userId);
         });
 
         // Step 3: Backfill recipe_user_account_infos based on recipe type
@@ -126,6 +152,25 @@ public class MigrationBackfillQueries {
         // Step 5: Backfill primary_user_tenants (only for linked/primary users)
         if (user.isLinkedOrPrimary) {
             backfillPrimaryUserTenants(start, con, appId, user);
+        }
+    }
+
+    /**
+     * The per-app recipe table holding this recipe's users (and their time_joined). Returns null
+     * for unknown recipes — backfillAccountInfos() then fails loudly and rolls the batch back.
+     */
+    private static String getRecipeUsersTable(Start start, String recipeId) {
+        switch (recipeId) {
+            case "emailpassword":
+                return getConfig(start).getEmailPasswordUsersTable();
+            case "passwordless":
+                return getConfig(start).getPasswordlessUsersTable();
+            case "thirdparty":
+                return getConfig(start).getThirdPartyUsersTable();
+            case "webauthn":
+                return getConfig(start).getWebAuthNUsersTable();
+            default:
+                return null;
         }
     }
 

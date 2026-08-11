@@ -146,15 +146,52 @@ public class AccountInfoQueries {
                 + Config.getConfig(start).getRecipeUserAccountInfosTable() + "(app_id, recipe_user_id);";
     }
 
+    // Backs the reservation-cleanup subqueries that filter recipe_user_account_infos by
+    // primary_user_id (tenant-removal, unlink, delete, and email/phone update all run a
+    // `WHERE app_id = ? AND primary_user_id = ?` probe). Without this index those probes scan the
+    // whole app's rows.
+    static String getQueryToCreatePrimaryUserIdIndexForRecipeUserAccountInfoTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_app_primary_user ON "
+                + Config.getConfig(start).getRecipeUserAccountInfosTable() + "(app_id, primary_user_id);";
+    }
+
+    // Backs the third-party / webauthn sign-in lookups that resolve a user from an account-info
+    // value (listPrimaryUserIdsByThirdPartyInfo and the webauthn email->primary lookups all filter
+    // `WHERE app_id = ? AND account_info_type = ? AND account_info_value = ?`). Without this index
+    // every such lookup seq-scans recipe_user_account_infos.
+    static String getQueryToCreateAccountInfoIndexForRecipeUserAccountInfoTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_account_info ON "
+                + Config.getConfig(start).getRecipeUserAccountInfosTable()
+                + "(app_id, account_info_type, account_info_value);";
+    }
+
     static String getQueryToCreateAccountInfoIndexForRecipeUserTenantsTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_account_info ON "
                 + Config.getConfig(start).getRecipeUserTenantsTable()
                 + "(app_id, tenant_id, account_info_type, account_info_value);";
     }
 
+    // Backs the "D" term of the per-tenant user-count decomposition (count = D - L + G, documented
+    // in full in GeneralQueries.getUsersCount_new): D is the count of distinct recipe users in a
+    // tenant. This index makes that a streaming, index-only DISTINCT pre-sorted by recipe_user_id,
+    // so the join to app_id_to_user_id is a merge join with no hash/spill.
+    static String getQueryToCreateTenantRecipeUserIndexForRecipeUserTenantsTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_tenant_recipe_user ON "
+                + Config.getConfig(start).getRecipeUserTenantsTable() + "(app_id, tenant_id, recipe_user_id);";
+    }
+
     static String getQueryToCreatePrimaryUserIndexForPrimaryUserTenantsTable(Start start) {
         return "CREATE INDEX IF NOT EXISTS idx_primary_user_tenants_primary ON "
                 + Config.getConfig(start).getPrimaryUserTenantsTable() + "(primary_user_id);";
+    }
+
+    // Backs the "G" term of the per-tenant user-count decomposition (count = D - L + G, documented
+    // in full in GeneralQueries.getUsersCount_new): G is the count of distinct primary users
+    // present in a tenant, computed as a streaming Unique straight off this index with no heap
+    // access.
+    static String getQueryToCreateTenantPrimaryUserIndexForPrimaryUserTenantsTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS idx_primary_user_tenants_tenant_primary ON "
+                + Config.getConfig(start).getPrimaryUserTenantsTable() + "(app_id, tenant_id, primary_user_id);";
     }
 
     private static boolean isPrimaryKeyError(ServerErrorMessage serverMessage, String tableName) {
@@ -962,24 +999,41 @@ public class AccountInfoQueries {
             //   3. Effectively, this ensures that account info reservations in primary_user_tenants only remain on tenants
             //      where the primary user (or any linked user) is still active after this tenant of user is removed.
             String recipeUserId = user.getRecipeUserId();
-            String QUERY = "DELETE FROM " + primaryUserTenantsTable
-                    + " WHERE app_id = ? AND primary_user_id = ? AND (tenant_id) NOT IN ("
-                    + "     SELECT DISTINCT tenant_id"
-                    + "     FROM " + recipeUserTenantsTable
-                    + "     WHERE recipe_user_id IN ("
-                    + "         SELECT recipe_user_id"
-                    + "         FROM " + recipeUserAccountInfosTable
-                    + "         WHERE primary_user_id = ? AND ((recipe_user_id = ? AND tenant_id != ?) OR recipe_user_id != ?)"
-                    + "     )"
+            // The "still-associated tenants" set is computed by driving from the primary user's group
+            // members (recipe_user_account_infos filtered by primary_user_id) and joining to their tenant
+            // rows, rather than by scanning recipe_user_tenants app-wide and correlating back per row.
+            //
+            // The previous shape enumerated every rut row of the app and re-ran a per-row subquery whose
+            // `rut.tenant_id != ?` predicate correlated to the enclosing rut scope. That correlation blocked
+            // decorrelation: the only predicate pushable into the rut enumeration was the non-selective
+            // app_id, so rut was scanned in full on every tenant disassociation (the A3 scaling breach).
+            //
+            // The correlated OR was an obfuscated pair-exclusion. For a rut row with recipe user `ru` and
+            // tenant `t`, the old condition
+            //     (ru = <removedMember> AND t != <removedTenant>) OR ru != <removedMember>
+            // admits every group member's row EXCEPT the exact (removedMember, removedTenant) pair, i.e. it
+            // is precisely NOT (ru = <removedMember> AND t = <removedTenant>). Rewritten decorrelated: join
+            // the group members (ruai by primary_user_id) to their tenant rows (rut by recipe_user_id) and
+            // drop only that one pair. Same result set; cost is now O(group members x their tenants) via
+            // idx_recipe_user_account_infos_app_primary_user on ruai and idx_recipe_user_tenants_recipe_user_id
+            // on rut (app_id flows to rut through the join's app_id equivalence), independent of app size.
+            String QUERY = "DELETE FROM " + primaryUserTenantsTable + " put"
+                    + " WHERE put.app_id = ? AND put.primary_user_id = ? AND (put.tenant_id) NOT IN ("
+                    + "     SELECT DISTINCT rut.tenant_id"
+                    + "     FROM " + recipeUserAccountInfosTable + " ruai"
+                    + "     JOIN " + recipeUserTenantsTable + " rut"
+                    + "         ON rut.app_id = ruai.app_id AND rut.recipe_user_id = ruai.recipe_user_id"
+                    + "     WHERE ruai.app_id = ? AND ruai.primary_user_id = ?"
+                    + "         AND NOT (rut.recipe_user_id = ? AND rut.tenant_id = ?)"
                     + " )";
 
             update(sqlCon, QUERY, pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, primaryUserId);
-                pst.setString(3, primaryUserId);
-                pst.setString(4, recipeUserId);
-                pst.setString(5, tenantIdentifier.getTenantId());
-                pst.setString(6, recipeUserId);
+                pst.setString(1, tenantIdentifier.getAppId());   // put.app_id
+                pst.setString(2, primaryUserId);                 // put.primary_user_id
+                pst.setString(3, tenantIdentifier.getAppId());   // ruai.app_id
+                pst.setString(4, primaryUserId);                 // ruai.primary_user_id
+                pst.setString(5, recipeUserId);                  // rut.recipe_user_id = ? (removed member)
+                pst.setString(6, tenantIdentifier.getTenantId());// rut.tenant_id = ? (removed tenant)
             });
         } catch (SQLException e) {
             throw new StorageQueryException(e);
@@ -1192,23 +1246,30 @@ public class AccountInfoQueries {
             // 1. Delete from primary_user_tenants to remove old account info if not contributed by any other linked user.
             if (primaryUserId != null) {
                 final String primaryUserIdFinal = primaryUserId;
-                String QUERY_1 = "DELETE FROM " + primaryUserTenantsTable
-                        + " WHERE app_id = ? AND primary_user_id = ? AND account_info_type = ? AND account_info_value NOT IN ("
-                        + "     SELECT account_info_value"
-                        + "     FROM " + recipeUserTenantsTable
-                        + "     WHERE recipe_user_id IN ("
-                        + "         SELECT recipe_user_id"
-                        + "         FROM " + recipeUserAccountInfosTable
-                        + "         WHERE primary_user_id = ? AND recipe_user_id != ?"
+                // app_id is restored on both nested subqueries (and every column is alias-qualified) so the
+                // leading index column is present: rut can use idx_recipe_user_tenants_recipe_user_id and ruai
+                // can use idx_recipe_user_account_infos_app_primary_user instead of whole-table scans of
+                // recipe_user_tenants / recipe_user_account_infos.
+                String QUERY_1 = "DELETE FROM " + primaryUserTenantsTable + " put"
+                        + " WHERE put.app_id = ? AND put.primary_user_id = ? AND put.account_info_type = ?"
+                        + "     AND put.account_info_value NOT IN ("
+                        + "     SELECT rut.account_info_value"
+                        + "     FROM " + recipeUserTenantsTable + " rut"
+                        + "     WHERE rut.app_id = ? AND rut.recipe_user_id IN ("
+                        + "         SELECT ruai.recipe_user_id"
+                        + "         FROM " + recipeUserAccountInfosTable + " ruai"
+                        + "         WHERE ruai.app_id = ? AND ruai.primary_user_id = ? AND ruai.recipe_user_id != ?"
                         + "     )"
                         + " )";
 
                 update(sqlCon, QUERY_1, pst -> {
-                    pst.setString(1, appIdentifier.getAppId());
-                    pst.setString(2, primaryUserIdFinal);
-                    pst.setString(3, accountInfoType.toString());
-                    pst.setString(4, primaryUserIdFinal);
-                    pst.setString(5, userId);
+                    pst.setString(1, appIdentifier.getAppId());   // put.app_id
+                    pst.setString(2, primaryUserIdFinal);         // put.primary_user_id
+                    pst.setString(3, accountInfoType.toString()); // put.account_info_type
+                    pst.setString(4, appIdentifier.getAppId());   // rut.app_id
+                    pst.setString(5, appIdentifier.getAppId());   // ruai.app_id
+                    pst.setString(6, primaryUserIdFinal);         // ruai.primary_user_id
+                    pst.setString(7, userId);                     // ruai.recipe_user_id != ?
                 });
             }
 

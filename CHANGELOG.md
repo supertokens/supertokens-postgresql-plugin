@@ -7,8 +7,31 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [10.0.0]
 
+## [9.7.0]
+
+- Fixes a connection pool leak in `UserIdMappingQueries.createBulkUserIdMapping`, which never returned its
+  pooled connection and could exhaust the pool on large bulk imports
+- Fixes `ActiveUsersQueries.getLastActiveByMultipleUserIds` reading its `IN (...)` batch result with
+  `if` instead of `while`, so all but one requested user read as never-active
+- Runs `UserRolesQueries.deleteRole` inside a transaction with a `FOR UPDATE` row lock, matching the other
+  role queries, so it can no longer interleave with a concurrent assign-role flow
+- Removes redundant recipe-level `recipe_user_tenants` inserts in `addUserIdToTenant_Transaction`; those rows
+  are already written by `Start.addUserIdToTenant_Transaction`. No behavior change.
+- Replaces the per-token `oauth_m2m_tokens` stats table with an hourly bucketed `oauth_m2m_token_stats`
+  rollup, fixing M2M token undercounting for bursty issuers (additive DDL; existing rows migrated on upgrade)
+- Decorrelates the tenant-removal reservation cleanup to scan the primary user's group members instead of the
+  whole app's `recipe_user_tenants` (result set unchanged).
+- Implements the approximate tenant user-count storage contract added in plugin-interface
+  (`computeTenantUserCountAnchor` and `countTenantUsersJoinedSince` on `AuthRecipeSQLStorage`): an opt-in fast
+  path that serves an exact-for-creations per-tenant user count in ms via a snapshot anchor plus a "joined
+  since" delta, instead of the multi-second exact merge. The exact-count SQL is unchanged. Adds
+  `ApproximateTenantUserCountTest`.
+- Adds `app_id` to the join in the legacy WebAuthN email lookup
+  (`getPrimaryUserIdForAppUsingEmail_Transaction`) so it can no longer match another app's
+  `all_auth_recipe_users` row carrying the same `user_id`.
+- Fixes `listUserIdsByMultipleThirdPartyInfo_Transaction` matching the cross-product of its inputs instead of 
+  the requested `(third_party_id, third_party_user_id)` pairs.
 - Adds support for plugin interface version 9.0
 - Adds nullable `prev_refresh_token_hash_2` (`VARCHAR(128)`) and `refresh_token_rotated_at` (`BIGINT`, ms epoch)
   columns to the `session_info` table to record refresh-token rotation state. Both `NULL` means "no rotation
@@ -24,6 +47,127 @@ Make sure the core is already upgraded to the version that supports plugin inter
 ALTER TABLE session_info ADD COLUMN prev_refresh_token_hash_2 VARCHAR(128);
 ALTER TABLE session_info ADD COLUMN refresh_token_rotated_at BIGINT;
 ```
+
+
+## [9.6.2]
+
+- Adds two additive indexes on `oauth_sessions`, `(app_id, client_id)` and `(app_id, session_handle)`, so the
+  revoke paths no longer scan the whole table on session-heavy deployments. The table is keyed by `gid` only,
+  so `deleteOAuthSessionByClientId` (`DELETE ... WHERE app_id = ? AND client_id = ?` — revoke-all-for-client,
+  and the FK-cascade path when an oauth client is deleted) and `deleteOAuthSessionBySessionHandle`
+  (`DELETE ... WHERE app_id = ? AND session_handle = ?` — revoke on SuperTokens-session logout) previously did
+  a sequential scan per call. No query or behaviour changes; both deletes now use an index scan.
+- Adds `OAuthSessionRevokeIndexRegressionTest`: seeds ~50k oauth sessions across many clients directly with SQL
+  and asserts on `EXPLAIN (FORMAT JSON)` that both revoke-by-client and revoke-by-session-handle deletes plan
+  an index scan on the new indexes, and (teeth) that dropping the indexes forces a sequential scan. Skippable
+  locally via `SKIP_SCALE_REGRESSION_TESTS=true`
+- Adds two secondary indexes on `recipe_user_account_infos` — `(app_id, primary_user_id)` and
+  `(app_id, account_info_type, account_info_value)` — so the reservation-cleanup subqueries and the
+  third-party/webauthn sign-in lookups no longer seq-scan the whole app's rows. Created on fresh databases
+  and backfilled at startup (see Migration below).
+- Restores the `app_id` condition on the nested subqueries of two `AccountInfoQueries` reservation-cleanup
+  statements (tenant-removal cleanup and `updateAccountInfo_Transaction`'s tenant delete), which had dropped
+  it and so forced app-wide table scans. Results unchanged.
+- Pins `getUsersCount_new`'s `D - L` statement to its streaming merge join
+  (`SET LOCAL enable_hashjoin = off`) so the planner can no longer flip to a hash join that spills the
+  app-wide table to disk when its row estimates drift. Count result unchanged.
+- Makes the user-listing and bulk-import keyset pagination cursors sargable by adding a redundant
+  leading-sort-column bound to the cursor predicate, so deep pages seek straight to the cursor instead of
+  scanning the pagination index from the top. Applies to `getUsers_new`, `getUsers_legacy`, and the
+  bulk-import listing; rows, order and cursor tokens are unchanged.
+
+### Migration
+
+Adds additive indexes, created on fresh databases and backfilled on existing ones at startup via
+
+``` sql
+
+CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_app_primary_user ON recipe_user_account_infos 
+(app_id, primary_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_recipe_user_account_infos_account_info ON recipe_user_account_infos 
+(app_id, account_info_type, account_info_value);
+
+CREATE INDEX IF NOT EXISTS oauth_session_client_id_index on oauth_sessions (app_id, client_id);
+
+CREATE INDEX IF NOT EXISTS oauth_session_session_handle_index on oauth_sessions (app_id, session_handle);
+```
+
+No table or column changes. **Operators of large deployments should pre-create these indexes with
+`CREATE INDEX CONCURRENTLY` before upgrading**, so the startup DDL is a no-op and does not hold a table lock
+during a long index build.
+
+## [9.6.1]
+
+- Implements `updateTimeJoinedForPrimaryUsers_Transaction` (new in plugin-interface `8.7.1`) by delegating to
+  the existing internal batch query, which normalizes `primary_or_recipe_user_time_joined` to the linked-group
+  minimum across every table carrying the column (respecting migration-mode branching). This lets callers that
+  insert linked members without normalizing — notably bulk import — restore the invariant that user-list
+  pagination relies on.
+- Fixes the reservation-table backfill getting stuck on users removed from all tenants: their `time_joined`
+  now falls back to the per-app recipe table instead of staying 0, which kept them permanently in the
+  pending set and looped the backfill cron forever
+- Fixes activity log partition maintenance failing forever when rows for a not-yet-created month landed in the
+  DEFAULT partition (e.g. after the core was paused across a month boundary): the rows are now moved into the
+  newly created monthly partition, and DEFAULT rows older than the retention window are purged
+- Rewrites the migrated-schema paginated user listing (`getUsers_new`, plain and cursor variants) to stream
+  over the pagination indexes: instead of joining `app_id_to_user_id` to `recipe_user_tenants` and
+  `GROUP BY`-ing every user of the tenant before the `LIMIT` can apply, the two non-search variants now use
+  `SELECT DISTINCT ... WHERE EXISTS (...)`, moving the cursor filter from a `HAVING` on `MIN(...)` to a plain
+  indexable `WHERE`. Pagination cost now scales with page size instead of tenant size. Rows, ordering and
+  cursor semantics are unchanged (relies on the same per-group `primary_or_recipe_user_time_joined` invariant
+  the dashboard-search branch already depends on)
+- Rewrites the migrated-schema unfiltered per-tenant user count (`getUsersCount_new`) to avoid the
+  tenant-wide hash-aggregating join that spilled to disk on very large tenants. The count is now computed as
+  the `D - L + G` decomposition (distinct recipe users in the tenant, minus those that are linked-or-primary,
+  plus the distinct primary users present in the tenant), where each term is an index-only streaming scan
+  over one of the three additive indexes noted in the Migration section below. The unfiltered app-scoped
+  count now streams a `GROUP BY (primary_or_recipe_user_time_joined, primary_or_recipe_user_id)` off
+  `app_id_to_user_id_pagination_index2` instead of hash-aggregating. Counts are unchanged; the
+  recipe-id-filtered variants keep their existing queries.
+- Adds `MigratedUserScaleRegressionTest`: plan-shape regression tests over a ~200k-user fixture seeded directly
+  with SQL, asserting on `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` that the rewritten pagination feeds only a
+  small multiple of the page size into its top `Unique` node (vs the old query aggregating the whole tenant)
+  and that the `D - L + G` and app-scoped counts write zero temp blocks and use no `HashAggregate` / `Hash Join`
+  at `work_mem = 64kB` (vs the old join + `GROUP BY` spilling), plus new-vs-old result equality. Heavy fixture;
+  runs in CI, skippable locally via `SKIP_SCALE_REGRESSION_TESTS=true`
+
+### Migration
+
+Adds three additive indexes, created on fresh databases and backfilled on existing ones at startup via
+
+``` sql
+
+CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_tenant_recipe_user on recipe_user_tenants (app_id, tenant_id, 
+recipe_user_id);
+
+CREATE INDEX IF NOT EXISTS app_id_to_user_id_linked_flag_index on app_id_to_user_id (app_id, user_id, 
+is_linked_or_is_a_primary_user);
+
+CREATE INDEX IF NOT EXISTS idx_primary_user_tenants_tenant_primary on primary_user_tenants (app_id, tenant_id, 
+primary_user_id);
+
+```
+
+No table or column changes. **Operators of very large deployments should pre-create these three indexes with
+`CREATE INDEX CONCURRENTLY` before upgrading**, so the startup DDL is a no-op and does not hold a table lock
+during a long index build.
+
+## [9.6.0]
+
+- Fixes `isUserIdBeingUsedInNonAuthRecipe` to use O(1) existence probes (`SELECT 1 ... LIMIT 1`) for sessions,
+  user roles and TOTP devices instead of loading every matching row
+- Fixes the raw database password being embedded verbatim in the HikariCP connection pool name (which is
+  included in Hikari log lines, exception messages and telemetry exports): the pool id now uses a truncated
+  SHA-256 hash of the password instead. Also masks the password on the OpenTelemetry log appender path.
+- Adds `countUsersActiveSinceGroupedByDay` (implements the new `ActiveUsersStorage` method): the MAU series is
+  now computed with a single bucketed query instead of one `COUNT(*)` per day threshold
+- Adds a composite `(app_id, last_active_time)` index on `user_last_active`, created on fresh databases and
+  backfilled (best-effort, outside the main DDL transaction) on databases provisioned before it existed
+
+## [9.5.6]
+
+- Adds `SKIP LOCKED` to the backfill batch locking query to improve performance
 
 ## [9.5.5]
 

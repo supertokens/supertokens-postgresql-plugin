@@ -89,6 +89,23 @@ public class OAuthQueries {
                 + oAuth2SessionTable + "(app_id, external_refresh_token DESC);";
     }
 
+    // Backs deleteOAuthSessionByClientId (revoke-all-for-client, and the FK-cascade path when an
+    // oauth client is deleted): DELETE ... WHERE app_id = ? AND client_id = ?. The table is keyed by
+    // gid only, so without this the delete scans the whole table per call.
+    public static String getQueryToCreateOAuthSessionsClientIdIndex(Start start) {
+        String oAuth2SessionTable = Config.getConfig(start).getOAuthSessionsTable();
+        return "CREATE INDEX IF NOT EXISTS oauth_session_client_id_index ON "
+                + oAuth2SessionTable + "(app_id, client_id);";
+    }
+
+    // Backs deleteOAuthSessionBySessionHandle (revoke on SuperTokens-session logout):
+    // DELETE ... WHERE app_id = ? AND session_handle = ?. Same rationale as above.
+    public static String getQueryToCreateOAuthSessionsSessionHandleIndex(Start start) {
+        String oAuth2SessionTable = Config.getConfig(start).getOAuthSessionsTable();
+        return "CREATE INDEX IF NOT EXISTS oauth_session_session_handle_index ON "
+                + oAuth2SessionTable + "(app_id, session_handle);";
+    }
+
     public static String getQueryToCreateOAuthM2MTokensTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String oAuth2M2MTokensTable = Config.getConfig(start).getOAuthM2MTokensTable();
@@ -117,6 +134,55 @@ public class OAuthQueries {
         String oAuth2M2MTokensTable = Config.getConfig(start).getOAuthM2MTokensTable();
         return "CREATE INDEX IF NOT EXISTS oauth_m2m_token_exp_index ON "
                 + oAuth2M2MTokensTable + "(exp DESC);";
+    }
+
+    public static String getQueryToCreateOAuthM2MTokenStatsTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String statsTable = Config.getConfig(start).getOAuthM2MTokenStatsTable();
+        // Rollup counters replacing the per-token oauth_m2m_tokens rows: one row per
+        // (app_id, iat hour-bucket, exp hour-bucket) holding how many tokens issued in that iat
+        // hour expire in that exp hour. With one uniform token TTL an iat hour maps to ~1-3 exp
+        // hours, so the 30-day window holds ~750-2,000 rows per app regardless of issuance volume.
+        // client_id is intentionally not kept: neither stat is per-client, and dropping it collapses
+        // an app's issuance onto a single hot counter row per (iat_bucket, exp_bucket).
+        // @formatter:off
+        return "CREATE TABLE IF NOT EXISTS " + statsTable + " ("
+                + "app_id VARCHAR(64) DEFAULT 'public',"
+                + "iat_bucket BIGINT NOT NULL,"
+                + "exp_bucket BIGINT NOT NULL,"
+                + "count BIGINT NOT NULL DEFAULT 0,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, statsTable, null, "pkey")
+                + " PRIMARY KEY (app_id, iat_bucket, exp_bucket)"
+                + ");";
+        // @formatter:on
+    }
+
+    // Supports countTotalNumberOfOAuthM2MTokensAlive's (app_id, exp_bucket > now) range as an index
+    // scan; the PK's (app_id, iat_bucket) prefix already serves the created-since range.
+    public static String getQueryToCreateOAuthM2MTokenStatsExpBucketIndex(Start start) {
+        String statsTable = Config.getConfig(start).getOAuthM2MTokenStatsTable();
+        return "CREATE INDEX IF NOT EXISTS oauth_m2m_token_stats_exp_bucket_index ON "
+                + statsTable + "(app_id, exp_bucket);";
+    }
+
+    // One-shot transition: bucket whatever per-token rows the legacy oauth_m2m_tokens table still
+    // holds into the rollup. Emitted only in the DDL batch that first creates the rollup table (see
+    // GeneralQueries.createTablesIfNotExists), so seed and table commit atomically -> it runs exactly
+    // once. Cheap: the legacy table is capped by the 31-day retention cron. After this, new tokens go
+    // only to the rollup and the legacy table drains to empty within 31 days. Idempotent via ON
+    // CONFLICT should it ever be re-attempted.
+    public static String getQueryToBackfillOAuthM2MTokenStatsFromLegacy(Start start) {
+        String statsTable = Config.getConfig(start).getOAuthM2MTokenStatsTable();
+        String legacyTable = Config.getConfig(start).getOAuthM2MTokensTable();
+        return "INSERT INTO " + statsTable + " (app_id, iat_bucket, exp_bucket, count)"
+                + " SELECT app_id, iat / 3600, exp / 3600, COUNT(*)"
+                + " FROM " + legacyTable
+                + " GROUP BY app_id, iat / 3600, exp / 3600"
+                // Qualify the existing-row count with the table name: an unqualified `count` in a DO
+                // UPDATE SET is ambiguous between the target row and the EXCLUDED pseudo-row (both carry
+                // a `count` column), which Postgres rejects.
+                + " ON CONFLICT (app_id, iat_bucket, exp_bucket) DO UPDATE SET count = "
+                + statsTable + ".count + EXCLUDED.count;";
     }
 
     public static String getQueryToCreateOAuthLogoutChallengesTable(Start start) {
@@ -320,11 +386,17 @@ public class OAuthQueries {
 
     public static int countTotalNumberOfOAuthM2MTokensAlive(Start start, AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT COUNT(*) as c FROM " + Config.getConfig(start).getOAuthM2MTokensTable() +
-                " WHERE app_id = ? AND exp > ?";
+        // SUM the rollup over buckets whose exp hour is strictly in the future. Bounded by the number
+        // of live exp-buckets for the app (index range on (app_id, exp_bucket)), independent of
+        // issuance volume. Edge semantics: tokens in the current exp hour (exp_bucket == now_bucket)
+        // are excluded even though some are still alive -> off by at most the current partial hour.
+        long nowBucket = (System.currentTimeMillis() / 1000) / 3600;
+        String QUERY = "SELECT COALESCE(SUM(count), 0) as c FROM "
+                + Config.getConfig(start).getOAuthM2MTokenStatsTable() +
+                " WHERE app_id = ? AND exp_bucket > ?";
         return execute(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
-            pst.setLong(2, System.currentTimeMillis()/1000);
+            pst.setLong(2, nowBucket);
         }, result -> {
             if (result.next()) {
                 return result.getInt("c");
@@ -335,11 +407,18 @@ public class OAuthQueries {
 
     public static int countTotalNumberOfOAuthM2MTokensCreatedSince(Start start, AppIdentifier appIdentifier, long since)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT COUNT(*) as c FROM " + Config.getConfig(start).getOAuthM2MTokensTable() +
-                " WHERE app_id = ? AND iat >= ?";
+        // SUM the rollup over buckets whose iat hour is at or after `since` (a millisecond epoch).
+        // Constant work: an index range on the PK's (app_id, iat_bucket) prefix. Edge semantics:
+        // counts are exact per bucket, so a `since` landing inside a bucket over-counts by at most
+        // that bucket's partial hour (versus the old implementation's unbounded undercount of bursty
+        // issuers).
+        long sinceBucket = (since / 1000) / 3600;
+        String QUERY = "SELECT COALESCE(SUM(count), 0) as c FROM "
+                + Config.getConfig(start).getOAuthM2MTokenStatsTable() +
+                " WHERE app_id = ? AND iat_bucket >= ?";
         return execute(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
-            pst.setLong(2, since / 1000);
+            pst.setLong(2, sinceBucket);
         }, result -> {
             if (result.next()) {
                 return result.getInt("c");
@@ -350,13 +429,28 @@ public class OAuthQueries {
 
     public static void addOAuthM2MTokenForStats(Start start, AppIdentifier appIdentifier, String clientId, long iat, long exp)
             throws SQLException, StorageQueryException {
-        String QUERY = "INSERT INTO " + Config.getConfig(start).getOAuthM2MTokensTable() +
-                " (app_id, client_id, iat, exp) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING";
+        // Bucket the token into hourly (epoch-hour) iat/exp buckets and increment a counter instead of
+        // storing one row per issued token. This fixes the undercount of bursty issuers (the old PK
+        // (app_id, client_id, iat-second) + ON CONFLICT DO NOTHING recorded at most one token per
+        // client per second) and keeps both stat queries index-range SUMs whose cost is bounded by the
+        // live bucket count, independent of issuance volume. `clientId` is unused now (see the table
+        // comment); the parameter and the throws clause are kept so the OAuthStorage signature is
+        // unchanged. High-rate note: all of an app's issuance upserts one hot row per
+        // (iat_bucket, exp_bucket); if sustained multi-thousand-tokens/sec contention ever shows in
+        // tests, add a small hash-shard column to the PK and SUM over shards.
+        long iatBucket = iat / 3600;
+        long expBucket = exp / 3600;
+        String statsTable = Config.getConfig(start).getOAuthM2MTokenStatsTable();
+        // Qualify the existing-row count with the table name: an unqualified `count` in a DO UPDATE
+        // SET is ambiguous between the target row and the EXCLUDED pseudo-row (both carry a `count`
+        // column), which Postgres rejects.
+        String QUERY = "INSERT INTO " + statsTable +
+                " (app_id, iat_bucket, exp_bucket, count) VALUES (?, ?, ?, 1)" +
+                " ON CONFLICT (app_id, iat_bucket, exp_bucket) DO UPDATE SET count = " + statsTable + ".count + 1";
         update(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, clientId);
-            pst.setLong(3, iat);
-            pst.setLong(4, exp);
+            pst.setLong(2, iatBucket);
+            pst.setLong(3, expBucket);
         });
     }
 
@@ -489,11 +583,22 @@ public class OAuthQueries {
     }
 
     public static void deleteExpiredOAuthM2MTokens(Start start, long exp) throws SQLException, StorageQueryException {
-        // delete expired M2M tokens
+        // Keep draining the legacy per-token table. New tokens no longer land here, so once every row
+        // has aged past the retention window (`exp` is now-31d, in epoch seconds) this is a no-op and
+        // the table stays empty.
         String QUERY = "DELETE FROM " + Config.getConfig(start).getOAuthM2MTokensTable() +
                 " WHERE exp < ?";
         update(start, QUERY, pst -> {
             pst.setLong(1, exp);
+        });
+
+        // Matching sweep for the rollup: drop buckets whose whole exp hour is past the retention
+        // window. exp_bucket >= iat_bucket always, so an exp_bucket strictly below the cutoff hour
+        // means both buckets predate the window.
+        String STATS_QUERY = "DELETE FROM " + Config.getConfig(start).getOAuthM2MTokenStatsTable() +
+                " WHERE exp_bucket < ?";
+        update(start, STATS_QUERY, pst -> {
+            pst.setLong(1, exp / 3600);
         });
     }
 

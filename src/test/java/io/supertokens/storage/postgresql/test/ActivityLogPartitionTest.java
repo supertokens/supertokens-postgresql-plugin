@@ -115,8 +115,85 @@ public class ActivityLogPartitionTest {
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
 
+    /**
+     * Rows that land in the DEFAULT backstop for a month whose partition doesn't exist yet (e.g.
+     * the core was stopped or paused across a month boundary) must not wedge the maintenance cron.
+     * Postgres refuses to create a partition whose range is occupied by rows in DEFAULT
+     * ("updated partition constraint for default partition would be violated by some row"), so the
+     * cron has to move them into the new monthly partition instead of failing on them forever.
+     * Rows in DEFAULT older than the retention window must be purged rather than moved.
+     */
+    @Test
+    public void maintenanceHealsRowsStrandedInDefaultPartition() throws Exception {
+        String[] args = {"../"};
+
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        if (StorageLayer.getStorage(process.getProcess()).getType() != STORAGE_TYPE.SQL) {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+            return;
+        }
+
+        Start storage = (Start) StorageLayer.getStorage(process.getProcess());
+        String table = Config.getConfig(storage).getActivityLogTable();
+
+        YearMonth thisMonth = YearMonth.now(ZoneOffset.UTC);
+        YearMonth expiredMonth = thisMonth.minusMonths(3);
+
+        // Simulate a core that was paused across the month boundary: this month's partition does
+        // not exist, and events for this month (and for a long-expired month) are stranded in the
+        // DEFAULT backstop.
+        dropPartition(storage, table, thisMonth);
+        insertEventIn(storage, table, thisMonth);
+        insertEventIn(storage, table, expiredMonth);
+        assertEquals(2, countRowsInDefault(storage, table));
+
+        // Before the fix this threw: "updated partition constraint for default partition
+        // \"activity_log_default\" would be violated by some row".
+        ((ActivityLogStorage) storage).maintainActivityLogPartitions();
+
+        // This month's row was moved into the freshly created partition; the expired one was purged.
+        assertTrue(partitionExists(storage, table, thisMonth));
+        assertEquals(0, countRowsInDefault(storage, table));
+        assertEquals(1, countEventsIn(storage, table, thisMonth));
+        assertEquals(0, countEventsIn(storage, table, expiredMonth));
+
+        // Running it again is a no-op.
+        ((ActivityLogStorage) storage).maintainActivityLogPartitions();
+        assertEquals(1, countEventsIn(storage, table, thisMonth));
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
     private static String partitionFullName(String table, YearMonth month) {
         return table + "_p" + month.format(MONTH_SUFFIX_FORMAT);
+    }
+
+    private void dropPartition(Start storage, String table, YearMonth month) throws Exception {
+        String query = "DROP TABLE IF EXISTS " + partitionFullName(table, month);
+        storage.startTransaction(con -> {
+            Connection sqlCon = (Connection) con.getConnection();
+            try (PreparedStatement pst = sqlCon.prepareStatement(query)) {
+                pst.executeUpdate();
+            }
+            return null;
+        });
+    }
+
+    private int countRowsInDefault(Start storage, String table) throws Exception {
+        String query = "SELECT COUNT(*) FROM " + table + "_default";
+        return storage.startTransaction(con -> {
+            Connection sqlCon = (Connection) con.getConnection();
+            try (PreparedStatement pst = sqlCon.prepareStatement(query)) {
+                try (ResultSet rs = pst.executeQuery()) {
+                    rs.next();
+                    return rs.getInt(1);
+                }
+            }
+        });
     }
 
     private static long monthStartMillis(YearMonth month) {

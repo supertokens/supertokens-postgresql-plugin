@@ -516,7 +516,7 @@ public class WebAuthNQueries {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getWebAuthNUserToTenantTable() + " AS webauthn"
                 + " JOIN " + getConfig(start).getUsersTable() + " AS all_users"
-                + " ON webauthn.user_id = all_users.user_id"
+                + " ON webauthn.app_id = all_users.app_id AND webauthn.user_id = all_users.user_id"
                 + " WHERE webauthn.app_id = ? AND webauthn.email = ?";
 
         return execute(sqlConnection, QUERY, pst -> {
@@ -659,7 +659,7 @@ public class WebAuthNQueries {
                 "LEFT JOIN " + credentialTable + " as credentials ON webauthn.user_id = credentials.user_id " +
                 "LEFT JOIN " + userIdMappingTable + " as user_id_mapping ON webauthn.user_id = user_id_mapping.supertokens_user_id " +
                 "LEFT JOIN " + emailVerificationTable + " as email_verification ON webauthn.app_id = " +
-                "email_verification.app_id AND (user_id_mapping.external_user_id = email_verification.user_id OR user_id_mapping.supertokens_user_id = email_verification.user_id OR webauthn.user_id = email_verification.user_id OR webauthn.user_id = email_verification.user_id) " +
+                "email_verification.app_id AND (user_id_mapping.external_user_id = email_verification.user_id OR user_id_mapping.supertokens_user_id = email_verification.user_id OR webauthn.user_id = email_verification.user_id) " +
                 " AND email_verification.email = webauthn.email " +
                 "WHERE webauthn.app_id = ? AND webauthn.user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(ids.size()) + ")";
 
@@ -717,7 +717,7 @@ public class WebAuthNQueries {
                 tenantJoin +
                 "LEFT JOIN " + getConfig(start).getWebAuthNCredentialsTable() + " as credentials ON webauthn.user_id = credentials.user_id " +
                 "LEFT JOIN " + getConfig(start).getUserIdMappingTable() + " as user_id_mapping ON webauthn.user_id = user_id_mapping.supertokens_user_id " +
-                "LEFT JOIN " + getConfig(start).getEmailVerificationTable() + " as email_verification ON webauthn.app_id = email_verification.app_id AND (user_id_mapping.external_user_id = email_verification.user_id OR user_id_mapping.supertokens_user_id = email_verification.user_id OR webauthn.user_id = email_verification.user_id OR webauthn.user_id = email_verification.user_id) " +
+                "LEFT JOIN " + getConfig(start).getEmailVerificationTable() + " as email_verification ON webauthn.app_id = email_verification.app_id AND (user_id_mapping.external_user_id = email_verification.user_id OR user_id_mapping.supertokens_user_id = email_verification.user_id OR webauthn.user_id = email_verification.user_id) " +
                 " AND email_verification.email = webauthn.email " +
                 "WHERE webauthn.app_id = ? AND credentials.id = ?";
 
@@ -794,6 +794,18 @@ public class WebAuthNQueries {
                 + " WHERE app_id = ? AND tenant_id = ? AND id = ?";
 
         return update(start, UPDATE, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, optionsId);
+        });
+    }
+
+    public static void removeOptions_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier,
+                                                 String optionsId) throws SQLException, StorageQueryException {
+        String UPDATE = "DELETE FROM " + getConfig(start).getWebAuthNGeneratedOptionsTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND id = ?";
+
+        update(sqlCon, UPDATE, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, optionsId);

@@ -17,6 +17,7 @@
 package io.supertokens.storage.postgresql.queries;
 
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
@@ -153,12 +154,36 @@ public class UserRolesQueries {
     public static boolean deleteRole(Start start, AppIdentifier appIdentifier,
                                      String role)
             throws SQLException, StorageQueryException {
-        String QUERY = "DELETE FROM " + getConfig(start).getRolesTable()
-                + " WHERE app_id = ? AND role = ? ;";
-        return update(start, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, role);
-        }) == 1;
+        // The delete is run inside a transaction that first takes a row lock on the role (FOR UPDATE),
+        // matching the coordination done by the other role queries (doesRoleExist_transaction) and the
+        // in-memory implementation. Without it, a plain autocommit delete can interleave between an
+        // assign-role transaction's exists-check and its insert, leaving a role assignment for a role
+        // that no longer exists (or triggering a foreign key error).
+        try {
+            return start.startTransaction(con -> {
+                Connection sqlCon = (Connection) con.getConnection();
+                try {
+                    // Take the row lock on the role before deleting it.
+                    doesRoleExist_transaction(start, sqlCon, appIdentifier, role);
+
+                    String QUERY = "DELETE FROM " + getConfig(start).getRolesTable()
+                            + " WHERE app_id = ? AND role = ? ;";
+                    boolean deleted = update(sqlCon, QUERY, pst -> {
+                        pst.setString(1, appIdentifier.getAppId());
+                        pst.setString(2, role);
+                    }) == 1;
+                    sqlCon.commit();
+                    return deleted;
+                } catch (SQLException e) {
+                    throw new StorageTransactionLogicException(e);
+                }
+            });
+        } catch (StorageTransactionLogicException e) {
+            if (e.actualException instanceof SQLException) {
+                throw (SQLException) e.actualException;
+            }
+            throw new StorageQueryException(e.actualException);
+        }
     }
 
     public static boolean doesRoleExist(Start start, AppIdentifier appIdentifier, String role)
@@ -254,6 +279,18 @@ public class UserRolesQueries {
             }
             return roles.toArray(String[]::new);
         });
+    }
+
+    public static boolean doesUserHaveAnyRole(Start start, AppIdentifier appIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+        // existence check only — see doesNonExpiredSessionExistForUser
+        String QUERY = "SELECT 1 FROM " + getConfig(start).getUserRolesTable()
+                + " WHERE app_id = ? AND user_id = ? LIMIT 1";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, ResultSet::next);
     }
 
     public static String[] getRolesForUser(Start start, AppIdentifier appIdentifier, String userId)

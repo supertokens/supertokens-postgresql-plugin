@@ -19,9 +19,11 @@ package io.supertokens.storage.postgresql.queries;
 import io.supertokens.pluginInterface.auditlog.AuditLogEvent;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -143,12 +145,97 @@ public class ActivityLogQueries {
     /**
      * Pre-creates upcoming month partitions and drops any whose entire month is older than
      * {@link #RETENTION_DAYS} days. Idempotent; intended to be run daily.
+     *
+     * If rows for a month landed in the DEFAULT backstop before that month's partition existed
+     * (e.g. the core was stopped or paused across a month boundary, so neither startup nor the
+     * cron pre-created it), Postgres refuses to create the partition — "updated partition
+     * constraint for default partition would be violated by some row". In that case the rows are
+     * moved out of DEFAULT and into the new partition in a single transaction, so the cron heals
+     * the backstop instead of failing on it forever.
      */
     public static void maintainPartitions(Start start) throws SQLException, StorageQueryException {
-        for (String query : getQueriesToCreateUpcomingMonthPartitions(start)) {
-            update(start, query, pst -> {});
+        YearMonth thisMonth = YearMonth.now(ZoneOffset.UTC);
+        for (int i = 0; i <= PREMAKE_MONTHS; i++) {
+            ensureMonthlyPartition(start, thisMonth.plusMonths(i));
         }
         dropPartitionsOlderThanRetention(start);
+        purgeExpiredRowsFromDefaultPartition(start);
+    }
+
+    private static void ensureMonthlyPartition(Start start, YearMonth month)
+            throws SQLException, StorageQueryException {
+        try {
+            update(start, getQueryToCreateMonthlyPartition(start, month), pst -> {});
+        } catch (SQLException e) {
+            if (!isDefaultPartitionConflict(e)) {
+                throw e;
+            }
+            createPartitionMovingRowsFromDefault(start, month);
+        }
+    }
+
+    /**
+     * Matches Postgres's refusal to create/attach a partition while the DEFAULT partition holds
+     * rows belonging to the new partition's range (errcode 23514, check_violation).
+     */
+    private static boolean isDefaultPartitionConflict(SQLException e) {
+        String message = e.getMessage();
+        return message != null && message.contains("would be violated by some row");
+    }
+
+    /**
+     * Creates the monthly partition after moving that month's rows out of the DEFAULT partition,
+     * all in one transaction. The parent is locked first — the same order in which row inserts
+     * acquire locks, so this cannot deadlock with them — which also stops new rows from slipping
+     * into DEFAULT between the move and the partition creation.
+     */
+    private static void createPartitionMovingRowsFromDefault(Start start, YearMonth month)
+            throws SQLException, StorageQueryException {
+        String tableName = Config.getConfig(start).getActivityLogTable();
+        String defaultPartition = tableName + "_default";
+        long fromMillis = month.atDay(1).toEpochDay() * MILLIS_PER_DAY;
+        long toMillis = month.plusMonths(1).atDay(1).toEpochDay() * MILLIS_PER_DAY;
+        String rangeCondition = " WHERE created_at >= " + fromMillis + " AND created_at < " + toMillis;
+
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            boolean originalAutoCommit = con.getAutoCommit();
+            con.setAutoCommit(false);
+            try {
+                update(con, "LOCK TABLE " + tableName + " IN ACCESS EXCLUSIVE MODE", pst -> {});
+                // ON COMMIT DROP also drops on rollback, so nothing leaks into the pooled session.
+                update(con, "CREATE TEMP TABLE activity_log_default_moved ON COMMIT DROP AS"
+                        + " SELECT * FROM " + defaultPartition + rangeCondition, pst -> {});
+                update(con, "DELETE FROM " + defaultPartition + rangeCondition, pst -> {});
+                update(con, getQueryToCreateMonthlyPartition(start, month), pst -> {});
+                // Re-insert through the parent so the rows route into the new partition;
+                // OVERRIDING SYSTEM VALUE keeps their original identity ids.
+                update(con, "INSERT INTO " + tableName
+                        + " (id, app_id, tenant_id, recipe_user_id, primary_or_recipe_user_id, event_type,"
+                        + " status, auth_principal, identifier, created_at, payload)"
+                        + " OVERRIDING SYSTEM VALUE"
+                        + " SELECT id, app_id, tenant_id, recipe_user_id, primary_or_recipe_user_id, event_type,"
+                        + " status, auth_principal, identifier, created_at, payload"
+                        + " FROM activity_log_default_moved", pst -> {});
+                con.commit();
+            } catch (SQLException e) {
+                con.rollback();
+                throw e;
+            } finally {
+                con.setAutoCommit(originalAutoCommit);
+            }
+        }
+    }
+
+    /**
+     * Rows in the DEFAULT partition are only ever for months without a partition (past months
+     * whose partition was already dropped, or timestamps outside the premake window), so retention
+     * is enforced on them directly — dropping monthly partitions alone would keep them forever.
+     */
+    private static void purgeExpiredRowsFromDefaultPartition(Start start)
+            throws SQLException, StorageQueryException {
+        String defaultPartition = Config.getConfig(start).getActivityLogTable() + "_default";
+        long cutoffMillis = LocalDate.now(ZoneOffset.UTC).minusDays(RETENTION_DAYS).toEpochDay() * MILLIS_PER_DAY;
+        update(start, "DELETE FROM " + defaultPartition + " WHERE created_at < " + cutoffMillis, pst -> {});
     }
 
     private static void dropPartitionsOlderThanRetention(Start start) throws SQLException, StorageQueryException {

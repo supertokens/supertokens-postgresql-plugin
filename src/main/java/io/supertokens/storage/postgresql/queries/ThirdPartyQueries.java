@@ -357,23 +357,33 @@ public class ThirdPartyQueries {
         if(thirdPartyUserIdToThirdPartyId == null || thirdPartyUserIdToThirdPartyId.isEmpty()){
             return new ArrayList<>();
         }
+        // Match each (third_party_id, third_party_user_id) pair exactly, not the cross-product of the
+        // two lists. Using two independent IN clauses would also match unrelated pairings that happen
+        // to share a third_party_id or third_party_user_id with a requested pair (e.g. asking for
+        // (google, u1) and (facebook, u2) would spuriously match (google, u2) and (facebook, u1)).
+        StringBuilder pairPlaceholders = new StringBuilder();
+        for (int i = 0; i < thirdPartyUserIdToThirdPartyId.size(); i++) {
+            if (i > 0) {
+                pairPlaceholders.append(", ");
+            }
+            pairPlaceholders.append("(?, ?)");
+        }
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getThirdPartyUsersTable() + " AS tp" +
                 " JOIN " + getConfig(start).getUsersTable() + " AS all_users" +
                 " ON tp.app_id = all_users.app_id AND tp.user_id = all_users.user_id" +
-                " WHERE tp.app_id = ? AND tp.third_party_id IN ( " + Utils.generateCommaSeperatedQuestionMarks(
-                thirdPartyUserIdToThirdPartyId.size()) + " ) AND tp.third_party_user_id IN ( " + Utils.generateCommaSeperatedQuestionMarks(
-                thirdPartyUserIdToThirdPartyId.size()) + " )";
+                " WHERE tp.app_id = ? AND (tp.third_party_id, tp.third_party_user_id) IN ( "
+                + pairPlaceholders + " )";
 
         return execute(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             int counter = 2;
-            for (String thirdpartId : thirdPartyUserIdToThirdPartyId.values()){
-                pst.setString(counter, thirdpartId);
+            // The map is keyed by third_party_user_id with third_party_id as the value; bind each
+            // entry as the (third_party_id, third_party_user_id) tuple in the row-value list above.
+            for (Map.Entry<String, String> entry : thirdPartyUserIdToThirdPartyId.entrySet()) {
+                pst.setString(counter, entry.getValue());
                 counter++;
-            }
-            for (String thirdparyUserId : thirdPartyUserIdToThirdPartyId.keySet()){
-                pst.setString(counter, thirdparyUserId);
+                pst.setString(counter, entry.getKey());
                 counter++;
             }
         }, result -> {
@@ -585,41 +595,14 @@ public class ThirdPartyQueries {
             return numRows > 0;
         }
 
-        if (mode.writesToNewTables() && mode.writesToOldTables()) { // recipe_user_tenants (email + tparty rows)
-            int totalRows = 0;
-            if (userInfo.email != null) {
-                String Q = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
-                        + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type,"
-                        + " third_party_id, third_party_user_id, account_info_value)"
-                        + " VALUES(?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING";
-                totalRows += update(sqlCon, Q, pst -> {
-                    pst.setString(1, tenantIdentifier.getAppId());
-                    pst.setString(2, userInfo.id);
-                    pst.setString(3, tenantIdentifier.getTenantId());
-                    pst.setString(4, THIRD_PARTY.toString());
-                    pst.setString(5, ACCOUNT_INFO_TYPE.EMAIL.toString());
-                    pst.setString(6, userInfo.thirdParty.id);
-                    pst.setString(7, userInfo.thirdParty.userId);
-                    pst.setString(8, userInfo.email);
-                });
-            }
-            String Q2 = "INSERT INTO " + getConfig(start).getRecipeUserTenantsTable()
-                    + "(app_id, recipe_user_id, tenant_id, recipe_id, account_info_type,"
-                    + " third_party_id, third_party_user_id, account_info_value)"
-                    + " VALUES(?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING";
-            totalRows += update(sqlCon, Q2, pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, userInfo.id);
-                pst.setString(3, tenantIdentifier.getTenantId());
-                pst.setString(4, THIRD_PARTY.toString());
-                pst.setString(5, ACCOUNT_INFO_TYPE.THIRD_PARTY.toString());
-                pst.setString(6, "");
-                pst.setString(7, "");
-                pst.setString(8, new io.supertokens.pluginInterface.authRecipe.LoginMethod.ThirdParty(
-                        userInfo.thirdParty.id, userInfo.thirdParty.userId).getAccountInfoValue());
-            });
-            return totalRows > 0;
-        }
+        // recipe_user_tenants (email + tparty rows) is seeded by the orchestration-level writer
+        // Start.addUserIdToTenant_Transaction -> AccountInfoQueries.addTenantIdToRecipeUser_Transaction,
+        // which runs for every writesToNewTables() mode and materialises this user's rows into the
+        // target tenant from the app-scoped recipe_user_account_infos. A recipe-level insert here would
+        // be redundant (and its former writesToNewTables() && writesToOldTables() gate was in fact
+        // unreachable: the writesToOldTables() branch above returns first), so it is intentionally
+        // omitted. In writesToNewTables()-only (MIGRATED) mode the return value below is discarded:
+        // Start computes wasAlreadyAssociated from a pre-check instead.
 
         return false;
     }

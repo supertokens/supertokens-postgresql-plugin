@@ -367,6 +367,20 @@ public class SessionQueries {
         });
     }
 
+    public static boolean doesNonExpiredSessionExistForUser(Start start, AppIdentifier appIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+        // existence check only: must not load the user's session handles, which can number in the
+        // hundreds of thousands for long-lived / never-revoked sessions.
+        String QUERY = "SELECT 1 FROM " + getConfig(start).getSessionInfoTable()
+                + " WHERE app_id = ? AND user_id = ? AND expires_at >= ? LIMIT 1";
+
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+            pst.setLong(3, currentTimeMillis());
+        }, ResultSet::next);
+    }
+
     public static String[] getAllNonExpiredSessionHandlesForUser(Start start, AppIdentifier appIdentifier,
                                                                  String userId)
             throws SQLException, StorageQueryException {
