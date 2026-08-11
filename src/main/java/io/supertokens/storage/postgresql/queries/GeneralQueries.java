@@ -748,6 +748,19 @@ public class GeneralQueries {
                     ddl.add(OAuthQueries.getQueryToCreateOAuthM2MTokenExpIndex(start));
                 }
 
+                if (!doesTableExists(existingTables, Config.getConfig(start).getOAuthM2MTokenStatsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    ddl.add(OAuthQueries.getQueryToCreateOAuthM2MTokenStatsTable(start));
+                    ddl.add(OAuthQueries.getQueryToCreateOAuthM2MTokenStatsExpBucketIndex(start));
+
+                    // One-shot transition: seed the rollup from whatever the legacy oauth_m2m_tokens
+                    // table still holds. Runs in this same DDL transaction (right after both the legacy
+                    // and rollup CREATE TABLEs, so the source table exists), so table + seed commit
+                    // atomically -> exactly once. On a fresh install the legacy table is empty, so this
+                    // is a no-op.
+                    ddl.add(OAuthQueries.getQueryToBackfillOAuthM2MTokenStatsFromLegacy(start));
+                }
+
                 if (!doesTableExists(existingTables, Config.getConfig(start).getOAuthLogoutChallengesTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     ddl.add(OAuthQueries.getQueryToCreateOAuthLogoutChallengesTable(start));
@@ -1028,6 +1041,7 @@ public class GeneralQueries {
                     + getConfig(start).getDashboardSessionsTable() + ","
                     + getConfig(start).getOAuthClientsTable() + ","
                     + getConfig(start).getOAuthM2MTokensTable() + ","
+                    + getConfig(start).getOAuthM2MTokenStatsTable() + ","
                     + getConfig(start).getOAuthLogoutChallengesTable() + ","
                     + getConfig(start).getTotpUsedCodesTable() + ","
                     + getConfig(start).getTotpUserDevicesTable() + ","

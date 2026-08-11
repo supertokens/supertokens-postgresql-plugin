@@ -7,6 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+
 ## [9.7.0]
 
 - Fixes a connection pool leak in `UserIdMappingQueries.createBulkUserIdMapping`, which never returned its
@@ -17,6 +18,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   role queries, so it can no longer interleave with a concurrent assign-role flow
 - Removes redundant recipe-level `recipe_user_tenants` inserts in `addUserIdToTenant_Transaction`; those rows
   are already written by `Start.addUserIdToTenant_Transaction`. No behavior change.
+- Replaces the per-token `oauth_m2m_tokens` stats table with an hourly bucketed `oauth_m2m_token_stats`
+  rollup, fixing M2M token undercounting for bursty issuers (additive DDL; existing rows migrated on upgrade)
 
 ## [9.6.2]
 
