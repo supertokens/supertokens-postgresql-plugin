@@ -7,25 +7,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- Makes the dashboard user search (email/phone/provider) sargable: the `account_info_value ILIKE` arms of
-  `getUsers_new` become `LIKE lower(?) || '%'` prefix matches, each a B-tree range scan instead of a
-  per-request scan of the tenant's account-info rows. Because emails/phones are normalized to lower case at
-  write time, their arms match the bare column (`account_info_value LIKE lower(?) || '%'`) and are served by
-  an opclass swap of the existing account-info index: `idx_recipe_user_tenants_account_info` is recreated as
-  `idx_recipe_user_tenants_account_info_pattern` with `text_pattern_ops` on `account_info_value` (this still
-  serves the existing equality lookups — Postgres uses `text_pattern_ops` for `=` too — so the sign-up/linking
-  hot path is unaffected). The email-domain arm and the case-insensitive provider arm keep `lower()` and get
-  their own small partial expression indexes (`idx_recipe_user_tenants_search_domain`,
-  `idx_recipe_user_tenants_search_tparty`). Results are unchanged on normalized data; the only intentional
-  change is that the email search's `%@term%` arm becomes a strict domain-prefix match (identical for the
-  single-`@` values that email normalization guarantees).
+- Makes the dashboard user search (email/phone/provider) sargable by rewriting the non-indexable `ILIKE` scans
+  on `account_info_value` as `LIKE lower(?) || '%'` prefix matches, served by an opclass swap of the account-info index to `text_pattern_ops` (equality lookups unaffected) plus two small partial indexes for the email-domain and provider arms. Results unchanged on normalized data.
 
 ### Migration
 
-The dashboard-search indexes are created automatically on startup, but on large `recipe_user_tenants` tables
-the build (and the opclass swap's drop of the old index) can hold a lock. To avoid it, perform the swap and
-create the partial indexes with `CREATE INDEX CONCURRENTLY` before upgrading (the startup DDL then becomes a
-no-op). Note the transient window in which both the old and the new account-info index exist on the table:
+Created/swapped automatically at startup; on large `recipe_user_tenants` tables pre-create them with
+`CREATE INDEX CONCURRENTLY` before upgrading to avoid a lock (note the transient two-index window on the account-info family):
 
 ```sql
 -- opclass swap of the account-info index (create the successor concurrently, then drop the predecessor)
