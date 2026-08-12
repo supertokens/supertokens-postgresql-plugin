@@ -5,10 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [9.7.1]
 
-- Makes the dashboard user search (email/phone/provider) sargable by rewriting the non-indexable `ILIKE` scans
-  on `account_info_value` as `LIKE lower(?) || '%'` prefix matches, served by an opclass swap of the account-info index to `text_pattern_ops` (equality lookups unaffected) plus two small partial indexes for the email-domain and provider arms. Results unchanged on normalized data.
+- Makes the dashboard user search (email/phone/provider) sargable: `ILIKE` scans on `account_info_value`
+  become `LIKE lower(?) || '%'` prefix matches via a `text_pattern_ops` opclass swap plus two partial indexes.
 
 ### Migration
 
