@@ -38,6 +38,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   recorded" (no backfill required).
 - Adds `prevRefreshTokenHash2` and `refreshTokenRotatedAt` params to `updateSessionInfo_Transaction` and reads
   the new columns back into `SessionInfo`.
+- Makes the dashboard user search (email/phone/provider) sargable: the `account_info_value ILIKE` arms of
+  `getUsers_new` become `lower(account_info_value) LIKE lower(?) || '%'` (and, for emails, an added
+  `lower(split_part(account_info_value, '@', 2)) LIKE lower(?) || '%'` domain arm), backed by two new
+  expression indexes on `recipe_user_tenants` (`idx_recipe_user_tenants_search_value`,
+  `idx_recipe_user_tenants_search_domain`). Each search arm becomes a B-tree range scan instead of a
+  per-request scan of the tenant's account-info rows. Results are unchanged on normalized data; the only
+  intentional change is that the email search's `%@term%` arm becomes a strict domain-prefix match (identical
+  for the single-`@` values that email normalization guarantees).
 
 ### Migration
 
@@ -46,6 +54,18 @@ Make sure the core is already upgraded to the version that supports plugin inter
 ```sql
 ALTER TABLE session_info ADD COLUMN prev_refresh_token_hash_2 VARCHAR(128);
 ALTER TABLE session_info ADD COLUMN refresh_token_rotated_at BIGINT;
+```
+
+The two dashboard-search indexes are created automatically on startup, but on large `recipe_user_tenants`
+tables the build can hold a lock. To avoid it, pre-create them with `CREATE INDEX CONCURRENTLY` before
+upgrading (the startup DDL then becomes a no-op):
+
+```sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_recipe_user_tenants_search_value ON recipe_user_tenants
+  (app_id, tenant_id, account_info_type, lower(account_info_value) text_pattern_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_recipe_user_tenants_search_domain ON recipe_user_tenants
+  (app_id, tenant_id, lower(split_part(account_info_value, '@', 2)) text_pattern_ops)
+  WHERE account_info_type = 'email';
 ```
 
 

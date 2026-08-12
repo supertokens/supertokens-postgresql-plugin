@@ -171,6 +171,30 @@ public class AccountInfoQueries {
                 + "(app_id, tenant_id, account_info_type, account_info_value);";
     }
 
+    // Backs the dashboard user search arms (GeneralQueries.getUsers_new). The search filters
+    // `lower(account_info_value) LIKE lower(?) || '%'` per (app_id, tenant_id, account_info_type),
+    // a case-insensitive prefix match. The plain (app_id, tenant_id, account_info_type,
+    // account_info_value) index above cannot serve it: its default text_ops opclass does not order by
+    // the C-collation byte order that LIKE-prefix bounds require, and the previous ILIKE defeated any
+    // index outright. This expression index on lower(account_info_value) with text_pattern_ops turns
+    // each search arm into a B-tree range scan instead of a per-request scan of the tenant's rows.
+    static String getQueryToCreateSearchValueIndexForRecipeUserTenantsTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_search_value ON "
+                + Config.getConfig(start).getRecipeUserTenantsTable()
+                + "(app_id, tenant_id, account_info_type, lower(account_info_value) text_pattern_ops);";
+    }
+
+    // Backs the second (domain) arm of the dashboard email search
+    // (`lower(split_part(account_info_value, '@', 2)) LIKE lower(?) || '%'`), which replaced the old
+    // non-sargable `%@?%` substring match. Partial on account_info_type = 'email' because only email
+    // values have a meaningful domain part; the query always pins that type, so the planner can use it.
+    static String getQueryToCreateSearchDomainIndexForRecipeUserTenantsTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_search_domain ON "
+                + Config.getConfig(start).getRecipeUserTenantsTable()
+                + "(app_id, tenant_id, lower(split_part(account_info_value, '@', 2)) text_pattern_ops)"
+                + " WHERE account_info_type = 'email';";
+    }
+
     // Backs the "D" term of the per-tenant user-count decomposition (count = D - L + G, documented
     // in full in GeneralQueries.getUsersCount_new): D is the count of distinct recipe users in a
     // tenant. This index makes that a streaming, index-only DISTINCT pre-sorted by recipe_user_id,
