@@ -435,13 +435,22 @@ public class GeneralQueries {
                 if (doesTableExists(existingTables, Config.getConfig(start).getRecipeUserTenantsTable())) {
                     backfillIndexDdl.add(
                             AccountInfoQueries.getQueryToCreateTenantRecipeUserIndexForRecipeUserTenantsTable(start));
-                    // Sargable-search expression indexes for the dashboard user search arms. Additive and
-                    // idempotent; on large deployments operators should pre-create them with CREATE INDEX
-                    // CONCURRENTLY before upgrading so this startup DDL is a no-op (see CHANGELOG).
+                    // Sargable dashboard user search. The email/phone value arms are served by an
+                    // opclass swap of idx_recipe_user_tenants_account_info -> ..._pattern
+                    // (text_pattern_ops): create the successor, then drop the predecessor (the drop is
+                    // guarded on the successor existing, so a skipped create never leaves the equality
+                    // index absent). The provider (tparty) and email-domain arms get their own small
+                    // partial indexes. Additive/idempotent; on large deployments operators should
+                    // pre-create the ..._pattern index with CREATE INDEX CONCURRENTLY and drop the old
+                    // one before upgrading so this startup DDL is a no-op (see CHANGELOG).
                     backfillIndexDdl.add(
-                            AccountInfoQueries.getQueryToCreateSearchValueIndexForRecipeUserTenantsTable(start));
+                            AccountInfoQueries.getQueryToCreateAccountInfoPatternIndexForRecipeUserTenantsTable(start));
+                    backfillIndexDdl.add(
+                            AccountInfoQueries.getQueryToDropOldAccountInfoIndexForRecipeUserTenantsTable(start));
                     backfillIndexDdl.add(
                             AccountInfoQueries.getQueryToCreateSearchDomainIndexForRecipeUserTenantsTable(start));
+                    backfillIndexDdl.add(
+                            AccountInfoQueries.getQueryToCreateSearchTpartyIndexForRecipeUserTenantsTable(start));
                 }
                 if (doesTableExists(existingTables, Config.getConfig(start).getAppIdToUserIdTable())) {
                     backfillIndexDdl.add(getQueryToCreateLinkedFlagIndexForAppIdToUserIdTable(start));
@@ -858,10 +867,10 @@ public class GeneralQueries {
                     ddl.add(AccountInfoQueries.getQueryToCreateTenantIndexForRecipeUserTenantsTable(start));
                     ddl.add(AccountInfoQueries.getQueryToCreateRecipeUserIdIndexForRecipeUserTenantsTable(start));
                     ddl.add(AccountInfoQueries.getQueryToCreateRecipeUserIdIndexForRecipeUserAccountInfoTable(start));
-                    ddl.add(AccountInfoQueries.getQueryToCreateAccountInfoIndexForRecipeUserTenantsTable(start));
+                    ddl.add(AccountInfoQueries.getQueryToCreateAccountInfoPatternIndexForRecipeUserTenantsTable(start));
                     ddl.add(AccountInfoQueries.getQueryToCreateTenantRecipeUserIndexForRecipeUserTenantsTable(start));
-                    ddl.add(AccountInfoQueries.getQueryToCreateSearchValueIndexForRecipeUserTenantsTable(start));
                     ddl.add(AccountInfoQueries.getQueryToCreateSearchDomainIndexForRecipeUserTenantsTable(start));
+                    ddl.add(AccountInfoQueries.getQueryToCreateSearchTpartyIndexForRecipeUserTenantsTable(start));
                 }
 
                 if (!doesTableExists(existingTables, Config.getConfig(start).getPrimaryUserTenantsTable())) {
@@ -1678,26 +1687,38 @@ public class GeneralQueries {
                 dashboardSearchTags);
     }
 
-    // Appends one index-sargable, case-insensitive prefix match on a recipe_user_tenants alias's
-    // account_info_value, and binds the raw search term (the SQL appends the wildcard). lower() on both
-    // sides preserves the previous ILIKE case-insensitivity — relevant for third-party values whose
-    // user-id part is not normalized — while turning the arm into a plain LIKE prefix that the
-    // idx_recipe_user_tenants_search_value expression index can seek instead of scanning the tenant.
-    private static void appendValuePrefixMatch(StringBuilder query, ArrayList<String> queryParams,
-                                               String alias, String term) {
+    // Appends an index-sargable prefix match on an ingestion-normalized (lower-cased at write time)
+    // recipe_user_tenants value: phone numbers and the email local+domain value arm. Matches the bare
+    // column so the text_pattern_ops idx_recipe_user_tenants_account_info_pattern index can seek it; the
+    // bound term is lower()'d only defensively (the core already lower-cases search tags). Since column
+    // and term are both lower case, this is result-identical to the previous ILIKE on normalized data.
+    private static void appendNormalizedPrefixMatch(StringBuilder query, ArrayList<String> queryParams,
+                                                    String alias, String term) {
+        query.append(" ").append(alias).append(".account_info_value LIKE lower(?) || '%'");
+        queryParams.add(term);
+    }
+
+    // Appends the case-insensitive provider (tparty) prefix match. Third-party account values are not
+    // normalized to lower case at write time, so this keeps lower() on both sides to preserve the
+    // previous ILIKE case-insensitivity, and is served by the partial
+    // idx_recipe_user_tenants_search_tparty expression index rather than the bare-column pattern index.
+    private static void appendProviderPrefixMatch(StringBuilder query, ArrayList<String> queryParams,
+                                                  String alias, String term) {
         query.append(" lower(").append(alias).append(".account_info_value) LIKE lower(?) || '%'");
         queryParams.add(term);
     }
 
-    // Appends the email search arm: a prefix match on the whole value (local-part search, backed by
-    // idx_recipe_user_tenants_search_value) OR a prefix match on the domain (backed by
-    // idx_recipe_user_tenants_search_domain). The domain arm replaces the old non-sargable
-    // `account_info_value ILIKE '%@term%'`: for values with exactly one '@' (guaranteed by email
-    // normalization at write time) "domain starts with term" is equivalent to "'@term' appears", so
-    // this is result-identical on normalized data while becoming a B-tree range seek.
+    // Appends the email search arm: an index-sargable prefix match on the whole value (local-part +
+    // domain, backed by idx_recipe_user_tenants_account_info_pattern on the bare column) OR a prefix
+    // match on the domain (backed by idx_recipe_user_tenants_search_domain). Emails are normalized to
+    // lower case at write time, so the value arm matches the bare column; the domain arm keeps
+    // lower(split_part(...)) to match its expression index. The domain arm replaces the old
+    // non-sargable `account_info_value ILIKE '%@term%'`: for values with exactly one '@' (guaranteed by
+    // email normalization) "domain starts with term" is equivalent to "'@term' appears", so this is
+    // result-identical on normalized data while becoming a B-tree range seek.
     private static void appendEmailPrefixMatch(StringBuilder query, ArrayList<String> queryParams,
                                                String alias, String term) {
-        query.append(" lower(").append(alias).append(".account_info_value) LIKE lower(?) || '%'")
+        query.append(" ").append(alias).append(".account_info_value LIKE lower(?) || '%'")
                 .append(" OR lower(split_part(").append(alias).append(".account_info_value, '@', 2))")
                 .append(" LIKE lower(?) || '%'");
         queryParams.add(term);
@@ -1761,7 +1782,7 @@ public class GeneralQueries {
                     query.append(" AND rut_phone.account_info_type = 'phone' AND (");
                     for (int i = 0; i < dashboardSearchTags.phoneNumbers.size(); i++) {
                         if (i > 0) query.append(" OR");
-                        appendValuePrefixMatch(query, queryParams, "rut_phone", dashboardSearchTags.phoneNumbers.get(i));
+                        appendNormalizedPrefixMatch(query, queryParams, "rut_phone", dashboardSearchTags.phoneNumbers.get(i));
                     }
                     query.append(")");
                     // Provider filter (if also present) - uses rut_tp join (different row from email)
@@ -1769,7 +1790,7 @@ public class GeneralQueries {
                         query.append(" AND rut_tp.account_info_type = 'tparty' AND (");
                         for (int i = 0; i < dashboardSearchTags.providers.size(); i++) {
                             if (i > 0) query.append(" OR");
-                            appendValuePrefixMatch(query, queryParams, "rut_tp", dashboardSearchTags.providers.get(i));
+                            appendProviderPrefixMatch(query, queryParams, "rut_tp", dashboardSearchTags.providers.get(i));
                         }
                         query.append(")");
                     }
@@ -1784,7 +1805,7 @@ public class GeneralQueries {
                     query.append(") AND rut_tp.account_info_type = 'tparty' AND (");
                     for (int i = 0; i < dashboardSearchTags.providers.size(); i++) {
                         if (i > 0) query.append(" OR");
-                        appendValuePrefixMatch(query, queryParams, "rut_tp", dashboardSearchTags.providers.get(i));
+                        appendProviderPrefixMatch(query, queryParams, "rut_tp", dashboardSearchTags.providers.get(i));
                     }
                     query.append(")");
 
@@ -1793,12 +1814,12 @@ public class GeneralQueries {
                     query.append(" AND rut.account_info_type = 'phone' AND (");
                     for (int i = 0; i < dashboardSearchTags.phoneNumbers.size(); i++) {
                         if (i > 0) query.append(" OR");
-                        appendValuePrefixMatch(query, queryParams, "rut", dashboardSearchTags.phoneNumbers.get(i));
+                        appendNormalizedPrefixMatch(query, queryParams, "rut", dashboardSearchTags.phoneNumbers.get(i));
                     }
                     query.append(") AND rut_tp.account_info_type = 'tparty' AND (");
                     for (int i = 0; i < dashboardSearchTags.providers.size(); i++) {
                         if (i > 0) query.append(" OR");
-                        appendValuePrefixMatch(query, queryParams, "rut_tp", dashboardSearchTags.providers.get(i));
+                        appendProviderPrefixMatch(query, queryParams, "rut_tp", dashboardSearchTags.providers.get(i));
                     }
                     query.append(")");
 
@@ -1814,7 +1835,7 @@ public class GeneralQueries {
                     query.append(" AND rut.account_info_type = 'phone' AND (");
                     for (int i = 0; i < dashboardSearchTags.phoneNumbers.size(); i++) {
                         if (i > 0) query.append(" OR");
-                        appendValuePrefixMatch(query, queryParams, "rut", dashboardSearchTags.phoneNumbers.get(i));
+                        appendNormalizedPrefixMatch(query, queryParams, "rut", dashboardSearchTags.phoneNumbers.get(i));
                     }
                     query.append(")");
 
@@ -1822,7 +1843,7 @@ public class GeneralQueries {
                     query.append(" AND rut.account_info_type = 'tparty' AND (");
                     for (int i = 0; i < dashboardSearchTags.providers.size(); i++) {
                         if (i > 0) query.append(" OR");
-                        appendValuePrefixMatch(query, queryParams, "rut", dashboardSearchTags.providers.get(i));
+                        appendProviderPrefixMatch(query, queryParams, "rut", dashboardSearchTags.providers.get(i));
                     }
                     query.append(")");
                 }

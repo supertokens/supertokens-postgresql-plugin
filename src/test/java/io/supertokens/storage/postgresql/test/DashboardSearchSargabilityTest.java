@@ -56,16 +56,22 @@ import static org.junit.Assert.*;
 
 /**
  * Covers the dashboard user-search sargability change on {@code GeneralQueries.getUsers_new}: the
- * {@code account_info_value ILIKE} arms became {@code lower(account_info_value) LIKE lower(?) || '%'}
- * (plus, for emails, an added {@code lower(split_part(account_info_value, '@', 2)) LIKE lower(?) || '%'}
- * domain arm), backed by the two new expression indexes on {@code recipe_user_tenants}
- * ({@code idx_recipe_user_tenants_search_value} and {@code idx_recipe_user_tenants_search_domain}).
+ * {@code account_info_value ILIKE} arms became index-sargable {@code LIKE lower(?) || '%'} prefix matches.
+ * Emails/phones are normalized to lower case at write time, so those arms match the <b>bare</b> column
+ * ({@code account_info_value LIKE lower(?) || '%'}) and are served by an opclass swap of the existing
+ * account-info index: {@code idx_recipe_user_tenants_account_info} is recreated as
+ * {@code idx_recipe_user_tenants_account_info_pattern} with {@code text_pattern_ops} on
+ * {@code account_info_value} (still serves the equality consumers, now also serves prefix range scans).
+ * The email domain arm ({@code lower(split_part(account_info_value, '@', 2)) LIKE lower(?) || '%'}) and the
+ * case-insensitive provider arm ({@code lower(account_info_value) LIKE lower(?) || '%'}, tparty values are
+ * not normalized) keep {@code lower()} and get their own small partial expression indexes
+ * ({@code idx_recipe_user_tenants_search_domain} and {@code idx_recipe_user_tenants_search_tparty}).
  *
  * <p>{@link #testDashboardSearchArmsAreSargable()} is a plan-shape regression test: it seeds a synthetic
  * single-app / single-tenant dataset directly with SQL, then runs the exact query {@code getUsers_new}
  * builds (bind params inlined as literals) under {@code EXPLAIN (FORMAT JSON)} and asserts that the search
- * arms reach {@code recipe_user_tenants} through the new indexes with <b>no sequential scan</b>. Its teeth
- * drop the two indexes and assert the search can no longer be served by them (it degrades to a filter over a
+ * arms reach {@code recipe_user_tenants} through those indexes with <b>no sequential scan</b>. Its teeth
+ * drop the indexes and assert the search can no longer be served by them (it degrades to a filter over a
  * broad scan). {@code EXPLAIN} without {@code ANALYZE} only plans, it does not execute.
  *
  * <p>{@link #testDashboardSearchSemanticsPreserved()} drives the real {@code getUsers_new} path end to end
@@ -88,8 +94,12 @@ public class DashboardSearchSargabilityTest {
     private static final long TIME_BASE = 1_000_000_000L;
 
     // Index names created by AccountInfoQueries (must match the DDL).
-    private static final String IDX_SEARCH_VALUE = "idx_recipe_user_tenants_search_value";
+    // The opclass-swapped successor to idx_recipe_user_tenants_account_info; serves the bare-column
+    // email/phone prefix arms.
+    private static final String IDX_ACCOUNT_INFO_PATTERN = "idx_recipe_user_tenants_account_info_pattern";
+    private static final String IDX_ACCOUNT_INFO_OLD = "idx_recipe_user_tenants_account_info";
     private static final String IDX_SEARCH_DOMAIN = "idx_recipe_user_tenants_search_domain";
+    private static final String IDX_SEARCH_TPARTY = "idx_recipe_user_tenants_search_tparty";
 
     @AfterClass
     public static void afterTesting() {
@@ -138,9 +148,14 @@ public class DashboardSearchSargabilityTest {
             try {
                 con.setAutoCommit(true);
 
-                // Sanity: the two new indexes were actually created at startup on a fresh database.
-                assertTrue("startup DDL must create " + IDX_SEARCH_VALUE, indexExists(con, IDX_SEARCH_VALUE));
+                // Sanity: the search indexes were actually created at startup on a fresh database, and the
+                // fresh-install path creates the swapped pattern index directly rather than the old plain one.
+                assertTrue("startup DDL must create " + IDX_ACCOUNT_INFO_PATTERN,
+                        indexExists(con, IDX_ACCOUNT_INFO_PATTERN));
                 assertTrue("startup DDL must create " + IDX_SEARCH_DOMAIN, indexExists(con, IDX_SEARCH_DOMAIN));
+                assertTrue("startup DDL must create " + IDX_SEARCH_TPARTY, indexExists(con, IDX_SEARCH_TPARTY));
+                assertFalse("fresh install must not create the pre-swap " + IDX_ACCOUNT_INFO_OLD,
+                        indexExists(con, IDX_ACCOUNT_INFO_OLD));
 
                 // Deterministic single-worker plans so node selection does not flip on a loaded CI box.
                 exec(con, "SET max_parallel_workers_per_gather = 0");
@@ -151,39 +166,40 @@ public class DashboardSearchSargabilityTest {
                 // ---- index scans). The prefixes below are selective (one matching user each). ----
                 JsonObject emailPlan = explain(con, emailSearch(auid, rut, appId, tenantId, "user12345", "d12345"));
                 assertNoSeqScan("email search", emailPlan, rut);
-                assertTrue("email search must use " + IDX_SEARCH_VALUE + " (local-part arm); plan=" + emailPlan,
-                        usesIndex(emailPlan, IDX_SEARCH_VALUE));
+                assertTrue("email search must use " + IDX_ACCOUNT_INFO_PATTERN + " (local-part arm); plan="
+                                + emailPlan, usesIndex(emailPlan, IDX_ACCOUNT_INFO_PATTERN));
                 assertTrue("email search must use " + IDX_SEARCH_DOMAIN + " (domain arm); plan=" + emailPlan,
                         usesIndex(emailPlan, IDX_SEARCH_DOMAIN));
 
-                // Teeth: without the two expression indexes the search cannot be served by them. The plain
-                // (app_id, tenant_id, account_info_type, account_info_value) index cannot answer a
-                // case-insensitive prefix, so the lower()/split_part() arms fall to a Filter over a broad
-                // scan (seq scan on PG <= 17, or a type-prefix index scan filtered on 18+) — either way the
-                // two search indexes are unused. Their absence from the plan is the version-proof signature.
-                exec(con, "DROP INDEX " + IDX_SEARCH_VALUE);
+                // Teeth: without the pattern index (value arm) and the domain index the search cannot be
+                // served by them. A default-opclass index cannot answer a C-collation prefix bound, so the
+                // arms fall to a Filter over a broad scan (seq scan on PG <= 17, or a type-prefix index scan
+                // filtered on 18+) — either way both indexes are unused. Their absence from the plan is the
+                // version-proof signature.
+                exec(con, "DROP INDEX " + IDX_ACCOUNT_INFO_PATTERN);
                 exec(con, "DROP INDEX " + IDX_SEARCH_DOMAIN);
                 exec(con, "ANALYZE " + rut);
                 try {
                     JsonObject teeth = explain(con, emailSearch(auid, rut, appId, tenantId, "user12345", "d12345"));
-                    assertFalse("teeth: " + IDX_SEARCH_VALUE + " must be gone; plan=" + teeth,
-                            usesIndex(teeth, IDX_SEARCH_VALUE));
+                    assertFalse("teeth: " + IDX_ACCOUNT_INFO_PATTERN + " must be gone; plan=" + teeth,
+                            usesIndex(teeth, IDX_ACCOUNT_INFO_PATTERN));
                     assertFalse("teeth: " + IDX_SEARCH_DOMAIN + " must be gone; plan=" + teeth,
                             usesIndex(teeth, IDX_SEARCH_DOMAIN));
                 } finally {
-                    exec(con, "CREATE INDEX IF NOT EXISTS " + IDX_SEARCH_VALUE + " ON " + rut
-                            + "(app_id, tenant_id, account_info_type, lower(account_info_value) text_pattern_ops)");
+                    exec(con, "CREATE INDEX IF NOT EXISTS " + IDX_ACCOUNT_INFO_PATTERN + " ON " + rut
+                            + "(app_id, tenant_id, account_info_type, account_info_value text_pattern_ops)");
                     exec(con, "CREATE INDEX IF NOT EXISTS " + IDX_SEARCH_DOMAIN + " ON " + rut
                             + "(app_id, tenant_id, lower(split_part(account_info_value, '@', 2)) text_pattern_ops)"
                             + " WHERE account_info_type = 'email'");
                     exec(con, "ANALYZE " + rut);
                 }
 
-                // ---- Provider (tparty) arm: single value-prefix match served by IDX_SEARCH_VALUE. ----
+                // ---- Provider (tparty) arm: single case-insensitive value-prefix match served by the ----
+                // ---- partial IDX_SEARCH_TPARTY. ----
                 JsonObject providerPlan = explain(con, providerSearch(auid, rut, appId, tenantId, "google::sub12345"));
                 assertNoSeqScan("provider search", providerPlan, rut);
-                assertTrue("provider search must use " + IDX_SEARCH_VALUE + "; plan=" + providerPlan,
-                        usesIndex(providerPlan, IDX_SEARCH_VALUE));
+                assertTrue("provider search must use " + IDX_SEARCH_TPARTY + "; plan=" + providerPlan,
+                        usesIndex(providerPlan, IDX_SEARCH_TPARTY));
             } finally {
                 con.close();
             }
@@ -233,7 +249,7 @@ public class DashboardSearchSargabilityTest {
                 + " JOIN " + rut + " rut ON auid.app_id = rut.app_id AND auid.user_id = rut.recipe_user_id"
                 + " WHERE rut.app_id = " + q(appId) + " AND rut.tenant_id = " + q(tenantId)
                 + " AND rut.account_info_type = 'email' AND ("
-                + "   lower(rut.account_info_value) LIKE lower(" + q(localTerm) + ") || '%'"
+                + "   rut.account_info_value LIKE lower(" + q(localTerm) + ") || '%'"
                 + "   OR lower(split_part(rut.account_info_value, '@', 2)) LIKE lower(" + q(domainTerm) + ") || '%'"
                 + " )"
                 + " ORDER BY auid.primary_or_recipe_user_time_joined ASC, auid.primary_or_recipe_user_id DESC"

@@ -165,23 +165,48 @@ public class AccountInfoQueries {
                 + "(app_id, account_info_type, account_info_value);";
     }
 
-    static String getQueryToCreateAccountInfoIndexForRecipeUserTenantsTable(Start start) {
-        return "CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_account_info ON "
+    // Backs BOTH the account-info equality lookups on recipe_user_tenants (third-party / webauthn
+    // sign-in resolution and conflict checks, all `... AND account_info_type = ? AND
+    // account_info_value = ?`) AND the dashboard user search's email/phone prefix arms
+    // (GeneralQueries.getUsers_new). This is the opclass-swapped successor to the old
+    // idx_recipe_user_tenants_account_info: same columns, but account_info_value now carries
+    // text_pattern_ops, so a C-collation `account_info_value LIKE ? || '%'` prefix bound becomes a
+    // B-tree range scan. text_pattern_ops still serves ordinary equality (Postgres uses it for `=`),
+    // so every prior consumer of the old index is unaffected; no consumer orders by or range-scans
+    // account_info_value in locale order (audited across all queries), which is the only behaviour the
+    // opclass swap changes. Emails/phones are ingestion-normalized to lower case (core
+    // Utils.normaliseEmail, applied on every write incl. bulk import), so those search arms match the
+    // bare column with no lower() and are served directly here; the tparty arm keeps lower() and uses
+    // its own partial index (getQueryToCreateSearchTpartyIndex...).
+    static String getQueryToCreateAccountInfoPatternIndexForRecipeUserTenantsTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_account_info_pattern ON "
                 + Config.getConfig(start).getRecipeUserTenantsTable()
-                + "(app_id, tenant_id, account_info_type, account_info_value);";
+                + "(app_id, tenant_id, account_info_type, account_info_value text_pattern_ops);";
     }
 
-    // Backs the dashboard user search arms (GeneralQueries.getUsers_new). The search filters
-    // `lower(account_info_value) LIKE lower(?) || '%'` per (app_id, tenant_id, account_info_type),
-    // a case-insensitive prefix match. The plain (app_id, tenant_id, account_info_type,
-    // account_info_value) index above cannot serve it: its default text_ops opclass does not order by
-    // the C-collation byte order that LIKE-prefix bounds require, and the previous ILIKE defeated any
-    // index outright. This expression index on lower(account_info_value) with text_pattern_ops turns
-    // each search arm into a B-tree range scan instead of a per-request scan of the tenant's rows.
-    static String getQueryToCreateSearchValueIndexForRecipeUserTenantsTable(Start start) {
-        return "CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_search_value ON "
+    // Drops the pre-swap idx_recipe_user_tenants_account_info once its text_pattern_ops successor
+    // (above) is present. Guarded on the successor existing so that if the CREATE was skipped this boot
+    // (e.g. a lock timeout on a large table — the backfill path swallows failures and retries next
+    // boot), we never remove the equality index while nothing replaces it. Idempotent: a no-op once
+    // the old index is gone. Only used on the backfill (existing-deployment) path; fresh installs never
+    // create the old index, so they have nothing to drop.
+    static String getQueryToDropOldAccountInfoIndexForRecipeUserTenantsTable(Start start) {
+        return "DO $$ BEGIN"
+                + " IF to_regclass('idx_recipe_user_tenants_account_info_pattern') IS NOT NULL THEN"
+                + "  EXECUTE 'DROP INDEX IF EXISTS idx_recipe_user_tenants_account_info';"
+                + " END IF; END $$;";
+    }
+
+    // Backs the case-insensitive provider (tparty) arm of the dashboard search
+    // (`lower(account_info_value) LIKE lower(?) || '%'`). Unlike email/phone, third-party account
+    // values are not normalized to lower case at write time, so this arm keeps lower() and therefore
+    // cannot use the bare-column pattern index above; this small partial expression index (tparty rows
+    // only) serves it. Partial on account_info_type = 'tparty' because the query always pins that type.
+    static String getQueryToCreateSearchTpartyIndexForRecipeUserTenantsTable(Start start) {
+        return "CREATE INDEX IF NOT EXISTS idx_recipe_user_tenants_search_tparty ON "
                 + Config.getConfig(start).getRecipeUserTenantsTable()
-                + "(app_id, tenant_id, account_info_type, lower(account_info_value) text_pattern_ops);";
+                + "(app_id, tenant_id, lower(account_info_value) text_pattern_ops)"
+                + " WHERE account_info_type = 'tparty';";
     }
 
     // Backs the second (domain) arm of the dashboard email search
