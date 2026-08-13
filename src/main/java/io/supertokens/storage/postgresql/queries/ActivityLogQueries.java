@@ -83,8 +83,25 @@ public class ActivityLogQueries {
                 + "auth_principal VARCHAR(256),"
                 + "identifier VARCHAR(256),"
                 + "created_at BIGINT NOT NULL,"
-                + "payload TEXT"
+                // JSONB (not TEXT): structured lifecycle-event payloads will start flowing into this
+                // column, and JSONB rejects malformed JSON at write time. Monthly partitions are created
+                // with PARTITION OF, which copies the parent's column definitions verbatim, so every new
+                // partition inherits this type automatically — no per-partition DDL to keep in sync.
+                + "payload JSONB"
                 + ") PARTITION BY RANGE (created_at);";
+    }
+
+    /**
+     * One-time, idempotent migration of a pre-existing {@code payload} column from TEXT to JSONB (the
+     * column originally shipped as TEXT). Applied to the partitioned parent, so Postgres rewrites every
+     * child partition with the same cast. {@code USING payload::jsonb} makes an old row holding invalid
+     * JSON fail the migration loudly (invalid_text_representation) rather than being silently dropped —
+     * which is why the caller runs this in the transactional DDL batch, not the best-effort index
+     * backfill. The caller guards it on the column not already being JSONB, so it never re-runs.
+     */
+    public static String getQueryToMigratePayloadColumnToJsonb(Start start) {
+        return "ALTER TABLE " + Config.getConfig(start).getActivityLogTable()
+                + " ALTER COLUMN payload TYPE JSONB USING payload::jsonb;";
     }
 
     static String getQueryToCreateActivityLogDefaultPartition(Start start) {
@@ -103,7 +120,10 @@ public class ActivityLogQueries {
         String QUERY = "INSERT INTO " + Config.getConfig(start).getActivityLogTable()
                 + " (app_id, tenant_id, recipe_user_id, primary_or_recipe_user_id, event_type, status,"
                 + " auth_principal, identifier, created_at, payload)"
-                + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                // payload is bound as a String; ?::jsonb casts it explicitly so the JSONB column accepts
+                // it (the driver sends the parameter as text, and text is not implicitly coercible to
+                // JSONB). A null payload casts to SQL NULL unchanged.
+                + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb)";
 
         update(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
