@@ -20,6 +20,7 @@ import io.supertokens.pluginInterface.auditlog.AuditLogEvent;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ConnectionPool;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 
@@ -44,8 +45,8 @@ import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
  * The table is range-partitioned by {@code created_at} (epoch millis) into one partition per UTC
  * calendar month. Upcoming months' partitions are pre-created — at table creation and by a daily
  * maintenance cron ({@code CleanupActivityLogPartitions}) — and a monthly partition is dropped once
- * its entire month is older than {@link #RETENTION_DAYS} days. A DEFAULT partition is a backstop so
- * inserts never fail if the cron lapses beyond the pre-created window.
+ * its entire month is older than the retention window the caller supplies. A DEFAULT partition is a
+ * backstop so inserts never fail if the cron lapses beyond the pre-created window.
  *
  * No primary key or foreign key — the identity sequence makes {@code id} unique by construction.
  * The only index is a BRIN on {@code created_at} created on the parent table (Postgres propagates
@@ -53,12 +54,6 @@ import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
  * to prune time-range scans. Requires PostgreSQL 11+.
  */
 public class ActivityLogQueries {
-
-    /**
-     * A monthly partition is dropped only once its entire month is older than this many days, so no
-     * data younger than the window is ever removed (a partition is retained until its last day ages out).
-     */
-    private static final int RETENTION_DAYS = 31;
 
     /** Number of future months (beyond the current one) to pre-create partitions for, so DEFAULT stays empty. */
     private static final int PREMAKE_MONTHS = 1;
@@ -98,14 +93,16 @@ public class ActivityLogQueries {
                 + Config.getConfig(start).getActivityLogTable() + " USING brin (created_at);";
     }
 
-    public static void createActivityLogEntry(Start start, TenantIdentifier tenantIdentifier, AuditLogEvent event)
-            throws SQLException, StorageQueryException {
-        String QUERY = "INSERT INTO " + Config.getConfig(start).getActivityLogTable()
+    private static String getQueryToInsertActivityLogEntry(Start start) {
+        return "INSERT INTO " + Config.getConfig(start).getActivityLogTable()
                 + " (app_id, tenant_id, recipe_user_id, primary_or_recipe_user_id, event_type, status,"
                 + " auth_principal, identifier, created_at, payload)"
                 + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    }
 
-        update(start, QUERY, pst -> {
+    private static PreparedStatementValueSetter activityLogEntrySetter(TenantIdentifier tenantIdentifier,
+                                                                       AuditLogEvent event) {
+        return pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, event.recipeUserId);
@@ -116,6 +113,38 @@ public class ActivityLogQueries {
             pst.setString(8, event.identifier);
             pst.setLong(9, event.createdAt);
             pst.setString(10, event.payload);
+        };
+    }
+
+    public static void createActivityLogEntry(Start start, TenantIdentifier tenantIdentifier, AuditLogEvent event)
+            throws SQLException, StorageQueryException {
+        update(start, getQueryToInsertActivityLogEntry(start), activityLogEntrySetter(tenantIdentifier, event));
+    }
+
+    /**
+     * Same insert as {@link #createActivityLogEntry}, but on the caller's transaction connection, so
+     * the entry commits or rolls back atomically with the surrounding mutation.
+     */
+    public static void createActivityLogEntry_Transaction(Connection con, Start start,
+                                                          TenantIdentifier tenantIdentifier, AuditLogEvent event)
+            throws SQLException, StorageQueryException {
+        update(con, getQueryToInsertActivityLogEntry(start), activityLogEntrySetter(tenantIdentifier, event));
+    }
+
+    /**
+     * Cheap existence check for rollup-relevant activity newer than {@code sinceMillis} — the rows
+     * the last-active rollup would fold ({@code user_last_active}) or reconcile ({@code account_linking}).
+     * Storage-wide, no app predicate; lets the rollup cron skip work when there is nothing new.
+     */
+    public static boolean hasUnfoldedActivitySince(Start start, long sinceMillis)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT EXISTS (SELECT 1 FROM " + Config.getConfig(start).getActivityLogTable()
+                + " WHERE event_type IN ('user_last_active', 'account_linking') AND created_at > ?) AS has_activity";
+        return execute(start, QUERY, pst -> pst.setLong(1, sinceMillis), result -> {
+            if (result.next()) {
+                return result.getBoolean("has_activity");
+            }
+            return false;
         });
     }
 
@@ -144,7 +173,8 @@ public class ActivityLogQueries {
 
     /**
      * Pre-creates upcoming month partitions and drops any whose entire month is older than
-     * {@link #RETENTION_DAYS} days. Idempotent; intended to be run daily.
+     * {@code retentionDays} days. Retention is supplied by the caller (from configuration) rather
+     * than hardcoded. Idempotent; intended to be run daily.
      *
      * If rows for a month landed in the DEFAULT backstop before that month's partition existed
      * (e.g. the core was stopped or paused across a month boundary, so neither startup nor the
@@ -153,13 +183,14 @@ public class ActivityLogQueries {
      * moved out of DEFAULT and into the new partition in a single transaction, so the cron heals
      * the backstop instead of failing on it forever.
      */
-    public static void maintainPartitions(Start start) throws SQLException, StorageQueryException {
+    public static void maintainPartitions(Start start, int retentionDays)
+            throws SQLException, StorageQueryException {
         YearMonth thisMonth = YearMonth.now(ZoneOffset.UTC);
         for (int i = 0; i <= PREMAKE_MONTHS; i++) {
             ensureMonthlyPartition(start, thisMonth.plusMonths(i));
         }
-        dropPartitionsOlderThanRetention(start);
-        purgeExpiredRowsFromDefaultPartition(start);
+        dropPartitionsOlderThanRetention(start, retentionDays);
+        purgeExpiredRowsFromDefaultPartition(start, retentionDays);
     }
 
     private static void ensureMonthlyPartition(Start start, YearMonth month)
@@ -231,14 +262,15 @@ public class ActivityLogQueries {
      * whose partition was already dropped, or timestamps outside the premake window), so retention
      * is enforced on them directly — dropping monthly partitions alone would keep them forever.
      */
-    private static void purgeExpiredRowsFromDefaultPartition(Start start)
+    private static void purgeExpiredRowsFromDefaultPartition(Start start, int retentionDays)
             throws SQLException, StorageQueryException {
         String defaultPartition = Config.getConfig(start).getActivityLogTable() + "_default";
-        long cutoffMillis = LocalDate.now(ZoneOffset.UTC).minusDays(RETENTION_DAYS).toEpochDay() * MILLIS_PER_DAY;
+        long cutoffMillis = LocalDate.now(ZoneOffset.UTC).minusDays(retentionDays).toEpochDay() * MILLIS_PER_DAY;
         update(start, "DELETE FROM " + defaultPartition + " WHERE created_at < " + cutoffMillis, pst -> {});
     }
 
-    private static void dropPartitionsOlderThanRetention(Start start) throws SQLException, StorageQueryException {
+    private static void dropPartitionsOlderThanRetention(Start start, int retentionDays)
+            throws SQLException, StorageQueryException {
         String tableName = Config.getConfig(start).getActivityLogTable();
         String LIST_QUERY = "SELECT n.nspname AS schema_name, c.relname AS partition_name"
                 + " FROM pg_inherits i"
@@ -246,7 +278,7 @@ public class ActivityLogQueries {
                 + " JOIN pg_namespace n ON n.oid = c.relnamespace"
                 + " WHERE i.inhparent = ?::regclass";
 
-        LocalDate cutoff = LocalDate.now(ZoneOffset.UTC).minusDays(RETENTION_DAYS);
+        LocalDate cutoff = LocalDate.now(ZoneOffset.UTC).minusDays(retentionDays);
 
         List<String> partitionsToDrop = execute(start, LIST_QUERY, pst -> {
             pst.setString(1, tableName);

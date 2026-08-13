@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- Parameterizes `activity_log` retention (drops the hardcoded 31-day constant), adds a transactional
+  activity-log insert (`createActivityLogEntry_Transaction`), a `hasUnfoldedActivitySince` check, and the
+  `user_last_active` fold+reconcile rollup (`rollupLastActiveFromActivityLog_Transaction`) derived from the
+  activity log. Implements the plugin-interface activity-log storage contract.
+
 ## [9.7.1]
 
 - Makes the dashboard user search (email/phone/provider) sargable: `ILIKE` scans on `account_info_value`

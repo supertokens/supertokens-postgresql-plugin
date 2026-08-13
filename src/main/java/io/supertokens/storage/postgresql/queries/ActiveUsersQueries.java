@@ -191,6 +191,55 @@ public class ActiveUsersQueries {
         }
     }
 
+    /**
+     * Constant key for the transaction-scoped advisory lock that deduplicates concurrent rollup passes.
+     * The fold/reconcile below are idempotent, so the lock is purely work-deduplication, not correctness.
+     */
+    private static final String LAST_ACTIVE_ROLLUP_LOCK_KEY = "last_active_rollup";
+
+    /**
+     * Derives {@code user_last_active} from the activity log over {@code [windowStartMillis, now]}, on the
+     * caller's transaction connection. Two idempotent statements:
+     * <ol>
+     *   <li><b>Fold</b> — upsert each user's most recent {@code user_last_active} activity into the
+     *       projection, monotonically ({@code GREATEST} never lowers a stored timestamp).</li>
+     *   <li><b>Reconcile</b> — delete projection rows for users linked away within the same window
+     *       ({@code account_linking} events, matched on {@code app_id} + {@code recipe_user_id}).</li>
+     * </ol>
+     * As the first statement it takes a non-blocking advisory lock with a constant key; if another
+     * instance holds it the pass is skipped (that instance is folding — the work is redundant, not lost).
+     */
+    public static void rollupLastActiveFromActivityLog_Transaction(Start start, Connection con,
+                                                                   long windowStartMillis)
+            throws StorageQueryException, SQLException {
+        try {
+            io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(con, LAST_ACTIVE_ROLLUP_LOCK_KEY);
+        } catch (StorageQueryException e) {
+            if (e.getCause() instanceof io.supertokens.storage.postgresql.LockFailure) {
+                // Another instance is folding this pass; the fold/reconcile are idempotent, so skip.
+                return;
+            }
+            throw e;
+        }
+
+        String userLastActiveTable = Config.getConfig(start).getUserLastActiveTable();
+        String activityLogTable = Config.getConfig(start).getActivityLogTable();
+
+        String FOLD_QUERY = "INSERT INTO " + userLastActiveTable + " (app_id, user_id, last_active_time)"
+                + " SELECT app_id, primary_or_recipe_user_id, MAX(created_at) FROM " + activityLogTable
+                + " WHERE event_type = 'user_last_active' AND created_at >= ?"
+                + " GROUP BY app_id, primary_or_recipe_user_id"
+                + " ON CONFLICT (app_id, user_id) DO UPDATE"
+                + " SET last_active_time = GREATEST(" + userLastActiveTable + ".last_active_time,"
+                + " EXCLUDED.last_active_time)";
+        update(con, FOLD_QUERY, pst -> pst.setLong(1, windowStartMillis));
+
+        String RECONCILE_QUERY = "DELETE FROM " + userLastActiveTable + " ula USING " + activityLogTable + " al"
+                + " WHERE al.event_type = 'account_linking' AND al.created_at >= ?"
+                + " AND al.app_id = ula.app_id AND al.recipe_user_id = ula.user_id";
+        update(con, RECONCILE_QUERY, pst -> pst.setLong(1, windowStartMillis));
+    }
+
     public static void deleteUserActive_Transaction(Connection con, Start start, AppIdentifier appIdentifier,
                                                     String userId)
             throws StorageQueryException, SQLException {
