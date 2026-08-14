@@ -1,0 +1,186 @@
+name: "DB schema / migration manifest check"
+
+# Backstop for the migration-scripts/manifest.json convention: the manifest is
+# the source of truth the core release workflow derives has-db-migration from,
+# so a schema-changing PR that forgets the manifest entry would silently ship
+# an unguarded SaaS rollout. This job verifies, mechanically:
+#   1. Whether the PR changes the DB schema at all — by booting the core with
+#      the base-branch plugin and with the PR-head plugin against fresh
+#      databases and diffing the pg_dump'd schemas.
+#   2. If it does (beyond additive startup-backfill indexes): that the PR also
+#      ships a migration script + manifest entry, AND that applying that
+#      script to the base schema (followed by a boot of the new core, matching
+#      the real SaaS upgrade order) reproduces the fresh-install schema
+#      exactly — catching wrong/incomplete scripts, not just missing ones.
+#
+# Escape hatch: label the PR `skip-schema-check` (e.g. PRs against old release
+# branches where core master no longer builds against this plugin).
+
+on:
+  pull_request:
+
+jobs:
+  schema-migration-check:
+    name: Schema change requires a matching migration script
+    if: "!contains(github.event.pull_request.labels.*.name, 'skip-schema-check')"
+    runs-on: ubuntu-latest
+    container: rishabhpoddar/supertokens_core_testing
+
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_DB: supertokens
+          POSTGRES_PASSWORD: root
+          POSTGRES_USER: root
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install postgres client and python
+        run: apt-get update && apt-get install -y --no-install-recommends postgresql-client python3
+
+      - name: Update Java 1
+        run: update-alternatives --install "/usr/bin/java" "java" "/usr/java/jdk-21.0.7/bin/java" 2
+      - name: Update Java 2
+        run: update-alternatives --install "/usr/bin/javac" "javac" "/usr/java/jdk-21.0.7/bin/javac" 2
+
+      - name: Prepare a base-branch copy of the plugin
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git worktree add /tmp/plugin-base ${{ github.event.pull_request.base.sha }}
+
+      - name: Point devConfig at the CI postgres (both copies)
+        run: |
+          for f in ./devConfig.yaml /tmp/plugin-base/devConfig.yaml; do
+            sed -i "s/# postgresql_host:/postgresql_host: postgres/" "$f"
+            sed -i "s/# postgresql_user:/postgresql_user: root/" "$f"
+            sed -i "s/# postgresql_password:/postgresql_password: root/" "$f"
+          done
+
+      - name: Cloning supertokens-root
+        run: cd ../ && git clone https://github.com/supertokens/supertokens-root.git
+      - name: Modifying modules.txt in supertokens-root
+        run: cd ../supertokens-root && echo "core,master\nplugin-interface,master\npostgresql-plugin,master" > modules.txt
+      - name: Running loadModules in supertokens-root
+        run: cd ../supertokens-root && ./loadModules
+
+      - name: Create base and head databases
+        run: |
+          PGPASSWORD=root psql -h postgres -U root -d supertokens -c "CREATE DATABASE schema_base;"
+          PGPASSWORD=root psql -h postgres -U root -d supertokens -c "CREATE DATABASE schema_head;"
+
+      - name: Build with the base-branch plugin
+        run: |
+          cd ../supertokens-root
+          rm -rf ./supertokens-postgresql-plugin
+          cp -r /tmp/plugin-base ./supertokens-postgresql-plugin
+          ./utils/setupTestEnv --local
+
+      - name: Boot core on base plugin and dump schema
+        run: |
+          cd ../supertokens-root
+          cp ./temp/config.yaml .
+          echo "postgresql_database_name: schema_base" >> config.yaml
+          java -classpath "./core/*:./plugin-interface/*:./ee/*" io.supertokens.Main ./ DEV &
+          CORE_PID=$!
+          for i in $(seq 1 120); do curl -sf http://localhost:3567/hello > /dev/null && break; sleep 1; done
+          curl -sf http://localhost:3567/hello > /dev/null
+          kill $CORE_PID && wait $CORE_PID || true
+          PGPASSWORD=root pg_dump -h postgres -U root --schema-only --no-owner --no-privileges schema_base > /tmp/base-schema.sql
+
+      - name: Swap in the PR-head plugin
+        run: |
+          cd ../supertokens-root
+          rm -rf ./supertokens-postgresql-plugin
+          cp -r "$GITHUB_WORKSPACE" ./supertokens-postgresql-plugin
+          (cd supertokens-postgresql-plugin && ./runBuild noJarFolderChange)
+          rm -f ./plugin/*
+          cp supertokens-postgresql-plugin/build/libs/* ./plugin/
+          cp supertokens-postgresql-plugin/build/dependencies/* ./plugin/ 2>/dev/null || true
+
+      - name: Boot core on head plugin and dump schema
+        run: |
+          cd ../supertokens-root
+          cp ./temp/config.yaml .
+          echo "postgresql_database_name: schema_head" >> config.yaml
+          java -classpath "./core/*:./plugin-interface/*:./ee/*" io.supertokens.Main ./ DEV &
+          CORE_PID=$!
+          for i in $(seq 1 120); do curl -sf http://localhost:3567/hello > /dev/null && break; sleep 1; done
+          curl -sf http://localhost:3567/hello > /dev/null
+          kill $CORE_PID && wait $CORE_PID || true
+          PGPASSWORD=root pg_dump -h postgres -U root --schema-only --no-owner --no-privileges schema_head > /tmp/head-schema.sql
+
+      - name: Classify schema diff
+        id: classify
+        run: |
+          set +e
+          python3 .github/helpers/schema-migration-check.py diff /tmp/base-schema.sql /tmp/head-schema.sql
+          code=$?
+          set -e
+          if [ "$code" != "0" ] && [ "$code" != "10" ] && [ "$code" != "20" ]; then
+            exit "$code"
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+      - name: Warn on manifest change without schema change
+        if: steps.classify.outputs.code == '0'
+        run: |
+          if ! git diff --quiet ${{ github.event.pull_request.base.sha }} HEAD -- migration-scripts/; then
+            echo "::notice::migration-scripts/ changed but the schema did not - make sure that is intentional."
+          fi
+
+      - name: Require manifest entry and verify migration equivalence
+        if: steps.classify.outputs.code == '20'
+        run: |
+          base_sha=${{ github.event.pull_request.base.sha }}
+          if git diff --quiet "$base_sha" HEAD -- migration-scripts/manifest.json; then
+            echo "::error::This PR changes the DB schema but does not touch migration-scripts/manifest.json. Add a migration script and manifest entry keyed by this branch's plugin X.Y (see migration-scripts/README.md), or - for additive changes handled by the startup backfill - move them to the backfill list."
+            exit 1
+          fi
+          # New manifest entries must be keyed by THIS branch's plugin X.Y
+          # (from build.gradle) - the core pairing is only decided at release
+          # time, so a PR cannot know (and must not guess) a core version.
+          plugin_xy=$(grep -E '^version\s*=' build.gradle | cut -d'"' -f2 | cut -d. -f1,2)
+          if git show "$base_sha:migration-scripts/manifest.json" > /tmp/base-manifest.json 2>/dev/null; then
+            base_manifest=/tmp/base-manifest.json
+          else
+            base_manifest=NONE
+          fi
+          python3 .github/helpers/schema-migration-check.py validate-new-entries migration-scripts/manifest.json "$base_manifest" "$plugin_xy"
+          changed_files=$(git diff --name-only "$base_sha" HEAD -- 'migration-scripts/*.sql')
+          scripts=$(python3 .github/helpers/schema-migration-check.py changed-scripts migration-scripts/manifest.json $changed_files)
+          if [ -z "$scripts" ]; then
+            echo "::error::manifest.json changed, but no manifest-referenced .sql script was added or modified in this PR. The manifest entry must point at a script shipped in this PR."
+            exit 1
+          fi
+          echo "Applying migration script(s) to the base schema, in manifest order:"
+          echo "$scripts"
+          for s in $scripts; do
+            # psql autocommit runs each statement separately, which is what
+            # custom scripts (CREATE INDEX CONCURRENTLY) require.
+            PGPASSWORD=root psql -v ON_ERROR_STOP=1 -h postgres -U root -d schema_base -f "migration-scripts/$s"
+          done
+          # Boot the NEW core against the migrated base schema - the same
+          # order as a real SaaS upgrade (migrate, then boot) - so boot-time
+          # objects (e.g. activity_log month partitions) exist on both sides
+          # of the final comparison, and the new core is proven to start on a
+          # migrated database.
+          cd ../supertokens-root
+          cp ./temp/config.yaml .
+          echo "postgresql_database_name: schema_base" >> config.yaml
+          java -classpath "./core/*:./plugin-interface/*:./ee/*" io.supertokens.Main ./ DEV &
+          CORE_PID=$!
+          for i in $(seq 1 120); do curl -sf http://localhost:3567/hello > /dev/null && break; sleep 1; done
+          curl -sf http://localhost:3567/hello > /dev/null
+          kill $CORE_PID && wait $CORE_PID || true
+          PGPASSWORD=root pg_dump -h postgres -U root --schema-only --no-owner --no-privileges schema_base > /tmp/base-migrated-schema.sql
+          cd "$GITHUB_WORKSPACE"
+          python3 .github/helpers/schema-migration-check.py compare /tmp/base-migrated-schema.sql /tmp/head-schema.sql
