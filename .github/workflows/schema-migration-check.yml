@@ -8,10 +8,19 @@ name: "DB schema / migration manifest check"
 #      the base-branch plugin and with the PR-head plugin against fresh
 #      databases and diffing the pg_dump'd schemas.
 #   2. If it does (beyond additive startup-backfill indexes): that the PR also
-#      ships a migration script + manifest entry, AND that applying that
-#      script to the base schema (followed by a boot of the new core, matching
-#      the real SaaS upgrade order) reproduces the fresh-install schema
-#      exactly — catching wrong/incomplete scripts, not just missing ones.
+#      ships a migration script + manifest entry keyed by this branch's plugin
+#      X.Y, AND that applying that script to the base schema (followed by a
+#      boot of the new core, matching the real SaaS upgrade order) reproduces
+#      the fresh-install schema exactly — catching wrong/incomplete scripts,
+#      not just missing ones.
+#
+# Runs on a plain runner (NOT the rishabhpoddar/supertokens_core_testing
+# container): that image is Ubuntu 16.04, whose glibc can no longer run the
+# Node that GitHub forces JS actions (actions/checkout etc.) to use, and its
+# apt archive only carries postgres client 9.5 which refuses to talk to a
+# modern server. psql/pg_dump therefore run via `docker run postgres:latest`,
+# the same image as the service container, so client and server versions
+# always match.
 #
 # Escape hatch: label the PR `skip-schema-check` (e.g. PRs against old release
 # branches where core master no longer builds against this plugin).
@@ -24,7 +33,6 @@ jobs:
     name: Schema change requires a matching migration script
     if: "!contains(github.event.pull_request.labels.*.name, 'skip-schema-check')"
     runs-on: ubuntu-latest
-    container: rishabhpoddar/supertokens_core_testing
 
     services:
       postgres:
@@ -33,6 +41,8 @@ jobs:
           POSTGRES_DB: supertokens
           POSTGRES_PASSWORD: root
           POSTGRES_USER: root
+        ports:
+          - 5432:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -44,23 +54,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install postgres client and python
-        run: apt-get update && apt-get install -y --no-install-recommends postgresql-client python3
-
-      - name: Update Java 1
-        run: update-alternatives --install "/usr/bin/java" "java" "/usr/java/jdk-21.0.7/bin/java" 2
-      - name: Update Java 2
-        run: update-alternatives --install "/usr/bin/javac" "javac" "/usr/java/jdk-21.0.7/bin/javac" 2
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: 21.0.7
+          distribution: zulu
 
       - name: Prepare a base-branch copy of the plugin
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git worktree add /tmp/plugin-base ${{ github.event.pull_request.base.sha }}
+        run: git worktree add /tmp/plugin-base ${{ github.event.pull_request.base.sha }}
 
       - name: Point devConfig at the CI postgres (both copies)
         run: |
           for f in ./devConfig.yaml /tmp/plugin-base/devConfig.yaml; do
-            sed -i "s/# postgresql_host:/postgresql_host: postgres/" "$f"
+            sed -i "s/# postgresql_host:/postgresql_host: localhost/" "$f"
             sed -i "s/# postgresql_user:/postgresql_user: root/" "$f"
             sed -i "s/# postgresql_password:/postgresql_password: root/" "$f"
           done
@@ -68,14 +74,17 @@ jobs:
       - name: Cloning supertokens-root
         run: cd ../ && git clone https://github.com/supertokens/supertokens-root.git
       - name: Modifying modules.txt in supertokens-root
-        run: cd ../supertokens-root && echo "core,master\nplugin-interface,master\npostgresql-plugin,master" > modules.txt
+        run: |
+          cd ../supertokens-root
+          printf 'core,master\nplugin-interface,master\npostgresql-plugin,master\n' > modules.txt
+          cat modules.txt
       - name: Running loadModules in supertokens-root
         run: cd ../supertokens-root && ./loadModules
 
       - name: Create base and head databases
         run: |
-          PGPASSWORD=root psql -h postgres -U root -d supertokens -c "CREATE DATABASE schema_base;"
-          PGPASSWORD=root psql -h postgres -U root -d supertokens -c "CREATE DATABASE schema_head;"
+          docker run --rm --network host -e PGPASSWORD=root postgres:latest psql -h localhost -U root -d supertokens -c "CREATE DATABASE schema_base;"
+          docker run --rm --network host -e PGPASSWORD=root postgres:latest psql -h localhost -U root -d supertokens -c "CREATE DATABASE schema_head;"
 
       - name: Build with the base-branch plugin
         run: |
@@ -94,7 +103,7 @@ jobs:
           for i in $(seq 1 120); do curl -sf http://localhost:3567/hello > /dev/null && break; sleep 1; done
           curl -sf http://localhost:3567/hello > /dev/null
           kill $CORE_PID && wait $CORE_PID || true
-          PGPASSWORD=root pg_dump -h postgres -U root --schema-only --no-owner --no-privileges schema_base > /tmp/base-schema.sql
+          docker run --rm --network host -e PGPASSWORD=root postgres:latest pg_dump -h localhost -U root --schema-only --no-owner --no-privileges schema_base > /tmp/base-schema.sql
 
       - name: Swap in the PR-head plugin
         run: |
@@ -116,7 +125,7 @@ jobs:
           for i in $(seq 1 120); do curl -sf http://localhost:3567/hello > /dev/null && break; sleep 1; done
           curl -sf http://localhost:3567/hello > /dev/null
           kill $CORE_PID && wait $CORE_PID || true
-          PGPASSWORD=root pg_dump -h postgres -U root --schema-only --no-owner --no-privileges schema_head > /tmp/head-schema.sql
+          docker run --rm --network host -e PGPASSWORD=root postgres:latest pg_dump -h localhost -U root --schema-only --no-owner --no-privileges schema_head > /tmp/head-schema.sql
 
       - name: Classify schema diff
         id: classify
@@ -166,7 +175,7 @@ jobs:
           for s in $scripts; do
             # psql autocommit runs each statement separately, which is what
             # custom scripts (CREATE INDEX CONCURRENTLY) require.
-            PGPASSWORD=root psql -v ON_ERROR_STOP=1 -h postgres -U root -d schema_base -f "migration-scripts/$s"
+            docker run --rm --network host -e PGPASSWORD=root -v "$GITHUB_WORKSPACE:/work" -w /work postgres:latest psql -v ON_ERROR_STOP=1 -h localhost -U root -d schema_base -f "migration-scripts/$s"
           done
           # Boot the NEW core against the migrated base schema - the same
           # order as a real SaaS upgrade (migrate, then boot) - so boot-time
@@ -181,6 +190,6 @@ jobs:
           for i in $(seq 1 120); do curl -sf http://localhost:3567/hello > /dev/null && break; sleep 1; done
           curl -sf http://localhost:3567/hello > /dev/null
           kill $CORE_PID && wait $CORE_PID || true
-          PGPASSWORD=root pg_dump -h postgres -U root --schema-only --no-owner --no-privileges schema_base > /tmp/base-migrated-schema.sql
+          docker run --rm --network host -e PGPASSWORD=root postgres:latest pg_dump -h localhost -U root --schema-only --no-owner --no-privileges schema_base > /tmp/base-migrated-schema.sql
           cd "$GITHUB_WORKSPACE"
           python3 .github/helpers/schema-migration-check.py compare /tmp/base-migrated-schema.sql /tmp/head-schema.sql

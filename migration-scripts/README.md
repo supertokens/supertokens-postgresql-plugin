@@ -55,8 +55,10 @@ in when the pairing becomes known.
    the SaaS rollout of that core version can run — releases with
    `hasDBMigration: true` and no registered migration defer the rollout with
    an alert and a `core_version_metadata.saas_rollout_pending` marker.
-3. **Self-hosted users** can apply `vX.Y.sql` files in order when upgrading
-   across core versions (see also the per-version upgrade notes in the docs).
+3. **Self-hosted users** can apply `vX.Y.sql` files in ascending plugin
+   version order when upgrading across core versions — use each entry's
+   `coreVersion` to map a core upgrade to the scripts it needs (see also the
+   per-version upgrade notes in the docs).
 
 Pre-7.0 migrations are not represented here; they predate this convention and
 live only in the SaaS legacy migration path.

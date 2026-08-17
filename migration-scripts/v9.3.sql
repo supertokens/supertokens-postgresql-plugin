@@ -1,4 +1,4 @@
--- Core 11.3: SAML tables.
+-- Plugin 9.3 (core 11.3): SAML tables.
 
 CREATE TABLE IF NOT EXISTS saml_clients (
     app_id VARCHAR(64) NOT NULL DEFAULT 'public',

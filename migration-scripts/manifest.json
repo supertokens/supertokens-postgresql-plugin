@@ -4,43 +4,43 @@
         {
             "pluginVersion": "5.0",
             "coreVersion": "7.0",
-            "sql": "v7.0.sql",
+            "sql": "v5.0.sql",
             "notes": "Account linking: primary_or_recipe_user_id columns, pagination index rework, password reset token FK + email column."
         },
         {
             "pluginVersion": "6.0",
             "coreVersion": "8.0",
-            "sql": "v8.0.sql",
+            "sql": "v6.0.sql",
             "notes": "Drops the user_roles -> roles foreign key so roles no longer need to exist before being assigned."
         },
         {
             "pluginVersion": "7.0",
             "coreVersion": "9.0",
-            "sql": "v9.0.sql",
+            "sql": "v7.0.sql",
             "notes": "Adds created_at to totp_user_devices."
         },
         {
             "pluginVersion": "8.0",
             "coreVersion": "10.0",
-            "sql": "v10.0.sql",
+            "sql": "v8.0.sql",
             "notes": "Bulk import tables + session_info (user_id, app_id) index."
         },
         {
             "pluginVersion": "8.1",
             "coreVersion": "10.1",
-            "sql": "v10.1.sql",
+            "sql": "v8.1.sql",
             "notes": "WebAuthn tables (10.1.0), emailverification and user_roles indexes (10.1.2)."
         },
         {
             "pluginVersion": "9.3",
             "coreVersion": "11.3",
-            "sql": "v11.3.sql",
+            "sql": "v9.3.sql",
             "notes": "SAML tables (saml_clients, saml_relay_state, saml_claims)."
         },
         {
             "pluginVersion": "9.5",
             "coreVersion": "12.0",
-            "sql": "v12.0.sql",
+            "sql": "v9.5.sql",
             "requiresBackfillMigration": true,
             "custom": true,
             "notes": "Schema rework (supertokens-core PR #1275): recipe_user_account_infos / recipe_user_tenants / primary_user_tenants, activity_log, FK rework to ON UPDATE CASCADE. custom: the pagination indexes must be built with CREATE INDEX CONCURRENTLY outside any transaction (see comments in the SQL file), and the release requires the user-record backfill arm of the SaaS upgrade orchestrator."
@@ -48,7 +48,7 @@
         {
             "pluginVersion": "9.7",
             "coreVersion": "12.1",
-            "sql": "v12.1.sql",
+            "sql": "v9.7.sql",
             "notes": "Refresh token rotation columns on session_info."
         }
     ]
