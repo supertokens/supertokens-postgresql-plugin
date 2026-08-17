@@ -1,4 +1,4 @@
--- Plugin 9.5 (core 12.0): schema rework (supertokens-core PR #1275).
+-- Plugin 9.5.0 (core 12.0.0): schema rework (supertokens-core PR #1275).
 -- New recipe_user_account_infos / recipe_user_tenants / primary_user_tenants
 -- tables, activity_log (partitioned), and FK rework to ON UPDATE CASCADE.
 --

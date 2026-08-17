@@ -1,4 +1,4 @@
--- Plugin 8.0 (core 10.0): bulk import tables + session_info (user_id, app_id) index.
+-- Plugin 8.0.0 (core 10.0.0): bulk import tables + session_info (user_id, app_id) index.
 
 CREATE TABLE IF NOT EXISTS bulk_import_users (
     id CHAR(36),

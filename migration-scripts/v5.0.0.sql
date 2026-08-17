@@ -1,4 +1,4 @@
--- Plugin 5.0 (core 7.0): account linking.
+-- Plugin 5.0.0 (core 7.0.0): account linking.
 -- New primary_or_recipe_user_id / is_linked_or_is_a_primary_user /
 -- primary_or_recipe_user_time_joined columns, pagination index rework,
 -- password reset token FK moved to app_id_to_user_id + email column.

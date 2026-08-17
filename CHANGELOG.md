@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- Migration manifest (`migration-scripts/manifest.json`) and scripts are now keyed by the full plugin version
+  (`X.Y.Z`, `vX.Y.Z.sql`); patch releases get entries too but may only add/drop indexes (`CREATE/DROP INDEX
+  CONCURRENTLY` in the script, also done by the core at startup); adds a `9.7.1` entry for the dashboard-search indexes
+- `schema-migration-check` CI now requires a manifest entry for any schema change (index-only included), enforces
+  the index-only / `CONCURRENTLY` patch rule and proves the startup backfill by booting the new core on the
+  un-migrated base schema, and requires the migration to be referenced from the release's `### Migration`
+  changelog section
+
 ## [9.7.1]
 
 - Makes the dashboard user search (email/phone/provider) sargable: `ILIKE` scans on `account_info_value`
@@ -13,7 +23,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Migration
 
 Created/swapped automatically at startup; on large `recipe_user_tenants` tables pre-create them with
-`CREATE INDEX CONCURRENTLY` before upgrading to avoid a lock (note the transient two-index window on the account-info family):
+`CREATE INDEX CONCURRENTLY` before upgrading to avoid a lock (note the transient two-index window on the account-info family).
+Canonical script: [`migration-scripts/v9.7.1.sql`](migration-scripts/v9.7.1.sql) (run with psql autocommit, not in one transaction).
 
 ```sql
 -- opclass swap of the account-info index (create the successor concurrently, then drop the predecessor)

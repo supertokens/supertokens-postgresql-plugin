@@ -1,4 +1,4 @@
--- Plugin 8.1 (core 10.1): WebAuthn tables (10.1.0) and emailverification / user_roles
+-- Plugin 8.1.0 (core 10.1.0): WebAuthn tables (10.1.0) and emailverification / user_roles
 -- indexes (10.1.2). Tables are ordered so webauthn_users exists before
 -- webauthn_credentials references it.
 

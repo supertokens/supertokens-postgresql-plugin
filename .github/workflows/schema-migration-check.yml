@@ -7,12 +7,21 @@ name: "DB schema / migration manifest check"
 #   1. Whether the PR changes the DB schema at all — by booting the core with
 #      the base-branch plugin and with the PR-head plugin against fresh
 #      databases and diffing the pg_dump'd schemas.
-#   2. If it does (beyond additive startup-backfill indexes): that the PR also
-#      ships a migration script + manifest entry keyed by this branch's plugin
-#      X.Y, AND that applying that script to the base schema (followed by a
-#      boot of the new core, matching the real SaaS upgrade order) reproduces
-#      the fresh-install schema exactly — catching wrong/incomplete scripts,
-#      not just missing ones.
+#   2. If it does: that the PR also ships a migration script + manifest entry
+#      keyed by this branch's plugin X.Y.Z, AND that applying that script to
+#      the base schema (followed by a boot of the new core, matching the real
+#      SaaS upgrade order) reproduces the fresh-install schema exactly —
+#      catching wrong/incomplete scripts, not just missing ones.
+#   3. For patch releases (build.gradle Z > 0): that the change is index-only
+#      (the schema diff adds/removes nothing but CREATE INDEX statements), that
+#      the script consists solely of CREATE INDEX CONCURRENTLY IF NOT EXISTS /
+#      DROP INDEX CONCURRENTLY IF EXISTS, and that booting the new core on the
+#      UN-migrated base schema ALSO reproduces the fresh-install schema — i.e.
+#      the core applies the index changes itself at startup, which is what
+#      makes the change safe for an in-place patch rollout (no migration hook
+#      there). Anything else must bump the minor version.
+#   4. That the CHANGELOG.md section for this branch's version documents the
+#      migration under `### Migration` and references the script.
 #
 # Runs on a plain runner (NOT the rishabhpoddar/supertokens_core_testing
 # container): that image is Ubuntu 16.04, whose glibc can no longer run the
@@ -147,28 +156,42 @@ jobs:
           fi
 
       - name: Require manifest entry and verify migration equivalence
-        if: steps.classify.outputs.code == '20'
+        id: verify
+        if: steps.classify.outputs.code != '0'
         run: |
           base_sha=${{ github.event.pull_request.base.sha }}
           if git diff --quiet "$base_sha" HEAD -- migration-scripts/manifest.json; then
-            echo "::error::This PR changes the DB schema but does not touch migration-scripts/manifest.json. Add a migration script and manifest entry keyed by this branch's plugin X.Y (see migration-scripts/README.md), or - for additive changes handled by the startup backfill - move them to the backfill list."
+            echo "::error::This PR changes the DB schema but does not touch migration-scripts/manifest.json. Add a migration script and manifest entry keyed by this branch's plugin X.Y.Z (see migration-scripts/README.md). Patch releases may only add/drop indexes (CREATE/DROP INDEX CONCURRENTLY in the script, also done by the core at startup); anything else needs a minor release."
             exit 1
           fi
-          # New manifest entries must be keyed by THIS branch's plugin X.Y
+          # New manifest entries must be keyed by THIS branch's plugin X.Y.Z
           # (from build.gradle) - the core pairing is only decided at release
           # time, so a PR cannot know (and must not guess) a core version.
-          plugin_xy=$(grep -E '^version\s*=' build.gradle | cut -d'"' -f2 | cut -d. -f1,2)
+          plugin_version=$(grep -E '^version\s*=' build.gradle | cut -d'"' -f2)
+          echo "plugin-version=$plugin_version" >> "$GITHUB_OUTPUT"
+          patch_z=$(echo "$plugin_version" | cut -d. -f3)
+          is_patch=$([ "$patch_z" != "0" ] && echo true || echo false)
+          echo "is-patch=$is_patch" >> "$GITHUB_OUTPUT"
+          if [ "$is_patch" = "true" ] && [ "${{ steps.classify.outputs.code }}" != "10" ]; then
+            echo "::error::Plugin $plugin_version is a PATCH release, but this PR's schema change is not index-only (see the diff above). Patch releases may only add/drop indexes; columns, tables, constraints and data transforms must ship in a minor release (bump build.gradle to X.$((10#$(echo "$plugin_version" | cut -d. -f2)+1)).0)."
+            exit 1
+          fi
           if git show "$base_sha:migration-scripts/manifest.json" > /tmp/base-manifest.json 2>/dev/null; then
             base_manifest=/tmp/base-manifest.json
           else
             base_manifest=NONE
           fi
-          python3 .github/helpers/schema-migration-check.py validate-new-entries migration-scripts/manifest.json "$base_manifest" "$plugin_xy"
+          python3 .github/helpers/schema-migration-check.py validate-new-entries migration-scripts/manifest.json "$base_manifest" "$plugin_version"
           changed_files=$(git diff --name-only "$base_sha" HEAD -- 'migration-scripts/*.sql')
           scripts=$(python3 .github/helpers/schema-migration-check.py changed-scripts migration-scripts/manifest.json $changed_files)
           if [ -z "$scripts" ]; then
             echo "::error::manifest.json changed, but no manifest-referenced .sql script was added or modified in this PR. The manifest entry must point at a script shipped in this PR."
             exit 1
+          fi
+          echo "scripts=$(echo $scripts)" >> "$GITHUB_OUTPUT"
+          if [ "$is_patch" = "true" ]; then
+            # Patch scripts: CREATE/DROP INDEX CONCURRENTLY, nothing else.
+            python3 .github/helpers/schema-migration-check.py patch-script-check $(for s in $scripts; do echo "migration-scripts/$s"; done)
           fi
           echo "Applying migration script(s) to the base schema, in manifest order:"
           echo "$scripts"
@@ -193,3 +216,39 @@ jobs:
           docker run --rm --network host -e PGPASSWORD=root postgres:latest pg_dump -h localhost -U root --schema-only --no-owner --no-privileges schema_base > /tmp/base-migrated-schema.sql
           cd "$GITHUB_WORKSPACE"
           python3 .github/helpers/schema-migration-check.py compare /tmp/base-migrated-schema.sql /tmp/head-schema.sql
+
+      # Patch-release migrations rely on the new core creating/dropping the
+      # indexes on its own at boot (that is the only thing that runs against every SaaS
+      # database on an in-place patch rollout). Prove it: restore the base
+      # schema into a fresh database, boot the NEW core on it WITHOUT running
+      # the script, and require the result to equal the fresh-install schema.
+      # If this fails, the change is missing from the startup backfill list.
+      - name: Verify the core applies the index changes at startup (patch releases)
+        if: steps.classify.outputs.code != '0' && steps.verify.outputs.is-patch == 'true'
+        run: |
+          echo "Patch release ${{ steps.verify.outputs.plugin-version }}: proving the new core applies ${{ steps.verify.outputs.scripts }} itself at startup"
+          docker run --rm --network host -e PGPASSWORD=root postgres:latest psql -h localhost -U root -d supertokens -c "CREATE DATABASE schema_startup;"
+          docker run --rm --network host -e PGPASSWORD=root -v /tmp:/dumps postgres:latest psql -v ON_ERROR_STOP=1 -q -h localhost -U root -d schema_startup -f /dumps/base-schema.sql
+          cd ../supertokens-root
+          cp ./temp/config.yaml .
+          echo "postgresql_database_name: schema_startup" >> config.yaml
+          java -classpath "./core/*:./plugin-interface/*:./ee/*" io.supertokens.Main ./ DEV &
+          CORE_PID=$!
+          for i in $(seq 1 120); do curl -sf http://localhost:3567/hello > /dev/null && break; sleep 1; done
+          curl -sf http://localhost:3567/hello > /dev/null
+          kill $CORE_PID && wait $CORE_PID || true
+          docker run --rm --network host -e PGPASSWORD=root postgres:latest pg_dump -h localhost -U root --schema-only --no-owner --no-privileges schema_startup > /tmp/startup-schema.sql
+          cd "$GITHUB_WORKSPACE"
+          if ! python3 .github/helpers/schema-migration-check.py compare /tmp/startup-schema.sql /tmp/head-schema.sql; then
+            echo "::error::Patch release, but booting the new core on the un-migrated base schema does not reproduce the fresh-install schema - the core does NOT apply these index changes at startup, so existing SaaS databases would never receive them on an in-place rollout. Add them to GeneralQueries.createTablesIfNotExists' backfill list (CREATE INDEX IF NOT EXISTS / DROP INDEX IF EXISTS)."
+            exit 1
+          fi
+
+      # A release that ships a migration must say so in its release notes:
+      # the CHANGELOG section for this branch's version needs a
+      # `### Migration` subsection referencing the script. (The core release
+      # workflow applies the same check to supertokens-core's CHANGELOG.)
+      - name: Require the migration to be documented in CHANGELOG.md
+        if: steps.classify.outputs.code != '0'
+        run: |
+          python3 .github/helpers/schema-migration-check.py check-changelog CHANGELOG.md "${{ steps.verify.outputs.plugin-version }}" ${{ steps.verify.outputs.scripts }}
