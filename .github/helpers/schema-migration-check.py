@@ -75,7 +75,11 @@ def statements(path):
     with open(path) as f:
         for raw in f:
             line = raw.strip()
-            if not line or line.startswith("--"):
+            # Skip blanks, SQL comments and psql meta-commands (backslash
+            # lines). pg_dump 18+ emits `\restrict <random-token>` /
+            # `\unrestrict <random-token>` lines; they carry no schema meaning
+            # and the token differs per dump, so they must not reach the diff.
+            if not line or line.startswith("--") or line.startswith("\\"):
                 continue
             current.append(line)
             if line.endswith(";"):
