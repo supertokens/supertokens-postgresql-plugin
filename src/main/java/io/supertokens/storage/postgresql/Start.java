@@ -53,6 +53,7 @@ import io.supertokens.pluginInterface.emailverification.exception.DuplicateEmail
 import io.supertokens.pluginInterface.emailverification.sqlStorage.EmailVerificationSQLStorage;
 import io.supertokens.pluginInterface.exceptions.DbInitException;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
+import io.supertokens.pluginInterface.exceptions.SchemaMismatchException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.jwt.JWTRecipeStorage;
@@ -167,6 +168,11 @@ public class Start
     private Thread shutdownHook;
 
     private boolean isBaseTenant = false;
+
+    // Startup schema verification state (see verifySchema). A successful check is cached for the lifetime of
+    // this instance; after a failed check every ConnectionPool.getConnection(this) throws with this message.
+    private volatile boolean schemaVerified = false;
+    volatile String schemaMismatchMessage = null;
 
     public ResourceDistributor getResourceDistributor() {
         return resourceDistributor;
@@ -580,6 +586,23 @@ public class Start
     @Override
     public void close() {
         ConnectionPool.close(this);
+    }
+
+    @Override
+    public void verifySchema() throws SchemaMismatchException, StorageQueryException {
+        if (schemaVerified) {
+            return;
+        }
+        try (Connection con = ConnectionPool.getConnectionForSchemaVerification(this)) {
+            SchemaVerifier.verify(this, con);
+            schemaMismatchMessage = null;
+            schemaVerified = true;
+        } catch (SchemaMismatchException e) {
+            schemaMismatchMessage = e.getMessage();
+            throw e;
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
