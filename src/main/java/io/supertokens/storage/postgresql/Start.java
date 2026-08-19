@@ -34,6 +34,7 @@ import io.supertokens.pluginInterface.bulkimport.BulkImportUser;
 import io.supertokens.pluginInterface.bulkimport.PrimaryUser;
 import io.supertokens.pluginInterface.bulkimport.exceptions.BulkImportBatchInsertException;
 import io.supertokens.pluginInterface.bulkimport.exceptions.BulkImportTransactionRolledBackException;
+import io.supertokens.pluginInterface.bulkimport.sqlStorage.BulkImportProxyStoragePool;
 import io.supertokens.pluginInterface.bulkimport.sqlStorage.BulkImportSQLStorage;
 import io.supertokens.pluginInterface.dashboard.DashboardSearchTags;
 import io.supertokens.pluginInterface.dashboard.DashboardSessionInfo;
@@ -188,8 +189,15 @@ public class Start
     }
 
     @Override
+    @Deprecated
     public Storage createBulkImportProxyStorageInstance() {
-        return new BulkImportProxyStorage();
+        throw new UnsupportedOperationException(
+                "Bulk import proxy storages are created from a pool, see openBulkImportProxyStoragePool()");
+    }
+
+    @Override
+    public BulkImportProxyStoragePool openBulkImportProxyStoragePool(int maxConnections) throws DbInitException {
+        return BulkImportConnectionPool.open(this, maxConnections);
     }
 
     @Override
