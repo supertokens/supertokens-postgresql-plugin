@@ -11,9 +11,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Bulk import proxy storages no longer replay the startup DDL (`CREATE TABLE/INDEX IF NOT EXISTS`) on every worker
 - Bulk import proxy connections use READ COMMITTED, support savepoints, and report `application_name = supertokens-bulk-import`
 - Implements `Storage.verifySchema()` (plugin interface 9.0.1): at startup the core compares each database against
-  the plugin's own `CREATE TABLE` definitions and logs an ERROR with the `ALTER TABLE` statements to run when a
-  table or column is missing; the core still boots, and queries hitting the missing schema fail with a
-  "Schema mismatch ... check the core error logs" message instead of a raw `column does not exist` error
+  the plugin's own `CREATE TABLE` definitions and reports missing tables/columns with the `ALTER TABLE` statements
+  to run. **Behaviour is governed by the new core config `schema_check_strict_mode` (default `true`): in strict
+  mode the core REFUSES TO START on a base-database mismatch and a mismatched tenant database is not served until
+  the migration is applied - if your schema is behind, upgrading stops the core from booting until you run the
+  migration SQL or set `schema_check_strict_mode: false`.** With strict mode off, mismatches are only logged and
+  queries hitting the missing schema fail with a "Schema mismatch ... check the core error logs" message instead
+  of a raw `column does not exist` error
 - Corrects the 9.7.0 migration note below: the `session_info` columns are a manual step, not applied automatically
 
 ## [9.7.1]
@@ -76,9 +80,10 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_recipe_user_tenants_search_tparty ON
 
 **Manual step required — NOT applied automatically.** The plugin only creates tables that do not exist yet; it never
 adds columns to an existing table. On any database created by an earlier plugin version, run the following before
-starting core 12.1.x (from plugin 9.7.2 / core 12.1.2 the core reports the missing columns at startup and session APIs
-fail with a schema-mismatch message pointing at the logs; 9.7.0/9.7.1 start silently and fail every session API
-with `column prev_refresh_token_hash_2 does not exist`). Both columns are nullable;
+starting core 12.1.x (from plugin 9.7.2 / core 12.1.2 the core detects the missing columns at startup: with the default
+`schema_check_strict_mode: true` it **refuses to start** until they exist, with `false` it logs them and session
+APIs fail with a schema-mismatch message pointing at the logs; 9.7.0/9.7.1 start silently and fail every session
+API with `column prev_refresh_token_hash_2 does not exist`). Both columns are nullable;
 no backfill is required.
 
 ```sql
