@@ -10,9 +10,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Bulk import runs on a dedicated, bounded connection pool (`openBulkImportProxyStoragePool`), separate from the live pool and opened only while there is work
 - Bulk import proxy storages no longer replay the startup DDL (`CREATE TABLE/INDEX IF NOT EXISTS`) on every worker
 - Bulk import proxy connections use READ COMMITTED, support savepoints, and report `application_name = supertokens-bulk-import`
-- Implements `Storage.verifySchema()` (plugin interface 9.0.1): at startup the core compares the database against the
-  plugin's own `CREATE TABLE` definitions and refuses to start (base database) or logs at ERROR and disables that
-  storage (tenant databases) when a table or column is missing, printing the `ALTER TABLE` statements to run
+- Implements `Storage.verifySchema()` (plugin interface 9.0.1): at startup the core compares each database against
+  the plugin's own `CREATE TABLE` definitions and logs an ERROR with the `ALTER TABLE` statements to run when a
+  table or column is missing; the core still boots, and queries hitting the missing schema fail with a
+  "Schema mismatch ... check the core error logs" message instead of a raw `column does not exist` error
 - Corrects the 9.7.0 migration note below: the `session_info` columns are a manual step, not applied automatically
 
 ## [9.7.1]
@@ -75,8 +76,9 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_recipe_user_tenants_search_tparty ON
 
 **Manual step required — NOT applied automatically.** The plugin only creates tables that do not exist yet; it never
 adds columns to an existing table. On any database created by an earlier plugin version, run the following before
-starting core 12.1.x (from plugin 9.7.2 / core 12.1.2 the core refuses to start until these columns exist; 9.7.0/9.7.1
-start but fail every session API with `column prev_refresh_token_hash_2 does not exist`). Both columns are nullable;
+starting core 12.1.x (from plugin 9.7.2 / core 12.1.2 the core reports the missing columns at startup and session APIs
+fail with a schema-mismatch message pointing at the logs; 9.7.0/9.7.1 start silently and fail every session API
+with `column prev_refresh_token_hash_2 does not exist`). Both columns are nullable;
 no backfill is required.
 
 ```sql

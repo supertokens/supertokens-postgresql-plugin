@@ -170,9 +170,9 @@ public class Start
     private boolean isBaseTenant = false;
 
     // Startup schema verification state (see verifySchema). A successful check is cached for the lifetime of
-    // this instance; after a failed check every ConnectionPool.getConnection(this) throws with this message.
+    // this instance; a failed check is only reported (the core logs it) - queries that hit the missing
+    // schema fail at runtime with a schema-mismatch hint (see QueryExecutorTemplate).
     private volatile boolean schemaVerified = false;
-    volatile String schemaMismatchMessage = null;
 
     public ResourceDistributor getResourceDistributor() {
         return resourceDistributor;
@@ -593,13 +593,9 @@ public class Start
         if (schemaVerified) {
             return;
         }
-        try (Connection con = ConnectionPool.getConnectionForSchemaVerification(this)) {
+        try (Connection con = ConnectionPool.getConnection(this)) {
             SchemaVerifier.verify(this, con);
-            schemaMismatchMessage = null;
             schemaVerified = true;
-        } catch (SchemaMismatchException e) {
-            schemaMismatchMessage = e.getMessage();
-            throw e;
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

@@ -42,6 +42,8 @@ public interface QueryExecutorTemplate {
             try (ResultSet result = pst.executeQuery()) {
                 return mapper.extract(result);
             }
+        } catch (SQLException e) {
+            throw withSchemaMismatchHint(e);
         }
     }
 
@@ -62,6 +64,8 @@ public interface QueryExecutorTemplate {
                 }
             }
             pst.executeBatch(); //for the possible remaining ones
+        } catch (SQLException e) {
+            throw withSchemaMismatchHint(e);
         }
     }
 
@@ -76,6 +80,8 @@ public interface QueryExecutorTemplate {
         try (PreparedStatement pst = con.prepareStatement(QUERY)) {
             setter.setValues(pst);
             return pst.executeUpdate();
+        } catch (SQLException e) {
+            throw withSchemaMismatchHint(e);
         }
     }
 
@@ -87,7 +93,27 @@ public interface QueryExecutorTemplate {
                 try (ResultSet result = pst.executeQuery()) {
                     return mapper.extract(result);
                 }
+            } catch (SQLException e) {
+                throw withSchemaMismatchHint(e);
             }
         }
     }
+
+    /**
+     * PostgreSQL SQLSTATEs for "column does not exist" / "relation does not exist". When one of these comes out
+     * of a query, the schema is missing something this plugin version expects - i.e. a release's manual
+     * "### Migration" step was not applied (see {@link SchemaVerifier}). The raw driver message ("column
+     * sess.prev_refresh_token_hash_2 does not exist") ends up in API responses where it is cryptic, so it is
+     * wrapped with a hint pointing the operator at the core logs, which carry the full startup report.
+     */
+    static SQLException withSchemaMismatchHint(SQLException e) {
+        String state = e.getSQLState();
+        if ("42703".equals(state) || "42P01".equals(state)) {
+            return new SQLException("Schema mismatch: the database is missing a table or column required by "
+                    + "this version of SuperTokens. Check the core error logs and the \"### Migration\" "
+                    + "sections of the CHANGELOG for the SQL to run. (" + e.getMessage() + ")", state, e);
+        }
+        return e;
+    }
+
 }

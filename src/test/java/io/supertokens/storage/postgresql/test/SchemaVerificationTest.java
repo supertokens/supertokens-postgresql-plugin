@@ -58,8 +58,9 @@ import static org.junit.Assert.*;
 
 /**
  * Startup schema verification ({@code Storage.verifySchema()} / {@link SchemaVerifier}): a database missing
- * columns that this plugin version needs must make the core fail loudly at startup (base storage) or log and
- * disable the storage (tenant storages), instead of 500-ing per request (supertokens-core#1386).
+ * columns that this plugin version needs is reported loudly at startup (ERROR log + SCHEMA_MISMATCH state with
+ * the SQL to run), while the core keeps booting and serving everything else; only the queries touching the
+ * missing schema fail, with a schema-mismatch hint instead of a raw SQL error (supertokens-core#1386).
  */
 public class SchemaVerificationTest {
 
@@ -148,11 +149,12 @@ public class SchemaVerificationTest {
     }
 
     // ---------------------------------------------------------------------------------------------------------
-    // 2. The #1386 scenario on the base database: columns missing -> the core refuses to start, and the
-    //    failure names the table, the columns and the SQL to run.
+    // 2. The #1386 scenario on the base database: columns missing -> the core still boots, reports the mismatch
+    //    loudly (SCHEMA_MISMATCH state + ERROR log with the SQL to run), keeps serving unaffected queries, and
+    //    the affected queries fail with a schema-mismatch hint instead of a raw "column does not exist".
     // ---------------------------------------------------------------------------------------------------------
     @Test
-    public void missingColumnsOnBaseStorageFailStartupLoudly() throws Exception {
+    public void missingColumnsAreReportedAtStartupAndOnlyAffectedQueriesFail() throws Exception {
         String[] args = {"../"};
         // First boot creates the tables (fresh schema), so we can then "downgrade" session_info.
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -163,12 +165,11 @@ public class SchemaVerificationTest {
         runSql(String.format(DROP_COLUMNS, "public"));
         try {
             process = TestingProcessManager.start(args);
+            // boots despite the mismatch
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
             ProcessState.EventAndException e =
-                    process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
+                    process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.SCHEMA_MISMATCH);
             assertNotNull(e);
-            assertNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED, 1000));
-            assertNull("must fail before tenant storages are loaded",
-                    process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.LOADING_ALL_TENANT_STORAGE, 1000));
 
             String msg = e.exception.getMessage();
             assertTrue(msg, msg.contains("session_info"));
@@ -179,17 +180,29 @@ public class SchemaVerificationTest {
                     "ALTER TABLE session_info ADD COLUMN IF NOT EXISTS prev_refresh_token_hash_2 VARCHAR(128);"));
             assertTrue(msg, msg.contains(
                     "ALTER TABLE session_info ADD COLUMN IF NOT EXISTS refresh_token_rotated_at BIGINT;"));
+
+            Start storage = (Start) StorageLayer.getStorage(process.getProcess());
+            // unaffected queries keep working
+            assertNull(storage.getKeyValue(TenantIdentifier.BASE_TENANT, "nope"));
+            // affected queries fail with the hint, not a bare SQL error
+            try {
+                storage.getSession(TenantIdentifier.BASE_TENANT, "no-such-session");
+                fail();
+            } catch (StorageQueryException ex) {
+                assertTrue(ex.getMessage(), ex.getMessage().contains("Schema mismatch"));
+                assertTrue(ex.getMessage(), ex.getMessage().contains("Check the core error logs"));
+            }
+
+            // operator applies the migration; affected queries recover without a restart
+            runSql(String.format(RESTORE_COLUMNS, "public"));
+            assertNull(storage.getSession(TenantIdentifier.BASE_TENANT, "no-such-session"));
+
+            // keep the tables so the finally-block restore (a no-op here) has a relation to run against
             process.kill(false);
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
         } finally {
             runSql(String.format(RESTORE_COLUMNS, "public"));
         }
-
-        // With the columns back, the same database boots again.
-        process = TestingProcessManager.start(args);
-        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
-        process.kill();
-        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
 
     // ---------------------------------------------------------------------------------------------------------
@@ -230,13 +243,13 @@ public class SchemaVerificationTest {
     }
 
     // ---------------------------------------------------------------------------------------------------------
-    // 4. A tenant database (different schema, same server) with missing columns: the core still starts, logs
-    //    the mismatch (SCHEMA_MISMATCH state), the base tenant keeps working, every query on the broken
-    //    tenant fails with the explanatory message, and the tenant recovers once the columns are added and the
-    //    storage layer is reloaded.
+    // 4. A tenant database (different schema, same server) with missing columns: the core boots and reports the
+    //    mismatch (SCHEMA_MISMATCH state names the tenant schema), the base tenant and the tenant's unaffected
+    //    queries keep working, only the tenant's affected queries fail - and they recover once the columns are
+    //    added.
     // ---------------------------------------------------------------------------------------------------------
     @Test
-    public void tenantStorageMismatchLogsAndDisablesOnlyThatTenant() throws Exception {
+    public void tenantStorageMismatchIsReportedAndOnlyAffectedTenantQueriesFail() throws Exception {
         String[] args = {"../"};
         TenantIdentifier tid = new TenantIdentifier("abc", null, null);
         JsonObject tenantConfigJson = new JsonObject();
@@ -278,20 +291,24 @@ public class SchemaVerificationTest {
             assertTrue(mismatch.exception.getMessage(),
                     mismatch.exception.getMessage().contains(TENANT_SCHEMA + ".session_info"));
 
-            // base tenant unaffected
-            assertNull(StorageLayer.getStorage(main).getKeyValue(TenantIdentifier.BASE_TENANT, "nope"));
-            // broken tenant: every query fails with the explanatory message
+            // base tenant unaffected, including session queries
+            Start baseStorage = (Start) StorageLayer.getStorage(main);
+            assertNull(baseStorage.getSession(TenantIdentifier.BASE_TENANT, "no-such-session"));
+            // the broken tenant still serves everything that does not touch the missing columns
+            Start tenantStorage = (Start) StorageLayer.getStorage(tid, main);
+            assertNull(tenantStorage.getKeyValue(tid, "nope"));
+            // only its affected queries fail, with the hint
             try {
-                StorageLayer.getStorage(tid, main).getKeyValue(tid, "nope");
+                tenantStorage.getSession(tid, "no-such-session");
                 fail();
             } catch (StorageQueryException e) {
-                assertTrue(e.getMessage(), e.getMessage().contains("prev_refresh_token_hash_2"));
+                assertTrue(e.getMessage(), e.getMessage().contains("Schema mismatch"));
+                assertTrue(e.getMessage(), e.getMessage().contains("Check the core error logs"));
             }
 
-            // operator applies the migration; the next storage-layer load re-verifies and re-enables the tenant
+            // operator applies the migration; the tenant recovers without a restart
             runSql(String.format(RESTORE_COLUMNS, TENANT_SCHEMA));
-            MultitenancyHelper.getInstance(main).loadStorageLayer();
-            assertNull(StorageLayer.getStorage(tid, main).getKeyValue(tid, "nope"));
+            assertNull(tenantStorage.getSession(tid, "no-such-session"));
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));

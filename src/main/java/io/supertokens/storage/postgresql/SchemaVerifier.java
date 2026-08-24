@@ -264,8 +264,9 @@ public class SchemaVerifier {
                 msg.append("  - ").append(e.getKey()).append(": ").append(String.join(", ", e.getValue()))
                         .append("\n");
             }
-            msg.append("Apply the migration SQL from the CHANGELOG of every version you upgraded across, then ")
-                    .append("restart. Equivalent statements (review NOT NULL / DEFAULT clauses for tables that ")
+            msg.append("Until they are added, queries that touch these columns fail with a schema-mismatch ")
+                    .append("error. Apply the migration SQL from the CHANGELOG of every version you upgraded ")
+                    .append("across. Equivalent statements (review NOT NULL / DEFAULT clauses for tables that ")
                     .append("already contain rows):\n");
             for (String sql : suggestedSql) {
                 msg.append("  ").append(sql).append("\n");
