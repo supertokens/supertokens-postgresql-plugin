@@ -7,10 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- Parameterizes `activity_log` retention (drops the hardcoded 31-day constant), adds a transactional
-  activity-log insert (`createActivityLogEntry_Transaction`), a `hasUnfoldedActivitySince` check, and the
-  `user_last_active` fold+reconcile rollup (`rollupLastActiveFromActivityLog_Transaction`) derived from the
-  activity log. Implements the plugin-interface activity-log storage contract.
+- Implements the plugin-interface activity-log storage contract: retention parameter, transactional insert, unfolded-activity check, and last-active rollup.
 
 ## [9.7.1]
 
