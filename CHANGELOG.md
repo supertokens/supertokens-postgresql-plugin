@@ -7,16 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [9.7.2]
 
-- Changes the `activity_log.payload` column from `TEXT` to `JSONB`. Fresh installs create it as `JSONB`
-  (monthly partitions inherit the type via `PARTITION OF`), and the insert path binds the payload with
-  `?::jsonb`. Existing deployments are migrated in place at startup.
+- Changes the `activity_log.payload` column from `TEXT` to `JSONB`. Fresh installs create it as `JSONB`;
+  pre-existing `TEXT` columns are migrated automatically at startup.
 
 ### Migration
 
-Run automatically at startup for a pre-existing `TEXT` column (idempotent — skipped once the column is
-`JSONB`). It runs in the transactional startup DDL batch, so an old row holding non-JSON text aborts the
-migration loudly rather than being silently dropped. On large `activity_log` tables the rewrite takes an
-`ACCESS EXCLUSIVE` lock; operators can pre-apply it before upgrading:
+Applied automatically at startup (idempotent; a non-JSON row aborts it loudly rather than dropping data).
+The rewrite takes an `ACCESS EXCLUSIVE` lock, so on large `activity_log` tables you may pre-apply it
+before upgrading to control the timing:
 
 ```sql
 ALTER TABLE activity_log ALTER COLUMN payload TYPE JSONB USING payload::jsonb;
