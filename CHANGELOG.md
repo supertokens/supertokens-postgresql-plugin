@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.7.2]
+
+- Takes a per-app advisory lock in `SessionQueries.getAccessTokenSigningKeys_Transaction`, so cores rotating the
+  dynamic access token signing key at the same time can no longer each create a key of their own. `FOR UPDATE` could
+  not make that check-then-act safe: it only locks rows that already exist, and under `READ COMMITTED` a blocked
+  `SELECT` re-reads only the rows it was blocked on, so every waiting core still saw no fresh key and inserted one.
+  The duplicates left each core signing with a key absent from the other cores' JWKS, which consumers reject with
+  `kid` mismatches (e.g. Envoy `Jwks_doesn't_have_key_to_match_kid_or_alg_from_Jwt`) until the caches reconverge.
+  The lock is keyed by app, so rotations of different apps never wait on each other, and `FOR UPDATE` is dropped from
+  the read now that it is redundant, matching `UserMetadataQueries.getUserMetadata_Transaction`.
+
 ## [9.7.1]
 
 - Makes the dashboard user search (email/phone/provider) sargable: `ILIKE` scans on `account_info_value`

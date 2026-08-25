@@ -535,8 +535,11 @@ public class SessionQueries {
     public static KeyValueInfo[] getAccessTokenSigningKeys_Transaction(Start start, Connection con,
                                                                        AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
+        io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(con,
+                appIdentifier.getAppId() + "~" + getConfig(start).getAccessTokenSigningKeysTable());
+
         String QUERY = "SELECT * FROM " + getConfig(start).getAccessTokenSigningKeysTable()
-                + " WHERE app_id = ? FOR UPDATE";
+                + " WHERE app_id = ?";
 
         return execute(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
