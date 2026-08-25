@@ -171,9 +171,10 @@ public class Start
 
     // Startup schema verification state (see verifySchema). A successful check is cached for the lifetime of
     // this instance. In strict mode (schema_check_strict_mode) a failed check sets schemaMismatchMessage and
-    // every ConnectionPool.getConnection(this) throws with it until a later verification succeeds; in
-    // non-strict mode a failure is only reported (the core logs it) and just the queries that hit the missing
-    // schema fail at runtime, with a schema-mismatch hint (see QueryExecutorTemplate).
+    // every ConnectionPool.getConnection(this) throws with it until a later verification succeeds - the core
+    // retries every minute (SyncCoreConfigWithDb), so the storage resumes within a minute of the migration
+    // being applied; in non-strict mode a failure is only reported (the core logs it) and just the queries
+    // that hit the missing schema fail at runtime, with a schema-mismatch hint (see QueryExecutorTemplate).
     private volatile boolean schemaVerified = false;
     volatile String schemaMismatchMessage = null;
 
@@ -598,6 +599,10 @@ public class Start
         }
         try (Connection con = ConnectionPool.getConnectionForSchemaVerification(this)) {
             SchemaVerifier.verify(this, con);
+            if (schemaMismatchMessage != null) {
+                Logging.info(this, "Database schema verification now passes; resuming queries on this storage.",
+                        true);
+            }
             schemaMismatchMessage = null;
             schemaVerified = true;
         } catch (SchemaMismatchException e) {

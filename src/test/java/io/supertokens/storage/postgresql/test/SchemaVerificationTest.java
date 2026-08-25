@@ -20,6 +20,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import io.supertokens.Main;
 import io.supertokens.ProcessState;
+import io.supertokens.cronjobs.CronTaskTest;
+import io.supertokens.cronjobs.syncCoreConfigWithDb.SyncCoreConfigWithDb;
 import io.supertokens.featureflag.EE_FEATURES;
 import io.supertokens.featureflag.FeatureFlagTestContent;
 import io.supertokens.multitenancy.Multitenancy;
@@ -60,7 +62,8 @@ import static org.junit.Assert.*;
  * Startup schema verification ({@code Storage.verifySchema()} / {@link SchemaVerifier}) for
  * supertokens-core#1386, gated by the core's {@code schema_check_strict_mode} config. Strict (the default): a
  * base-database mismatch refuses to start, and a mismatched tenant storage refuses all queries until the
- * migration is applied. Non-strict: the mismatch is only reported (ERROR log + SCHEMA_MISMATCH state with the
+ * migration is applied - the core's config-sync cron re-verifies every minute, so the tenant resumes without
+ * a restart. Non-strict: the mismatch is only reported (ERROR log + SCHEMA_MISMATCH state with the
  * SQL to run) and just the queries touching the missing schema fail, with a schema-mismatch hint instead of a
  * raw SQL error.
  */
@@ -367,7 +370,8 @@ public class SchemaVerificationTest {
     // ---------------------------------------------------------------------------------------------------------
     // 7. Strict mode, tenant database mismatch: the core still boots and serves the base tenant, but the
     //    affected tenant storage refuses ALL queries (with the full mismatch message) until the migration is
-    //    applied and the storage layer is reloaded.
+    //    applied. The config-sync cron re-verifies every interval, so the tenant resumes on its own - no
+    //    restart, no tenant change.
     // ---------------------------------------------------------------------------------------------------------
     @Test
     public void strictModeTenantStorageMismatchDisablesOnlyThatTenant() throws Exception {
@@ -401,6 +405,8 @@ public class SchemaVerificationTest {
             process = TestingProcessManager.start(args, false);
             FeatureFlagTestContent.getInstance(process.getProcess())
                     .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES, new EE_FEATURES[]{EE_FEATURES.MULTI_TENANCY});
+            CronTaskTest.getInstance(process.getProcess())
+                    .setIntervalInSeconds(SyncCoreConfigWithDb.RESOURCE_KEY, 1);
             process.startProcess();
             Main main = process.getProcess();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -418,10 +424,21 @@ public class SchemaVerificationTest {
                 assertTrue(e.getMessage(), e.getMessage().contains("prev_refresh_token_hash_2"));
             }
 
-            // operator applies the migration; the next storage-layer load re-verifies and re-enables the tenant
+            // operator applies the migration; the config-sync cron (1s interval above) re-verifies and the
+            // tenant resumes on its own - deliberately no loadStorageLayer()/restart here
             runSql(String.format(RESTORE_COLUMNS, TENANT_SCHEMA));
-            MultitenancyHelper.getInstance(main).loadStorageLayer();
-            assertNull(tenantStorage.getKeyValue(tid, "nope"));
+            long deadline = System.currentTimeMillis() + 30_000;
+            while (true) {
+                try {
+                    assertNull(tenantStorage.getKeyValue(tid, "nope"));
+                    break;
+                } catch (StorageQueryException e) {
+                    if (System.currentTimeMillis() > deadline) {
+                        throw e;
+                    }
+                    Thread.sleep(250);
+                }
+            }
 
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));

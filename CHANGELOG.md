@@ -14,7 +14,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the plugin's own `CREATE TABLE` definitions and reports missing tables/columns with the `ALTER TABLE` statements
   to run. **Behaviour is governed by the new core config `schema_check_strict_mode` (default `true`): in strict
   mode the core REFUSES TO START on a base-database mismatch and a mismatched tenant database is not served until
-  the migration is applied - if your schema is behind, upgrading stops the core from booting until you run the
+  the migration is applied (the core re-verifies every minute, so the tenant resumes without a restart) - if your
+  schema is behind, upgrading stops the core from booting until you run the
   migration SQL or set `schema_check_strict_mode: false`.** With strict mode off, mismatches are only logged and
   queries hitting the missing schema fail with a "Schema mismatch ... check the core error logs" message instead
   of a raw `column does not exist` error
