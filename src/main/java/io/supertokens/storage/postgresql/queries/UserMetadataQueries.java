@@ -37,6 +37,7 @@ import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import io.supertokens.storage.postgresql.utils.Utils;
+import io.supertokens.storage.postgresql.annotations.UnauditedAutoCommitWrite;
 
 public class UserMetadataQueries {
 
@@ -63,6 +64,7 @@ public class UserMetadataQueries {
                 + Config.getConfig(start).getUserMetadataTable() + "(app_id);";
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static int deleteUserMetadata(Start start, AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getUserMetadataTable()

@@ -35,6 +35,7 @@ import java.util.Map;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
+import io.supertokens.storage.postgresql.annotations.UnauditedAutoCommitWrite;
 
 public class UserRolesQueries {
     public static String getQueryToCreateRolesTable(Start start) {
@@ -224,6 +225,7 @@ public class UserRolesQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static int addRoleToUser(Start start, TenantIdentifier tenantIdentifier, String userId, String role)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + getConfig(start).getUserRolesTable()
@@ -454,6 +456,7 @@ public class UserRolesQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static int deleteAllRolesForUser(Start start, TenantIdentifier tenantIdentifier, String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getUserRolesTable()
@@ -476,6 +479,7 @@ public class UserRolesQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean deleteAllUserRoleAssociationsForRole(Start start, AppIdentifier appIdentifier, String role)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getUserRolesTable()

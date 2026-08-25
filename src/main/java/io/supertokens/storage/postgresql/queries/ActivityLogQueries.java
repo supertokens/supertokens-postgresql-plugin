@@ -37,6 +37,7 @@ import java.util.regex.Pattern;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import io.supertokens.storage.postgresql.annotations.AtomicAutoCommitWrite;
 
 /**
  * Append-only audit/activity log.
@@ -98,6 +99,7 @@ public class ActivityLogQueries {
                 + Config.getConfig(start).getActivityLogTable() + " USING brin (created_at);";
     }
 
+    @AtomicAutoCommitWrite(justification = "append-only activity-log write; the insert is the operation")
     public static void createActivityLogEntry(Start start, TenantIdentifier tenantIdentifier, AuditLogEvent event)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + Config.getConfig(start).getActivityLogTable()
@@ -231,6 +233,7 @@ public class ActivityLogQueries {
      * whose partition was already dropped, or timestamps outside the premake window), so retention
      * is enforced on them directly — dropping monthly partitions alone would keep them forever.
      */
+    @AtomicAutoCommitWrite(justification = "time-based cleanup sweep; single auto-commit DELETE with nothing to be atomic with")
     private static void purgeExpiredRowsFromDefaultPartition(Start start)
             throws SQLException, StorageQueryException {
         String defaultPartition = Config.getConfig(start).getActivityLogTable() + "_default";

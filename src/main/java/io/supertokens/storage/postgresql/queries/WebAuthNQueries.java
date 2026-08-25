@@ -50,6 +50,8 @@ import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import io.supertokens.storage.postgresql.utils.Utils;
+import io.supertokens.storage.postgresql.annotations.AtomicAutoCommitWrite;
+import io.supertokens.storage.postgresql.annotations.UnauditedAutoCommitWrite;
 
 public class WebAuthNQueries {
 
@@ -192,6 +194,7 @@ public class WebAuthNQueries {
                 " (expires_at DESC);";
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static WebAuthNOptions saveOptions(Start start, TenantIdentifier tenantIdentifier, WebAuthNOptions options)
             throws SQLException, StorageQueryException {
         String INSERT = "INSERT INTO " + getConfig(start).getWebAuthNGeneratedOptionsTable()
@@ -263,6 +266,7 @@ public class WebAuthNQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static WebAuthNStoredCredential saveCredential(Start start, TenantIdentifier tenantIdentifier, WebAuthNStoredCredential credential)
             throws SQLException, StorageQueryException {
         String INSERT = "INSERT INTO " + getConfig(start).getWebAuthNCredentialsTable()
@@ -776,6 +780,7 @@ public class WebAuthNQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static int removeCredential(Start start, TenantIdentifier tenantIdentifier, String userId, String credentialId)
             throws SQLException, StorageQueryException {
         String UPDATE = "DELETE FROM " + getConfig(start).getWebAuthNCredentialsTable()
@@ -788,6 +793,7 @@ public class WebAuthNQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static int removeOptions(Start start, TenantIdentifier tenantIdentifier, String optionsId)
             throws SQLException, StorageQueryException {
         String UPDATE = "DELETE FROM " + getConfig(start).getWebAuthNGeneratedOptionsTable()
@@ -920,6 +926,7 @@ public class WebAuthNQueries {
         }
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void addRecoverAccountToken(Start start, TenantIdentifier tenantIdentifier, AccountRecoveryTokenInfo accountRecoveryTokenInfo)
             throws SQLException, StorageQueryException {
         String INSERT = "INSERT INTO " + getConfig(start).getWebAuthNAccountRecoveryTokenTable() + " (app_id, tenant_id, user_id, email, token, expires_at) VALUES (?, ?, ?, ?, ?, ?)";
@@ -977,6 +984,7 @@ public class WebAuthNQueries {
         });
     }
 
+    @AtomicAutoCommitWrite(justification = "time-based cleanup sweep; single auto-commit DELETE with nothing to be atomic with")
     public static void deleteExpiredAccountRecoveryTokens(Start start)
             throws SQLException, StorageQueryException {
         String DELETE = "DELETE FROM " + getConfig(start).getWebAuthNAccountRecoveryTokenTable() + " WHERE expires_at < ?";
@@ -985,6 +993,7 @@ public class WebAuthNQueries {
         });
     }
 
+    @AtomicAutoCommitWrite(justification = "time-based cleanup sweep; single auto-commit DELETE with nothing to be atomic with")
     public static void deleteExpiredGeneratedOptions(Start start)
             throws SQLException, StorageQueryException {
         String DELETE = "DELETE FROM " + getConfig(start).getWebAuthNGeneratedOptionsTable() + " WHERE expires_at < ?";
