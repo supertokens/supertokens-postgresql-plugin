@@ -23,14 +23,6 @@ name: "DB schema / migration manifest check"
 #   4. That the CHANGELOG.md section for this branch's version documents the
 #      migration under `### Migration` and references the script.
 #
-# Runs on a plain runner (NOT the rishabhpoddar/supertokens_core_testing
-# container): that image is Ubuntu 16.04, whose glibc can no longer run the
-# Node that GitHub forces JS actions (actions/checkout etc.) to use, and its
-# apt archive only carries postgres client 9.5 which refuses to talk to a
-# modern server. psql/pg_dump therefore run via `docker run postgres:latest`,
-# the same image as the service container, so client and server versions
-# always match.
-#
 # Escape hatch: label the PR `skip-schema-check` (e.g. PRs against old release
 # branches where core master no longer builds against this plugin).
 
