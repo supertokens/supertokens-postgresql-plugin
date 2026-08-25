@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.7.2]
+
+- Changes the `activity_log.payload` column from `TEXT` to `JSONB`. Fresh installs create it as `JSONB`;
+  pre-existing `TEXT` columns are migrated automatically at startup.
+
+### Migration
+
+Applied automatically at startup (idempotent; a non-JSON row aborts it loudly rather than dropping data).
+The rewrite takes an `ACCESS EXCLUSIVE` lock, so on large `activity_log` tables you may pre-apply it
+before upgrading to control the timing:
+
+```sql
+ALTER TABLE activity_log ALTER COLUMN payload TYPE JSONB USING payload::jsonb;
+```
+
 ## [9.7.1]
 
 - Makes the dashboard user search (email/phone/provider) sargable: `ILIKE` scans on `account_info_value`
