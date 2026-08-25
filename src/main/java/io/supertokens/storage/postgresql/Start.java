@@ -58,7 +58,7 @@ import io.supertokens.pluginInterface.jwt.JWTRecipeStorage;
 import io.supertokens.pluginInterface.jwt.JWTSigningKeyInfo;
 import io.supertokens.pluginInterface.jwt.exceptions.DuplicateKeyIdException;
 import io.supertokens.pluginInterface.jwt.sqlstorage.JWTRecipeSQLStorage;
-import io.supertokens.pluginInterface.auditlog.ActivityLogStorage;
+import io.supertokens.pluginInterface.auditlog.ActivityLogSQLStorage;
 import io.supertokens.pluginInterface.auditlog.AuditLogEvent;
 import io.supertokens.pluginInterface.migration.MigrationBackfillStorage;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
@@ -143,7 +143,7 @@ public class Start
         UserIdMappingSQLStorage, MultitenancyStorage, MultitenancySQLStorage, DashboardSQLStorage, TOTPSQLStorage,
         ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage, OAuthStorage, OAuthSQLStorage,
         BulkImportSQLStorage, WebAuthNSQLStorage, SAMLStorage, UserLockingStorage, AccountInfoStorage,
-        MigrationBackfillStorage, ActivityLogStorage {
+        MigrationBackfillStorage, ActivityLogSQLStorage {
 
     // these configs are protected from being modified / viewed by the dev using the SuperTokens
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
@@ -5607,7 +5607,7 @@ public class Start
         }
     }
 
-    // ActivityLogStorage implementation
+    // ActivityLogSQLStorage implementation
 
     @Override
     public void createActivityLogEntry(TenantIdentifier tenantIdentifier, AuditLogEvent event)
@@ -5620,9 +5620,40 @@ public class Start
     }
 
     @Override
-    public void maintainActivityLogPartitions() throws StorageQueryException {
+    public void createActivityLogEntry_Transaction(TransactionConnection con, TenantIdentifier tenantIdentifier,
+                                                   AuditLogEvent event) throws StorageQueryException {
         try {
-            ActivityLogQueries.maintainPartitions(this);
+            Connection sqlCon = (Connection) con.getConnection();
+            ActivityLogQueries.createActivityLogEntry_Transaction(sqlCon, this, tenantIdentifier, event);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean hasUnfoldedActivitySince(long sinceMillis) throws StorageQueryException {
+        try {
+            return ActivityLogQueries.hasUnfoldedActivitySince(this, sinceMillis);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void maintainActivityLogPartitions(int retentionDays) throws StorageQueryException {
+        try {
+            ActivityLogQueries.maintainPartitions(this, retentionDays);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void rollupLastActiveFromActivityLog_Transaction(TransactionConnection con, long windowStartMillis)
+            throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            ActiveUsersQueries.rollupLastActiveFromActivityLog_Transaction(this, sqlCon, windowStartMillis);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

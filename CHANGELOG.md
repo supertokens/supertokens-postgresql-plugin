@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- Implements the plugin-interface activity-log storage contract: retention parameter, transactional insert, unfolded-activity check, and last-active rollup.
+
 ## [9.7.2]
 
 - Changes the `activity_log.payload` column from `TEXT` to `JSONB`. Fresh installs create it as `JSONB`;
