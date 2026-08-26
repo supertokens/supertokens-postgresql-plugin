@@ -535,7 +535,12 @@ public class SessionQueries {
     public static KeyValueInfo[] getAccessTokenSigningKeys_Transaction(Start start, Connection con,
                                                                        AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
-        io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(con,
+        // Blocking on purpose: every core notices the same rotation moment, so contention here is the norm,
+        // not the exception. The try-variant would make each loser roll back the whole transaction and sleep
+        // 10ms-3.26s in the deadlock-retry loop - while the core-side SigningKeys refresh may be holding a
+        // monitor that all of the app's session traffic funnels through. Queuing in the database costs only
+        // the winner's actual hold time, and the loser's SELECT below then sees the winner's committed key.
+        io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLockBlocking(con,
                 appIdentifier.getAppId() + "~" + getConfig(start).getAccessTokenSigningKeysTable());
 
         String QUERY = "SELECT * FROM " + getConfig(start).getAccessTokenSigningKeysTable()
