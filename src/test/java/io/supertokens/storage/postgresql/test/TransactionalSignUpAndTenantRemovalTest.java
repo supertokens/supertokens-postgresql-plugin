@@ -293,10 +293,28 @@ public class TransactionalSignUpAndTenantRemovalTest {
     }
 
     // ---- duplicate detection matches the auto-commit path ----------------------------------------
+    //
+    // Run under both DUAL_WRITE_READ_OLD and LEGACY. The two modes reach the duplicate through
+    // different constraints, so they cover different translation arms of the new _Transaction
+    // variants: with the new tables present (DUAL_WRITE_READ_OLD) a duplicate email/phone/third-party
+    // trips the `recipe_user_tenants` primary key first (the `isPrimaryKeyError(recipeUserTenants)`
+    // arm), whereas in LEGACY (old tables only, no `recipe_user_tenants`) it trips the unique
+    // constraint on the `..._user_to_tenant` table (the `isUniqueConstraintError(...UserToTenantTable,
+    // "email"/"phone_number"/"third_party_user_id")` arm). In every mode the mapped exception type
+    // must still match the auto-commit path.
 
     @Test
     public void emailPasswordDuplicateDetectionMatchesAutoCommit() throws Exception {
-        TestingProcessManager.TestingProcess process = startProcess(MigrationMode.DUAL_WRITE_READ_OLD);
+        assertEmailPasswordDuplicateParity(MigrationMode.DUAL_WRITE_READ_OLD);
+    }
+
+    @Test
+    public void emailPasswordDuplicateDetectionMatchesAutoCommitLegacy() throws Exception {
+        assertEmailPasswordDuplicateParity(MigrationMode.LEGACY);
+    }
+
+    private void assertEmailPasswordDuplicateParity(MigrationMode mode) throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess(mode);
         Start storage = (Start) StorageLayer.getStorage(process.getProcess());
         long now = System.currentTimeMillis();
         storage.signUp(PUBLIC, "ep1", "ep1@example.com", "hash", now);
@@ -322,7 +340,16 @@ public class TransactionalSignUpAndTenantRemovalTest {
 
     @Test
     public void thirdPartyDuplicateDetectionMatchesAutoCommit() throws Exception {
-        TestingProcessManager.TestingProcess process = startProcess(MigrationMode.DUAL_WRITE_READ_OLD);
+        assertThirdPartyDuplicateParity(MigrationMode.DUAL_WRITE_READ_OLD);
+    }
+
+    @Test
+    public void thirdPartyDuplicateDetectionMatchesAutoCommitLegacy() throws Exception {
+        assertThirdPartyDuplicateParity(MigrationMode.LEGACY);
+    }
+
+    private void assertThirdPartyDuplicateParity(MigrationMode mode) throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess(mode);
         Start storage = (Start) StorageLayer.getStorage(process.getProcess());
         long now = System.currentTimeMillis();
         LoginMethod.ThirdParty tp = new LoginMethod.ThirdParty("google", "g-1");
@@ -351,7 +378,16 @@ public class TransactionalSignUpAndTenantRemovalTest {
 
     @Test
     public void passwordlessDuplicateDetectionMatchesAutoCommit() throws Exception {
-        TestingProcessManager.TestingProcess process = startProcess(MigrationMode.DUAL_WRITE_READ_OLD);
+        assertPasswordlessDuplicateParity(MigrationMode.DUAL_WRITE_READ_OLD);
+    }
+
+    @Test
+    public void passwordlessDuplicateDetectionMatchesAutoCommitLegacy() throws Exception {
+        assertPasswordlessDuplicateParity(MigrationMode.LEGACY);
+    }
+
+    private void assertPasswordlessDuplicateParity(MigrationMode mode) throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess(mode);
         Start storage = (Start) StorageLayer.getStorage(process.getProcess());
         long now = System.currentTimeMillis();
         storage.createUser(PUBLIC, "pl1", "pl1@example.com", null, now);
