@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 - Implements the plugin-interface activity-log storage contract: retention parameter, transactional insert, unfolded-activity check, and last-active rollup.
+- Implements the connection-taking count-affecting write variants from plugin-interface#216: `signUp_Transaction` on `EmailPasswordSQLStorage` and `ThirdPartySQLStorage`, `createUser_Transaction` on `PasswordlessSQLStorage`, and `removeUserIdFromTenant_Transaction` on `MultitenancySQLStorage`. Each existing auto-commit method is refactored into a thin wrapper over the new variant, so callers can commit the mutation and its lifecycle audit event on one connection.
 
 ## [9.7.2]
 

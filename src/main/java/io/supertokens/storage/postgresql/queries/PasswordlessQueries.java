@@ -436,93 +436,108 @@ public class PasswordlessQueries {
         return start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try {
-                MigrationMode mode = Config.getConfig(start).getMigrationMode();
-
-                { // app_id_to_user_id — ALWAYS
-                    // When writes don't reach the new tables, keep the time_joined = 0
-                    // sentinel so this user stays in the backfill pending set — the backfill
-                    // both restores the real timestamps (from the old tables) and creates the
-                    // reservation rows this mode skips.
-                    long sentinelOrTimeJoined = mode.writesToNewTables() ? timeJoined : 0;
-                    String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
-                            + "(app_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
-                            + " VALUES(?, ?, ?, ?, ?, ?)";
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, id);
-                        pst.setString(3, id);
-                        pst.setString(4, PASSWORDLESS.toString());
-                        pst.setLong(5, sentinelOrTimeJoined);
-                        pst.setLong(6, sentinelOrTimeJoined);
-                    });
-                }
-
-                if (mode.writesToOldTables()) { // all_auth_recipe_users
-                    String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
-                            +
-                            "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, " +
-                            "primary_or_recipe_user_time_joined)" +
-                            " VALUES(?, ?, ?, ?, ?, ?, ?)";
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, tenantIdentifier.getTenantId());
-                        pst.setString(3, id);
-                        pst.setString(4, id);
-                        pst.setString(5, PASSWORDLESS.toString());
-                        pst.setLong(6, timeJoined);
-                        pst.setLong(7, timeJoined);
-                    });
-                }
-
-                if (mode.writesToNewTables()) { // recipe_user_tenants
-                    if (email != null) {
-                        AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
-                                PASSWORDLESS.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", email);
-                    }
-                    if (phoneNumber != null) {
-                        AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
-                                PASSWORDLESS.toString(), ACCOUNT_INFO_TYPE.PHONE_NUMBER, "", "", phoneNumber);
-                    }
-                    if (email == null && phoneNumber == null) {
-                        throw new IllegalArgumentException("Either email or phoneNumber must be provided");
-                    }
-                }
-
-                { // passwordless_users — ALWAYS
-                    String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUsersTable()
-                            + "(app_id, user_id, email, phone_number, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, id);
-                        pst.setString(3, email);
-                        pst.setString(4, phoneNumber);
-                        pst.setLong(5, timeJoined);
-                    });
-                }
-
-                if (mode.writesToOldTables()) { // passwordless_user_to_tenant
-                    String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUserToTenantTable()
-                            + "(app_id, tenant_id, user_id, email, phone_number)" + " VALUES(?, ?, ?, ?, ?)";
-
-                    update(sqlCon, QUERY, pst -> {
-                        pst.setString(1, tenantIdentifier.getAppId());
-                        pst.setString(2, tenantIdentifier.getTenantId());
-                        pst.setString(3, id);
-                        pst.setString(4, email);
-                        pst.setString(5, phoneNumber);
-                    });
-                }
-
-                UserInfoPartial userInfo = new UserInfoPartial(id, email, phoneNumber, timeJoined);
-                fillUserInfoWithTenantIds_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
-                fillUserInfoWithVerified_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
+                AuthRecipeUserInfo userInfo = createUser_Transaction(start, sqlCon, tenantIdentifier, id, email,
+                        phoneNumber, timeJoined);
                 sqlCon.commit();
-                return AuthRecipeUserInfo.create(id, false,
-                        userInfo.toLoginMethod());
+                return userInfo;
             } catch (SQLException throwables) {
                 throw new StorageTransactionLogicException(throwables);
             }
         });
+    }
+
+    // Connection-taking variant of createUser: performs exactly the same writes on the caller's connection and
+    // does NOT commit, so the user creation and whatever else the caller writes (e.g. a lifecycle audit event)
+    // are committed or rolled back together. Duplicate detection is unchanged: it surfaces as the SQLException
+    // raised by the offending INSERT, which the caller (Start.createUser_Transaction) translates into the same
+    // DuplicateEmail/DuplicatePhoneNumber/DuplicateUserId/TenantOrAppNotFound exceptions as the auto-commit path.
+    public static AuthRecipeUserInfo createUser_Transaction(Start start, Connection sqlCon,
+                                                            TenantIdentifier tenantIdentifier, String id,
+                                                            @Nullable String email, @Nullable String phoneNumber,
+                                                            long timeJoined)
+            throws SQLException, StorageQueryException {
+        MigrationMode mode = Config.getConfig(start).getMigrationMode();
+
+        { // app_id_to_user_id — ALWAYS
+            // When writes don't reach the new tables, keep the time_joined = 0
+            // sentinel so this user stays in the backfill pending set — the backfill
+            // both restores the real timestamps (from the old tables) and creates the
+            // reservation rows this mode skips.
+            long sentinelOrTimeJoined = mode.writesToNewTables() ? timeJoined : 0;
+            String QUERY = "INSERT INTO " + getConfig(start).getAppIdToUserIdTable()
+                    + "(app_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
+                    + " VALUES(?, ?, ?, ?, ?, ?)";
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, id);
+                pst.setString(3, id);
+                pst.setString(4, PASSWORDLESS.toString());
+                pst.setLong(5, sentinelOrTimeJoined);
+                pst.setLong(6, sentinelOrTimeJoined);
+            });
+        }
+
+        if (mode.writesToOldTables()) { // all_auth_recipe_users
+            String QUERY = "INSERT INTO " + getConfig(start).getUsersTable()
+                    +
+                    "(app_id, tenant_id, user_id, primary_or_recipe_user_id, recipe_id, time_joined, " +
+                    "primary_or_recipe_user_time_joined)" +
+                    " VALUES(?, ?, ?, ?, ?, ?, ?)";
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, id);
+                pst.setString(4, id);
+                pst.setString(5, PASSWORDLESS.toString());
+                pst.setLong(6, timeJoined);
+                pst.setLong(7, timeJoined);
+            });
+        }
+
+        if (mode.writesToNewTables()) { // recipe_user_tenants
+            if (email != null) {
+                AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
+                        PASSWORDLESS.toString(), ACCOUNT_INFO_TYPE.EMAIL, "", "", email);
+            }
+            if (phoneNumber != null) {
+                AccountInfoQueries.addRecipeUserAccountInfo_Transaction(start, sqlCon, tenantIdentifier, id,
+                        PASSWORDLESS.toString(), ACCOUNT_INFO_TYPE.PHONE_NUMBER, "", "", phoneNumber);
+            }
+            if (email == null && phoneNumber == null) {
+                throw new IllegalArgumentException("Either email or phoneNumber must be provided");
+            }
+        }
+
+        { // passwordless_users — ALWAYS
+            String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUsersTable()
+                    + "(app_id, user_id, email, phone_number, time_joined)" + " VALUES(?, ?, ?, ?, ?)";
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, id);
+                pst.setString(3, email);
+                pst.setString(4, phoneNumber);
+                pst.setLong(5, timeJoined);
+            });
+        }
+
+        if (mode.writesToOldTables()) { // passwordless_user_to_tenant
+            String QUERY = "INSERT INTO " + getConfig(start).getPasswordlessUserToTenantTable()
+                    + "(app_id, tenant_id, user_id, email, phone_number)" + " VALUES(?, ?, ?, ?, ?)";
+
+            update(sqlCon, QUERY, pst -> {
+                pst.setString(1, tenantIdentifier.getAppId());
+                pst.setString(2, tenantIdentifier.getTenantId());
+                pst.setString(3, id);
+                pst.setString(4, email);
+                pst.setString(5, phoneNumber);
+            });
+        }
+
+        UserInfoPartial userInfo = new UserInfoPartial(id, email, phoneNumber, timeJoined);
+        fillUserInfoWithTenantIds_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
+        fillUserInfoWithVerified_transaction(start, sqlCon, tenantIdentifier.toAppIdentifier(), userInfo);
+        return AuthRecipeUserInfo.create(id, false,
+                userInfo.toLoginMethod());
     }
 
     private static UserInfoWithTenantId[] getUserInfosWithTenant_Transaction(Start start, Connection con,
