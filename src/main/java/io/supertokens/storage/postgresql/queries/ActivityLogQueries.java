@@ -18,13 +18,16 @@ package io.supertokens.storage.postgresql.queries;
 
 import io.supertokens.pluginInterface.auditlog.AuditLogEvent;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 
+import java.sql.Array;
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -33,6 +36,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -166,6 +170,65 @@ public class ActivityLogQueries {
             }
             return false;
         });
+    }
+
+    /**
+     * App-scoped, window-bounded read of the activity log so callers can fold lifecycle events in Java
+     * rather than in the database. Returns the {@code appIdentifier} events (across all its tenants, each
+     * row's {@code tenant_id} preserved) whose {@code event_type} is in {@code eventTypes} and whose
+     * {@code created_at} lies in the half-open interval {@code (fromExclusiveMillis, toInclusiveMillis]},
+     * ordered by {@code created_at} ascending and capped at {@code limit} rows.
+     *
+     * The range predicate is kept literally on {@code created_at} (no expression around it) so the monthly
+     * partition pruning and the BRIN index on {@code created_at} both apply. {@code LIMIT} is applied in the
+     * query, never after materialising the window, so a caller can pass {@code cap + 1} to detect an
+     * over-cap window without reading all of it. {@code payload} is cast to text ({@code ::text}) so the
+     * JSONB column comes back as its serialised JSON string; a null payload stays null.
+     */
+    public static List<AuditLogEvent> getActivityLogEntriesForApp(Start start, AppIdentifier appIdentifier,
+                                                                  Set<String> eventTypes, long fromExclusiveMillis,
+                                                                  long toInclusiveMillis, int limit)
+            throws SQLException, StorageQueryException {
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit must be > 0");
+        }
+        if (eventTypes == null || eventTypes.isEmpty()) {
+            throw new IllegalArgumentException("eventTypes must be non-empty");
+        }
+        String[] eventTypesArray = eventTypes.toArray(new String[0]);
+        String QUERY = "SELECT app_id, tenant_id, recipe_user_id, primary_or_recipe_user_id, event_type, status,"
+                + " auth_principal, identifier, created_at, payload::text AS payload FROM "
+                + Config.getConfig(start).getActivityLogTable()
+                + " WHERE app_id = ? AND event_type = ANY(?) AND created_at > ? AND created_at <= ?"
+                + " ORDER BY created_at ASC LIMIT ?";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            Array eventTypesSqlArray = pst.getConnection().createArrayOf("VARCHAR", eventTypesArray);
+            pst.setArray(2, eventTypesSqlArray);
+            pst.setLong(3, fromExclusiveMillis);
+            pst.setLong(4, toInclusiveMillis);
+            pst.setInt(5, limit);
+        }, result -> {
+            List<AuditLogEvent> events = new ArrayList<>();
+            while (result.next()) {
+                events.add(auditLogEventFromRow(result));
+            }
+            return events;
+        });
+    }
+
+    private static AuditLogEvent auditLogEventFromRow(ResultSet result) throws SQLException {
+        return new AuditLogEvent(
+                result.getString("app_id"),
+                result.getString("tenant_id"),
+                result.getString("recipe_user_id"),
+                result.getString("primary_or_recipe_user_id"),
+                result.getString("event_type"),
+                result.getString("status"),
+                result.getString("auth_principal"),
+                result.getString("identifier"),
+                result.getLong("created_at"),
+                result.getString("payload"));
     }
 
     /**
