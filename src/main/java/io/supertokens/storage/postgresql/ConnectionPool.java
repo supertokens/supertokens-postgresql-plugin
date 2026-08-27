@@ -240,9 +240,20 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
     }
 
     public static Connection getConnection(Start start) throws SQLException, StorageQueryException {
+        if (start.schemaMismatchMessage != null) {
+            // Start.verifySchema() ran in strict mode (schema_check_strict_mode) and found missing
+            // tables/columns: fail every query on this storage consistently with the operator-facing message
+            // until a later verification succeeds.
+            throw new SQLException(start.schemaMismatchMessage);
+        }
         if (start instanceof BulkImportProxyStorage) {
             return ((BulkImportProxyStorage) start).getTransactionConnection();
         }
+        return getNewConnection(start);
+    }
+
+    /** Bypasses the strict-mode schema-mismatch gate above so that a failed storage can be re-verified. */
+    static Connection getConnectionForSchemaVerification(Start start) throws SQLException, StorageQueryException {
         return getNewConnection(start);
     }
 

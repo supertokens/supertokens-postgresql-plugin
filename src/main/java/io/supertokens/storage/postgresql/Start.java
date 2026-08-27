@@ -53,6 +53,7 @@ import io.supertokens.pluginInterface.emailverification.exception.DuplicateEmail
 import io.supertokens.pluginInterface.emailverification.sqlStorage.EmailVerificationSQLStorage;
 import io.supertokens.pluginInterface.exceptions.DbInitException;
 import io.supertokens.pluginInterface.exceptions.InvalidConfigException;
+import io.supertokens.pluginInterface.exceptions.SchemaMismatchException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.jwt.JWTRecipeStorage;
@@ -167,6 +168,15 @@ public class Start
     private Thread shutdownHook;
 
     private boolean isBaseTenant = false;
+
+    // Startup schema verification state (see verifySchema). A successful check is cached for the lifetime of
+    // this instance. In strict mode (schema_check_strict_mode) a failed check sets schemaMismatchMessage and
+    // every ConnectionPool.getConnection(this) throws with it until a later verification succeeds - the core
+    // retries every minute (SyncCoreConfigWithDb), so the storage resumes within a minute of the migration
+    // being applied; in non-strict mode a failure is only reported (the core logs it) and just the queries
+    // that hit the missing schema fail at runtime, with a schema-mismatch hint (see QueryExecutorTemplate).
+    private volatile boolean schemaVerified = false;
+    volatile String schemaMismatchMessage = null;
 
     public ResourceDistributor getResourceDistributor() {
         return resourceDistributor;
@@ -580,6 +590,29 @@ public class Start
     @Override
     public void close() {
         ConnectionPool.close(this);
+    }
+
+    @Override
+    public void verifySchema(boolean strictMode) throws SchemaMismatchException, StorageQueryException {
+        if (schemaVerified) {
+            return;
+        }
+        try (Connection con = ConnectionPool.getConnectionForSchemaVerification(this)) {
+            SchemaVerifier.verify(this, con);
+            if (schemaMismatchMessage != null) {
+                Logging.info(this, "Database schema verification now passes; resuming queries on this storage.",
+                        true);
+            }
+            schemaMismatchMessage = null;
+            schemaVerified = true;
+        } catch (SchemaMismatchException e) {
+            if (strictMode) {
+                schemaMismatchMessage = e.getMessage();
+            }
+            throw e;
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
     }
 
     @Override
