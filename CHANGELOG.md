@@ -11,9 +11,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Implements `Storage.verifySchema()`: at startup each database is compared against the plugin's own `CREATE TABLE` definitions and missing tables/columns are reported with the `ALTER TABLE` statements to run
 - In strict mode a mismatched tenant database refuses all queries until the migration is applied — the core re-verifies every minute, so the tenant resumes without a restart; with strict mode off, mismatches are only logged and queries hitting the missing schema fail with a "Schema mismatch ... check the core error logs" message instead of a raw `column does not exist` error
 - Corrects the 9.7.0 migration note below: the `session_info` columns are a manual step, not applied automatically
-
-## [9.7.2]
-
 - Bulk import runs on a dedicated, bounded connection pool (`openBulkImportProxyStoragePool`), separate from the live pool and opened only while there is work
 - Bulk import proxy storages no longer replay the startup DDL (`CREATE TABLE/INDEX IF NOT EXISTS`) on every worker
 - Bulk import proxy connections use READ COMMITTED, support savepoints, and report `application_name = supertokens-bulk-import`
