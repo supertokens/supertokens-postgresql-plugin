@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [9.7.2]
+## [9.8.0]
 
 - Takes a per-app advisory lock in `SessionQueries.getAccessTokenSigningKeys_Transaction`, so cores rotating the
   dynamic access token signing key at the same time can no longer each create a key of their own. `FOR UPDATE` could
