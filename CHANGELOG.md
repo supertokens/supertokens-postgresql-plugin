@@ -18,6 +18,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `QueryExecutorTemplate.update(Start, ...)` auto-commit write not justified with `@AtomicAutoCommitWrite`
   (permanent) or `@UnauditedAutoCommitWrite` (debt), plus baseline tests pinning the tier counts. No behavioral
   changes.
+- Fixes duplicate JWT signing keys when concurrent transactions create an app's first key: the empty-read path now takes a per-app advisory lock and re-reads
+- JWT signing key reads no longer take `FOR UPDATE` row locks
 
 ## [9.7.1]
 
