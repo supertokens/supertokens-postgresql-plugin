@@ -14,6 +14,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Bulk import runs on a dedicated, bounded connection pool (`openBulkImportProxyStoragePool`), separate from the live pool and opened only while there is work
 - Bulk import proxy storages no longer replay the startup DDL (`CREATE TABLE/INDEX IF NOT EXISTS`) on every worker
 - Bulk import proxy connections use READ COMMITTED, support savepoints, and report `application_name = supertokens-bulk-import`
+- Adds a compile-time guard (AspectJ `declare error`, via `io.freefair.aspectj`) that fails the build on any
+  `QueryExecutorTemplate.update(Start, ...)` auto-commit write not justified with `@AtomicAutoCommitWrite`
+  (permanent) or `@UnauditedAutoCommitWrite` (debt), plus baseline tests pinning the tier counts. No behavioral
+  changes.
 
 ## [9.7.1]
 
