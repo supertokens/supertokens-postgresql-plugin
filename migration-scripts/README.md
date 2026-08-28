@@ -120,9 +120,6 @@ the PR-head plugin against fresh databases, diffs the `pg_dump`'d schemas, and
 - requires `CHANGELOG.md`'s `## [X.Y.Z]` section for this branch's version
   to contain a `### Migration` subsection that references the script.
 
-Escape hatch: add the `skip-schema-check` label to the PR (intended for old
-release branches where `core,master` no longer builds against this plugin).
-
 ## The full pipeline
 
 How a schema change travels from a plugin PR to the SuperTokens SaaS, with no
