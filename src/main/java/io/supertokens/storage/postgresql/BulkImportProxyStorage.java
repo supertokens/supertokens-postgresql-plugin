@@ -56,7 +56,9 @@ public class BulkImportProxyStorage extends Start implements BulkImportProxySQLS
             // READ COMMITTED (the core-wide default since 12.0): statement-level snapshots mean that after a
             // ROLLBACK TO SAVEPOINT a retried statement sees current data. Under REPEATABLE READ the
             // transaction would keep its original snapshot and a retry after a serialization failure could
-            // never succeed.
+            // never succeed. We set it explicitly rather than relying on the default: this proxy is only
+            // correct under READ COMMITTED, so the level is pinned here as a required invariant instead of
+            // inheriting whatever the pool or server default happens to be.
             con.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
             con.setAutoCommit(false);
             this.connection = new BulkImportProxyConnection(con);
