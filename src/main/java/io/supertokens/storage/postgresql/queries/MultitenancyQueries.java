@@ -37,6 +37,7 @@ import java.util.HashMap;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
+import io.supertokens.storage.postgresql.annotations.UnauditedAutoCommitWrite;
 
 public class MultitenancyQueries {
     public static boolean simulateErrorInAddingTenantIdInTargetStorage_forTesting = false;
@@ -218,6 +219,7 @@ public class MultitenancyQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean deleteTenantConfig(Start start, TenantIdentifier tenantIdentifier)
             throws StorageQueryException {
         try {
@@ -360,6 +362,7 @@ public class MultitenancyQueries {
         }
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void deleteTenantIdInTargetStorage(Start start, TenantIdentifier tenantIdentifier)
             throws StorageQueryException {
         try {

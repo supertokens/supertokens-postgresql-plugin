@@ -35,6 +35,8 @@ import java.util.stream.Collectors;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
+import io.supertokens.storage.postgresql.annotations.AtomicAutoCommitWrite;
+import io.supertokens.storage.postgresql.annotations.UnauditedAutoCommitWrite;
 
 
 public class OAuthQueries {
@@ -228,6 +230,7 @@ public class OAuthQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void createOrUpdateOAuthSession(Start start, AppIdentifier appIdentifier, @NotNull String gid, @NotNull String clientId,
                                                   String externalRefreshToken, String internalRefreshToken, String sessionHandle,
                                                   String jti, long exp)
@@ -280,6 +283,7 @@ public class OAuthQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void addOrUpdateOauthClient(Start start, AppIdentifier appIdentifier, String clientId, String clientSecret,
                                             boolean isClientCredentialsOnly, boolean enableRefreshTokenRotation)
             throws SQLException, StorageQueryException {
@@ -298,6 +302,7 @@ public class OAuthQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean deleteOAuthClient(Start start, String clientId, AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
         String DELETE = "DELETE FROM " + Config.getConfig(start).getOAuthClientsTable()
@@ -309,6 +314,7 @@ public class OAuthQueries {
         return numberOfRow > 0;
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean deleteOAuthSessionByGID(Start start, AppIdentifier appIdentifier, String gid)
             throws SQLException, StorageQueryException {
         String DELETE = "DELETE FROM " + Config.getConfig(start).getOAuthSessionsTable()
@@ -320,6 +326,7 @@ public class OAuthQueries {
         return numberOfRows > 0;
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean deleteOAuthSessionByClientId(Start start, AppIdentifier appIdentifier, String clientId)
             throws SQLException, StorageQueryException {
         String DELETE = "DELETE FROM " + Config.getConfig(start).getOAuthSessionsTable()
@@ -331,6 +338,7 @@ public class OAuthQueries {
         return numberOfRows > 0;
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean deleteOAuthSessionBySessionHandle(Start start, AppIdentifier appIdentifier, String sessionHandle)
             throws SQLException, StorageQueryException {
         String DELETE = "DELETE FROM " + Config.getConfig(start).getOAuthSessionsTable()
@@ -342,6 +350,7 @@ public class OAuthQueries {
         return numberOfRows > 0;
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean deleteJTIFromOAuthSession(Start start, AppIdentifier appIdentifier, String gid, String jti)
             throws SQLException, StorageQueryException {
         //jti is a comma separated list. When deleting a jti, just have to delete from the list
@@ -427,6 +436,7 @@ public class OAuthQueries {
         });
     }
 
+    @AtomicAutoCommitWrite(justification = "append-only M2M token stats row; nothing to be atomic with")
     public static void addOAuthM2MTokenForStats(Start start, AppIdentifier appIdentifier, String clientId, long iat, long exp)
             throws SQLException, StorageQueryException {
         // Bucket the token into hourly (epoch-hour) iat/exp buckets and increment a counter instead of
@@ -454,6 +464,7 @@ public class OAuthQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void addOAuthLogoutChallenge(Start start, AppIdentifier appIdentifier, String challenge, String clientId,
             String postLogoutRedirectionUri, String sessionHandle, String state, long timeCreated) throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + Config.getConfig(start).getOAuthLogoutChallengesTable() +
@@ -492,6 +503,7 @@ public class OAuthQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void deleteOAuthLogoutChallenge(Start start, AppIdentifier appIdentifier, String challenge) throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + Config.getConfig(start).getOAuthLogoutChallengesTable() +
                 " WHERE app_id = ? AND challenge = ?";
@@ -501,6 +513,7 @@ public class OAuthQueries {
         });
     }
 
+    @AtomicAutoCommitWrite(justification = "time-based cleanup sweep; single auto-commit DELETE with nothing to be atomic with")
     public static void deleteOAuthLogoutChallengesBefore(Start start, long time) throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + Config.getConfig(start).getOAuthLogoutChallengesTable() +
                 " WHERE time_created < ?";
@@ -572,6 +585,7 @@ public class OAuthQueries {
         });
     }
 
+    @AtomicAutoCommitWrite(justification = "time-based cleanup sweep; single auto-commit DELETE with nothing to be atomic with")
     public static void deleteExpiredOAuthSessions(Start start, long exp) throws SQLException, StorageQueryException {
         // delete expired M2M tokens
         String QUERY = "DELETE FROM " + Config.getConfig(start).getOAuthSessionsTable() +
@@ -582,6 +596,7 @@ public class OAuthQueries {
         });
     }
 
+    @AtomicAutoCommitWrite(justification = "time-based cleanup sweep; single auto-commit DELETE with nothing to be atomic with")
     public static void deleteExpiredOAuthM2MTokens(Start start, long exp) throws SQLException, StorageQueryException {
         // Keep draining the legacy per-token table. New tokens no longer land here, so once every row
         // has aged past the retention window (`exp` is now-31d, in epoch seconds) this is a no-op and

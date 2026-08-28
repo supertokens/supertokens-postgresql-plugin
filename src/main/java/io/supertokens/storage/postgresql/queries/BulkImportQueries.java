@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
+import io.supertokens.storage.postgresql.annotations.UnauditedAutoCommitWrite;
 
 public class BulkImportQueries {
     static String getQueryToCreateBulkImportUsersTable(Start start) {
@@ -257,6 +258,7 @@ public class BulkImportQueries {
         deleteBulkImportUsers(start, appIdentifier, bulkImportUserIds, sqlCon);
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     private static List<String> deleteBulkImportUsers(Start start, AppIdentifier appIdentifier,
                                                       @Nonnull String[] bulkImportUserIds, Connection sqlCon)
             throws SQLException, StorageQueryException {
@@ -296,6 +298,7 @@ public class BulkImportQueries {
         return update(start, query, setter, mapper);
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void updateBulkImportUserPrimaryUserId(Start start, AppIdentifier appIdentifier,
             @Nonnull String bulkImportUserId,
             @Nonnull String primaryUserId) throws SQLException, StorageQueryException {
