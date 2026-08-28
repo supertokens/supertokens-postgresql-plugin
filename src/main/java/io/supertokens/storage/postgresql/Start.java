@@ -5649,6 +5649,18 @@ public class Start
     }
 
     @Override
+    public List<AuditLogEvent> getActivityLogEntriesForApp(AppIdentifier appIdentifier, Set<String> eventTypes,
+                                                           long fromExclusiveMillis, long toInclusiveMillis, int limit)
+            throws StorageQueryException {
+        try {
+            return ActivityLogQueries.getActivityLogEntriesForApp(this, appIdentifier, eventTypes,
+                    fromExclusiveMillis, toInclusiveMillis, limit);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public void rollupLastActiveFromActivityLog_Transaction(TransactionConnection con, long windowStartMillis)
             throws StorageQueryException {
         try {
