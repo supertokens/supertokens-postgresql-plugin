@@ -7,14 +7,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.8.0]
+
 - Implements the plugin-interface activity-log storage contract: retention parameter, transactional insert, unfolded-activity check, and last-active rollup.
 - Implements `ActivityLogStorage.getActivityLogEntriesForApp`: an app-scoped, window-bounded read of the
   activity log — event-type filtered, half-open `(from, to]` on `created_at` (kept literally on the column so
   partition pruning and the BRIN index apply), ascending, `LIMIT`-capped in the query. `payload` is returned
   as JSON text (`::text`), null stays null.
-
-## [9.7.2]
-
 - Changes the `activity_log.payload` column from `TEXT` to `JSONB`. Fresh installs create it as `JSONB`;
   pre-existing `TEXT` columns are migrated automatically at startup.
 

@@ -211,6 +211,47 @@ public class ActivityLogRollupTest {
         stopProcess(process);
     }
 
+    /**
+     * The rollup cron's gate: {@code hasUnfoldedActivitySince} must return true only when there is
+     * rollup-relevant activity ({@code user_last_active} or {@code account_linking}) strictly newer than
+     * the watermark, and must ignore unrelated event types. A regression here (e.g. a typo in the
+     * hardcoded event-type literals, or drift from the names core emits) would silently disable the
+     * rollup with nothing else failing, so it is asserted directly rather than only through the fold.
+     */
+    @Test
+    public void gateSeesOnlyRollupRelevantActivityStrictlyAfterWatermark() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        Start storage = (Start) StorageLayer.getStorage(process.getProcess());
+        if (storage == null) {
+            return;
+        }
+        String log = Config.getConfig(storage).getActivityLogTable();
+
+        long base = System.currentTimeMillis();
+
+        // Nothing recorded yet.
+        assertEquals(false, storage.hasUnfoldedActivitySince(base));
+
+        // A user_last_active event at base+1000 makes the gate open for any watermark below it...
+        insertUserLastActiveEvent(storage, log, "gate-user-A", base + 1000);
+        assertEquals(true, storage.hasUnfoldedActivitySince(base));
+
+        // ...but the predicate is strict (created_at > ?): a watermark exactly on the row's timestamp
+        // must not see it, and one above it must not either.
+        assertEquals(false, storage.hasUnfoldedActivitySince(base + 1000));
+        assertEquals(false, storage.hasUnfoldedActivitySince(base + 2000));
+
+        // account_linking is the other rollup-relevant type and must also open the gate.
+        insertAccountLinkingEvent(storage, log, "gate-recipe-B", "gate-primary-B", base + 3000);
+        assertEquals(true, storage.hasUnfoldedActivitySince(base + 2000));
+
+        // An unrelated event type, even when newer than everything, must not open the gate.
+        insertActivityLogRow(storage, log, "gate-user-C", "gate-user-C", "session_created", base + 4000);
+        assertEquals(false, storage.hasUnfoldedActivitySince(base + 3000));
+
+        stopProcess(process);
+    }
+
     // ---- helpers ----
 
     private TestingProcessManager.TestingProcess startProcess() throws Exception {
