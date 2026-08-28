@@ -22,6 +22,9 @@ name: "DB schema / migration manifest check"
 #      there). Anything else must bump the minor version.
 #   4. That the CHANGELOG.md section for this branch's version documents the
 #      migration under `### Migration` and references the script.
+#
+# Escape hatch: label the PR `skip-schema-check` (e.g. PRs against old release
+# branches where core master no longer builds against this plugin).
 
 on:
   pull_request:
@@ -29,6 +32,7 @@ on:
 jobs:
   schema-migration-check:
     name: Schema change requires a matching migration script
+    if: "!contains(github.event.pull_request.labels.*.name, 'skip-schema-check')"
     runs-on: ubuntu-latest
 
     services:
