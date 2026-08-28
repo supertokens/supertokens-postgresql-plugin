@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- Migration manifest (`migration-scripts/manifest.json`) and scripts are now keyed by the full plugin version
+  (`X.Y.Z`, `vX.Y.Z.sql`); patch releases get entries too but may only add/drop indexes (`CREATE/DROP INDEX
+  CONCURRENTLY` in the script, also done by the core at startup); adds a `9.7.1` entry for the dashboard-search indexes
+- `schema-migration-check` CI now requires a manifest entry for any schema change (index-only included), enforces
+  the index-only / `CONCURRENTLY` patch rule and proves the startup backfill by booting the new core on the
+  un-migrated base schema, and requires the migration to be referenced from the release's `### Migration`
+  changelog section
+
 ## [9.8.0]
 
 - **Upgrade note: the core (12.2.0) now verifies the database schema at startup and, by default (`schema_check_strict_mode: true`), refuses to start when the base database is missing a manual migration — run the migration SQL from the CHANGELOGs (or set `schema_check_strict_mode: false`) before upgrading**
@@ -21,16 +31,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Fixes duplicate JWT signing keys when concurrent transactions create an app's first key: the empty-read path now takes a per-app advisory lock and re-reads
 - JWT signing key reads no longer take `FOR UPDATE` row locks
 - Serialises access-token signing-key rotation with a per-app advisory lock in getAccessTokenSigningKeys_Transaction, so concurrent cores no longer create duplicate keys (which caused kid mismatches at JWT consumers); FOR UPDATE is dropped as redundant.
-## [Unreleased]
-
-- Migration manifest (`migration-scripts/manifest.json`) and scripts are now keyed by the full plugin version
-  (`X.Y.Z`, `vX.Y.Z.sql`); patch releases get entries too but may only add/drop indexes (`CREATE/DROP INDEX
-  CONCURRENTLY` in the script, also done by the core at startup); adds a `9.7.1` entry for the dashboard-search indexes
-- `schema-migration-check` CI now requires a manifest entry for any schema change (index-only included), enforces
-  the index-only / `CONCURRENTLY` patch rule and proves the startup backfill by booting the new core on the
-  un-migrated base schema, and requires the migration to be referenced from the release's `### Migration`
-  changelog section
-
 ## [9.7.1]
 
 - Makes the dashboard user search (email/phone/provider) sargable: `ILIKE` scans on `account_info_value`
