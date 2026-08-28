@@ -51,8 +51,41 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
             throw new RuntimeException("Connection to refused"); // emulates exception thrown by Hikari
         }
 
-        HikariConfig config = new HikariConfig();
         PostgreSQLConfig userConfig = Config.getConfig(start);
+        HikariConfig config = newHikariConfig(userConfig, start.getUserPoolId() + "~" + start.getConnectionPoolId());
+        config.setMaximumPoolSize(userConfig.getConnectionPoolSize());
+        if (userConfig.getMinimumIdleConnections() != null) {
+            config.setMinimumIdle(userConfig.getMinimumIdleConnections());
+            config.setIdleTimeout(userConfig.getIdleConnectionTimeout());
+        }
+        try {
+            hikariDataSource = new HikariDataSource(config);
+        } catch (Exception e) {
+            throw new SQLException(e);
+        }
+
+        try {
+            try (Connection con = hikariDataSource.getConnection()) {
+                this.postConnectCallback.apply(con);
+            }
+        } catch (StorageQueryException e) {
+            // if an exception happens here, we want to set the hikariDataSource to null once again so that
+            // whenever the getConnection is called again, we want to re-attempt creation of tables and tenant
+            // entries for this storage
+            hikariDataSource.close();
+            hikariDataSource = null;
+            throw e;
+        }
+    }
+
+    /**
+     * Builds the Hikari configuration shared by every pool this plugin opens against a database described by
+     * {@code userConfig}: JDBC URL, credentials, driver properties, connection-init SQL and timeouts. Pool
+     * sizing is deliberately left to the caller — the live pool sizes itself from the user config, while the
+     * bulk import pool ({@link BulkImportConnectionPool}) is sized by the import parallelism.
+     */
+    static HikariConfig newHikariConfig(PostgreSQLConfig userConfig, String poolName) {
+        HikariConfig config = new HikariConfig();
         config.setDriverClassName("org.postgresql.Driver");
 
         String scheme = userConfig.getConnectionScheme();
@@ -83,12 +116,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         if (userConfig.getPassword() != null && !userConfig.getPassword().equals("")) {
             config.setPassword(userConfig.getPassword());
         }
-        config.setMaximumPoolSize(userConfig.getConnectionPoolSize());
         config.setConnectionTimeout(5000);
-        if (userConfig.getMinimumIdleConnections() != null) {
-            config.setMinimumIdle(userConfig.getMinimumIdleConnections());
-            config.setIdleTimeout(userConfig.getIdleConnectionTimeout());
-        }
         config.addDataSourceProperty("cachePrepStmts", "true");
         config.addDataSourceProperty("prepStmtCacheSize", "250");
         config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
@@ -101,25 +129,8 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         // SuperTokens
         // - Failed to validate connection org.mariadb.jdbc.MariaDbConnection@79af83ae (Connection.setNetworkTimeout
         // cannot be called on a closed connection). Possibly consider using a shorter maxLifetime value.
-        config.setPoolName(start.getUserPoolId() + "~" + start.getConnectionPoolId());
-        try {
-            hikariDataSource = new HikariDataSource(config);
-        } catch (Exception e) {
-            throw new SQLException(e);
-        }
-
-        try {
-            try (Connection con = hikariDataSource.getConnection()) {
-                this.postConnectCallback.apply(con);
-            }
-        } catch (StorageQueryException e) {
-            // if an exception happens here, we want to set the hikariDataSource to null once again so that
-            // whenever the getConnection is called again, we want to re-attempt creation of tables and tenant
-            // entries for this storage
-            hikariDataSource.close();
-            hikariDataSource = null;
-            throw e;
-        }
+        config.setPoolName(poolName);
+        return config;
     }
 
     private static int getTimeToWaitToInit(Start start) {
@@ -229,9 +240,20 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
     }
 
     public static Connection getConnection(Start start) throws SQLException, StorageQueryException {
+        if (start.schemaMismatchMessage != null) {
+            // Start.verifySchema() ran in strict mode (schema_check_strict_mode) and found missing
+            // tables/columns: fail every query on this storage consistently with the operator-facing message
+            // until a later verification succeeds.
+            throw new SQLException(start.schemaMismatchMessage);
+        }
         if (start instanceof BulkImportProxyStorage) {
             return ((BulkImportProxyStorage) start).getTransactionConnection();
         }
+        return getNewConnection(start);
+    }
+
+    /** Bypasses the strict-mode schema-mismatch gate above so that a failed storage can be re-verified. */
+    static Connection getConnectionForSchemaVerification(Start start) throws SQLException, StorageQueryException {
         return getNewConnection(start);
     }
 

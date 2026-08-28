@@ -42,6 +42,8 @@ import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import static java.lang.System.currentTimeMillis;
+import io.supertokens.storage.postgresql.annotations.AtomicAutoCommitWrite;
+import io.supertokens.storage.postgresql.annotations.UnauditedAutoCommitWrite;
 
 public class SessionQueries {
 
@@ -111,6 +113,7 @@ public class SessionQueries {
                 + Config.getConfig(start).getSessionInfoTable() + "(user_id, app_id);";
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void createNewSession(Start start, TenantIdentifier tenantIdentifier, String sessionHandle,
                                         String userId, String refreshTokenHash2,
                                         JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT,
@@ -282,6 +285,7 @@ public class SessionQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static int deleteSession(Start start, TenantIdentifier tenantIdentifier, String[] sessionHandles)
             throws SQLException, StorageQueryException {
         if (sessionHandles.length == 0) {
@@ -307,6 +311,7 @@ public class SessionQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void deleteSessionsOfUser(Start start, AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getSessionInfoTable()
@@ -330,6 +335,7 @@ public class SessionQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean deleteSessionsOfUser(Start start, TenantIdentifier tenantIdentifier, String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getSessionInfoTable()
@@ -432,12 +438,14 @@ public class SessionQueries {
         });
     }
 
+    @AtomicAutoCommitWrite(justification = "time-based cleanup sweep; single auto-commit DELETE with nothing to be atomic with")
     public static void deleteAllExpiredSessions(Start start) throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getSessionInfoTable() + " WHERE expires_at <= ?";
 
         update(start, QUERY, pst -> pst.setLong(1, currentTimeMillis()));
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static int updateSession(Start start, TenantIdentifier tenantIdentifier, String sessionHandle,
                                     @Nullable JsonObject sessionData,
                                     @Nullable JsonObject jwtPayload) throws SQLException, StorageQueryException {
@@ -561,6 +569,7 @@ public class SessionQueries {
         });
     }
 
+    @AtomicAutoCommitWrite(justification = "time-based cleanup sweep; single auto-commit DELETE with nothing to be atomic with")
     public static void removeAccessTokenSigningKeysBefore(Start start, AppIdentifier appIdentifier, long time)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getAccessTokenSigningKeysTable()

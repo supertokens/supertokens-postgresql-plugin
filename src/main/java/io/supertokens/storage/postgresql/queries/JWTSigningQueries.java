@@ -72,8 +72,30 @@ public class JWTSigningQueries {
     public static List<JWTSigningKeyInfo> getJWTSigningKeys_Transaction(Start start, Connection con,
                                                                         AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
+        List<JWTSigningKeyInfo> keys = selectJWTSigningKeys(start, con, appIdentifier);
+        if (keys.isEmpty()) {
+            // An empty read is (with RS256 the sole supported algorithm) always followed by the caller
+            // generating and inserting the app's first key. FOR UPDATE cannot serialize that check-then-act:
+            // it has no rows to lock on an empty result, so under READ COMMITTED two transactions both see
+            // "no keys" and both insert - the PK is (app_id, key_id), so duplicate keys for the algorithm
+            // commit fine. Serialize only this first-key path with a per-app advisory lock (a LockFailure is
+            // retried by startTransaction, as with UserMetadataQueries) and re-read, so the loser's retry
+            // sees the winner's committed key and skips its insert. Reads that find keys - every read after
+            // app setup, including per-token-issue getOrCreateAndGetKeyForAlgorithm calls - take no locks at
+            // all. If JWTSigningKey.SupportedAlgorithms ever grows a second algorithm, "empty" stops meaning
+            // "missing for the requested algorithm" and this must become algorithm-aware.
+            io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(con,
+                    appIdentifier.getAppId() + "~jwt_signing_keys");
+            keys = selectJWTSigningKeys(start, con, appIdentifier);
+        }
+        return keys;
+    }
+
+    private static List<JWTSigningKeyInfo> selectJWTSigningKeys(Start start, Connection con,
+                                                                AppIdentifier appIdentifier)
+            throws SQLException, StorageQueryException {
         String QUERY = "SELECT * FROM " + getConfig(start).getJWTSigningKeysTable()
-                + " WHERE app_id = ? ORDER BY created_at DESC FOR UPDATE";
+                + " WHERE app_id = ? ORDER BY created_at DESC";
 
         return execute(con, QUERY, pst -> pst.setString(1, appIdentifier.getAppId()), result -> {
             List<JWTSigningKeyInfo> keys = new ArrayList<>();

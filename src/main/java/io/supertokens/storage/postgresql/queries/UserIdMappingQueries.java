@@ -37,6 +37,7 @@ import java.util.Map;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
+import io.supertokens.storage.postgresql.annotations.UnauditedAutoCommitWrite;
 
 public class UserIdMappingQueries {
 
@@ -68,6 +69,7 @@ public class UserIdMappingQueries {
                 + getConfig(start).getUserIdMappingTable() + "(app_id, supertokens_user_id);";
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void createUserIdMapping(Start start, AppIdentifier appIdentifier, String superTokensUserId,
                                            String externalUserId,
                                            String externalUserIdInfo) throws SQLException, StorageQueryException {
@@ -233,6 +235,7 @@ public class UserIdMappingQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean deleteUserIdMappingWithSuperTokensUserId(Start start, AppIdentifier appIdentifier,
                                                                    String userId)
             throws SQLException, StorageQueryException {
@@ -248,6 +251,7 @@ public class UserIdMappingQueries {
         return rowUpdatedCount > 0;
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean deleteUserIdMappingWithExternalUserId(Start start, AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + Config.getConfig(start).getUserIdMappingTable() +
@@ -262,6 +266,7 @@ public class UserIdMappingQueries {
         return rowUpdatedCount > 0;
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean updateOrDeleteExternalUserIdInfoWithSuperTokensUserId(Start start,
                                                                                 AppIdentifier appIdentifier,
                                                                                 String userId,
@@ -279,6 +284,7 @@ public class UserIdMappingQueries {
         return rowUpdated > 0;
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean updateOrDeleteExternalUserIdInfoWithExternalUserId(Start start, AppIdentifier appIdentifier,
                                                                              String userId,
                                                                              @Nullable String externalUserIdInfo)

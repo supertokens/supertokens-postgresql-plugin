@@ -16,6 +16,7 @@ import java.util.Map;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
+import io.supertokens.storage.postgresql.annotations.AtomicAutoCommitWrite;
 
 public class ActiveUsersQueries {
     static String getQueryToCreateUserLastActiveTable(Start start) {
@@ -112,6 +113,7 @@ public class ActiveUsersQueries {
         });
     }
 
+    @AtomicAutoCommitWrite(justification = "idempotent last-active upsert; nothing to be atomic with")
     public static int updateUserLastActive(Start start, AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + Config.getConfig(start).getUserLastActiveTable()
@@ -129,6 +131,7 @@ public class ActiveUsersQueries {
     }
 
     @TestOnly
+    @AtomicAutoCommitWrite(justification = "idempotent last-active upsert; nothing to be atomic with")
     public static int updateUserLastActive(Start start, AppIdentifier appIdentifier, String userId, long timestamp)
             throws SQLException, StorageQueryException {
         String QUERY = "INSERT INTO " + Config.getConfig(start).getUserLastActiveTable()
