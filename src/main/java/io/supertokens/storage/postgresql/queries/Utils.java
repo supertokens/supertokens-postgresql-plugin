@@ -50,4 +50,29 @@ public class Utils {
             throw new StorageQueryException(new LockFailure());
         }
     }
+
+    /**
+     * Acquires a PostgreSQL advisory lock, waiting for it to become available. Transaction-scoped
+     * (automatically released on commit/rollback), and participates in PostgreSQL deadlock detection.
+     *
+     * <p>Unlike {@link #takeAdvisoryLock}, contention does not throw {@link LockFailure}: the statement
+     * simply queues in the database for the actual hold time of the current holder. Use this on paths where
+     * contention is expected and synchronized (e.g. every core noticing the same signing key rotation at the
+     * same moment) - the try-variant would turn each loser into a whole-transaction rollback plus a
+     * 10ms-3.26s backoff sleep in {@code startTransaction}'s retry loop, recorded as a spurious
+     * DEADLOCK_FOUND. Keep using {@link #takeAdvisoryLock} where contention is rare (per-user keys) and the
+     * retry-on-LockFailure contract is established.
+     *
+     * @param con The database connection (must be within a transaction)
+     * @param key Key for the lock (e.g., appId)
+     * @throws SQLException          If a database error occurs (including lock_timeout/socketTimeout expiry)
+     * @throws StorageQueryException If a query error occurs
+     */
+    public static void takeAdvisoryLockBlocking(Connection con, String key)
+            throws SQLException, StorageQueryException {
+        String LOCK_QUERY = "SELECT pg_advisory_xact_lock(hashtext(?))";
+        execute(con, LOCK_QUERY, pst -> {
+            pst.setString(1, key);
+        }, result -> null);
+    }
 }

@@ -20,6 +20,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   changes.
 - Fixes duplicate JWT signing keys when concurrent transactions create an app's first key: the empty-read path now takes a per-app advisory lock and re-reads
 - JWT signing key reads no longer take `FOR UPDATE` row locks
+- Serialises access-token signing-key rotation with a per-app advisory lock in getAccessTokenSigningKeys_Transaction, so concurrent cores no longer create duplicate keys (which caused kid mismatches at JWT consumers); FOR UPDATE is dropped as redundant.
 
 ## [9.7.1]
 
