@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Aligns the parameter order of the connection-taking `signUp_Transaction` (`EmailPasswordSQLStorage`, `ThirdPartySQLStorage`) and `createUser_Transaction` (`PasswordlessSQLStorage`) variants to `(TenantIdentifier, TransactionConnection, …)`, matching the plugin-interface contract. Fixes the `compileAspectj` "must override or implement a supertype method" break on `feat/activity-log`.
+
 ## [9.8.0]
 
 - **Upgrade note: the core (12.2.0) now verifies the database schema at startup and, by default (`schema_check_strict_mode: true`), refuses to start when the base database is missing a manual migration — run the migration SQL from the CHANGELOGs (or set `schema_check_strict_mode: false`) before upgrading**
