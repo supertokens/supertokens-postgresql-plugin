@@ -61,6 +61,19 @@ public class Config extends ResourceDistributor.SingletonResource {
         Logging.info(start, "Loading PostgreSQL config.", tenantIdentifier.equals(TenantIdentifier.BASE_TENANT));
     }
 
+    /**
+     * Makes {@code target} use the very same, already validated configuration as {@code source}. Used for the
+     * bulk import proxy storages, which always run against the database of the live storage they were created
+     * from and must therefore see identical connection settings, table names and prefixes.
+     */
+    public static void shareConfig(Start source, Start target) {
+        Config sourceConfig = getInstance(source);
+        if (sourceConfig == null) {
+            throw new IllegalStateException("Please call loadConfig() on the source storage first");
+        }
+        target.getResourceDistributor().setResource(RESOURCE_KEY, sourceConfig);
+    }
+
     public static String getUserPoolId(Start start) {
         // TODO: The way things are implemented right now, this function has the issue that if the user points to the
         //  same database, but with a different host (cause the db is reachable via two hosts as an example),

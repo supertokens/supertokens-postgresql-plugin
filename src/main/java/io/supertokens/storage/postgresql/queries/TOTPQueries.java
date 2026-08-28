@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Map;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
+import io.supertokens.storage.postgresql.annotations.AtomicAutoCommitWrite;
+import io.supertokens.storage.postgresql.annotations.UnauditedAutoCommitWrite;
 
 public class TOTPQueries {
     public static String getQueryToCreateUsersTable(Start start) {
@@ -208,6 +210,7 @@ public class TOTPQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static int markDeviceAsVerified(Start start, AppIdentifier appIdentifier, String userId, String deviceName)
             throws StorageQueryException, SQLException {
         String QUERY = "UPDATE " + Config.getConfig(start).getTotpUserDevicesTable()
@@ -244,6 +247,7 @@ public class TOTPQueries {
         return removedUsersCount;
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean removeUser(Start start, TenantIdentifier tenantIdentifier, String userId)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + Config.getConfig(start).getTotpUsedCodesTable()
@@ -257,6 +261,7 @@ public class TOTPQueries {
         return removedUsersCount > 0;
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static int updateDeviceName(Start start, AppIdentifier appIdentifier, String userId, String oldDeviceName,
                                        String newDeviceName)
             throws StorageQueryException, SQLException {
@@ -393,6 +398,7 @@ public class TOTPQueries {
         });
     }
 
+    @AtomicAutoCommitWrite(justification = "time-based cleanup sweep; single auto-commit DELETE with nothing to be atomic with")
     public static int removeExpiredCodes(Start start, TenantIdentifier tenantIdentifier, long expiredBefore)
             throws StorageQueryException, SQLException {
         String QUERY = "DELETE FROM " + Config.getConfig(start).getTotpUsedCodesTable()

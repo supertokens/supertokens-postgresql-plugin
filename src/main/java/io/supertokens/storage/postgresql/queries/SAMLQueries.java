@@ -36,6 +36,8 @@ import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import io.supertokens.storage.postgresql.utils.Utils;
+import io.supertokens.storage.postgresql.annotations.AtomicAutoCommitWrite;
+import io.supertokens.storage.postgresql.annotations.UnauditedAutoCommitWrite;
 
 public class SAMLQueries {
     public static String getQueryToCreateSAMLClientsTable(Start start) {
@@ -138,6 +140,7 @@ public class SAMLQueries {
                 + Config.getConfig(start).getSAMLClaimsTable() + " (expires_at)";
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void saveRelayStateInfo(Start start, TenantIdentifier tenantIdentifier,
                                           String relayState, String clientId, String state, String redirectURI, long relayStateValidity)
             throws StorageQueryException, SQLException {
@@ -181,6 +184,7 @@ public class SAMLQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void saveSAMLClaims(Start start, TenantIdentifier tenantIdentifier, String clientId, String code, String claimsJson, long claimsValidity)
             throws StorageQueryException, SQLException {
         String QUERY = "INSERT INTO " + getConfig(start).getSAMLClaimsTable()
@@ -199,6 +203,7 @@ public class SAMLQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static SAMLClaimsInfo getSAMLClaimsAndRemoveCode(Start start, TenantIdentifier tenantIdentifier, String code)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT client_id, claims FROM " + getConfig(start).getSAMLClaimsTable()
@@ -238,6 +243,7 @@ public class SAMLQueries {
         return result;
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static SAMLClient createOrUpdateSAMLClient(
             Start start,
             TenantIdentifier tenantIdentifier,
@@ -393,6 +399,7 @@ public class SAMLQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean removeSAMLClient(Start start, TenantIdentifier tenantIdentifier, String clientId)
             throws StorageQueryException, SQLException {
         String QUERY = "DELETE FROM " + getConfig(start).getSAMLClientsTable()
@@ -407,6 +414,7 @@ public class SAMLQueries {
         return rowsAffected > 0;
     }
 
+    @AtomicAutoCommitWrite(justification = "time-based cleanup sweep; single auto-commit DELETE with nothing to be atomic with")
     public static void removeExpiredSAMLCodesAndRelayStates(Start start) throws StorageQueryException, SQLException {
         long now = System.currentTimeMillis();
 
