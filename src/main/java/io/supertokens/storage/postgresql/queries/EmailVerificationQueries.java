@@ -36,6 +36,8 @@ import java.util.*;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.*;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import static java.lang.System.currentTimeMillis;
+import io.supertokens.storage.postgresql.annotations.AtomicAutoCommitWrite;
+import io.supertokens.storage.postgresql.annotations.UnauditedAutoCommitWrite;
 
 public class EmailVerificationQueries {
 
@@ -97,6 +99,7 @@ public class EmailVerificationQueries {
                 + Config.getConfig(start).getEmailVerificationTokensTable() + "(token_expiry);";
     }
 
+    @AtomicAutoCommitWrite(justification = "time-based cleanup sweep; single auto-commit DELETE with nothing to be atomic with")
     public static void deleteExpiredEmailVerificationTokens(Start start) throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTokensTable() + " WHERE token_expiry < ?";
 
@@ -190,6 +193,7 @@ public class EmailVerificationQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void addEmailVerificationToken(Start start, TenantIdentifier tenantIdentifier, String userId,
                                                  String tokenHash, long expiry,
                                                  String email) throws SQLException, StorageQueryException {
@@ -448,6 +452,7 @@ public class EmailVerificationQueries {
         }
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean deleteUserInfo(Start start, TenantIdentifier tenantIdentifier, String userId)
             throws StorageQueryException, SQLException {
         String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTokensTable()
@@ -461,6 +466,7 @@ public class EmailVerificationQueries {
         return numRows > 0;
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void unverifyEmail(Start start, AppIdentifier appIdentifier, String userId, String email)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTable()
@@ -473,6 +479,7 @@ public class EmailVerificationQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void revokeAllTokens(Start start, TenantIdentifier tenantIdentifier, String userId, String email)
             throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTokensTable()

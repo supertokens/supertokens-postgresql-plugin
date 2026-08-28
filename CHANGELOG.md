@@ -9,6 +9,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [9.8.0]
 
+- **Upgrade note: the core (12.2.0) now verifies the database schema at startup and, by default (`schema_check_strict_mode: true`), refuses to start when the base database is missing a manual migration — run the migration SQL from the CHANGELOGs (or set `schema_check_strict_mode: false`) before upgrading**
+- Implements `Storage.verifySchema()`: at startup each database is compared against the plugin's own `CREATE TABLE` definitions and missing tables/columns are reported with the `ALTER TABLE` statements to run
+- In strict mode a mismatched tenant database refuses all queries until the migration is applied — the core re-verifies every minute, so the tenant resumes without a restart; with strict mode off, mismatches are only logged and queries hitting the missing schema fail with a "Schema mismatch ... check the core error logs" message instead of a raw `column does not exist` error
+- Corrects the 9.7.0 migration note below: the `session_info` columns are a manual step, not applied automatically
+- Bulk import runs on a dedicated, bounded connection pool (`openBulkImportProxyStoragePool`), separate from the live pool and opened only while there is work
+- Bulk import proxy storages no longer replay the startup DDL (`CREATE TABLE/INDEX IF NOT EXISTS`) on every worker
+- Bulk import proxy connections use READ COMMITTED, support savepoints, and report `application_name = supertokens-bulk-import`
+- Adds a compile-time guard (AspectJ `declare error`, via `io.freefair.aspectj`) that fails the build on any
+  `QueryExecutorTemplate.update(Start, ...)` auto-commit write not justified with `@AtomicAutoCommitWrite`
+  (permanent) or `@UnauditedAutoCommitWrite` (debt), plus baseline tests pinning the tier counts. No behavioral
+  changes.
+- Fixes duplicate JWT signing keys when concurrent transactions create an app's first key: the empty-read path now takes a per-app advisory lock and re-reads
+- JWT signing key reads no longer take `FOR UPDATE` row locks
+- Serialises access-token signing-key rotation with a per-app advisory lock in getAccessTokenSigningKeys_Transaction, so concurrent cores no longer create duplicate keys (which caused kid mismatches at JWT consumers); FOR UPDATE is dropped as redundant.
 - Implements the plugin-interface activity-log storage contract: retention parameter, transactional insert, unfolded-activity check, and last-active rollup.
 - Implements the connection-taking count-affecting write variants from plugin-interface#216: `signUp_Transaction` on `EmailPasswordSQLStorage` and `ThirdPartySQLStorage`, `createUser_Transaction` on `PasswordlessSQLStorage`, and `removeUserIdFromTenant_Transaction` on `MultitenancySQLStorage`. Each existing auto-commit method is refactored into a thin wrapper over the new variant, so callers can commit the mutation and its lifecycle audit event on one connection.
 - Implements `ActivityLogStorage.getActivityLogEntriesForApp`: an app-scoped, window-bounded read of the
@@ -86,11 +100,17 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_recipe_user_tenants_search_tparty ON
 
 ### Migration
 
-Make sure the core is already upgraded to the version that supports plugin interface 9.0 before migrating.
+**Manual step required — NOT applied automatically.** The plugin only creates tables that do not exist yet; it never
+adds columns to an existing table. On any database created by an earlier plugin version, run the following before
+starting core 12.1.x (from plugin 9.7.2 / core 12.1.2 the core detects the missing columns at startup: with the default
+`schema_check_strict_mode: true` it **refuses to start** until they exist, with `false` it logs them and session
+APIs fail with a schema-mismatch message pointing at the logs; 9.7.0/9.7.1 start silently and fail every session
+API with `column prev_refresh_token_hash_2 does not exist`). Both columns are nullable;
+no backfill is required.
 
 ```sql
-ALTER TABLE session_info ADD COLUMN prev_refresh_token_hash_2 VARCHAR(128);
-ALTER TABLE session_info ADD COLUMN refresh_token_rotated_at BIGINT;
+ALTER TABLE session_info ADD COLUMN IF NOT EXISTS prev_refresh_token_hash_2 VARCHAR(128);
+ALTER TABLE session_info ADD COLUMN IF NOT EXISTS refresh_token_rotated_at BIGINT;
 ```
 
 

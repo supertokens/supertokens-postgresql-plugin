@@ -360,6 +360,75 @@ public class GeneralQueries {
                 + "(recipe_id, app_id, primary_or_recipe_user_time_joined ASC, primary_or_recipe_user_id DESC);";
     }
 
+    /**
+     * Every {@code CREATE TABLE} statement this plugin version owns, in the same order as
+     * {@link #createTablesIfNotExists}. Tables only: no indexes and no activity-log partitions.
+     *
+     * <p>This is the single source of truth for the startup schema verification
+     * ({@link io.supertokens.storage.postgresql.SchemaVerifier}): the expected columns are parsed out of these
+     * statements, so adding a column to a {@code getQueryToCreate*Table} method automatically makes the core
+     * refuse to start against a database that does not have it. When adding a table here, add it to
+     * {@link #createTablesIfNotExists} too (and vice versa) - {@code SchemaVerificationTest} asserts the two agree
+     * with a fresh database.
+     */
+    public static List<String> getAllCreateTableQueries(Start start) {
+        List<String> ddl = new ArrayList<>();
+        ddl.add(getQueryToCreateAppsTable(start));
+        ddl.add(getQueryToCreateTenantsTable(start));
+        ddl.add(getQueryToCreateKeyValueTable(start));
+        ddl.add(getQueryToCreateAppIdToUserIdTable(start));
+        ddl.add(getQueryToCreateUsersTable(start));
+        ddl.add(ActiveUsersQueries.getQueryToCreateUserLastActiveTable(start));
+        ddl.add(getQueryToCreateAccessTokenSigningKeysTable(start));
+        ddl.add(getQueryToCreateSessionInfoTable(start));
+        ddl.add(MultitenancyQueries.getQueryToCreateTenantConfigsTable(start));
+        ddl.add(MultitenancyQueries.getQueryToCreateTenantThirdPartyProvidersTable(start));
+        ddl.add(MultitenancyQueries.getQueryToCreateFirstFactorsTable(start));
+        ddl.add(MultitenancyQueries.getQueryToCreateRequiredSecondaryFactorsTable(start));
+        ddl.add(MultitenancyQueries.getQueryToCreateTenantThirdPartyProviderClientsTable(start));
+        ddl.add(EmailPasswordQueries.getQueryToCreateUsersTable(start));
+        ddl.add(EmailPasswordQueries.getQueryToCreateEmailPasswordUserToTenantTable(start));
+        ddl.add(getQueryToCreatePasswordResetTokensTable(start));
+        ddl.add(getQueryToCreateEmailVerificationTable(start));
+        ddl.add(getQueryToCreateEmailVerificationTokensTable(start));
+        ddl.add(ThirdPartyQueries.getQueryToCreateUsersTable(start));
+        ddl.add(ThirdPartyQueries.getQueryToCreateThirdPartyUserToTenantTable(start));
+        ddl.add(getQueryToCreateJWTSigningTable(start));
+        ddl.add(PasswordlessQueries.getQueryToCreateUsersTable(start));
+        ddl.add(PasswordlessQueries.getQueryToCreatePasswordlessUserToTenantTable(start));
+        ddl.add(getQueryToCreateDevicesTable(start));
+        ddl.add(getQueryToCreateCodesTable(start));
+        ddl.add(getQueryToCreateUserMetadataTable(start));
+        ddl.add(UserRolesQueries.getQueryToCreateRolesTable(start));
+        ddl.add(UserRolesQueries.getQueryToCreateRolePermissionsTable(start));
+        ddl.add(UserRolesQueries.getQueryToCreateUserRolesTable(start));
+        ddl.add(UserIdMappingQueries.getQueryToCreateUserIdMappingTable(start));
+        ddl.add(DashboardQueries.getQueryToCreateDashboardUsersTable(start));
+        ddl.add(DashboardQueries.getQueryToCreateDashboardUserSessionsTable(start));
+        ddl.add(TOTPQueries.getQueryToCreateUsersTable(start));
+        ddl.add(TOTPQueries.getQueryToCreateUserDevicesTable(start));
+        ddl.add(TOTPQueries.getQueryToCreateUsedCodesTable(start));
+        ddl.add(BulkImportQueries.getQueryToCreateBulkImportUsersTable(start));
+        ddl.add(OAuthQueries.getQueryToCreateOAuthClientTable(start));
+        ddl.add(OAuthQueries.getQueryToCreateOAuthSessionsTable(start));
+        ddl.add(OAuthQueries.getQueryToCreateOAuthM2MTokensTable(start));
+        ddl.add(OAuthQueries.getQueryToCreateOAuthM2MTokenStatsTable(start));
+        ddl.add(OAuthQueries.getQueryToCreateOAuthLogoutChallengesTable(start));
+        ddl.add(WebAuthNQueries.getQueryToCreateWebAuthNUsersTable(start));
+        ddl.add(WebAuthNQueries.getQueryToCreateWebAuthNUsersToTenantTable(start));
+        ddl.add(WebAuthNQueries.getQueryToCreateWebAuthNGeneratedOptionsTable(start));
+        ddl.add(WebAuthNQueries.getQueryToCreateWebAuthNCredentialsTable(start));
+        ddl.add(WebAuthNQueries.getQueryToCreateWebAuthNAccountRecoveryTokenTable(start));
+        ddl.add(SAMLQueries.getQueryToCreateSAMLClientsTable(start));
+        ddl.add(SAMLQueries.getQueryToCreateSAMLRelayStateTable(start));
+        ddl.add(SAMLQueries.getQueryToCreateSAMLClaimsTable(start));
+        ddl.add(AccountInfoQueries.getQueryToCreateRecipeUserAccountInfosTable(start));
+        ddl.add(AccountInfoQueries.getQueryToCreateRecipeUserTenantsTable(start));
+        ddl.add(AccountInfoQueries.getQueryToCreatePrimaryUserTenantsTable(start));
+        ddl.add(ActivityLogQueries.getQueryToCreateActivityLogTable(start));
+        return ddl;
+    }
+
     public static void createTablesIfNotExists(Start start, Connection con) throws SQLException, StorageQueryException {
         int numberOfRetries = 0;
         boolean retry = true;

@@ -50,6 +50,8 @@ import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import static io.supertokens.storage.postgresql.config.Config.getConfig;
 import io.supertokens.storage.postgresql.utils.Utils;
+import io.supertokens.storage.postgresql.annotations.AtomicAutoCommitWrite;
+import io.supertokens.storage.postgresql.annotations.UnauditedAutoCommitWrite;
 
 public class EmailPasswordQueries {
     static String getQueryToCreateUsersTable(Start start) {
@@ -135,6 +137,7 @@ public class EmailPasswordQueries {
                 + Config.getConfig(start).getPasswordResetTokensTable() + "(token_expiry);";
     }
 
+    @AtomicAutoCommitWrite(justification = "time-based cleanup sweep; single auto-commit DELETE with nothing to be atomic with")
     public static void deleteExpiredPasswordResetTokens(Start start) throws SQLException, StorageQueryException {
         String QUERY = "DELETE FROM " + getConfig(start).getPasswordResetTokensTable() + " WHERE token_expiry < ?";
 
@@ -259,6 +262,7 @@ public class EmailPasswordQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void addPasswordResetToken(Start start, AppIdentifier appIdentifier, String userId, String tokenHash,
                                              long expiry, String email)
             throws SQLException, StorageQueryException {
