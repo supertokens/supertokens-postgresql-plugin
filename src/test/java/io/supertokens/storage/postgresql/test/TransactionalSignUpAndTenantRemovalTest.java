@@ -223,7 +223,7 @@ public class TransactionalSignUpAndTenantRemovalTest {
             Start storage = (Start) StorageLayer.getStorage(process.getProcess());
             long now = System.currentTimeMillis();
             assertRollbackLeavesNoRows(storage, "ep-" + mode, (con, userId) ->
-                    storage.signUp_Transaction(con, PUBLIC, userId, userId + "@example.com", "hash", now));
+                    storage.signUp_Transaction(PUBLIC, con, userId, userId + "@example.com", "hash", now));
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
         }
@@ -236,7 +236,7 @@ public class TransactionalSignUpAndTenantRemovalTest {
             Start storage = (Start) StorageLayer.getStorage(process.getProcess());
             long now = System.currentTimeMillis();
             assertRollbackLeavesNoRows(storage, "tp-" + mode, (con, userId) ->
-                    storage.signUp_Transaction(con, PUBLIC, userId, userId + "@example.com",
+                    storage.signUp_Transaction(PUBLIC, con, userId, userId + "@example.com",
                             new LoginMethod.ThirdParty("google", "tpid-" + userId), now));
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -251,10 +251,10 @@ public class TransactionalSignUpAndTenantRemovalTest {
             long now = System.currentTimeMillis();
             // with email
             assertRollbackLeavesNoRows(storage, "ple-" + mode, (con, userId) ->
-                    storage.createUser_Transaction(con, PUBLIC, userId, userId + "@example.com", null, now));
+                    storage.createUser_Transaction(PUBLIC, con, userId, userId + "@example.com", null, now));
             // with phone number
             assertRollbackLeavesNoRows(storage, "plp-" + mode, (con, userId) ->
-                    storage.createUser_Transaction(con, PUBLIC, userId, null, "+1000" + Math.abs(userId.hashCode()),
+                    storage.createUser_Transaction(PUBLIC, con, userId, null, "+1000" + Math.abs(userId.hashCode()),
                             now));
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
@@ -272,7 +272,7 @@ public class TransactionalSignUpAndTenantRemovalTest {
         AuthRecipeUserInfo created = (AuthRecipeUserInfo) storage.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try {
-                AuthRecipeUserInfo u = storage.signUp_Transaction(con, PUBLIC, "commit-user",
+                AuthRecipeUserInfo u = storage.signUp_Transaction(PUBLIC, con, "commit-user",
                         "commit@example.com", "hash", now);
                 sqlCon.commit();
                 return u;
@@ -323,13 +323,13 @@ public class TransactionalSignUpAndTenantRemovalTest {
         assertEquals(DuplicateUserIdException.class,
                 autoCommitExceptionClass(() -> storage.signUp(PUBLIC, "ep1", "other@example.com", "hash", now)));
         assertThrowsThenRollbackWorks(storage, DuplicateUserIdException.class, con ->
-                storage.signUp_Transaction(con, PUBLIC, "ep1", "other@example.com", "hash", now));
+                storage.signUp_Transaction(PUBLIC, con, "ep1", "other@example.com", "hash", now));
 
         // duplicate email
         assertEquals(DuplicateEmailException.class,
                 autoCommitExceptionClass(() -> storage.signUp(PUBLIC, "ep2", "ep1@example.com", "hash", now)));
         assertThrowsThenRollbackWorks(storage, DuplicateEmailException.class, con ->
-                storage.signUp_Transaction(con, PUBLIC, "ep2", "ep1@example.com", "hash", now));
+                storage.signUp_Transaction(PUBLIC, con, "ep2", "ep1@example.com", "hash", now));
 
         // the failed attempts left nothing behind
         assertEquals(1, storage.getUsersCount(PUBLIC, new RECIPE_ID[]{RECIPE_ID.EMAIL_PASSWORD}));
@@ -361,14 +361,14 @@ public class TransactionalSignUpAndTenantRemovalTest {
                         new LoginMethod.ThirdParty("google", "g-2"), now)));
         assertThrowsThenRollbackWorks(storage,
                 io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException.class, con ->
-                        storage.signUp_Transaction(con, PUBLIC, "tp1", "tp1@example.com",
+                        storage.signUp_Transaction(PUBLIC, con, "tp1", "tp1@example.com",
                                 new LoginMethod.ThirdParty("google", "g-2"), now));
 
         // duplicate third party user (same provider + third-party user id, different user id)
         assertEquals(DuplicateThirdPartyUserException.class,
                 autoCommitExceptionClass(() -> storage.signUp(PUBLIC, "tp2", "tp1@example.com", tp, now)));
         assertThrowsThenRollbackWorks(storage, DuplicateThirdPartyUserException.class, con ->
-                storage.signUp_Transaction(con, PUBLIC, "tp2", "tp1@example.com", tp, now));
+                storage.signUp_Transaction(PUBLIC, con, "tp2", "tp1@example.com", tp, now));
 
         assertEquals(1, storage.getUsersCount(PUBLIC, new RECIPE_ID[]{RECIPE_ID.THIRD_PARTY}));
 
@@ -397,19 +397,19 @@ public class TransactionalSignUpAndTenantRemovalTest {
         assertEquals(DuplicateUserIdException.class,
                 autoCommitExceptionClass(() -> storage.createUser(PUBLIC, "pl1", "new@example.com", null, now)));
         assertThrowsThenRollbackWorks(storage, DuplicateUserIdException.class, con ->
-                storage.createUser_Transaction(con, PUBLIC, "pl1", "new@example.com", null, now));
+                storage.createUser_Transaction(PUBLIC, con, "pl1", "new@example.com", null, now));
 
         // duplicate email
         assertEquals(DuplicateEmailException.class,
                 autoCommitExceptionClass(() -> storage.createUser(PUBLIC, "pl2", "pl1@example.com", null, now)));
         assertThrowsThenRollbackWorks(storage, DuplicateEmailException.class, con ->
-                storage.createUser_Transaction(con, PUBLIC, "pl2", "pl1@example.com", null, now));
+                storage.createUser_Transaction(PUBLIC, con, "pl2", "pl1@example.com", null, now));
 
         // duplicate phone number
         assertEquals(DuplicatePhoneNumberException.class,
                 autoCommitExceptionClass(() -> storage.createUser(PUBLIC, "pl3", null, "+10000001", now)));
         assertThrowsThenRollbackWorks(storage, DuplicatePhoneNumberException.class, con ->
-                storage.createUser_Transaction(con, PUBLIC, "pl3", null, "+10000001", now));
+                storage.createUser_Transaction(PUBLIC, con, "pl3", null, "+10000001", now));
 
         assertEquals(2, storage.getUsersCount(PUBLIC, new RECIPE_ID[]{RECIPE_ID.PASSWORDLESS}));
 

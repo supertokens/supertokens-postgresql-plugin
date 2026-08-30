@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Aligns the connection-taking `signUp_Transaction` and `createUser_Transaction` variants to the plugin-interface `(TenantIdentifier, TransactionConnection, …)` parameter order, fixing the `compileAspectj` override break
+
 ## [9.8.0]
 
 - **Upgrade note: the core (12.2.0) now verifies the database schema at startup and, by default (`schema_check_strict_mode: true`), refuses to start when the base database is missing a manual migration — run the migration SQL from the CHANGELOGs (or set `schema_check_strict_mode: false`) before upgrading**

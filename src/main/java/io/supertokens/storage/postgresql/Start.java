@@ -1235,7 +1235,7 @@ public class Start
     }
 
     @Override
-    public AuthRecipeUserInfo signUp_Transaction(TransactionConnection con, TenantIdentifier tenantIdentifier,
+    public AuthRecipeUserInfo signUp_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                                  String id, String email, String passwordHash, long timeJoined)
             throws StorageQueryException, DuplicateUserIdException, DuplicateEmailException,
             TenantOrAppNotFoundException {
@@ -1821,7 +1821,7 @@ public class Start
     }
 
     @Override
-    public AuthRecipeUserInfo signUp_Transaction(TransactionConnection con, TenantIdentifier tenantIdentifier,
+    public AuthRecipeUserInfo signUp_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                                  String id, String email, LoginMethod.ThirdParty thirdParty,
                                                  long timeJoined)
             throws StorageQueryException, io.supertokens.pluginInterface.thirdparty.exception.DuplicateUserIdException,
@@ -2452,7 +2452,7 @@ public class Start
     }
 
     @Override
-    public AuthRecipeUserInfo createUser_Transaction(TransactionConnection con, TenantIdentifier tenantIdentifier,
+    public AuthRecipeUserInfo createUser_Transaction(TenantIdentifier tenantIdentifier, TransactionConnection con,
                                                      String id, @javax.annotation.Nullable String email,
                                                      @javax.annotation.Nullable String phoneNumber, long timeJoined)
             throws StorageQueryException, DuplicateEmailException, DuplicatePhoneNumberException,
