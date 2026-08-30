@@ -7,7 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- Aligns the parameter order of the connection-taking `signUp_Transaction` (`EmailPasswordSQLStorage`, `ThirdPartySQLStorage`) and `createUser_Transaction` (`PasswordlessSQLStorage`) variants to `(TenantIdentifier, TransactionConnection, …)`, matching the plugin-interface contract. Fixes the `compileAspectj` "must override or implement a supertype method" break on `feat/activity-log`.
+- Aligns the connection-taking `signUp_Transaction` and `createUser_Transaction` variants to the plugin-interface `(TenantIdentifier, TransactionConnection, …)` parameter order, fixing the `compileAspectj` override break
 
 ## [9.8.0]
 
