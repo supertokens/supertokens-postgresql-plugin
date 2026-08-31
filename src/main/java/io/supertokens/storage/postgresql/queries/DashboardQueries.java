@@ -32,6 +32,8 @@ import io.supertokens.storage.postgresql.ResultSetValueExtractor;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
+import io.supertokens.storage.postgresql.annotations.AtomicAutoCommitWrite;
+import io.supertokens.storage.postgresql.annotations.UnauditedAutoCommitWrite;
 
 public class DashboardQueries {
 
@@ -90,6 +92,7 @@ public class DashboardQueries {
                 + Config.getConfig(start).getDashboardSessionsTable() + "(app_id, user_id);";
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void createDashboardUser(Start start, AppIdentifier appIdentifier, String userId, String email,
                                            String passwordHash, long timeJoined)
             throws SQLException, StorageQueryException {
@@ -104,6 +107,7 @@ public class DashboardQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean deleteDashboardUserWithUserId(Start start, AppIdentifier appIdentifier, String userId)
             throws SQLException, StorageQueryException {
 
@@ -173,6 +177,7 @@ public class DashboardQueries {
         return rowsUpdated > 0;
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void createDashboardSession(Start start, AppIdentifier appIdentifier, String userId, String sessionId,
                                               long timeCreated,
                                               long expiry) throws SQLException, StorageQueryException {
@@ -215,6 +220,7 @@ public class DashboardQueries {
                 new DashboardSessionInfoResultExtractor());
     }
 
+    @AtomicAutoCommitWrite(justification = "time-based cleanup sweep; single auto-commit DELETE with nothing to be atomic with")
     public static void deleteExpiredSessions(Start start) throws SQLException, StorageQueryException {
         long currentTimeMillis = System.currentTimeMillis();
         String QUERY = "DELETE FROM " + Config.getConfig(start).getDashboardSessionsTable()
@@ -238,6 +244,7 @@ public class DashboardQueries {
         });
     }
 
+    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static boolean deleteDashboardUserSessionWithSessionId(Start start, AppIdentifier appIdentifier,
                                                                   String sessionId)
             throws SQLException, StorageQueryException {

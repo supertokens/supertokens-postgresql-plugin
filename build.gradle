@@ -1,9 +1,26 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        // Applied from its Maven Central artifact (rather than the plugins {} block)
+        // so this stays self-contained in the plugin's own build: the plugins {}
+        // marker would otherwise need a pluginManagement repositories block in the
+        // multi-repo root settings.gradle, which this repository does not own.
+        classpath 'io.freefair.gradle:aspectj-plugin:8.13.1'
+    }
+}
+
 plugins {
     id 'java-library'
     id 'java-test-fixtures'
 }
 
-version = "9.7.1"
+// Compile the main sources with ajc so that AuditEnforcementAspect's
+// `declare error` is enforced at build time (see that aspect for the rule).
+apply plugin: 'io.freefair.aspectj'
+
+version = "9.8.0"
 
 repositories {
     mavenCentral()
@@ -12,6 +29,14 @@ repositories {
 }
 
 dependencies {
+    // aspectjrt is needed only to compile AuditEnforcementAspect and to run ajc
+    // over each source set; the aspect declares only `declare error` (no runtime
+    // advice), so it is kept off every runtime classpath (compile-only in all
+    // three source sets rather than `implementation`).
+    compileOnly 'org.aspectj:aspectjrt:1.9.22.1'
+    testCompileOnly 'org.aspectj:aspectjrt:1.9.22.1'
+    testFixturesCompileOnly 'org.aspectj:aspectjrt:1.9.22.1'
+
     compileOnly project(":supertokens-plugin-interface")
     testImplementation project(":supertokens-plugin-interface")
     testImplementation project(":supertokens-core")
