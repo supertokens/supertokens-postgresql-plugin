@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- Creates whole-table extended statistics for the two dashboard-search index expressions (email-domain
+  and provider) and runs a one-time `ANALYZE` on `recipe_user_tenants`, so the planner stops misestimating
+  those search arms and rejecting the partial indexes on large tables (PostgreSQL >= 14; skipped on older versions).
+
+### Migration
+
+Applied automatically at startup. On large deployments already running 9.7.x, run it ahead of the
+upgrade so the first dashboard search doesn't wait on it (safe to run online; `ANALYZE` samples the
+table, it does not scan it):
+
+```sql
+CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_domain
+  ON (lower(split_part(account_info_value, '@', 2))) FROM recipe_user_tenants;
+CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_tparty
+  ON (lower(account_info_value)) FROM recipe_user_tenants;
+ANALYZE recipe_user_tenants;
+```
+
 ## [9.8.0]
 
 - **Upgrade note: the core (12.2.0) now verifies the database schema at startup and, by default (`schema_check_strict_mode: true`), refuses to start when the base database is missing a manual migration — run the migration SQL from the CHANGELOGs (or set `schema_check_strict_mode: false`) before upgrading**
