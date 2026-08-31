@@ -162,6 +162,45 @@ public class ActivityLogRollupTest {
     }
 
     /**
+     * The fold must never resurrect a projection row for an app that no longer exists. {@code activity_log}
+     * rows are intentionally retained after an app is deleted (the table has no app foreign key), while
+     * {@code user_last_active} cascades on app delete via its {@code app_id -> apps} FK. Without a guard the
+     * fold re-inserts the retained events and the INSERT violates that FK — exactly the failure that
+     * surfaced across the suite once the test DB stopped being reset. The {@code EXISTS (apps)} guard
+     * confines the fold to still-existing apps: an event whose app_id is absent from {@code apps} is
+     * skipped (no FK violation, no resurrected row) while a concurrent event for an existing app still
+     * folds normally.
+     */
+    @Test
+    public void foldSkipsActivityForAppMissingFromApps() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        Start storage = (Start) StorageLayer.getStorage(process.getProcess());
+        if (storage == null) {
+            return;
+        }
+        String log = Config.getConfig(storage).getActivityLogTable();
+
+        long base = System.currentTimeMillis();
+        String existingAppUser = "rollup-app-guard-existing";
+        String deletedAppUser = "rollup-app-guard-deleted";
+        // "public" is present in the apps table; this id never is. activity_log has no app FK, so the row
+        // inserts fine, standing in for a deleted app whose activity_log rows still linger.
+        String missingAppId = "app-that-was-deleted";
+
+        insertUserLastActiveEventForApp(storage, log, APP_ID, existingAppUser, base + 1000);
+        insertUserLastActiveEventForApp(storage, log, missingAppId, deletedAppUser, base + 2000);
+
+        // Without the guard this fold would throw a user_last_active -> apps FK violation on the missing app.
+        runRollup(storage, base - 10000);
+
+        // The existing app's user is folded; the missing app's user is skipped (no resurrected row).
+        assertEquals(Long.valueOf(base + 1000), getLastActiveForApp(storage, APP_ID, existingAppUser));
+        assertNull(getLastActiveForApp(storage, missingAppId, deletedAppUser));
+
+        stopProcess(process);
+    }
+
+    /**
      * A transactional audit write plus a mutation on one connection, with a failure injected after the
      * write, must roll back together — neither the audit row nor the mutation survives.
      */
@@ -246,7 +285,7 @@ public class ActivityLogRollupTest {
         assertEquals(true, storage.hasUnfoldedActivitySince(base + 2000));
 
         // An unrelated event type, even when newer than everything, must not open the gate.
-        insertActivityLogRow(storage, log, "gate-user-C", "gate-user-C", "session_created", base + 4000);
+        insertActivityLogRow(storage, log, APP_ID, "gate-user-C", "gate-user-C", "session_created", base + 4000);
         assertEquals(false, storage.hasUnfoldedActivitySince(base + 3000));
 
         stopProcess(process);
@@ -301,18 +340,27 @@ public class ActivityLogRollupTest {
         });
     }
 
+    private Long getLastActiveForApp(Start storage, String appId, String userId) throws Exception {
+        return ActiveUsersQueries.getLastActiveByUserId(storage, new AppIdentifier(null, appId), userId);
+    }
+
     private void insertUserLastActiveEvent(Start storage, String table, String userId, long createdAt)
             throws Exception {
         // For a user_last_active event the user is its own primary_or_recipe_user_id.
-        insertActivityLogRow(storage, table, userId, userId, "user_last_active", createdAt);
+        insertActivityLogRow(storage, table, APP_ID, userId, userId, "user_last_active", createdAt);
+    }
+
+    private void insertUserLastActiveEventForApp(Start storage, String table, String appId, String userId,
+                                                 long createdAt) throws Exception {
+        insertActivityLogRow(storage, table, appId, userId, userId, "user_last_active", createdAt);
     }
 
     private void insertAccountLinkingEvent(Start storage, String table, String recipeUserId,
                                            String primaryUserId, long createdAt) throws Exception {
-        insertActivityLogRow(storage, table, recipeUserId, primaryUserId, "account_linking", createdAt);
+        insertActivityLogRow(storage, table, APP_ID, recipeUserId, primaryUserId, "account_linking", createdAt);
     }
 
-    private void insertActivityLogRow(Start storage, String table, String recipeUserId,
+    private void insertActivityLogRow(Start storage, String table, String appId, String recipeUserId,
                                       String primaryOrRecipeUserId, String eventType, long createdAt)
             throws Exception {
         String query = "INSERT INTO " + table
@@ -321,7 +369,7 @@ public class ActivityLogRollupTest {
         storage.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try (PreparedStatement pst = sqlCon.prepareStatement(query)) {
-                pst.setString(1, APP_ID);
+                pst.setString(1, appId);
                 pst.setString(2, recipeUserId);
                 pst.setString(3, primaryOrRecipeUserId);
                 pst.setString(4, eventType);
