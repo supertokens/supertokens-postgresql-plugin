@@ -81,9 +81,9 @@ public class ActivityLogRollupTest {
         String userA = "rollup-idempotent-A";
         String userB = "rollup-idempotent-B";
 
-        insertUserLastActiveEvent(storage, log, userA, base + 1000);
-        insertUserLastActiveEvent(storage, log, userA, base + 2000); // A's most recent
-        insertUserLastActiveEvent(storage, log, userB, base + 3000);
+        insertActivityEvent(storage, log, userA, base + 1000);
+        insertActivityEvent(storage, log, userA, base + 2000); // A's most recent
+        insertActivityEvent(storage, log, userB, base + 3000);
 
         runRollup(storage, base - 10000);
         assertEquals(Long.valueOf(base + 2000), getLastActive(storage, userA));
@@ -121,7 +121,7 @@ public class ActivityLogRollupTest {
         seedUserLastActive(storage, ula, user, base + 9000);
 
         // The only activity the fold can see for this user is older than the stored value.
-        insertUserLastActiveEvent(storage, log, user, base + 1000);
+        insertActivityEvent(storage, log, user, base + 1000);
         runRollup(storage, base - 10000);
 
         // GREATEST(stored, folded) keeps the higher stored timestamp.
@@ -132,7 +132,9 @@ public class ActivityLogRollupTest {
 
     /**
      * A recipe user active just before being linked to a primary: after fold+reconcile in one pass, only
-     * the primary user's projection row remains (the linked-away recipe user's row is reconciled away).
+     * the primary user's projection row remains (the linked-away recipe user's row is reconciled away). The
+     * {@code account_linking} event also folds — crediting the primary ({@code primary_or_recipe_user_id})
+     * at the link's timestamp — so the primary's last-active is the link time, above its own earlier activity.
      */
     @Test
     public void reconcileRemovesRecipeUserLinkedAwayInWindow() throws Exception {
@@ -148,15 +150,16 @@ public class ActivityLogRollupTest {
         String primaryUser = "rollup-reconcile-P";
 
         // R was active on its own, then P was active, then R got linked into P — all within the window.
-        insertUserLastActiveEvent(storage, log, recipeUser, base + 1000);
-        insertUserLastActiveEvent(storage, log, primaryUser, base + 2000);
+        insertActivityEvent(storage, log, recipeUser, base + 1000);
+        insertActivityEvent(storage, log, primaryUser, base + 2000);
         insertAccountLinkingEvent(storage, log, recipeUser, primaryUser, base + 3000);
 
         runRollup(storage, base - 10000);
 
-        // The recipe user's row is gone (folded then reconciled away); the primary user's row remains.
+        // The recipe user's row is gone (folded then reconciled away); the primary user's row remains, credited
+        // up to the account_linking event (base + 3000), which counts as activity for the primary.
         assertNull(getLastActive(storage, recipeUser));
-        assertEquals(Long.valueOf(base + 2000), getLastActive(storage, primaryUser));
+        assertEquals(Long.valueOf(base + 3000), getLastActive(storage, primaryUser));
 
         stopProcess(process);
     }
@@ -187,8 +190,8 @@ public class ActivityLogRollupTest {
         // inserts fine, standing in for a deleted app whose activity_log rows still linger.
         String missingAppId = "app-that-was-deleted";
 
-        insertUserLastActiveEventForApp(storage, log, APP_ID, existingAppUser, base + 1000);
-        insertUserLastActiveEventForApp(storage, log, missingAppId, deletedAppUser, base + 2000);
+        insertActivityEventForApp(storage, log, APP_ID, existingAppUser, base + 1000);
+        insertActivityEventForApp(storage, log, missingAppId, deletedAppUser, base + 2000);
 
         // Without the guard this fold would throw a user_last_active -> apps FK violation on the missing app.
         runRollup(storage, base - 10000);
@@ -251,11 +254,66 @@ public class ActivityLogRollupTest {
     }
 
     /**
+     * The fold's activity source is the semantic event set (ROLLUP_ACTIVITY_EVENT_TYPES), not the retired
+     * {@code user_last_active} event. Every included type must credit its {@code primary_or_recipe_user_id};
+     * every excluded type ({@code user_import}, other lifecycle types, {@code user_last_active} itself) must
+     * be ignored. Asserted per type because a typo or drift from the names core emits would silently drop or
+     * spuriously credit activity with nothing else failing.
+     */
+    @Test
+    public void foldCreditsIncludedEventTypesAndIgnoresExcluded() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        Start storage = (Start) StorageLayer.getStorage(process.getProcess());
+        if (storage == null) {
+            return;
+        }
+        String log = Config.getConfig(storage).getActivityLogTable();
+
+        long base = System.currentTimeMillis();
+
+        // One distinct user per included type, each at a distinct timestamp. The credited user is the
+        // event's primary_or_recipe_user_id. For account_linking the recipe_user_id is a distinct throwaway
+        // id (a real link credits the primary, not the linked-away recipe user) so the reconcile — which
+        // deletes rows whose user_id matches an account_linking recipe_user_id — does not remove the primary.
+        String[] included = {"sign_in", "token_refresh", "session_create", "sign_out",
+                "oauth_token_exchange", "oauth_authorize", "user_creation", "account_linking"};
+        for (int i = 0; i < included.length; i++) {
+            String user = "fold-included-" + included[i];
+            String recipeUserId = included[i].equals("account_linking") ? "fold-linked-away-" + i : user;
+            insertActivityLogRow(storage, log, APP_ID, recipeUserId, user, included[i], base + 1000 + i);
+        }
+
+        // Types the fold must ignore: user_import (imported != active), other lifecycle types, and the
+        // retired user_last_active synthetic event (no writer remains).
+        String[] excluded = {"user_import", "user_deletion", "account_unlinking", "tenant_association",
+                "user_last_active"};
+        for (int i = 0; i < excluded.length; i++) {
+            String user = "fold-excluded-" + excluded[i];
+            insertActivityLogRow(storage, log, APP_ID, user, user, excluded[i], base + 2000 + i);
+        }
+
+        runRollup(storage, base - 10000);
+
+        // Each included type credited its user with the event's timestamp.
+        for (int i = 0; i < included.length; i++) {
+            String user = "fold-included-" + included[i];
+            assertEquals("expected " + included[i] + " to fold", Long.valueOf(base + 1000 + i),
+                    getLastActive(storage, user));
+        }
+        // No excluded type produced a projection row.
+        for (String type : excluded) {
+            assertNull("expected " + type + " to be ignored", getLastActive(storage, "fold-excluded-" + type));
+        }
+
+        stopProcess(process);
+    }
+
+    /**
      * The rollup cron's gate: {@code hasUnfoldedActivitySince} must return true only when there is
-     * rollup-relevant activity ({@code user_last_active} or {@code account_linking}) strictly newer than
-     * the watermark, and must ignore unrelated event types. A regression here (e.g. a typo in the
-     * hardcoded event-type literals, or drift from the names core emits) would silently disable the
-     * rollup with nothing else failing, so it is asserted directly rather than only through the fold.
+     * rollup-relevant activity (a fold-relevant event, per {@code ActivityLogQueries.ROLLUP_ACTIVITY_EVENT_TYPES})
+     * strictly newer than the watermark, and must ignore excluded event types. A regression here (e.g. a typo
+     * in the event-type literals, or drift from the names core emits) would silently disable the rollup with
+     * nothing else failing, so it is asserted directly.
      */
     @Test
     public void gateSeesOnlyRollupRelevantActivityStrictlyAfterWatermark() throws Exception {
@@ -271,8 +329,8 @@ public class ActivityLogRollupTest {
         // Nothing recorded yet.
         assertEquals(false, storage.hasUnfoldedActivitySince(base));
 
-        // A user_last_active event at base+1000 makes the gate open for any watermark below it...
-        insertUserLastActiveEvent(storage, log, "gate-user-A", base + 1000);
+        // A sign_in event at base+1000 makes the gate open for any watermark below it...
+        insertActivityEvent(storage, log, "gate-user-A", base + 1000);
         assertEquals(true, storage.hasUnfoldedActivitySince(base));
 
         // ...but the predicate is strict (created_at > ?): a watermark exactly on the row's timestamp
@@ -280,12 +338,16 @@ public class ActivityLogRollupTest {
         assertEquals(false, storage.hasUnfoldedActivitySince(base + 1000));
         assertEquals(false, storage.hasUnfoldedActivitySince(base + 2000));
 
-        // account_linking is the other rollup-relevant type and must also open the gate.
+        // account_linking is another rollup-relevant type and must also open the gate.
         insertAccountLinkingEvent(storage, log, "gate-recipe-B", "gate-primary-B", base + 3000);
         assertEquals(true, storage.hasUnfoldedActivitySince(base + 2000));
 
-        // An unrelated event type, even when newer than everything, must not open the gate.
-        insertActivityLogRow(storage, log, APP_ID, "gate-user-C", "gate-user-C", "session_created", base + 4000);
+        // An excluded event type (user_import), even when newer than everything, must not open the gate.
+        insertActivityLogRow(storage, log, APP_ID, "gate-user-C", "gate-user-C", "user_import", base + 4000);
+        assertEquals(false, storage.hasUnfoldedActivitySince(base + 3000));
+
+        // ...nor the retired user_last_active synthetic event.
+        insertActivityLogRow(storage, log, APP_ID, "gate-user-D", "gate-user-D", "user_last_active", base + 5000);
         assertEquals(false, storage.hasUnfoldedActivitySince(base + 3000));
 
         stopProcess(process);
@@ -344,15 +406,16 @@ public class ActivityLogRollupTest {
         return ActiveUsersQueries.getLastActiveByUserId(storage, new AppIdentifier(null, appId), userId);
     }
 
-    private void insertUserLastActiveEvent(Start storage, String table, String userId, long createdAt)
+    private void insertActivityEvent(Start storage, String table, String userId, long createdAt)
             throws Exception {
-        // For a user_last_active event the user is its own primary_or_recipe_user_id.
-        insertActivityLogRow(storage, table, APP_ID, userId, userId, "user_last_active", createdAt);
+        // A semantic activity event (one of ROLLUP_ACTIVITY_EVENT_TYPES); the user is its own
+        // primary_or_recipe_user_id.
+        insertActivityLogRow(storage, table, APP_ID, userId, userId, "sign_in", createdAt);
     }
 
-    private void insertUserLastActiveEventForApp(Start storage, String table, String appId, String userId,
-                                                 long createdAt) throws Exception {
-        insertActivityLogRow(storage, table, appId, userId, userId, "user_last_active", createdAt);
+    private void insertActivityEventForApp(Start storage, String table, String appId, String userId,
+                                           long createdAt) throws Exception {
+        insertActivityLogRow(storage, table, appId, userId, userId, "sign_in", createdAt);
     }
 
     private void insertAccountLinkingEvent(Start storage, String table, String recipeUserId,
