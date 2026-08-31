@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim AS tmp
+FROM debian:trixie-slim AS tmp
 WORKDIR /build
 RUN apt-get update \
  && apt-get install -y --no-install-recommends wget unzip ca-certificates \
@@ -26,7 +26,7 @@ COPY ./version.yaml ./version.yaml
 
 RUN ./jre/bin/java -classpath "./cli/*" io.supertokens.cli.Main true
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 RUN groupadd supertokens && useradd -m -s /bin/bash -g supertokens supertokens
 
 RUN set -eux \
