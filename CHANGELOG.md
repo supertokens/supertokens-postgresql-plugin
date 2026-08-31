@@ -7,15 +7,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- Creates whole-table extended statistics for the expressions behind the two partial dashboard-search
-  indexes (`idx_recipe_user_tenants_search_domain`, `idx_recipe_user_tenants_search_tparty`) and runs a
-  one-time `ANALYZE` on `recipe_user_tenants` when they are first created (PostgreSQL >= 14; skipped on
-  older versions). PostgreSQL never uses expression statistics gathered from partial indexes, so
-  without these objects the email-domain and provider search arms of the dashboard user search were
-  estimated at a fixed default selectivity no matter how often the table was analyzed; on large
-  tables that misestimate makes the planner reject the search indexes entirely and walk every user of
-  the app (observed: 60+ seconds per search on an 8M-user deployment), and can flip warmed-up
-  connections onto a cached generic plan that cannot use the pattern indexes at all.
+- Creates whole-table extended statistics for the two dashboard-search index expressions (email-domain
+  and provider) and runs a one-time `ANALYZE` on `recipe_user_tenants`, so the planner stops misestimating
+  those search arms and rejecting the partial indexes on large tables (PostgreSQL >= 14; skipped on older versions).
 
 ### Migration
 
@@ -30,9 +24,6 @@ CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_tparty
   ON (lower(account_info_value)) FROM recipe_user_tenants;
 ANALYZE recipe_user_tenants;
 ```
-
-If you already created equivalent statistics objects under different names as a hotfix, drop one of
-the two duplicate sets to avoid redundant work during future `ANALYZE` runs.
 
 ## [9.7.1]
 
