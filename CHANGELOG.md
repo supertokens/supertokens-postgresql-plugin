@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 - Aligns the connection-taking `signUp_Transaction` and `createUser_Transaction` variants to the plugin-interface `(TenantIdentifier, TransactionConnection, …)` parameter order, fixing the `compileAspectj` override break
+- Drops the `activity_log` table (and its partitions) during the test-only `deleteAllInformation` reset so audit rows no longer leak across tests and fail the last-active rollup fold with a `user_last_active` foreign-key violation
 
 ## [9.8.0]
 

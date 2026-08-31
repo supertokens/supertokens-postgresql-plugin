@@ -1117,6 +1117,11 @@ public class GeneralQueries {
             String DROP_QUERY = "DROP TABLE IF EXISTS "
                     + getConfig(start).getAppsTable() + ","
                     + getConfig(start).getUserLastActiveTable() + ","
+                    // Range-partitioned parent; dropping it also drops every partition
+                    // (activity_log_default, activity_log_pYYYYMM). Unlike production, the test reset must
+                    // clear it: it has no app_id->apps FK cascade, so leftover rows leak across tests and a
+                    // later rollup fold would re-insert user_last_active rows for since-deleted app_ids.
+                    + getConfig(start).getActivityLogTable() + ","
                     + getConfig(start).getTenantsTable() + ","
                     + getConfig(start).getKeyValueTable() + ","
                     + getConfig(start).getAppIdToUserIdTable() + ","
