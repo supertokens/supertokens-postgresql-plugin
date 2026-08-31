@@ -10,7 +10,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Aligns the connection-taking `signUp_Transaction` and `createUser_Transaction` variants to the plugin-interface `(TenantIdentifier, TransactionConnection, …)` parameter order, fixing the `compileAspectj` override break
 - Drops the `activity_log` table (and its partitions) during the test-only `deleteAllInformation` reset so audit rows no longer leak across tests and fail the last-active rollup fold with a `user_last_active` foreign-key violation
 - Guards the last-active rollup fold with `EXISTS (apps)` so retained `activity_log` rows for a deleted app never resurrect a `user_last_active` projection row (which would violate its `apps` foreign key)
-- The last-active rollup fold and its `hasUnfoldedActivitySince` gate now read the semantic activity events (`sign_in`, `token_refresh`, `session_create`, `sign_out`, `oauth_token_exchange`, `oauth_authorize`) plus `user_creation` and `account_linking`, instead of the retired `user_last_active` synthetic event; `user_import` and other lifecycle types are excluded
+- The last-active rollup fold and its `hasUnfoldedActivitySince` gate now read the semantic activity events instead of the retired `user_last_active` synthetic event
 
 ## [9.8.0]
 
