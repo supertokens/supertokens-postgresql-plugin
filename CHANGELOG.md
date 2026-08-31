@@ -21,6 +21,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Fixes duplicate JWT signing keys when concurrent transactions create an app's first key: the empty-read path now takes a per-app advisory lock and re-reads
 - JWT signing key reads no longer take `FOR UPDATE` row locks
 - Serialises access-token signing-key rotation with a per-app advisory lock in getAccessTokenSigningKeys_Transaction, so concurrent cores no longer create duplicate keys (which caused kid mismatches at JWT consumers); FOR UPDATE is dropped as redundant.
+- Docker image: updates the bundled JRE from Temurin 21.0.7 to 21.0.12.1 (clears the July 2025 – July 2026 JDK CPU CVEs flagged by image scanners)
+- Docker image: runs `apt-get upgrade` at build time so rebuilds pick up Debian security fixes for base packages
 
 ## [9.7.1]
 
