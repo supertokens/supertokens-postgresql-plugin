@@ -101,6 +101,12 @@ public class DashboardSearchSargabilityTest {
     private static final String IDX_SEARCH_DOMAIN = "idx_recipe_user_tenants_search_domain";
     private static final String IDX_SEARCH_TPARTY = "idx_recipe_user_tenants_search_tparty";
 
+    // Whole-table expression statistics objects created by AccountInfoQueries (must match the DDL).
+    // These are what actually fix the partial-index mis-estimate; PostgreSQL requires 14+ for them.
+    private static final String STAT_SEARCH_DOMAIN = "st_recipe_user_tenants_search_domain";
+    private static final String STAT_SEARCH_TPARTY = "st_recipe_user_tenants_search_tparty";
+    private static final int PG14_VERSION_NUM = 140000;
+
     @AfterClass
     public static void afterTesting() {
         Utils.afterTesting();
@@ -200,6 +206,52 @@ public class DashboardSearchSargabilityTest {
                 assertNoSeqScan("provider search", providerPlan, rut);
                 assertTrue("provider search must use " + IDX_SEARCH_TPARTY + "; plan=" + providerPlan,
                         usesIndex(providerPlan, IDX_SEARCH_TPARTY));
+            } finally {
+                con.close();
+            }
+        } finally {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // (1b) Statistics objects: the whole-table expression statistics that fix the partial-index
+    //      mis-estimate must be created at startup on PG14+ (and skipped, without error, below 14).
+    //      This is the actual fix of the PR; the plan-shape test above only exercises the indexes,
+    //      so without this a refactor of the CREATE STATISTICS DO block would regress silently.
+    //      Cheap and deterministic (no large seed), so it is not gated behind SKIP_SCALE_REGRESSION_TESTS.
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    public void testDashboardSearchStatisticsCreated() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        try {
+            Main main = process.getProcess();
+            if (StorageLayer.getStorage(main).getType() != STORAGE_TYPE.SQL) return;
+
+            Start storage = (Start) StorageLayer.getStorage(main);
+            String rut = Config.getConfig(storage).getRecipeUserTenantsTable();
+
+            Connection con = ConnectionPool.getConnection(storage);
+            try {
+                con.setAutoCommit(true);
+                int serverVersion = serverVersionNum(con);
+                if (serverVersion >= PG14_VERSION_NUM) {
+                    // Expression statistics require PG14+; the startup DDL must have created both objects
+                    // (the process reaching STARTED already proves the fresh-install batch did not fail).
+                    assertTrue("startup DDL must create statistics " + STAT_SEARCH_DOMAIN + " on PG14+ (server_version_num="
+                            + serverVersion + ")", statisticsExists(con, rut, STAT_SEARCH_DOMAIN));
+                    assertTrue("startup DDL must create statistics " + STAT_SEARCH_TPARTY + " on PG14+ (server_version_num="
+                            + serverVersion + ")", statisticsExists(con, rut, STAT_SEARCH_TPARTY));
+                } else {
+                    // Below 14 the DO block returns early. Startup must still have succeeded (we got here)
+                    // and no statistics objects are created for this table.
+                    assertFalse("statistics " + STAT_SEARCH_DOMAIN + " must be skipped, not created, below PG14"
+                            + " (server_version_num=" + serverVersion + ")", statisticsExists(con, rut, STAT_SEARCH_DOMAIN));
+                    assertFalse("statistics " + STAT_SEARCH_TPARTY + " must be skipped, not created, below PG14"
+                            + " (server_version_num=" + serverVersion + ")", statisticsExists(con, rut, STAT_SEARCH_TPARTY));
+                }
             } finally {
                 con.close();
             }
@@ -377,6 +429,25 @@ public class DashboardSearchSargabilityTest {
              ResultSet rs = st.executeQuery(
                      "SELECT 1 FROM pg_indexes WHERE indexname = " + q(indexName) + " LIMIT 1")) {
             return rs.next();
+        }
+    }
+
+    // Scoped to this instance's table via stxrelid, mirroring the production DO-block guard, so it is
+    // correct even in a shared-schema deployment where another table carries a same-named stats object.
+    private boolean statisticsExists(Connection con, String table, String statsName) throws Exception {
+        try (Statement st = con.createStatement();
+             ResultSet rs = st.executeQuery(
+                     "SELECT 1 FROM pg_statistic_ext WHERE stxrelid = " + q(table) + "::regclass"
+                             + " AND stxname = " + q(statsName) + " LIMIT 1")) {
+            return rs.next();
+        }
+    }
+
+    private int serverVersionNum(Connection con) throws Exception {
+        try (Statement st = con.createStatement();
+             ResultSet rs = st.executeQuery("SHOW server_version_num")) {
+            assertTrue("SHOW server_version_num returned no rows", rs.next());
+            return Integer.parseInt(rs.getString(1).trim());
         }
     }
 

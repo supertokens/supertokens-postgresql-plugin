@@ -233,7 +233,14 @@ public class AccountInfoQueries {
     // the estimates are correct from the first search after upgrade. Expression statistics objects
     // require PostgreSQL 14+, hence the server_version_num gate; on older versions the arms keep
     // default estimates (functionally correct, may mis-plan at scale). Idempotent: a no-op once
-    // both objects exist.
+    // both objects exist. The statistics names are hardcoded (unprefixed) like the sibling search
+    // indexes, so CREATE STATISTICS carries IF NOT EXISTS for the same reason CREATE INDEX does: in a
+    // shared-schema deployment with two SuperTokens instances on different table_names_prefix values,
+    // the stxrelid guard (scoped to this instance's table) won't match the other instance's already
+    // existing same-named object, and a plain CREATE STATISTICS would then fail with "already exists".
+    // On the fresh-install path this runs inside the executeDDLBatch transaction, so that error would
+    // roll back the whole batch and block startup; IF NOT EXISTS degrades it to a harmless NOTICE
+    // (best-effort, matching the sibling indexes - the second instance simply reuses the first's stats).
     static String getQueryToCreateSearchStatisticsForRecipeUserTenantsTable(Start start) {
         String table = Config.getConfig(start).getRecipeUserTenantsTable();
         String schema = Config.getConfig(start).getTableSchema();
@@ -242,14 +249,14 @@ public class AccountInfoQueries {
                 + " IF NOT EXISTS (SELECT 1 FROM pg_statistic_ext"
                 + "  WHERE stxrelid = '" + table + "'::regclass"
                 + "  AND stxname = 'st_recipe_user_tenants_search_domain') THEN"
-                + "  CREATE STATISTICS " + schema + ".st_recipe_user_tenants_search_domain"
+                + "  CREATE STATISTICS IF NOT EXISTS " + schema + ".st_recipe_user_tenants_search_domain"
                 + "  ON (lower(split_part(account_info_value, '@', 2))) FROM " + table + ";"
                 + "  created := true;"
                 + " END IF;"
                 + " IF NOT EXISTS (SELECT 1 FROM pg_statistic_ext"
                 + "  WHERE stxrelid = '" + table + "'::regclass"
                 + "  AND stxname = 'st_recipe_user_tenants_search_tparty') THEN"
-                + "  CREATE STATISTICS " + schema + ".st_recipe_user_tenants_search_tparty"
+                + "  CREATE STATISTICS IF NOT EXISTS " + schema + ".st_recipe_user_tenants_search_tparty"
                 + "  ON (lower(account_info_value)) FROM " + table + ";"
                 + "  created := true;"
                 + " END IF;"
