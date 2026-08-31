@@ -220,6 +220,43 @@ public class AccountInfoQueries {
                 + " WHERE account_info_type = 'email';";
     }
 
+    // The two dashboard-search expression indexes above/below are PARTIAL indexes, and PostgreSQL
+    // deliberately never uses expression statistics gathered from partial indexes (selfuncs.c,
+    // examine_variable: partial-index stats don't reflect whole-population statistics). Without
+    // whole-table statistics for those expressions, the domain and tparty search arms are estimated
+    // at the default pattern selectivity (0.005) forever - ANALYZE does not help - which on large
+    // tables makes the planner reject the search indexes entirely and walk every user of the app
+    // (observed: 60+ s and 45M buffer reads for 19 matching rows on an 8M-user deployment), and
+    // makes plan_cache_mode=auto flip warmed-up connections onto a generic plan that cannot use the
+    // pattern indexes at all. This DO block creates whole-table extended statistics objects for
+    // both expressions and runs a one-time ANALYZE when (and only when) it created something, so
+    // the estimates are correct from the first search after upgrade. Expression statistics objects
+    // require PostgreSQL 14+, hence the server_version_num gate; on older versions the arms keep
+    // default estimates (functionally correct, may mis-plan at scale). Idempotent: a no-op once
+    // both objects exist.
+    static String getQueryToCreateSearchStatisticsForRecipeUserTenantsTable(Start start) {
+        String table = Config.getConfig(start).getRecipeUserTenantsTable();
+        String schema = Config.getConfig(start).getTableSchema();
+        return "DO $$ DECLARE created boolean := false; BEGIN"
+                + " IF current_setting('server_version_num')::int < 140000 THEN RETURN; END IF;"
+                + " IF NOT EXISTS (SELECT 1 FROM pg_statistic_ext"
+                + "  WHERE stxrelid = '" + table + "'::regclass"
+                + "  AND stxname = 'st_recipe_user_tenants_search_domain') THEN"
+                + "  CREATE STATISTICS " + schema + ".st_recipe_user_tenants_search_domain"
+                + "  ON (lower(split_part(account_info_value, '@', 2))) FROM " + table + ";"
+                + "  created := true;"
+                + " END IF;"
+                + " IF NOT EXISTS (SELECT 1 FROM pg_statistic_ext"
+                + "  WHERE stxrelid = '" + table + "'::regclass"
+                + "  AND stxname = 'st_recipe_user_tenants_search_tparty') THEN"
+                + "  CREATE STATISTICS " + schema + ".st_recipe_user_tenants_search_tparty"
+                + "  ON (lower(account_info_value)) FROM " + table + ";"
+                + "  created := true;"
+                + " END IF;"
+                + " IF created THEN EXECUTE 'ANALYZE " + table + "'; END IF;"
+                + " END $$;";
+    }
+
     // Backs the "D" term of the per-tenant user-count decomposition (count = D - L + G, documented
     // in full in GeneralQueries.getUsersCount_new): D is the count of distinct recipe users in a
     // tenant. This index makes that a streaming, index-only DISTINCT pre-sorted by recipe_user_id,

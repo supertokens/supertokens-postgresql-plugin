@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- Creates whole-table extended statistics for the expressions behind the two partial dashboard-search
+  indexes (`idx_recipe_user_tenants_search_domain`, `idx_recipe_user_tenants_search_tparty`) and runs a
+  one-time `ANALYZE` on `recipe_user_tenants` when they are first created (PostgreSQL >= 14; skipped on
+  older versions). PostgreSQL never uses expression statistics gathered from partial indexes, so
+  without these objects the email-domain and provider search arms of the dashboard user search were
+  estimated at a fixed default selectivity no matter how often the table was analyzed; on large
+  tables that misestimate makes the planner reject the search indexes entirely and walk every user of
+  the app (observed: 60+ seconds per search on an 8M-user deployment), and can flip warmed-up
+  connections onto a cached generic plan that cannot use the pattern indexes at all.
+
+### Migration
+
+Applied automatically at startup. On large deployments already running 9.7.x, run it ahead of the
+upgrade so the first dashboard search doesn't wait on it (safe to run online; `ANALYZE` samples the
+table, it does not scan it):
+
+```sql
+CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_domain
+  ON (lower(split_part(account_info_value, '@', 2))) FROM recipe_user_tenants;
+CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_tparty
+  ON (lower(account_info_value)) FROM recipe_user_tenants;
+ANALYZE recipe_user_tenants;
+```
+
+If you already created equivalent statistics objects under different names as a hotfix, drop one of
+the two duplicate sets to avoid redundant work during future `ANALYZE` runs.
+
 ## [9.7.1]
 
 - Makes the dashboard user search (email/phone/provider) sargable: `ILIKE` scans on `account_info_value`
