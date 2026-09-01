@@ -20,6 +20,7 @@ package io.supertokens.storage.postgresql.test;
 import io.supertokens.ProcessState;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.auditlog.AuditLogEvent;
+import io.supertokens.pluginInterface.auditlog.RollupEventTypes;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.Start;
@@ -254,7 +255,7 @@ public class ActivityLogRollupTest {
     }
 
     /**
-     * The fold's activity source is the semantic event set (ROLLUP_ACTIVITY_EVENT_TYPES), not the retired
+     * The fold's activity source is the semantic event set ({@link RollupEventTypes#FOLD_SET}), not the retired
      * {@code user_last_active} event. Every included type must credit its {@code primary_or_recipe_user_id};
      * every excluded type ({@code user_import}, other lifecycle types, {@code user_last_active} itself) must
      * be ignored. Asserted per type because a typo or drift from the names core emits would silently drop or
@@ -310,7 +311,7 @@ public class ActivityLogRollupTest {
 
     /**
      * The rollup cron's gate: {@code hasUnfoldedActivitySince} must return true only when there is
-     * rollup-relevant activity (a fold-relevant event, per {@code ActivityLogQueries.ROLLUP_ACTIVITY_EVENT_TYPES})
+     * rollup-relevant activity (a fold-relevant event, per {@link RollupEventTypes#FOLD_SET})
      * strictly newer than the watermark, and must ignore excluded event types. A regression here (e.g. a typo
      * in the event-type literals, or drift from the names core emits) would silently disable the rollup with
      * nothing else failing, so it is asserted directly.
@@ -408,7 +409,7 @@ public class ActivityLogRollupTest {
 
     private void insertActivityEvent(Start storage, String table, String userId, long createdAt)
             throws Exception {
-        // A semantic activity event (one of ROLLUP_ACTIVITY_EVENT_TYPES); the user is its own
+        // A semantic activity event (one of RollupEventTypes.FOLD_SET); the user is its own
         // primary_or_recipe_user_id.
         insertActivityLogRow(storage, table, APP_ID, userId, userId, "sign_in", createdAt);
     }

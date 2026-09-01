@@ -17,6 +17,7 @@
 package io.supertokens.storage.postgresql.queries;
 
 import io.supertokens.pluginInterface.auditlog.AuditLogEvent;
+import io.supertokens.pluginInterface.auditlog.RollupEventTypes;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
@@ -59,22 +60,6 @@ import io.supertokens.storage.postgresql.annotations.AtomicAutoCommitWrite;
  * to prune time-range scans. Requires PostgreSQL 11+.
  */
 public class ActivityLogQueries {
-
-    /**
-     * The {@code event_type} values the last-active rollup treats as activity, as a SQL list literal for an
-     * {@code IN (...)} predicate. The fold ({@link ActiveUsersQueries#rollupLastActiveFromActivityLog_Transaction})
-     * credits each user's {@code primary_or_recipe_user_id} with {@code MAX(created_at)} over these, and the
-     * rollup cron's gate ({@link #hasUnfoldedActivitySince}) opens on them — kept in one place so the fold set
-     * and the gate can never drift apart. Includes the semantic activity events plus the two lifecycle events
-     * that imply activity: {@code user_creation} (an interactive creation counts as activity) and
-     * {@code account_linking} (credits the primary user; the reconcile below still deletes the linked-away
-     * recipe user's row). Deliberately excludes {@code user_import} (imported != active), every other lifecycle
-     * type, and the retired {@code user_last_active} synthetic event (no writer remains, no legacy rows to honour).
-     * These literals must match the {@code event_type} strings supertokens-core emits.
-     */
-    static final String ROLLUP_ACTIVITY_EVENT_TYPES =
-            "'sign_in', 'token_refresh', 'session_create', 'sign_out', 'oauth_token_exchange', 'oauth_authorize',"
-                    + " 'user_creation', 'account_linking'";
 
     /** Number of future months (beyond the current one) to pre-create partitions for, so DEFAULT stays empty. */
     private static final int PREMAKE_MONTHS = 1;
@@ -175,13 +160,13 @@ public class ActivityLogQueries {
 
     /**
      * Cheap existence check for rollup-relevant activity newer than {@code sinceMillis} — the rows the
-     * last-active rollup would fold or reconcile ({@link #ROLLUP_ACTIVITY_EVENT_TYPES}).
+     * last-active rollup would fold or reconcile ({@link RollupEventTypes#FOLD_SET}).
      * Storage-wide, no app predicate; lets the rollup cron skip work when there is nothing new.
      */
     public static boolean hasUnfoldedActivitySince(Start start, long sinceMillis)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT EXISTS (SELECT 1 FROM " + Config.getConfig(start).getActivityLogTable()
-                + " WHERE event_type IN (" + ROLLUP_ACTIVITY_EVENT_TYPES + ") AND created_at > ?) AS has_activity";
+                + " WHERE event_type IN (" + RollupEventTypes.sqlInList() + ") AND created_at > ?) AS has_activity";
         return execute(start, QUERY, pst -> pst.setLong(1, sinceMillis), result -> {
             if (result.next()) {
                 return result.getBoolean("has_activity");
