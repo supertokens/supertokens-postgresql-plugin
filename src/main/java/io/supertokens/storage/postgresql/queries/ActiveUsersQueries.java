@@ -1,5 +1,6 @@
 package io.supertokens.storage.postgresql.queries;
 
+import io.supertokens.pluginInterface.auditlog.RollupEventTypes;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.storage.postgresql.Start;
@@ -204,8 +205,10 @@ public class ActiveUsersQueries {
      * Derives {@code user_last_active} from the activity log over {@code [windowStartMillis, now]}, on the
      * caller's transaction connection. Two idempotent statements:
      * <ol>
-     *   <li><b>Fold</b> — upsert each user's most recent {@code user_last_active} activity into the
-     *       projection, monotonically ({@code GREATEST} never lowers a stored timestamp).</li>
+     *   <li><b>Fold</b> — upsert each user's most recent activity into the projection, monotonically
+     *       ({@code GREATEST} never lowers a stored timestamp). The activity source is the semantic
+     *       activity/lifecycle event set in {@link RollupEventTypes#FOLD_SET},
+     *       credited to the event's {@code primary_or_recipe_user_id}.</li>
      *   <li><b>Reconcile</b> — delete projection rows for users linked away within the same window
      *       ({@code account_linking} events, matched on {@code app_id} + {@code recipe_user_id}).</li>
      * </ol>
@@ -235,7 +238,7 @@ public class ActiveUsersQueries {
         // user_last_active -> apps foreign key. EXISTS keeps the fold set to still-existing apps only.
         String FOLD_QUERY = "INSERT INTO " + userLastActiveTable + " (app_id, user_id, last_active_time)"
                 + " SELECT app_id, primary_or_recipe_user_id, MAX(created_at) FROM " + activityLogTable + " al"
-                + " WHERE event_type = 'user_last_active' AND created_at >= ?"
+                + " WHERE event_type IN (" + RollupEventTypes.sqlInList() + ") AND created_at >= ?"
                 + " AND EXISTS (SELECT 1 FROM " + appsTable + " a WHERE a.app_id = al.app_id)"
                 + " GROUP BY app_id, primary_or_recipe_user_id"
                 + " ON CONFLICT (app_id, user_id) DO UPDATE"

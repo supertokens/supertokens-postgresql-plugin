@@ -17,6 +17,7 @@
 package io.supertokens.storage.postgresql.queries;
 
 import io.supertokens.pluginInterface.auditlog.AuditLogEvent;
+import io.supertokens.pluginInterface.auditlog.RollupEventTypes;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
@@ -158,14 +159,14 @@ public class ActivityLogQueries {
     }
 
     /**
-     * Cheap existence check for rollup-relevant activity newer than {@code sinceMillis} — the rows
-     * the last-active rollup would fold ({@code user_last_active}) or reconcile ({@code account_linking}).
+     * Cheap existence check for rollup-relevant activity newer than {@code sinceMillis} — the rows the
+     * last-active rollup would fold or reconcile ({@link RollupEventTypes#FOLD_SET}).
      * Storage-wide, no app predicate; lets the rollup cron skip work when there is nothing new.
      */
     public static boolean hasUnfoldedActivitySince(Start start, long sinceMillis)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT EXISTS (SELECT 1 FROM " + Config.getConfig(start).getActivityLogTable()
-                + " WHERE event_type IN ('user_last_active', 'account_linking') AND created_at > ?) AS has_activity";
+                + " WHERE event_type IN (" + RollupEventTypes.sqlInList() + ") AND created_at > ?) AS has_activity";
         return execute(start, QUERY, pst -> pst.setLong(1, sinceMillis), result -> {
             if (result.next()) {
                 return result.getBoolean("has_activity");
