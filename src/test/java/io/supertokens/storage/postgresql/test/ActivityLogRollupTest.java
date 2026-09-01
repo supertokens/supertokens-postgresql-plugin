@@ -81,6 +81,8 @@ public class ActivityLogRollupTest {
         long base = System.currentTimeMillis();
         String userA = "rollup-idempotent-A";
         String userB = "rollup-idempotent-B";
+        registerUser(storage, APP_ID, userA);
+        registerUser(storage, APP_ID, userB);
 
         insertActivityEvent(storage, log, userA, base + 1000);
         insertActivityEvent(storage, log, userA, base + 2000); // A's most recent
@@ -117,6 +119,7 @@ public class ActivityLogRollupTest {
 
         long base = System.currentTimeMillis();
         String user = "rollup-monotonic";
+        registerUser(storage, APP_ID, user);
 
         // Projection already holds a recent value (as if written directly, ahead of the log).
         seedUserLastActive(storage, ula, user, base + 9000);
@@ -149,6 +152,8 @@ public class ActivityLogRollupTest {
         long base = System.currentTimeMillis();
         String recipeUser = "rollup-reconcile-R";
         String primaryUser = "rollup-reconcile-P";
+        registerUser(storage, APP_ID, recipeUser);
+        registerUser(storage, APP_ID, primaryUser);
 
         // R was active on its own, then P was active, then R got linked into P — all within the window.
         insertActivityEvent(storage, log, recipeUser, base + 1000);
@@ -190,6 +195,9 @@ public class ActivityLogRollupTest {
         // "public" is present in the apps table; this id never is. activity_log has no app FK, so the row
         // inserts fine, standing in for a deleted app whose activity_log rows still linger.
         String missingAppId = "app-that-was-deleted";
+        // The existing-app user is a real user; the deleted-app user cannot be registered (its app_id is
+        // absent from apps), which is fine — the apps guard skips it before the user guard is reached.
+        registerUser(storage, APP_ID, existingAppUser);
 
         insertActivityEventForApp(storage, log, APP_ID, existingAppUser, base + 1000);
         insertActivityEventForApp(storage, log, missingAppId, deletedAppUser, base + 2000);
@@ -200,6 +208,95 @@ public class ActivityLogRollupTest {
         // The existing app's user is folded; the missing app's user is skipped (no resurrected row).
         assertEquals(Long.valueOf(base + 1000), getLastActiveForApp(storage, APP_ID, existingAppUser));
         assertNull(getLastActiveForApp(storage, missingAppId, deletedAppUser));
+
+        stopProcess(process);
+    }
+
+    /**
+     * The fold must never resurrect a projection row for a user that no longer exists. {@code activity_log}
+     * rows are intentionally retained after a user is deleted (the table has no user foreign key), while
+     * {@code deleteUserActive_Transaction} removes the user's {@code user_last_active} row. Without the user
+     * guard the next fold re-reads the retained events and silently re-inserts the row — a permanent MAU
+     * overcount for any user deleted within a fold window of their last activity, and, on a lost-watermark
+     * full-retention catch-up, for every user deleted in the retention window. The
+     * {@code EXISTS (app_id_to_user_id)} guard confines the fold to still-existing users: a deleted user's
+     * retained activity is skipped while a coexisting live user still folds.
+     */
+    @Test
+    public void foldSkipsActivityForDeletedUser() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        Start storage = (Start) StorageLayer.getStorage(process.getProcess());
+        if (storage == null) {
+            return;
+        }
+        String log = Config.getConfig(storage).getActivityLogTable();
+
+        long base = System.currentTimeMillis();
+        String liveUser = "rollup-user-guard-live";
+        String deletedUser = "rollup-user-guard-deleted";
+        registerUser(storage, APP_ID, liveUser);
+        registerUser(storage, APP_ID, deletedUser);
+
+        insertActivityEvent(storage, log, liveUser, base + 1000);
+        insertActivityEvent(storage, log, deletedUser, base + 2000);
+
+        // First pass folds both — both users exist.
+        runRollup(storage, base - 10000);
+        assertEquals(Long.valueOf(base + 1000), getLastActive(storage, liveUser));
+        assertEquals(Long.valueOf(base + 2000), getLastActive(storage, deletedUser));
+
+        // The user is deleted: its user_last_active row and app_id_to_user_id row go away, but its
+        // activity_log rows are intentionally retained.
+        deleteUser(storage, APP_ID, deletedUser);
+        assertNull(getLastActive(storage, deletedUser));
+
+        // Second pass over the same window must NOT resurrect the deleted user from the retained events;
+        // the live user is unaffected.
+        runRollup(storage, base - 10000);
+        assertEquals(Long.valueOf(base + 1000), getLastActive(storage, liveUser));
+        assertNull(getLastActive(storage, deletedUser));
+
+        stopProcess(process);
+    }
+
+    /**
+     * The reconcile is order-insensitive. A recipe user linked, then unlinked, then active again inside
+     * one window must keep its post-unlink credit: the {@code account_linking} event matches the user by
+     * {@code recipe_user_id}, but its later activity gives the projection a {@code last_active_time} newer
+     * than the link, so the ordering guard ({@code al.created_at >= ula.last_active_time}) keeps the row
+     * instead of scrubbing it. A recipe user with no activity after the link is still reconciled away.
+     */
+    @Test
+    public void reconcileKeepsRecipeUserActiveAfterLinkInWindow() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        Start storage = (Start) StorageLayer.getStorage(process.getProcess());
+        if (storage == null) {
+            return;
+        }
+        String log = Config.getConfig(storage).getActivityLogTable();
+
+        long base = System.currentTimeMillis();
+        String activeAgain = "rollup-order-active-again"; // linked, then active again on its own
+        String linkedAway = "rollup-order-linked-away";   // linked, no later activity
+        String primary = "rollup-order-primary";
+        registerUser(storage, APP_ID, activeAgain);
+        registerUser(storage, APP_ID, linkedAway);
+        registerUser(storage, APP_ID, primary);
+
+        // activeAgain: linked into primary at t1, then (after an unlink) signs in on its own at t3.
+        insertAccountLinkingEvent(storage, log, activeAgain, primary, base + 1000);
+        insertActivityEvent(storage, log, activeAgain, base + 3000);
+
+        // linkedAway: active before the link at t0, linked at t2, nothing after — the classic reconcile case.
+        insertActivityEvent(storage, log, linkedAway, base + 500);
+        insertAccountLinkingEvent(storage, log, linkedAway, primary, base + 2000);
+
+        runRollup(storage, base - 10000);
+
+        // activeAgain keeps its post-link credit — the stale earlier link event does not scrub it.
+        assertEquals(Long.valueOf(base + 3000), getLastActive(storage, activeAgain));
+        // linkedAway had no activity after the link, so it is reconciled away as before.
+        assertNull(getLastActive(storage, linkedAway));
 
         stopProcess(process);
     }
@@ -281,6 +378,7 @@ public class ActivityLogRollupTest {
         for (int i = 0; i < included.length; i++) {
             String user = "fold-included-" + included[i];
             String recipeUserId = included[i].equals("account_linking") ? "fold-linked-away-" + i : user;
+            registerUser(storage, APP_ID, user);
             insertActivityLogRow(storage, log, APP_ID, recipeUserId, user, included[i], base + 1000 + i);
         }
 
@@ -290,6 +388,8 @@ public class ActivityLogRollupTest {
                 "user_last_active"};
         for (int i = 0; i < excluded.length; i++) {
             String user = "fold-excluded-" + excluded[i];
+            // Registered too, so the ONLY reason these never fold is the event_type filter, not the user guard.
+            registerUser(storage, APP_ID, user);
             insertActivityLogRow(storage, log, APP_ID, user, user, excluded[i], base + 2000 + i);
         }
 
@@ -405,6 +505,57 @@ public class ActivityLogRollupTest {
 
     private Long getLastActiveForApp(Start storage, String appId, String userId) throws Exception {
         return ActiveUsersQueries.getLastActiveByUserId(storage, new AppIdentifier(null, appId), userId);
+    }
+
+    /**
+     * Register {@code userId} as a standalone (self-primary) user in {@code app_id_to_user_id} so it
+     * satisfies the fold's user-existence guard. Not deleting this row is how we simulate a still-existing
+     * user; omitting the row (or deleting it) simulates a deleted user whose activity_log rows linger.
+     */
+    private void registerUser(Start storage, String appId, String userId) throws Exception {
+        String query = "INSERT INTO " + Config.getConfig(storage).getAppIdToUserIdTable()
+                + " (app_id, user_id, recipe_id, primary_or_recipe_user_id, is_linked_or_is_a_primary_user,"
+                + " time_joined, primary_or_recipe_user_time_joined) VALUES (?, ?, 'emailpassword', ?, false, 0, 0)";
+        storage.startTransaction(con -> {
+            Connection sqlCon = (Connection) con.getConnection();
+            try (PreparedStatement pst = sqlCon.prepareStatement(query)) {
+                pst.setString(1, appId);
+                pst.setString(2, userId);
+                pst.setString(3, userId);
+                pst.executeUpdate();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            storage.commitTransaction(con);
+            return null;
+        });
+    }
+
+    /**
+     * Simulate a user deletion: drop the user's {@code user_last_active} projection row and its
+     * {@code app_id_to_user_id} row, while leaving its {@code activity_log} rows in place (they are
+     * retained after deletion). This is the exact state that let the fold resurrect the user.
+     */
+    private void deleteUser(Start storage, String appId, String userId) throws Exception {
+        String ula = Config.getConfig(storage).getUserLastActiveTable();
+        String appToUser = Config.getConfig(storage).getAppIdToUserIdTable();
+        storage.startTransaction(con -> {
+            Connection sqlCon = (Connection) con.getConnection();
+            try {
+                for (String table : new String[]{ula, appToUser}) {
+                    try (PreparedStatement pst = sqlCon.prepareStatement(
+                            "DELETE FROM " + table + " WHERE app_id = ? AND user_id = ?")) {
+                        pst.setString(1, appId);
+                        pst.setString(2, userId);
+                        pst.executeUpdate();
+                    }
+                }
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            storage.commitTransaction(con);
+            return null;
+        });
     }
 
     private void insertActivityEvent(Start storage, String table, String userId, long createdAt)
