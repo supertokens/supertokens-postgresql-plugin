@@ -222,9 +222,11 @@ public class ActiveUsersQueries {
      *       {@code last_active_time}) and must not be scrubbed by the stale earlier link event.</li>
      * </ol>
      * As the first statement it takes a non-blocking advisory lock with a constant key; if another
-     * instance holds it the pass is skipped (that instance is folding — the work is redundant, not lost).
+     * instance holds it the pass is skipped (that instance is folding — the work is redundant, not lost)
+     * and this returns {@code false} so the caller leaves its watermark untouched; a completed fold
+     * returns {@code true}.
      */
-    public static void rollupLastActiveFromActivityLog_Transaction(Start start, Connection con,
+    public static boolean rollupLastActiveFromActivityLog_Transaction(Start start, Connection con,
                                                                    long windowStartMillis)
             throws StorageQueryException, SQLException {
         try {
@@ -232,7 +234,7 @@ public class ActiveUsersQueries {
         } catch (StorageQueryException e) {
             if (e.getCause() instanceof io.supertokens.storage.postgresql.LockFailure) {
                 // Another instance is folding this pass; the fold/reconcile are idempotent, so skip.
-                return;
+                return false;
             }
             throw e;
         }
@@ -273,6 +275,7 @@ public class ActiveUsersQueries {
                 + " AND al.app_id = ula.app_id AND al.recipe_user_id = ula.user_id"
                 + " AND al.created_at >= ula.last_active_time";
         update(con, RECONCILE_QUERY, pst -> pst.setLong(1, windowStartMillis));
+        return true;
     }
 
     public static void deleteUserActive_Transaction(Connection con, Start start, AppIdentifier appIdentifier,

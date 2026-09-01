@@ -7,6 +7,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- `rollupLastActiveFromActivityLog_Transaction` now returns `true` when the fold ran and `false` when it
+  was skipped after losing the non-blocking rollup advisory lock, so the last-active rollup cron does not
+  advance its watermark past a window this instance never folded.
 - Creates whole-table extended statistics for the two dashboard-search index expressions (email-domain
   and provider) and runs a one-time `ANALYZE` on `recipe_user_tenants`, so the planner stops misestimating
   those search arms and rejecting the partial indexes on large tables (PostgreSQL >= 14; skipped on older versions).
