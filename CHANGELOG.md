@@ -7,12 +7,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- Aligns the connection-taking `signUp_Transaction` and `createUser_Transaction` variants to the plugin-interface `(TenantIdentifier, TransactionConnection, …)` parameter order, fixing the `compileAspectj` override break
-- Drops the `activity_log` table (and its partitions) during the test-only `deleteAllInformation` reset so audit rows no longer leak across tests and fail the last-active rollup fold with a `user_last_active` foreign-key violation
-- Guards the last-active rollup fold with `EXISTS (apps)` so retained `activity_log` rows for a deleted app never resurrect a `user_last_active` projection row (which would violate its `apps` foreign key)
-- Guards the last-active rollup fold with `EXISTS (app_id_to_user_id)` so retained `activity_log` rows for a deleted user never resurrect a `user_last_active` projection row (`user_last_active` has no user foreign key, so this would otherwise permanently overcount MAU)
-- Makes the last-active rollup reconcile order-insensitive — it deletes a linked-away recipe user's row only when the `account_linking` event is not older than the stored `last_active_time`, so a recipe user linked, then unlinked, then active again within one window keeps its post-unlink activity
-- The last-active rollup fold and its `hasUnfoldedActivitySince` gate now read the semantic activity events instead of the retired `user_last_active` synthetic event
+- Creates whole-table extended statistics for the two dashboard-search index expressions (email-domain
+  and provider) and runs a one-time `ANALYZE` on `recipe_user_tenants`, so the planner stops misestimating
+  those search arms and rejecting the partial indexes on large tables (PostgreSQL >= 14; skipped on older versions).
+
+### Migration
+
+Applied automatically at startup. On large deployments already running 9.7.x, run it ahead of the
+upgrade so the first dashboard search doesn't wait on it (safe to run online; `ANALYZE` samples the
+table, it does not scan it):
+
+```sql
+CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_domain
+  ON (lower(split_part(account_info_value, '@', 2))) FROM recipe_user_tenants;
+CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_tparty
+  ON (lower(account_info_value)) FROM recipe_user_tenants;
+ANALYZE recipe_user_tenants;
+```
 
 ## [9.8.0]
 
@@ -30,20 +41,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Fixes duplicate JWT signing keys when concurrent transactions create an app's first key: the empty-read path now takes a per-app advisory lock and re-reads
 - JWT signing key reads no longer take `FOR UPDATE` row locks
 - Serialises access-token signing-key rotation with a per-app advisory lock in getAccessTokenSigningKeys_Transaction, so concurrent cores no longer create duplicate keys (which caused kid mismatches at JWT consumers); FOR UPDATE is dropped as redundant.
-- Implements the plugin-interface activity-log storage contract: retention parameter, transactional insert, unfolded-activity check, and last-active rollup.
-- Implements the connection-taking count-affecting write variants from plugin-interface#216: `signUp_Transaction` on `EmailPasswordSQLStorage` and `ThirdPartySQLStorage`, `createUser_Transaction` on `PasswordlessSQLStorage`, and `removeUserIdFromTenant_Transaction` on `MultitenancySQLStorage`. Each existing auto-commit method is refactored into a thin wrapper over the new variant, so callers can commit the mutation and its lifecycle audit event on one connection.
-- Implements `ActivityLogStorage.getActivityLogEntriesForApp`: an app-scoped, window-bounded read of the
-  activity log — event-type filtered, half-open `(from, to]` on `created_at` (kept literally on the column so
-  partition pruning and the BRIN index apply), ascending, `LIMIT`-capped in the query. `payload` is returned
-  as JSON text (`::text`), null stays null.
-- Changes the `activity_log.payload` column from `TEXT` to `JSONB`. Fresh installs create it as `JSONB`;
-  pre-existing `TEXT` columns are migrated automatically at startup.
+- Docker image: base updated from Debian 12 (bookworm, now LTS-only) to Debian 13 (trixie)
+- Docker image: updates the bundled JRE from Temurin 21.0.7 to 21.0.12.1 (clears the July 2025 – July 2026 JDK CPU CVEs flagged by image scanners)
+- Docker image: runs `apt-get upgrade` at build time so rebuilds pick up Debian security fixes for base packages
+- Implements the plugin-interface activity-log storage: retention parameter, transactional insert, app-scoped window read (`getActivityLogEntriesForApp`), and a last-active rollup (fold + reconcile) driven by the semantic activity/lifecycle events. The fold skips deleted apps and deleted users and the reconcile is order-insensitive, so a since-deleted or link/unlink-churned user is never resurrected into `user_last_active` (which would overcount MAU).
+- Adds the connection-taking count-affecting write variants from plugin-interface#216 (`signUp_Transaction`, `createUser_Transaction`, `removeUserIdFromTenant_Transaction`), so a mutation and its lifecycle audit event commit on one connection; the existing auto-commit methods become thin wrappers.
+- Stores `activity_log.payload` as `JSONB` (pre-existing `TEXT` columns migrated automatically at startup).
 
 ### Migration
 
-Applied automatically at startup (idempotent; a non-JSON row aborts it loudly rather than dropping data).
-The rewrite takes an `ACCESS EXCLUSIVE` lock, so on large `activity_log` tables you may pre-apply it
-before upgrading to control the timing:
+Applied automatically at startup (idempotent; a non-JSON row aborts it loudly). The rewrite takes an `ACCESS EXCLUSIVE` lock, so on a large `activity_log` table you may pre-apply it before upgrading:
 
 ```sql
 ALTER TABLE activity_log ALTER COLUMN payload TYPE JSONB USING payload::jsonb;

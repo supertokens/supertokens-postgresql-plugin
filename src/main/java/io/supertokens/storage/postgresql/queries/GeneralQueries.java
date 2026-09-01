@@ -537,6 +537,14 @@ public class GeneralQueries {
                             AccountInfoQueries.getQueryToCreateSearchDomainIndexForRecipeUserTenantsTable(start));
                     backfillIndexDdl.add(
                             AccountInfoQueries.getQueryToCreateSearchTpartyIndexForRecipeUserTenantsTable(start));
+                    // Whole-table expression statistics for the two partial search indexes above, plus a
+                    // one-time ANALYZE when first created - see the comment on
+                    // getQueryToCreateSearchStatisticsForRecipeUserTenantsTable. Without these the
+                    // planner never gets usable estimates for the domain/tparty arms (partial-index
+                    // expression stats are ignored by design) and can reject the search indexes
+                    // entirely on large tables.
+                    backfillIndexDdl.add(
+                            AccountInfoQueries.getQueryToCreateSearchStatisticsForRecipeUserTenantsTable(start));
                 }
                 if (doesTableExists(existingTables, Config.getConfig(start).getAppIdToUserIdTable())) {
                     backfillIndexDdl.add(getQueryToCreateLinkedFlagIndexForAppIdToUserIdTable(start));
@@ -957,6 +965,7 @@ public class GeneralQueries {
                     ddl.add(AccountInfoQueries.getQueryToCreateTenantRecipeUserIndexForRecipeUserTenantsTable(start));
                     ddl.add(AccountInfoQueries.getQueryToCreateSearchDomainIndexForRecipeUserTenantsTable(start));
                     ddl.add(AccountInfoQueries.getQueryToCreateSearchTpartyIndexForRecipeUserTenantsTable(start));
+                    ddl.add(AccountInfoQueries.getQueryToCreateSearchStatisticsForRecipeUserTenantsTable(start));
                 }
 
                 if (!doesTableExists(existingTables, Config.getConfig(start).getPrimaryUserTenantsTable())) {
