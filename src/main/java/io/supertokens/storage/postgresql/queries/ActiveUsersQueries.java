@@ -203,7 +203,7 @@ public class ActiveUsersQueries {
 
     /**
      * Derives {@code user_last_active} from the activity log over {@code [windowStartMillis, now]}, on the
-     * caller's transaction connection. Three idempotent statements:
+     * caller's transaction connection. Two idempotent statements:
      * <ol>
      *   <li><b>Fold</b> — upsert each user's most recent activity into the projection, monotonically
      *       ({@code GREATEST} never lowers a stored timestamp). The activity source is the semantic
@@ -224,13 +224,6 @@ public class ActiveUsersQueries {
      *       guard is what makes the delete order-insensitive: a recipe user linked, then unlinked, then
      *       active again inside one window is credited its post-unlink activity (a later
      *       {@code last_active_time}) and must not be scrubbed by the stale earlier link event.</li>
-     *   <li><b>Prune non-resident rows</b> — delete any projection row whose {@code (app_id, user_id)}
-     *       has no local {@code app_id_to_user_id} mapping. Going forward the fold's residency guard and
-     *       per-storage routing never create such rows, so this is a self-healing one-time cleanup of
-     *       legacy rows written to the wrong storage before per-storage routing existed (e.g. a
-     *       separate-database tenant user's app-wide sign-out that was misrouted to the app's
-     *       public-tenant storage). Left in place those rows would keep being counted by the summed
-     *       per-storage MAU read, double-counting the user.</li>
      * </ol>
      * As the first statement it takes a non-blocking advisory lock with a constant key; if another
      * instance holds it the pass is skipped (that instance is folding — the work is redundant, not lost)
@@ -284,18 +277,6 @@ public class ActiveUsersQueries {
                 + " AND al.app_id = ula.app_id AND al.recipe_user_id = ula.user_id"
                 + " AND al.created_at >= ula.last_active_time";
         update(con, RECONCILE_QUERY, pst -> pst.setLong(1, windowStartMillis));
-
-        // Prune projection rows for users who do not reside on this storage. The fold's residency guard
-        // and per-storage routing never create such rows going forward, so this only ever removes legacy
-        // rows written to the wrong storage before per-storage routing existed (e.g. a separate-database
-        // tenant user's app-wide sign-out that was misrouted to the app's public-tenant storage). Those
-        // rows would otherwise keep being counted by the summed per-storage MAU read, double-counting the
-        // user. Self-healing and idempotent: after the first pass on an upgraded install it matches
-        // nothing, and it never touches a resident user's row.
-        String PRUNE_NON_RESIDENT_QUERY = "DELETE FROM " + userLastActiveTable + " ula"
-                + " WHERE NOT EXISTS (SELECT 1 FROM " + appIdToUserIdTable + " aiu"
-                + " WHERE aiu.app_id = ula.app_id AND aiu.user_id = ula.user_id)";
-        update(con, PRUNE_NON_RESIDENT_QUERY, pst -> {});
         return true;
     }
 

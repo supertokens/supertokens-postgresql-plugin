@@ -266,55 +266,6 @@ public class ActivityLogRollupTest {
     }
 
     /**
-     * The rollup prunes projection rows for users who do not reside on this storage. Companion to
-     * core#1410's per-storage MAU counting: before per-storage routing, a separate-database tenant user's
-     * app-wide sign-out was misrouted to the app's public-tenant storage, leaving a {@code user_last_active}
-     * row there whose {@code (app_id, user_id)} has no local {@code app_id_to_user_id} mapping. The summed
-     * per-storage read would count that legacy row in addition to the user's real row on the tenant
-     * storage, double-counting the user. The prune deletes exactly those non-resident rows while leaving a
-     * genuinely resident user's row intact. Self-healing and idempotent: nothing new ever becomes
-     * non-resident, so on an upgraded install it fires once and then matches nothing.
-     */
-    @Test
-    public void pruneRemovesNonResidentLegacyRowsButKeepsResidentUsers() throws Exception {
-        TestingProcessManager.TestingProcess process = startProcess();
-        Start storage = (Start) StorageLayer.getStorage(process.getProcess());
-        if (storage == null) {
-            return;
-        }
-        String ula = Config.getConfig(storage).getUserLastActiveTable();
-
-        long base = System.currentTimeMillis();
-        String residentUser = "prune-resident-user";
-        String legacyGhost = "prune-legacy-ghost-user";
-
-        // Resident user: has a local app_id_to_user_id mapping and a projection row.
-        registerUser(storage, APP_ID, residentUser);
-        seedUserLastActive(storage, ula, residentUser, base + 1000);
-
-        // Legacy misrouted row: a projection row whose user has NO local app_id_to_user_id mapping —
-        // exactly what a separate-database tenant user's app-wide sign-out left on the public-tenant
-        // storage before per-storage routing existed. user_last_active has no user FK, so it persists.
-        seedUserLastActive(storage, ula, legacyGhost, base + 2000);
-
-        // Both rows are present before the rollup.
-        assertEquals(Long.valueOf(base + 1000), getLastActive(storage, residentUser));
-        assertEquals(Long.valueOf(base + 2000), getLastActive(storage, legacyGhost));
-
-        // The rollup prunes the non-resident legacy row and leaves the resident user untouched.
-        runRollup(storage, base - 10000);
-        assertEquals(Long.valueOf(base + 1000), getLastActive(storage, residentUser));
-        assertNull(getLastActive(storage, legacyGhost));
-
-        // Idempotent: a second pass changes nothing.
-        runRollup(storage, base - 10000);
-        assertEquals(Long.valueOf(base + 1000), getLastActive(storage, residentUser));
-        assertNull(getLastActive(storage, legacyGhost));
-
-        stopProcess(process);
-    }
-
-    /**
      * The reconcile is order-insensitive. A recipe user linked, then unlinked, then active again inside
      * one window must keep its post-unlink credit: the {@code account_linking} event matches the user by
      * {@code recipe_user_id}, but its later activity gives the projection a {@code last_active_time} newer
