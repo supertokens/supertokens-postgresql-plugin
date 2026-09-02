@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim AS tmp
+FROM debian:trixie-slim AS tmp
 WORKDIR /build
 RUN apt-get update \
  && apt-get install -y --no-install-recommends wget unzip ca-certificates \
@@ -6,14 +6,14 @@ RUN apt-get update \
 
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then \
-        wget -O jre.zip https://github.com/supertokens/jre/raw/refs/heads/master/jre-21.0.7-linux.zip; \
+        wget -O jre.zip https://github.com/supertokens/jre/raw/refs/heads/master/jre-21.0.12.1-linux.zip; \
     elif [ "$ARCH" = "arm64" ]; then \
-        wget -O jre.zip https://github.com/supertokens/jre/raw/refs/heads/master/jre-21.0.7-linux-aarch.zip; \
+        wget -O jre.zip https://github.com/supertokens/jre/raw/refs/heads/master/jre-21.0.12.1-linux-aarch.zip; \
     else \
         echo "Unsupported architecture: $ARCH" && exit 1; \
     fi
 RUN unzip jre.zip
-RUN mv jre-21.0.7 jre || mv jre-21.0.7-linux-aarch/jre-21.0.7 jre
+RUN mv jre-21.0.12.1 jre
 
 COPY ./cli ./cli
 COPY ./core ./core
@@ -26,7 +26,7 @@ COPY ./version.yaml ./version.yaml
 
 RUN ./jre/bin/java -classpath "./cli/*" io.supertokens.cli.Main true
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 RUN groupadd supertokens && useradd -m -s /bin/bash -g supertokens supertokens
 
 RUN set -eux \
@@ -35,6 +35,7 @@ RUN set -eux \
         ca-certificates \
         curl \
         tzdata \
+ && apt-get upgrade -y \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=tmp --chown=supertokens /usr/lib/supertokens /usr/lib/supertokens

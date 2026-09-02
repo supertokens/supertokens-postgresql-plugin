@@ -14,6 +14,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the index-only / `CONCURRENTLY` patch rule and proves the startup backfill by booting the new core on the
   un-migrated base schema, and requires the migration to be referenced from the release's `### Migration`
   changelog section
+- Creates whole-table extended statistics for the two dashboard-search index expressions (email-domain
+  and provider) and runs a one-time `ANALYZE` on `recipe_user_tenants`, so the planner stops misestimating
+  those search arms and rejecting the partial indexes on large tables (PostgreSQL >= 14; skipped on older versions).
+
+### Migration
+
+Applied automatically at startup. On large deployments already running 9.7.x, run it ahead of the
+upgrade so the first dashboard search doesn't wait on it (safe to run online; `ANALYZE` samples the
+table, it does not scan it):
+
+```sql
+CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_domain
+  ON (lower(split_part(account_info_value, '@', 2))) FROM recipe_user_tenants;
+CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_tparty
+  ON (lower(account_info_value)) FROM recipe_user_tenants;
+ANALYZE recipe_user_tenants;
+```
 
 ## [9.8.0]
 
@@ -31,6 +48,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Fixes duplicate JWT signing keys when concurrent transactions create an app's first key: the empty-read path now takes a per-app advisory lock and re-reads
 - JWT signing key reads no longer take `FOR UPDATE` row locks
 - Serialises access-token signing-key rotation with a per-app advisory lock in getAccessTokenSigningKeys_Transaction, so concurrent cores no longer create duplicate keys (which caused kid mismatches at JWT consumers); FOR UPDATE is dropped as redundant.
+- Docker image: base updated from Debian 12 (bookworm, now LTS-only) to Debian 13 (trixie)
+- Docker image: updates the bundled JRE from Temurin 21.0.7 to 21.0.12.1 (clears the July 2025 – July 2026 JDK CPU CVEs flagged by image scanners)
+- Docker image: runs `apt-get upgrade` at build time so rebuilds pick up Debian security fixes for base packages
+
 ## [9.7.1]
 
 - Makes the dashboard user search (email/phone/provider) sargable: `ILIKE` scans on `account_info_value`
