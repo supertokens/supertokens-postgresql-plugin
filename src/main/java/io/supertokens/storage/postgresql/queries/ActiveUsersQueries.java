@@ -1,5 +1,6 @@
 package io.supertokens.storage.postgresql.queries;
 
+import io.supertokens.pluginInterface.auditlog.LifecycleEventType;
 import io.supertokens.pluginInterface.auditlog.RollupEventTypes;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
@@ -273,7 +274,8 @@ public class ActiveUsersQueries {
         // one window keeps the post-unlink credit (its last_active_time is newer than the stale link),
         // instead of being wrongly scrubbed by an earlier account_linking event in the same window.
         String RECONCILE_QUERY = "DELETE FROM " + userLastActiveTable + " ula USING " + activityLogTable + " al"
-                + " WHERE al.event_type = 'account_linking' AND al.created_at >= ?"
+                + " WHERE al.event_type = '" + LifecycleEventType.ACCOUNT_LINKING.getValue() + "'"
+                + " AND al.created_at >= ?"
                 + " AND al.app_id = ula.app_id AND al.recipe_user_id = ula.user_id"
                 + " AND al.created_at >= ula.last_active_time";
         update(con, RECONCILE_QUERY, pst -> pst.setLong(1, windowStartMillis));
