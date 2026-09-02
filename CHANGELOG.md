@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Companion to core's per-storage active-user counting: the last-active fold now uses a single
+  `app_id_to_user_id` residency guard, dropping the redundant `apps` guard it subsumes (the residency
+  guard already keeps a since-deleted app's retained activity from being folded, since
+  `app_id_to_user_id` cascades on app delete).
 - `rollupLastActiveFromActivityLog_Transaction` now returns `true` when the fold ran and `false` when it
   was skipped after losing the non-blocking rollup advisory lock, so the last-active rollup cron does not
   advance its watermark past a window this instance never folded.

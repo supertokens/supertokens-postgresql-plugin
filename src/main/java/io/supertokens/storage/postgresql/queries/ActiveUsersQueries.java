@@ -208,12 +208,16 @@ public class ActiveUsersQueries {
      *   <li><b>Fold</b> — upsert each user's most recent activity into the projection, monotonically
      *       ({@code GREATEST} never lowers a stored timestamp). The activity source is the semantic
      *       activity/lifecycle event set in {@link RollupEventTypes#FOLD_SET},
-     *       credited to the event's {@code primary_or_recipe_user_id}. Two existence guards keep the
-     *       fold from resurrecting rows for entities that no longer exist: one on {@code apps}
-     *       (see below) and one on {@code app_id_to_user_id} — {@code activity_log} rows are retained
-     *       after a user is deleted (no user FK), but {@code deleteUserActive_Transaction} removes the
-     *       user's projection row, so folding the retained events would silently re-insert (resurrect)
-     *       it and permanently overcount MAU. The user guard confines the fold to still-existing users.</li>
+     *       credited to the event's {@code primary_or_recipe_user_id}. A single {@code app_id_to_user_id}
+     *       residency guard confines the fold to activity for a user whose auth record lives on this
+     *       storage. With per-storage routing a user's activity is colocated with their auth record, so
+     *       this normally matches; it doubles as insurance for the one tenant-less emit path
+     *       (SessionRemoveAPI's app-wide sign-out) and keeps the fold from resurrecting a since-deleted
+     *       user's retained {@code activity_log} rows (no user FK on {@code user_last_active}, but
+     *       {@code deleteUserActive_Transaction} had removed the projection row). It subsumes the old
+     *       {@code apps} existence guard: {@code app_id_to_user_id} cascades on app delete, so a
+     *       since-deleted app has no mapping rows here — its retained {@code activity_log} rows are not
+     *       folded and cannot violate the {@code user_last_active -> apps} foreign key.</li>
      *   <li><b>Reconcile</b> — delete projection rows for users linked away within the same window
      *       ({@code account_linking} events, matched on {@code app_id} + {@code recipe_user_id}), but
      *       only when the link event is not older than the row's {@code last_active_time}. That ordering
@@ -241,22 +245,20 @@ public class ActiveUsersQueries {
 
         String userLastActiveTable = Config.getConfig(start).getUserLastActiveTable();
         String activityLogTable = Config.getConfig(start).getActivityLogTable();
-        String appsTable = Config.getConfig(start).getAppsTable();
         String appIdToUserIdTable = Config.getConfig(start).getAppIdToUserIdTable();
 
-        // Two existence guards keep the fold from resurrecting projection rows for entities that no
-        // longer exist, since activity_log rows are intentionally retained after the entity is deleted:
-        //  - apps: user_last_active cascades on app delete via its app_id -> apps FK, so folding a
-        //    since-deleted app's retained rows would violate that FK. EXISTS (apps) keeps the fold set
-        //    to still-existing apps only.
-        //  - users: user_last_active has NO user FK, so a deleted user's retained activity would fold
-        //    back in without erroring (deleteUserActive_Transaction had removed the projection row) and
-        //    permanently overcount MAU. EXISTS (app_id_to_user_id) on the credited primary user id keeps
-        //    the fold set to still-existing users only.
+        // A single app_id_to_user_id residency guard confines the fold to activity for a user whose auth
+        // record lives on this storage (mirrors the in-memory guard in core#1410). With per-storage
+        // routing a user's activity is colocated with their auth record, so this normally matches; it is
+        // insurance for the one tenant-less emit path (SessionRemoveAPI's app-wide sign-out) and keeps a
+        // deleted user's retained activity_log rows (no user FK on user_last_active, but
+        // deleteUserActive_Transaction had removed the projection row) from resurrecting. It subsumes the
+        // old apps existence guard: app_id_to_user_id cascades on app delete, so a since-deleted app has
+        // no mapping rows here, so its retained activity_log rows are not folded and cannot violate the
+        // user_last_active -> apps foreign key.
         String FOLD_QUERY = "INSERT INTO " + userLastActiveTable + " (app_id, user_id, last_active_time)"
                 + " SELECT app_id, primary_or_recipe_user_id, MAX(created_at) FROM " + activityLogTable + " al"
                 + " WHERE event_type IN (" + RollupEventTypes.sqlInList() + ") AND created_at >= ?"
-                + " AND EXISTS (SELECT 1 FROM " + appsTable + " a WHERE a.app_id = al.app_id)"
                 + " AND EXISTS (SELECT 1 FROM " + appIdToUserIdTable + " aiu"
                 + " WHERE aiu.app_id = al.app_id AND aiu.user_id = al.primary_or_recipe_user_id)"
                 + " GROUP BY app_id, primary_or_recipe_user_id"

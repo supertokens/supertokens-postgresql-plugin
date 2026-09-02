@@ -180,10 +180,11 @@ public class ActivityLogRollupTest {
      * rows are intentionally retained after an app is deleted (the table has no app foreign key), while
      * {@code user_last_active} cascades on app delete via its {@code app_id -> apps} FK. Without a guard the
      * fold re-inserts the retained events and the INSERT violates that FK — exactly the failure that
-     * surfaced across the suite once the test DB stopped being reset. The {@code EXISTS (apps)} guard
-     * confines the fold to still-existing apps: an event whose app_id is absent from {@code apps} is
-     * skipped (no FK violation, no resurrected row) while a concurrent event for an existing app still
-     * folds normally.
+     * surfaced across the suite once the test DB stopped being reset. The single {@code app_id_to_user_id}
+     * residency guard subsumes the old {@code EXISTS (apps)} guard here: {@code app_id_to_user_id} cascades
+     * on app delete, so a deleted app has no mapping rows, so its retained activity is skipped (no FK
+     * violation, no resurrected row) while a concurrent event for an existing app still folds normally.
+     * This is the regression that proves dropping the apps guard did not reintroduce the FK violation.
      */
     @Test
     public void foldSkipsActivityForAppMissingFromApps() throws Exception {
@@ -201,7 +202,7 @@ public class ActivityLogRollupTest {
         // inserts fine, standing in for a deleted app whose activity_log rows still linger.
         String missingAppId = "app-that-was-deleted";
         // The existing-app user is a real user; the deleted-app user cannot be registered (its app_id is
-        // absent from apps), which is fine — the apps guard skips it before the user guard is reached.
+        // absent from apps), which is fine — with no mapping row it fails the residency guard and is skipped.
         registerUser(storage, APP_ID, existingAppUser);
 
         insertActivityEventForApp(storage, log, APP_ID, existingAppUser, base + 1000);
