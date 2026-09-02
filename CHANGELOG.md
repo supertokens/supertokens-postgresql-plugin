@@ -17,6 +17,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Creates whole-table extended statistics for the two dashboard-search index expressions (email-domain
   and provider) and runs a one-time `ANALYZE` on `recipe_user_tenants`, so the planner stops misestimating
   those search arms and rejecting the partial indexes on large tables (PostgreSQL >= 14; skipped on older versions).
+- Updates the `ActivityLogUserLastActiveTest` integration test to core's current
+  `ActiveUsers.updateLastActive(TenantIdentifier, Main, String, ActivityEventType)` signature (the retired
+  synthetic `user_last_active` event is now recorded as the concrete activity event), fixing the
+  `compileTestAspectj` break on this branch.
 
 ### Migration
 
