@@ -180,10 +180,11 @@ public class ActivityLogRollupTest {
      * rows are intentionally retained after an app is deleted (the table has no app foreign key), while
      * {@code user_last_active} cascades on app delete via its {@code app_id -> apps} FK. Without a guard the
      * fold re-inserts the retained events and the INSERT violates that FK — exactly the failure that
-     * surfaced across the suite once the test DB stopped being reset. The {@code EXISTS (apps)} guard
-     * confines the fold to still-existing apps: an event whose app_id is absent from {@code apps} is
-     * skipped (no FK violation, no resurrected row) while a concurrent event for an existing app still
-     * folds normally.
+     * surfaced across the suite once the test DB stopped being reset. The single {@code app_id_to_user_id}
+     * residency guard subsumes the old {@code EXISTS (apps)} guard here: {@code app_id_to_user_id} cascades
+     * on app delete, so a deleted app has no mapping rows, so its retained activity is skipped (no FK
+     * violation, no resurrected row) while a concurrent event for an existing app still folds normally.
+     * This is the regression that proves dropping the apps guard did not reintroduce the FK violation.
      */
     @Test
     public void foldSkipsActivityForAppMissingFromApps() throws Exception {
@@ -201,7 +202,7 @@ public class ActivityLogRollupTest {
         // inserts fine, standing in for a deleted app whose activity_log rows still linger.
         String missingAppId = "app-that-was-deleted";
         // The existing-app user is a real user; the deleted-app user cannot be registered (its app_id is
-        // absent from apps), which is fine — the apps guard skips it before the user guard is reached.
+        // absent from apps), which is fine — with no mapping row it fails the residency guard and is skipped.
         registerUser(storage, APP_ID, existingAppUser);
 
         insertActivityEventForApp(storage, log, APP_ID, existingAppUser, base + 1000);
@@ -260,6 +261,55 @@ public class ActivityLogRollupTest {
         runRollup(storage, base - 10000);
         assertEquals(Long.valueOf(base + 1000), getLastActive(storage, liveUser));
         assertNull(getLastActive(storage, deletedUser));
+
+        stopProcess(process);
+    }
+
+    /**
+     * The rollup prunes projection rows for users who do not reside on this storage. Companion to
+     * core#1410's per-storage MAU counting: before per-storage routing, a separate-database tenant user's
+     * app-wide sign-out was misrouted to the app's public-tenant storage, leaving a {@code user_last_active}
+     * row there whose {@code (app_id, user_id)} has no local {@code app_id_to_user_id} mapping. The summed
+     * per-storage read would count that legacy row in addition to the user's real row on the tenant
+     * storage, double-counting the user. The prune deletes exactly those non-resident rows while leaving a
+     * genuinely resident user's row intact. Self-healing and idempotent: nothing new ever becomes
+     * non-resident, so on an upgraded install it fires once and then matches nothing.
+     */
+    @Test
+    public void pruneRemovesNonResidentLegacyRowsButKeepsResidentUsers() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        Start storage = (Start) StorageLayer.getStorage(process.getProcess());
+        if (storage == null) {
+            return;
+        }
+        String ula = Config.getConfig(storage).getUserLastActiveTable();
+
+        long base = System.currentTimeMillis();
+        String residentUser = "prune-resident-user";
+        String legacyGhost = "prune-legacy-ghost-user";
+
+        // Resident user: has a local app_id_to_user_id mapping and a projection row.
+        registerUser(storage, APP_ID, residentUser);
+        seedUserLastActive(storage, ula, residentUser, base + 1000);
+
+        // Legacy misrouted row: a projection row whose user has NO local app_id_to_user_id mapping —
+        // exactly what a separate-database tenant user's app-wide sign-out left on the public-tenant
+        // storage before per-storage routing existed. user_last_active has no user FK, so it persists.
+        seedUserLastActive(storage, ula, legacyGhost, base + 2000);
+
+        // Both rows are present before the rollup.
+        assertEquals(Long.valueOf(base + 1000), getLastActive(storage, residentUser));
+        assertEquals(Long.valueOf(base + 2000), getLastActive(storage, legacyGhost));
+
+        // The rollup prunes the non-resident legacy row and leaves the resident user untouched.
+        runRollup(storage, base - 10000);
+        assertEquals(Long.valueOf(base + 1000), getLastActive(storage, residentUser));
+        assertNull(getLastActive(storage, legacyGhost));
+
+        // Idempotent: a second pass changes nothing.
+        runRollup(storage, base - 10000);
+        assertEquals(Long.valueOf(base + 1000), getLastActive(storage, residentUser));
+        assertNull(getLastActive(storage, legacyGhost));
 
         stopProcess(process);
     }
