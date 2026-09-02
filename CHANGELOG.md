@@ -7,9 +7,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Companion to core's per-storage active-user counting: the last-active fold now uses a single
+  `app_id_to_user_id` residency guard, dropping the redundant `apps` guard it subsumes (the residency
+  guard already keeps a since-deleted app's retained activity from being folded, since
+  `app_id_to_user_id` cascades on app delete).
+- `rollupLastActiveFromActivityLog_Transaction` now returns `true` when the fold ran and `false` when it
+  was skipped after losing the non-blocking rollup advisory lock, so the last-active rollup cron does not
+  advance its watermark past a window this instance never folded.
 - Creates whole-table extended statistics for the two dashboard-search index expressions (email-domain
   and provider) and runs a one-time `ANALYZE` on `recipe_user_tenants`, so the planner stops misestimating
   those search arms and rejecting the partial indexes on large tables (PostgreSQL >= 14; skipped on older versions).
+- Updates the `ActivityLogUserLastActiveTest` integration test to core's current
+  `ActiveUsers.updateLastActive(TenantIdentifier, Main, String, ActivityEventType)` signature (the retired
+  synthetic `user_last_active` event is now recorded as the concrete activity event), fixing the
+  `compileTestAspectj` break on this branch.
 
 ### Migration
 
@@ -44,6 +55,17 @@ ANALYZE recipe_user_tenants;
 - Docker image: base updated from Debian 12 (bookworm, now LTS-only) to Debian 13 (trixie)
 - Docker image: updates the bundled JRE from Temurin 21.0.7 to 21.0.12.1 (clears the July 2025 – July 2026 JDK CPU CVEs flagged by image scanners)
 - Docker image: runs `apt-get upgrade` at build time so rebuilds pick up Debian security fixes for base packages
+- Implements the plugin-interface activity-log storage: retention parameter, transactional insert, app-scoped window read (`getActivityLogEntriesForApp`), and a last-active rollup (fold + reconcile) driven by the semantic activity/lifecycle events. The fold skips deleted apps and deleted users and the reconcile is order-insensitive, so a since-deleted or link/unlink-churned user is never resurrected into `user_last_active` (which would overcount MAU).
+- Adds the connection-taking count-affecting write variants from plugin-interface#216 (`signUp_Transaction`, `createUser_Transaction`, `removeUserIdFromTenant_Transaction`), so a mutation and its lifecycle audit event commit on one connection; the existing auto-commit methods become thin wrappers.
+- Stores `activity_log.payload` as `JSONB` (pre-existing `TEXT` columns migrated automatically at startup).
+
+### Migration
+
+Applied automatically at startup (idempotent; a non-JSON row aborts it loudly). The rewrite takes an `ACCESS EXCLUSIVE` lock, so on a large `activity_log` table you may pre-apply it before upgrading:
+
+```sql
+ALTER TABLE activity_log ALTER COLUMN payload TYPE JSONB USING payload::jsonb;
+```
 
 ## [9.7.1]
 

@@ -117,6 +117,23 @@ public class GeneralQueries {
         return existingTables.contains(baseName);
     }
 
+    /**
+     * True if the (already existing) activity_log table's payload column is not yet JSONB - i.e. it is
+     * still the TEXT column the table originally shipped with, and needs the one-time TEXT -> JSONB
+     * migration. Resolved through {@code ::regclass} on the configured table name so it honours the
+     * schema and table-name prefix exactly like {@link PostgreSQLConfig#getActivityLogTable()} does;
+     * only call it when the table is known to exist (the cast errors on a missing relation).
+     */
+    private static boolean isActivityLogPayloadColumnNotJsonb(Start start, Connection con)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT format_type(a.atttypid, a.atttypmod) AS col_type FROM pg_attribute a"
+                + " WHERE a.attrelid = ?::regclass AND a.attname = 'payload' AND NOT a.attisdropped";
+        String columnType = execute(con, QUERY,
+                pst -> pst.setString(1, Config.getConfig(start).getActivityLogTable()),
+                result -> result.next() ? result.getString("col_type") : null);
+        return columnType != null && !"jsonb".equalsIgnoreCase(columnType);
+    }
+
     static String getQueryToCreateUsersTable(Start start) {
         String schema = Config.getConfig(start).getTableSchema();
         String usersTable = Config.getConfig(start).getUsersTable();
@@ -968,6 +985,13 @@ public class GeneralQueries {
                     // Pre-create the partitions for the current and upcoming months so the first inserts
                     // land in a monthly partition rather than the DEFAULT backstop.
                     ddl.addAll(ActivityLogQueries.getQueriesToCreateUpcomingMonthPartitions(start));
+                } else if (isActivityLogPayloadColumnNotJsonb(start, con)) {
+                    // Deployment created before payload became JSONB: migrate the pre-existing TEXT column
+                    // once. This goes in the transactional `ddl` batch rather than the best-effort index
+                    // backfill precisely because the backfill swallows failures - the cast of an old row
+                    // holding invalid JSON must abort startup loudly, not be silently skipped. Idempotent:
+                    // the guard above is false once the column is JSONB, so it never re-runs.
+                    ddl.add(ActivityLogQueries.getQueryToMigratePayloadColumnToJsonb(start));
                 }
 
                 executeDDLBatch(con, ddl);
@@ -1102,6 +1126,11 @@ public class GeneralQueries {
             String DROP_QUERY = "DROP TABLE IF EXISTS "
                     + getConfig(start).getAppsTable() + ","
                     + getConfig(start).getUserLastActiveTable() + ","
+                    // Range-partitioned parent; dropping it also drops every partition
+                    // (activity_log_default, activity_log_pYYYYMM). Unlike production, the test reset must
+                    // clear it: it has no app_id->apps FK cascade, so leftover rows leak across tests and a
+                    // later rollup fold would re-insert user_last_active rows for since-deleted app_ids.
+                    + getConfig(start).getActivityLogTable() + ","
                     + getConfig(start).getTenantsTable() + ","
                     + getConfig(start).getKeyValueTable() + ","
                     + getConfig(start).getAppIdToUserIdTable() + ","

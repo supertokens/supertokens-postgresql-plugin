@@ -17,13 +17,18 @@
 package io.supertokens.storage.postgresql.queries;
 
 import io.supertokens.pluginInterface.auditlog.AuditLogEvent;
+import io.supertokens.pluginInterface.auditlog.RollupEventTypes;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ConnectionPool;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 
+import java.sql.Array;
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -32,6 +37,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -45,8 +51,8 @@ import io.supertokens.storage.postgresql.annotations.AtomicAutoCommitWrite;
  * The table is range-partitioned by {@code created_at} (epoch millis) into one partition per UTC
  * calendar month. Upcoming months' partitions are pre-created — at table creation and by a daily
  * maintenance cron ({@code CleanupActivityLogPartitions}) — and a monthly partition is dropped once
- * its entire month is older than {@link #RETENTION_DAYS} days. A DEFAULT partition is a backstop so
- * inserts never fail if the cron lapses beyond the pre-created window.
+ * its entire month is older than the retention window the caller supplies. A DEFAULT partition is a
+ * backstop so inserts never fail if the cron lapses beyond the pre-created window.
  *
  * No primary key or foreign key — the identity sequence makes {@code id} unique by construction.
  * The only index is a BRIN on {@code created_at} created on the parent table (Postgres propagates
@@ -54,12 +60,6 @@ import io.supertokens.storage.postgresql.annotations.AtomicAutoCommitWrite;
  * to prune time-range scans. Requires PostgreSQL 11+.
  */
 public class ActivityLogQueries {
-
-    /**
-     * A monthly partition is dropped only once its entire month is older than this many days, so no
-     * data younger than the window is ever removed (a partition is retained until its last day ages out).
-     */
-    private static final int RETENTION_DAYS = 31;
 
     /** Number of future months (beyond the current one) to pre-create partitions for, so DEFAULT stays empty. */
     private static final int PREMAKE_MONTHS = 1;
@@ -84,8 +84,25 @@ public class ActivityLogQueries {
                 + "auth_principal VARCHAR(256),"
                 + "identifier VARCHAR(256),"
                 + "created_at BIGINT NOT NULL,"
-                + "payload TEXT"
+                // JSONB (not TEXT): structured lifecycle-event payloads will start flowing into this
+                // column, and JSONB rejects malformed JSON at write time. Monthly partitions are created
+                // with PARTITION OF, which copies the parent's column definitions verbatim, so every new
+                // partition inherits this type automatically — no per-partition DDL to keep in sync.
+                + "payload JSONB"
                 + ") PARTITION BY RANGE (created_at);";
+    }
+
+    /**
+     * One-time, idempotent migration of a pre-existing {@code payload} column from TEXT to JSONB (the
+     * column originally shipped as TEXT). Applied to the partitioned parent, so Postgres rewrites every
+     * child partition with the same cast. {@code USING payload::jsonb} makes an old row holding invalid
+     * JSON fail the migration loudly (invalid_text_representation) rather than being silently dropped —
+     * which is why the caller runs this in the transactional DDL batch, not the best-effort index
+     * backfill. The caller guards it on the column not already being JSONB, so it never re-runs.
+     */
+    public static String getQueryToMigratePayloadColumnToJsonb(Start start) {
+        return "ALTER TABLE " + Config.getConfig(start).getActivityLogTable()
+                + " ALTER COLUMN payload TYPE JSONB USING payload::jsonb;";
     }
 
     static String getQueryToCreateActivityLogDefaultPartition(Start start) {
@@ -99,15 +116,19 @@ public class ActivityLogQueries {
                 + Config.getConfig(start).getActivityLogTable() + " USING brin (created_at);";
     }
 
-    @AtomicAutoCommitWrite(justification = "append-only activity-log write; the insert is the operation")
-    public static void createActivityLogEntry(Start start, TenantIdentifier tenantIdentifier, AuditLogEvent event)
-            throws SQLException, StorageQueryException {
-        String QUERY = "INSERT INTO " + Config.getConfig(start).getActivityLogTable()
+    private static String getQueryToInsertActivityLogEntry(Start start) {
+        return "INSERT INTO " + Config.getConfig(start).getActivityLogTable()
                 + " (app_id, tenant_id, recipe_user_id, primary_or_recipe_user_id, event_type, status,"
                 + " auth_principal, identifier, created_at, payload)"
-                + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                // payload is bound as a String; ?::jsonb casts it explicitly so the JSONB column accepts
+                // it (the driver sends the parameter as text, and text is not implicitly coercible to
+                // JSONB). A null payload casts to SQL NULL unchanged.
+                + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb)";
+    }
 
-        update(start, QUERY, pst -> {
+    private static PreparedStatementValueSetter activityLogEntrySetter(TenantIdentifier tenantIdentifier,
+                                                                       AuditLogEvent event) {
+        return pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, event.recipeUserId);
@@ -118,7 +139,99 @@ public class ActivityLogQueries {
             pst.setString(8, event.identifier);
             pst.setLong(9, event.createdAt);
             pst.setString(10, event.payload);
+        };
+    }
+
+    @AtomicAutoCommitWrite(justification = "append-only activity-log write; the insert is the operation")
+    public static void createActivityLogEntry(Start start, TenantIdentifier tenantIdentifier, AuditLogEvent event)
+            throws SQLException, StorageQueryException {
+        update(start, getQueryToInsertActivityLogEntry(start), activityLogEntrySetter(tenantIdentifier, event));
+    }
+
+    /**
+     * Same insert as {@link #createActivityLogEntry}, but on the caller's transaction connection, so
+     * the entry commits or rolls back atomically with the surrounding mutation.
+     */
+    public static void createActivityLogEntry_Transaction(Connection con, Start start,
+                                                          TenantIdentifier tenantIdentifier, AuditLogEvent event)
+            throws SQLException, StorageQueryException {
+        update(con, getQueryToInsertActivityLogEntry(start), activityLogEntrySetter(tenantIdentifier, event));
+    }
+
+    /**
+     * Cheap existence check for rollup-relevant activity newer than {@code sinceMillis} — the rows the
+     * last-active rollup would fold or reconcile ({@link RollupEventTypes#FOLD_SET}).
+     * Storage-wide, no app predicate; lets the rollup cron skip work when there is nothing new.
+     */
+    public static boolean hasUnfoldedActivitySince(Start start, long sinceMillis)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT EXISTS (SELECT 1 FROM " + Config.getConfig(start).getActivityLogTable()
+                + " WHERE event_type IN (" + RollupEventTypes.sqlInList() + ") AND created_at > ?) AS has_activity";
+        return execute(start, QUERY, pst -> pst.setLong(1, sinceMillis), result -> {
+            if (result.next()) {
+                return result.getBoolean("has_activity");
+            }
+            return false;
         });
+    }
+
+    /**
+     * App-scoped, window-bounded read of the activity log so callers can fold lifecycle events in Java
+     * rather than in the database. Returns the {@code appIdentifier} events (across all its tenants, each
+     * row's {@code tenant_id} preserved) whose {@code event_type} is in {@code eventTypes} and whose
+     * {@code created_at} lies in the half-open interval {@code (fromExclusiveMillis, toInclusiveMillis]},
+     * ordered by {@code created_at} ascending and capped at {@code limit} rows.
+     *
+     * The range predicate is kept literally on {@code created_at} (no expression around it) so the monthly
+     * partition pruning and the BRIN index on {@code created_at} both apply. {@code LIMIT} is applied in the
+     * query, never after materialising the window, so a caller can pass {@code cap + 1} to detect an
+     * over-cap window without reading all of it. {@code payload} is cast to text ({@code ::text}) so the
+     * JSONB column comes back as its serialised JSON string; a null payload stays null.
+     */
+    public static List<AuditLogEvent> getActivityLogEntriesForApp(Start start, AppIdentifier appIdentifier,
+                                                                  Set<String> eventTypes, long fromExclusiveMillis,
+                                                                  long toInclusiveMillis, int limit)
+            throws SQLException, StorageQueryException {
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit must be > 0");
+        }
+        if (eventTypes == null || eventTypes.isEmpty()) {
+            throw new IllegalArgumentException("eventTypes must be non-empty");
+        }
+        String[] eventTypesArray = eventTypes.toArray(new String[0]);
+        String QUERY = "SELECT app_id, tenant_id, recipe_user_id, primary_or_recipe_user_id, event_type, status,"
+                + " auth_principal, identifier, created_at, payload::text AS payload FROM "
+                + Config.getConfig(start).getActivityLogTable()
+                + " WHERE app_id = ? AND event_type = ANY(?) AND created_at > ? AND created_at <= ?"
+                + " ORDER BY created_at ASC LIMIT ?";
+        return execute(start, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            Array eventTypesSqlArray = pst.getConnection().createArrayOf("VARCHAR", eventTypesArray);
+            pst.setArray(2, eventTypesSqlArray);
+            pst.setLong(3, fromExclusiveMillis);
+            pst.setLong(4, toInclusiveMillis);
+            pst.setInt(5, limit);
+        }, result -> {
+            List<AuditLogEvent> events = new ArrayList<>();
+            while (result.next()) {
+                events.add(auditLogEventFromRow(result));
+            }
+            return events;
+        });
+    }
+
+    private static AuditLogEvent auditLogEventFromRow(ResultSet result) throws SQLException {
+        return new AuditLogEvent(
+                result.getString("app_id"),
+                result.getString("tenant_id"),
+                result.getString("recipe_user_id"),
+                result.getString("primary_or_recipe_user_id"),
+                result.getString("event_type"),
+                result.getString("status"),
+                result.getString("auth_principal"),
+                result.getString("identifier"),
+                result.getLong("created_at"),
+                result.getString("payload"));
     }
 
     /**
@@ -146,7 +259,8 @@ public class ActivityLogQueries {
 
     /**
      * Pre-creates upcoming month partitions and drops any whose entire month is older than
-     * {@link #RETENTION_DAYS} days. Idempotent; intended to be run daily.
+     * {@code retentionDays} days. Retention is supplied by the caller (from configuration) rather
+     * than hardcoded. Idempotent; intended to be run daily.
      *
      * If rows for a month landed in the DEFAULT backstop before that month's partition existed
      * (e.g. the core was stopped or paused across a month boundary, so neither startup nor the
@@ -155,13 +269,14 @@ public class ActivityLogQueries {
      * moved out of DEFAULT and into the new partition in a single transaction, so the cron heals
      * the backstop instead of failing on it forever.
      */
-    public static void maintainPartitions(Start start) throws SQLException, StorageQueryException {
+    public static void maintainPartitions(Start start, int retentionDays)
+            throws SQLException, StorageQueryException {
         YearMonth thisMonth = YearMonth.now(ZoneOffset.UTC);
         for (int i = 0; i <= PREMAKE_MONTHS; i++) {
             ensureMonthlyPartition(start, thisMonth.plusMonths(i));
         }
-        dropPartitionsOlderThanRetention(start);
-        purgeExpiredRowsFromDefaultPartition(start);
+        dropPartitionsOlderThanRetention(start, retentionDays);
+        purgeExpiredRowsFromDefaultPartition(start, retentionDays);
     }
 
     private static void ensureMonthlyPartition(Start start, YearMonth month)
@@ -234,14 +349,15 @@ public class ActivityLogQueries {
      * is enforced on them directly — dropping monthly partitions alone would keep them forever.
      */
     @AtomicAutoCommitWrite(justification = "time-based cleanup sweep; single auto-commit DELETE with nothing to be atomic with")
-    private static void purgeExpiredRowsFromDefaultPartition(Start start)
+    private static void purgeExpiredRowsFromDefaultPartition(Start start, int retentionDays)
             throws SQLException, StorageQueryException {
         String defaultPartition = Config.getConfig(start).getActivityLogTable() + "_default";
-        long cutoffMillis = LocalDate.now(ZoneOffset.UTC).minusDays(RETENTION_DAYS).toEpochDay() * MILLIS_PER_DAY;
+        long cutoffMillis = LocalDate.now(ZoneOffset.UTC).minusDays(retentionDays).toEpochDay() * MILLIS_PER_DAY;
         update(start, "DELETE FROM " + defaultPartition + " WHERE created_at < " + cutoffMillis, pst -> {});
     }
 
-    private static void dropPartitionsOlderThanRetention(Start start) throws SQLException, StorageQueryException {
+    private static void dropPartitionsOlderThanRetention(Start start, int retentionDays)
+            throws SQLException, StorageQueryException {
         String tableName = Config.getConfig(start).getActivityLogTable();
         String LIST_QUERY = "SELECT n.nspname AS schema_name, c.relname AS partition_name"
                 + " FROM pg_inherits i"
@@ -249,7 +365,7 @@ public class ActivityLogQueries {
                 + " JOIN pg_namespace n ON n.oid = c.relnamespace"
                 + " WHERE i.inhparent = ?::regclass";
 
-        LocalDate cutoff = LocalDate.now(ZoneOffset.UTC).minusDays(RETENTION_DAYS);
+        LocalDate cutoff = LocalDate.now(ZoneOffset.UTC).minusDays(retentionDays);
 
         List<String> partitionsToDrop = execute(start, LIST_QUERY, pst -> {
             pst.setString(1, tableName);

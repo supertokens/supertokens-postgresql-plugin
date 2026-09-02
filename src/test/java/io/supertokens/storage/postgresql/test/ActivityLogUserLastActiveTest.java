@@ -20,7 +20,8 @@ package io.supertokens.storage.postgresql.test;
 import io.supertokens.ActiveUsers;
 import io.supertokens.ProcessState;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
-import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.pluginInterface.auditlog.ActivityEventType;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storageLayer.StorageLayer;
@@ -53,9 +54,10 @@ public class ActivityLogUserLastActiveTest {
     }
 
     /**
-     * Every write of user_last_active must also write a `user_last_active` row into the activity_log
-     * audit table. This exercises the core ActiveUsers.updateLastActive -> AuditLog.emit ->
-     * ActivityLogStorage path end-to-end against PostgreSQL.
+     * A call to core's ActiveUsers.updateLastActive must append the concrete activity event to the
+     * activity_log audit table (the retired synthetic `user_last_active` event was replaced by the actual
+     * interaction — a sign-in, refresh, session-create, ...). This exercises the core
+     * ActiveUsers.updateLastActive -> AuditLog.emit -> ActivityLogStorage path end-to-end against PostgreSQL.
      */
     @Test
     public void updateLastActiveMirrorsIntoActivityLog() throws Exception {
@@ -73,27 +75,31 @@ public class ActivityLogUserLastActiveTest {
         Start storage = (Start) StorageLayer.getStorage(process.getProcess());
         String table = Config.getConfig(storage).getActivityLogTable();
         String userId = "user-last-active-mirror-test";
+        ActivityEventType eventType = ActivityEventType.SIGN_IN;
 
         // No audit row for this user before the update.
-        assertEquals(0, countUserLastActiveEvents(storage, table, userId));
+        assertEquals(0, countActivityEvents(storage, table, userId, eventType));
 
-        ActiveUsers.updateLastActive(new AppIdentifier(null, null), process.getProcess(), userId);
+        ActiveUsers.updateLastActive(new TenantIdentifier(null, null, null), process.getProcess(), userId,
+                eventType);
 
-        // The user_last_active write mirrored a matching audit row.
-        assertEquals(1, countUserLastActiveEvents(storage, table, userId));
+        // The update appended a matching activity audit row.
+        assertEquals(1, countActivityEvents(storage, table, userId, eventType));
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
 
-    private int countUserLastActiveEvents(Start storage, String table, String userId) throws Exception {
+    private int countActivityEvents(Start storage, String table, String userId, ActivityEventType eventType)
+            throws Exception {
         String query = "SELECT COUNT(*) FROM " + table
-                + " WHERE event_type = 'user_last_active' AND status = 'success'"
+                + " WHERE event_type = ? AND status = 'success'"
                 + " AND primary_or_recipe_user_id = ?";
         return storage.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try (PreparedStatement pst = sqlCon.prepareStatement(query)) {
-                pst.setString(1, userId);
+                pst.setString(1, eventType.getValue());
+                pst.setString(2, userId);
                 try (ResultSet rs = pst.executeQuery()) {
                     rs.next();
                     return rs.getInt(1);
