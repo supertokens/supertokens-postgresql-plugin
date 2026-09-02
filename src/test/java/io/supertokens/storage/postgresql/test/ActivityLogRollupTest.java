@@ -36,10 +36,15 @@ import org.junit.rules.TestRule;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /**
@@ -455,6 +460,81 @@ public class ActivityLogRollupTest {
     }
 
     // ---- helpers ----
+
+    /**
+     * When a concurrent instance already holds the rollup advisory lock, the fold takes the non-blocking
+     * lock, loses it, and returns {@code false} without writing anything — so the caller (the cron) knows
+     * it folded nothing and must not advance its watermark. Once the lock is released, the same fold runs
+     * and returns {@code true}. Models the lock-loser case that the void signature could not express.
+     */
+    @Test
+    public void skippedFoldReturnsFalseAndFoldsNothingWhileTheRollupLockIsHeld() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        Start storage = (Start) StorageLayer.getStorage(process.getProcess());
+        if (storage == null) {
+            return;
+        }
+        String log = Config.getConfig(storage).getActivityLogTable();
+
+        long base = System.currentTimeMillis();
+        String user = "rollup-lock-skip";
+        registerUser(storage, APP_ID, user);
+        insertActivityEvent(storage, log, user, base + 1000);
+
+        // Hold the rollup advisory lock in a concurrent, still-open transaction so the fold under test
+        // loses the non-blocking lock. The key must match the (private) constant
+        // ActiveUsersQueries.LAST_ACTIVE_ROLLUP_LOCK_KEY.
+        CountDownLatch lockHeld = new CountDownLatch(1);
+        CountDownLatch releaseLock = new CountDownLatch(1);
+        AtomicReference<Exception> holderError = new AtomicReference<>();
+        Thread holder = new Thread(() -> {
+            try {
+                storage.startTransaction(con -> {
+                    Connection sqlCon = (Connection) con.getConnection();
+                    try {
+                        io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(sqlCon,
+                                "last_active_rollup");
+                        lockHeld.countDown();
+                        releaseLock.await();
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                    storage.commitTransaction(con);
+                    return null;
+                });
+            } catch (Exception e) {
+                holderError.set(e);
+                lockHeld.countDown();
+            }
+        });
+        holder.start();
+        assertTrue(lockHeld.await(20, TimeUnit.SECONDS));
+        assertNull(holderError.get());
+
+        // The fold loses the lock: returns false and writes nothing.
+        boolean folded = storage.startTransaction(con -> {
+            boolean r = storage.rollupLastActiveFromActivityLog_Transaction(con, base - 10000);
+            storage.commitTransaction(con);
+            return r;
+        });
+        assertFalse(folded);
+        assertNull(getLastActive(storage, user));
+
+        // Release the lock; the next fold runs to completion and reports it folded.
+        releaseLock.countDown();
+        holder.join(20_000);
+        assertNull(holderError.get());
+
+        boolean foldedNow = storage.startTransaction(con -> {
+            boolean r = storage.rollupLastActiveFromActivityLog_Transaction(con, base - 10000);
+            storage.commitTransaction(con);
+            return r;
+        });
+        assertTrue(foldedNow);
+        assertEquals(Long.valueOf(base + 1000), getLastActive(storage, user));
+
+        stopProcess(process);
+    }
 
     private TestingProcessManager.TestingProcess startProcess() throws Exception {
         String[] args = {"../"};
