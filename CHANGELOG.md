@@ -9,35 +9,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [9.8.0]
 
-- **Upgrade note: the core (12.2.0) now verifies the database schema at startup and, by default (`schema_check_strict_mode: true`), refuses to start when the base database is missing a manual migration — run the migration SQL from the CHANGELOGs (or set `schema_check_strict_mode: false`) before upgrading**
-- Implements `Storage.verifySchema()`: at startup each database is compared against the plugin's own `CREATE TABLE` definitions and missing tables/columns are reported with the `ALTER TABLE` statements to run
-- In strict mode a mismatched tenant database refuses all queries until the migration is applied — the core re-verifies every minute, so the tenant resumes without a restart; with strict mode off, mismatches are only logged and queries hitting the missing schema fail with a "Schema mismatch ... check the core error logs" message instead of a raw `column does not exist` error
-- Corrects the 9.7.0 migration note below: the `session_info` columns are a manual step, not applied automatically
-- Bulk import runs on a dedicated, bounded connection pool (`openBulkImportProxyStoragePool`), separate from the live pool and opened only while there is work
-- Bulk import proxy storages no longer replay the startup DDL (`CREATE TABLE/INDEX IF NOT EXISTS`) on every worker
-- Bulk import proxy connections use READ COMMITTED, support savepoints, and report `application_name = supertokens-bulk-import`
-- Adds a compile-time guard (AspectJ `declare error`, via `io.freefair.aspectj`) that fails the build on any
-  `QueryExecutorTemplate.update(Start, ...)` auto-commit write not justified with `@AtomicAutoCommitWrite`
-  (permanent) or `@UnauditedAutoCommitWrite` (debt), plus baseline tests pinning the tier counts. No behavioral
-  changes.
-- Fixes duplicate JWT signing keys when concurrent transactions create an app's first key: the empty-read path now takes a per-app advisory lock and re-reads
-- JWT signing key reads no longer take `FOR UPDATE` row locks
-- Serialises access-token signing-key rotation with a per-app advisory lock in getAccessTokenSigningKeys_Transaction, so concurrent cores no longer create duplicate keys (which caused kid mismatches at JWT consumers); FOR UPDATE is dropped as redundant.
-- Docker image: base updated from Debian 12 (bookworm, now LTS-only) to Debian 13 (trixie)
-- Docker image: updates the bundled JRE from Temurin 21.0.7 to 21.0.12.1 (clears the July 2025 – July 2026 JDK CPU CVEs flagged by image scanners)
-- Docker image: runs `apt-get upgrade` at build time so rebuilds pick up Debian security fixes for base packages
-- `startTransaction` always returns its connection to the pool, even when resetting autocommit or the isolation
-  level on it throws after the transaction
-- Migration manifest (`migration-scripts/manifest.json`) and scripts are now keyed by the full plugin version
-  (`X.Y.Z`, `vX.Y.Z.sql`); patch releases get entries too but may only add/drop indexes (`CREATE/DROP INDEX
-  CONCURRENTLY` in the script, also done by the core at startup); adds a `9.7.1` entry for the dashboard-search indexes
-- `schema-migration-check` CI now requires a manifest entry for any schema change (index-only included), enforces
-  the index-only / `CONCURRENTLY` patch rule and proves the startup backfill by booting the new core on the
-  un-migrated base schema, and requires the migration to be referenced from the release's `### Migration`
-  changelog section
-- Creates whole-table extended statistics for the two dashboard-search index expressions (email-domain
-  and provider) and runs a one-time `ANALYZE` on `recipe_user_tenants`, so the planner stops misestimating
-  those search arms and rejecting the partial indexes on large tables (PostgreSQL >= 14; skipped on older versions).
+- **Upgrade note: the core (12.2.0) now verifies the database schema at startup and, by default, refuses to start until the manual migrations from the CHANGELOGs are applied**
+- Implements `Storage.verifySchema()`: missing tables/columns are reported with the `ALTER TABLE` statements to run; mismatched tenant databases refuse queries until migrated (re-checked every minute), or only log in non-strict mode
+- Bulk import runs on a dedicated, bounded connection pool with savepoint support, separate from the live pool
+- Fixes duplicate signing keys under concurrent creation/rotation via per-app advisory locks; drops the redundant `FOR UPDATE` on key reads
+- `startTransaction` always returns its connection to the pool, even when the post-transaction connection resets throw
+- Adds a compile-time guard (AspectJ) against unaudited auto-commit writes
+- Migration manifest and scripts are now keyed by the full plugin version (`X.Y.Z`); patch releases may only ship `CONCURRENTLY` index changes, CI-enforced
+- Adds extended statistics and a one-time `ANALYZE` for the dashboard-search expressions, fixing planner misestimates on large tables (PostgreSQL >= 14)
+- Docker image: Debian 13, JRE Temurin 21.0.12.1, build-time `apt-get upgrade` (CVE cleanup)
+- Corrects the 9.7.0 migration note: the `session_info` columns are a manual step
 
 ### Migration
 
