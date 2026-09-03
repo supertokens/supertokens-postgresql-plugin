@@ -56,6 +56,12 @@
             "coreVersion": "12.1.1",
             "sql": "v9.7.1.sql",
             "notes": "Sargable dashboard user search: opclass swap of idx_recipe_user_tenants_account_info to text_pattern_ops (..._pattern) plus partial search_domain / search_tparty indexes on recipe_user_tenants, all built/dropped CONCURRENTLY. Patch release; the core creates/swaps these at startup."
+        },
+        {
+            "pluginVersion": "9.8.0",
+            "coreVersion": "12.2.0",
+            "sql": "v9.8.0.sql",
+            "notes": "Extended statistics (st_recipe_user_tenants_search_domain / _tparty) on the dashboard-search index expressions plus a one-time ANALYZE of recipe_user_tenants, fixing planner misestimates that rejected the 9.7.1 partial indexes on large tables. PostgreSQL >= 14 only; the plugin applies this itself at startup."
         }
     ]
 }

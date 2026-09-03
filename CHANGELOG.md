@@ -41,9 +41,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Migration
 
-Applied automatically at startup. On large deployments already running 9.7.x, run it ahead of the
-upgrade so the first dashboard search doesn't wait on it (safe to run online; `ANALYZE` samples the
-table, it does not scan it):
+Applied automatically at startup (PostgreSQL >= 14). On large deployments already running 9.7.x, run
+`migration-scripts/v9.8.0.sql` ahead of the upgrade so the first dashboard search doesn't wait on it
+(safe to run online; `ANALYZE` samples the table, it does not scan it):
 
 ```sql
 CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_domain
