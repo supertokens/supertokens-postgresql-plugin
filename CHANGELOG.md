@@ -7,7 +7,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-
 ## [9.8.0]
 
 - **Upgrade note: the core (12.2.0) now verifies the database schema at startup and, by default (`schema_check_strict_mode: true`), refuses to start when the base database is missing a manual migration — run the migration SQL from the CHANGELOGs (or set `schema_check_strict_mode: false`) before upgrading**
@@ -27,7 +26,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Docker image: base updated from Debian 12 (bookworm, now LTS-only) to Debian 13 (trixie)
 - Docker image: updates the bundled JRE from Temurin 21.0.7 to 21.0.12.1 (clears the July 2025 – July 2026 JDK CPU CVEs flagged by image scanners)
 - Docker image: runs `apt-get upgrade` at build time so rebuilds pick up Debian security fixes for base packages
-- - `startTransaction` always returns its connection to the pool, even when resetting autocommit or the isolation
+- `startTransaction` always returns its connection to the pool, even when resetting autocommit or the isolation
   level on it throws after the transaction
 - Migration manifest (`migration-scripts/manifest.json`) and scripts are now keyed by the full plugin version
   (`X.Y.Z`, `vX.Y.Z.sql`); patch releases get entries too but may only add/drop indexes (`CREATE/DROP INDEX
