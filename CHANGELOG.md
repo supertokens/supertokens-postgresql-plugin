@@ -7,6 +7,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Migration manifest (`migration-scripts/manifest.json`) and scripts are now keyed by the full plugin version
+  (`X.Y.Z`, `vX.Y.Z.sql`); patch releases get entries too but may only add/drop indexes (`CREATE/DROP INDEX
+  CONCURRENTLY` in the script, also done by the core at startup); adds a `9.7.1` entry for the dashboard-search indexes
+- `schema-migration-check` CI now requires a manifest entry for any schema change (index-only included), enforces
+  the index-only / `CONCURRENTLY` patch rule and proves the startup backfill by booting the new core on the
+  un-migrated base schema, and requires the migration to be referenced from the release's `### Migration`
+  changelog section
 - Creates whole-table extended statistics for the two dashboard-search index expressions (email-domain
   and provider) and runs a one-time `ANALYZE` on `recipe_user_tenants`, so the planner stops misestimating
   those search arms and rejecting the partial indexes on large tables (PostgreSQL >= 14; skipped on older versions).
@@ -53,7 +60,8 @@ ANALYZE recipe_user_tenants;
 ### Migration
 
 Created/swapped automatically at startup; on large `recipe_user_tenants` tables pre-create them with
-`CREATE INDEX CONCURRENTLY` before upgrading to avoid a lock (note the transient two-index window on the account-info family):
+`CREATE INDEX CONCURRENTLY` before upgrading to avoid a lock (note the transient two-index window on the account-info family).
+Canonical script: [`migration-scripts/v9.7.1.sql`](migration-scripts/v9.7.1.sql) (run with psql autocommit, not in one transaction).
 
 ```sql
 -- opclass swap of the account-info index (create the successor concurrently, then drop the predecessor)

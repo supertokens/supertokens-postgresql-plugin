@@ -1,0 +1,61 @@
+{
+    "description": "Machine-readable registry of the DB schema migrations shipped with plugin releases. One entry per plugin X.Y.Z version whose release contains schema changes; a plugin version with no entry ships no DB migration. pluginVersion is the machine key: a PR always knows its own plugin version (build.gradle on its target branch), while the core version a release pairs with is only decided at release time - the supertokens-core release workflow does that translation, deriving its has-db-migration flag from whether the exact plugin X.Y.Z being released has an entry here. coreVersion is informational: the core X.Y.Z whose SaaS upgrade applies this migration, matching the CORE_MIGRATIONS registry in supertokens-backend-apis (helpers/multi-tenancy/rds/migration), which must contain the corresponding entry before the SaaS rollout of that core can run. Minor releases (X.Y.0) may ship any schema change; patch releases (Z > 0) may only ADD or DROP INDEXES (the core also does so itself at startup, and the script must use CREATE/DROP INDEX CONCURRENTLY) - CI-verified - because an in-place patch rollout has no migration hook. Pre-7.0-core migrations are out of scope (handled by the SaaS legacy migration path only). Keep entries sorted by pluginVersion ascending.",
+    "migrations": [
+        {
+            "pluginVersion": "5.0.0",
+            "coreVersion": "7.0.0",
+            "sql": "v5.0.0.sql",
+            "notes": "Account linking: primary_or_recipe_user_id columns, pagination index rework, password reset token FK + email column."
+        },
+        {
+            "pluginVersion": "6.0.0",
+            "coreVersion": "8.0.0",
+            "sql": "v6.0.0.sql",
+            "notes": "Drops the user_roles -> roles foreign key so roles no longer need to exist before being assigned."
+        },
+        {
+            "pluginVersion": "7.0.0",
+            "coreVersion": "9.0.0",
+            "sql": "v7.0.0.sql",
+            "notes": "Adds created_at to totp_user_devices."
+        },
+        {
+            "pluginVersion": "8.0.0",
+            "coreVersion": "10.0.0",
+            "sql": "v8.0.0.sql",
+            "notes": "Bulk import tables + session_info (user_id, app_id) index."
+        },
+        {
+            "pluginVersion": "8.1.0",
+            "coreVersion": "10.1.0",
+            "sql": "v8.1.0.sql",
+            "notes": "WebAuthn tables (10.1.0), plus the emailverification and user_roles indexes that shipped in 10.1.2 (predates per-patch entries; folded in here)."
+        },
+        {
+            "pluginVersion": "9.3.0",
+            "coreVersion": "11.3.0",
+            "sql": "v9.3.0.sql",
+            "notes": "SAML tables (saml_clients, saml_relay_state, saml_claims)."
+        },
+        {
+            "pluginVersion": "9.5.0",
+            "coreVersion": "12.0.0",
+            "sql": "v9.5.0.sql",
+            "requiresBackfillMigration": true,
+            "custom": true,
+            "notes": "Schema rework (supertokens-core PR #1275): recipe_user_account_infos / recipe_user_tenants / primary_user_tenants, activity_log, FK rework to ON UPDATE CASCADE. custom: the pagination indexes must be built with CREATE INDEX CONCURRENTLY outside any transaction (see comments in the SQL file), and the release requires the user-record backfill arm of the SaaS upgrade orchestrator."
+        },
+        {
+            "pluginVersion": "9.7.0",
+            "coreVersion": "12.1.0",
+            "sql": "v9.7.0.sql",
+            "notes": "Refresh token rotation columns on session_info."
+        },
+        {
+            "pluginVersion": "9.7.1",
+            "coreVersion": "12.1.1",
+            "sql": "v9.7.1.sql",
+            "notes": "Sargable dashboard user search: opclass swap of idx_recipe_user_tenants_account_info to text_pattern_ops (..._pattern) plus partial search_domain / search_tparty indexes on recipe_user_tenants, all built/dropped CONCURRENTLY. Patch release; the core creates/swaps these at startup."
+        }
+    ]
+}
