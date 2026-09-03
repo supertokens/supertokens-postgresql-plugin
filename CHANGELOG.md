@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- `startTransaction` always returns its connection to the pool, even when resetting autocommit or the isolation
+  level on it throws after the transaction
 - Creates whole-table extended statistics for the two dashboard-search index expressions (email-domain
   and provider) and runs a one-time `ANALYZE` on `recipe_user_tenants`, so the planner stops misestimating
   those search arms and rejecting the partial indexes on large tables (PostgreSQL >= 14; skipped on older versions).
