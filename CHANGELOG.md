@@ -7,25 +7,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- `startTransaction` always returns its connection to the pool, even when resetting autocommit or the isolation
-  level on it throws after the transaction
-- Creates whole-table extended statistics for the two dashboard-search index expressions (email-domain
-  and provider) and runs a one-time `ANALYZE` on `recipe_user_tenants`, so the planner stops misestimating
-  those search arms and rejecting the partial indexes on large tables (PostgreSQL >= 14; skipped on older versions).
-
-### Migration
-
-Applied automatically at startup. On large deployments already running 9.7.x, run it ahead of the
-upgrade so the first dashboard search doesn't wait on it (safe to run online; `ANALYZE` samples the
-table, it does not scan it):
-
-```sql
-CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_domain
-  ON (lower(split_part(account_info_value, '@', 2))) FROM recipe_user_tenants;
-CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_tparty
-  ON (lower(account_info_value)) FROM recipe_user_tenants;
-ANALYZE recipe_user_tenants;
-```
 
 ## [9.8.0]
 
@@ -46,6 +27,32 @@ ANALYZE recipe_user_tenants;
 - Docker image: base updated from Debian 12 (bookworm, now LTS-only) to Debian 13 (trixie)
 - Docker image: updates the bundled JRE from Temurin 21.0.7 to 21.0.12.1 (clears the July 2025 – July 2026 JDK CPU CVEs flagged by image scanners)
 - Docker image: runs `apt-get upgrade` at build time so rebuilds pick up Debian security fixes for base packages
+- - `startTransaction` always returns its connection to the pool, even when resetting autocommit or the isolation
+  level on it throws after the transaction
+- Migration manifest (`migration-scripts/manifest.json`) and scripts are now keyed by the full plugin version
+  (`X.Y.Z`, `vX.Y.Z.sql`); patch releases get entries too but may only add/drop indexes (`CREATE/DROP INDEX
+  CONCURRENTLY` in the script, also done by the core at startup); adds a `9.7.1` entry for the dashboard-search indexes
+- `schema-migration-check` CI now requires a manifest entry for any schema change (index-only included), enforces
+  the index-only / `CONCURRENTLY` patch rule and proves the startup backfill by booting the new core on the
+  un-migrated base schema, and requires the migration to be referenced from the release's `### Migration`
+  changelog section
+- Creates whole-table extended statistics for the two dashboard-search index expressions (email-domain
+  and provider) and runs a one-time `ANALYZE` on `recipe_user_tenants`, so the planner stops misestimating
+  those search arms and rejecting the partial indexes on large tables (PostgreSQL >= 14; skipped on older versions).
+
+### Migration
+
+Applied automatically at startup. On large deployments already running 9.7.x, run it ahead of the
+upgrade so the first dashboard search doesn't wait on it (safe to run online; `ANALYZE` samples the
+table, it does not scan it):
+
+```sql
+CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_domain
+  ON (lower(split_part(account_info_value, '@', 2))) FROM recipe_user_tenants;
+CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_tparty
+  ON (lower(account_info_value)) FROM recipe_user_tenants;
+ANALYZE recipe_user_tenants;
+```
 
 ## [9.7.1]
 
@@ -55,7 +62,8 @@ ANALYZE recipe_user_tenants;
 ### Migration
 
 Created/swapped automatically at startup; on large `recipe_user_tenants` tables pre-create them with
-`CREATE INDEX CONCURRENTLY` before upgrading to avoid a lock (note the transient two-index window on the account-info family):
+`CREATE INDEX CONCURRENTLY` before upgrading to avoid a lock (note the transient two-index window on the account-info family).
+Canonical script: [`migration-scripts/v9.7.1.sql`](migration-scripts/v9.7.1.sql) (run with psql autocommit, not in one transaction).
 
 ```sql
 -- opclass swap of the account-info index (create the successor concurrently, then drop the predecessor)
