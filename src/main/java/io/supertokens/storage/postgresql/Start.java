@@ -445,11 +445,16 @@ public class Start
             throw e;
         } finally {
             if (con != null) {
-                con.setAutoCommit(true);
-                if (defaultTransactionIsolation != null) {
-                    con.setTransactionIsolation(defaultTransactionIsolation);
+                try {
+                    con.setAutoCommit(true);
+                    if (defaultTransactionIsolation != null) {
+                        con.setTransactionIsolation(defaultTransactionIsolation);
+                    }
+                } finally {
+                    // must run even if the resets above throw: a connection that is never closed is never
+                    // returned to the pool, permanently shrinking it
+                    con.close();
                 }
-                con.close();
             }
         }
     }

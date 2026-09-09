@@ -7,26 +7,26 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [9.9.0]
 
-- Companion to core's per-storage active-user counting: the last-active fold now uses a single
-  `app_id_to_user_id` residency guard, dropping the redundant `apps` guard it subsumes (the residency
-  guard already keeps a since-deleted app's retained activity from being folded, since
-  `app_id_to_user_id` cascades on app delete).
-- `rollupLastActiveFromActivityLog_Transaction` now returns `true` when the fold ran and `false` when it
-  was skipped after losing the non-blocking rollup advisory lock, so the last-active rollup cron does not
-  advance its watermark past a window this instance never folded.
-- `activity_log.payload` moves from `TEXT` to `JSONB` so the ledger's structured lifecycle-event payloads
-  are validated at write time; applied to the partitioned parent (all partitions rewritten). The plugin
-  applies it at startup, guarded (skipped when already `JSONB`).
-- Updates the `ActivityLogUserLastActiveTest` integration test to core's current
-  `ActiveUsers.updateLastActive(TenantIdentifier, Main, String, ActivityEventType)` signature (the retired
-  synthetic `user_last_active` event is now recorded as the concrete activity event), fixing the
-  `compileTestAspectj` break on this branch.
+- Implements the plugin-interface activity-log storage: retention parameter, transactional insert,
+  app-scoped window read (`getActivityLogEntriesForApp`), and a last-active rollup (fold + reconcile)
+  driven by the semantic activity/lifecycle events. The fold skips deleted apps/users via a single
+  `app_id_to_user_id` residency guard and the reconcile is order-insensitive, so a since-deleted or
+  link/unlink-churned user is never resurrected into `user_last_active` (which would overcount MAU).
+- `rollupLastActiveFromActivityLog_Transaction` returns `true` when the fold ran and `false` when it was
+  skipped after losing the non-blocking rollup advisory lock, so the last-active cron does not advance its
+  watermark past a window this instance never folded.
+- Adds the connection-taking count-affecting write variants from plugin-interface#216
+  (`signUp_Transaction`, `createUser_Transaction`, `removeUserIdFromTenant_Transaction`), so a mutation and
+  its lifecycle audit event commit on one connection; the existing auto-commit methods become thin wrappers.
+- `activity_log.payload` moves from `TEXT` to `JSONB` so structured lifecycle-event payloads are validated
+  at write time; applied to the partitioned parent (all partitions rewritten), at startup, guarded (skipped
+  when already `JSONB`).
 
 ### Migration
 
 `activity_log.payload` changes from `TEXT` to `JSONB`. The plugin applies this at startup, guarded and
-idempotent (skipped when the column is already `JSONB`), so an in-place upgrade needs no manual step.
-Canonical SQL: `migration-scripts/v9.9.0.sql`.
+idempotent (skipped when already `JSONB`), so an in-place upgrade needs no manual step. Canonical SQL:
+`migration-scripts/v9.9.0.sql`.
 
 **Large-deployment note:** this is an `ALTER COLUMN ... TYPE JSONB` on the partitioned `activity_log`
 parent, which rewrites every partition under an `ACCESS EXCLUSIVE` lock. On a large `activity_log` run it
@@ -39,33 +39,29 @@ ALTER TABLE activity_log ALTER COLUMN payload TYPE JSONB USING payload::jsonb;
 
 ## [9.8.0]
 
-- **Upgrade note: the core (12.2.0) now verifies the database schema at startup and, by default (`schema_check_strict_mode: true`), refuses to start when the base database is missing a manual migration — run the migration SQL from the CHANGELOGs (or set `schema_check_strict_mode: false`) before upgrading**
-- Implements `Storage.verifySchema()`: at startup each database is compared against the plugin's own `CREATE TABLE` definitions and missing tables/columns are reported with the `ALTER TABLE` statements to run
-- In strict mode a mismatched tenant database refuses all queries until the migration is applied — the core re-verifies every minute, so the tenant resumes without a restart; with strict mode off, mismatches are only logged and queries hitting the missing schema fail with a "Schema mismatch ... check the core error logs" message instead of a raw `column does not exist` error
-- Corrects the 9.7.0 migration note below: the `session_info` columns are a manual step, not applied automatically
-- Bulk import runs on a dedicated, bounded connection pool (`openBulkImportProxyStoragePool`), separate from the live pool and opened only while there is work
-- Bulk import proxy storages no longer replay the startup DDL (`CREATE TABLE/INDEX IF NOT EXISTS`) on every worker
-- Bulk import proxy connections use READ COMMITTED, support savepoints, and report `application_name = supertokens-bulk-import`
-- Adds a compile-time guard (AspectJ `declare error`, via `io.freefair.aspectj`) that fails the build on any
-  `QueryExecutorTemplate.update(Start, ...)` auto-commit write not justified with `@AtomicAutoCommitWrite`
-  (permanent) or `@UnauditedAutoCommitWrite` (debt), plus baseline tests pinning the tier counts. No behavioral
-  changes.
-- Fixes duplicate JWT signing keys when concurrent transactions create an app's first key: the empty-read path now takes a per-app advisory lock and re-reads
-- JWT signing key reads no longer take `FOR UPDATE` row locks
-- Serialises access-token signing-key rotation with a per-app advisory lock in getAccessTokenSigningKeys_Transaction, so concurrent cores no longer create duplicate keys (which caused kid mismatches at JWT consumers); FOR UPDATE is dropped as redundant.
-- Docker image: base updated from Debian 12 (bookworm, now LTS-only) to Debian 13 (trixie)
-- Docker image: updates the bundled JRE from Temurin 21.0.7 to 21.0.12.1 (clears the July 2025 – July 2026 JDK CPU CVEs flagged by image scanners)
-- Docker image: runs `apt-get upgrade` at build time so rebuilds pick up Debian security fixes for base packages
-- Implements the plugin-interface activity-log storage: retention parameter, transactional insert, app-scoped window read (`getActivityLogEntriesForApp`), and a last-active rollup (fold + reconcile) driven by the semantic activity/lifecycle events. The fold skips deleted apps and deleted users and the reconcile is order-insensitive, so a since-deleted or link/unlink-churned user is never resurrected into `user_last_active` (which would overcount MAU).
-- Adds the connection-taking count-affecting write variants from plugin-interface#216 (`signUp_Transaction`, `createUser_Transaction`, `removeUserIdFromTenant_Transaction`), so a mutation and its lifecycle audit event commit on one connection; the existing auto-commit methods become thin wrappers.
-- Stores `activity_log.payload` as `JSONB` (pre-existing `TEXT` columns migrated automatically at startup).
+- **Upgrade note: the core (12.2.0) now verifies the database schema at startup and, by default, refuses to start until the manual migrations from the CHANGELOGs are applied**
+- Implements `Storage.verifySchema()`: missing tables/columns are reported with the `ALTER TABLE` statements to run; mismatched tenant databases refuse queries until migrated (re-checked every minute), or only log in non-strict mode
+- Bulk import runs on a dedicated, bounded connection pool with savepoint support, separate from the live pool
+- Fixes duplicate signing keys under concurrent creation/rotation via per-app advisory locks; drops the redundant `FOR UPDATE` on key reads
+- `startTransaction` always returns its connection to the pool, even when the post-transaction connection resets throw
+- Adds a compile-time guard (AspectJ) against unaudited auto-commit writes
+- Migration manifest and scripts are now keyed by the full plugin version (`X.Y.Z`); patch releases may only ship `CONCURRENTLY` index changes, CI-enforced
+- Adds extended statistics and a one-time `ANALYZE` for the dashboard-search expressions, fixing planner misestimates on large tables (PostgreSQL >= 14)
+- Docker image: Debian 13, JRE Temurin 21.0.12.1, build-time `apt-get upgrade` (CVE cleanup)
+- Corrects the 9.7.0 migration note: the `session_info` columns are a manual step
 
 ### Migration
 
-Applied automatically at startup (idempotent; a non-JSON row aborts it loudly). The rewrite takes an `ACCESS EXCLUSIVE` lock, so on a large `activity_log` table you may pre-apply it before upgrading:
+Applied automatically at startup (PostgreSQL >= 14). On large deployments already running 9.7.x, run
+`migration-scripts/v9.8.0.sql` ahead of the upgrade so the first dashboard search doesn't wait on it
+(safe to run online; `ANALYZE` samples the table, it does not scan it):
 
 ```sql
-ALTER TABLE activity_log ALTER COLUMN payload TYPE JSONB USING payload::jsonb;
+CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_domain
+  ON (lower(split_part(account_info_value, '@', 2))) FROM recipe_user_tenants;
+CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_tparty
+  ON (lower(account_info_value)) FROM recipe_user_tenants;
+ANALYZE recipe_user_tenants;
 ```
 
 ## [9.7.1]
@@ -76,7 +72,8 @@ ALTER TABLE activity_log ALTER COLUMN payload TYPE JSONB USING payload::jsonb;
 ### Migration
 
 Created/swapped automatically at startup; on large `recipe_user_tenants` tables pre-create them with
-`CREATE INDEX CONCURRENTLY` before upgrading to avoid a lock (note the transient two-index window on the account-info family):
+`CREATE INDEX CONCURRENTLY` before upgrading to avoid a lock (note the transient two-index window on the account-info family).
+Canonical script: [`migration-scripts/v9.7.1.sql`](migration-scripts/v9.7.1.sql) (run with psql autocommit, not in one transaction).
 
 ```sql
 -- opclass swap of the account-info index (create the successor concurrently, then drop the predecessor)
