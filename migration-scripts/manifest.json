@@ -62,6 +62,12 @@
             "coreVersion": "12.2.0",
             "sql": "v9.8.0.sql",
             "notes": "Extended statistics (st_recipe_user_tenants_search_domain / _tparty) on the dashboard-search index expressions plus a one-time ANALYZE of recipe_user_tenants, fixing planner misestimates that rejected the 9.7.1 partial indexes on large tables. PostgreSQL >= 14 only; the plugin applies this itself at startup."
+        },
+        {
+            "pluginVersion": "9.9.0",
+            "coreVersion": "12.3.0",
+            "sql": "v9.9.0.sql",
+            "notes": "activity_log.payload moves from TEXT to JSONB so the ledger's structured lifecycle-event payloads are validated at write time. ALTER COLUMN ... TYPE JSONB on the partitioned activity_log parent rewrites every partition under an ACCESS EXCLUSIVE lock; all historical payloads are NULL so it is a pure type rewrite. The plugin applies it at startup, guarded (skipped when already JSONB)."
         }
     ]
 }

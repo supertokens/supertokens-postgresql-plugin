@@ -95,7 +95,7 @@ public class ActivityLogPartitionTest {
         assertEquals(1, countEventsIn(storage, table, oldMonth));
 
         // Run the maintenance the cron would run.
-        ((ActivityLogStorage) storage).maintainActivityLogPartitions();
+        ((ActivityLogStorage) storage).maintainActivityLogPartitions(31);
 
         // The old partition (and the row it held) is gone; last month's survives.
         assertFalse(partitionExists(storage, table, oldMonth));
@@ -107,7 +107,7 @@ public class ActivityLogPartitionTest {
         assertTrue(partitionExists(storage, table, thisMonth.plusMonths(1)));
 
         // Running it again is a no-op (CREATE ... IF NOT EXISTS / nothing new to drop).
-        ((ActivityLogStorage) storage).maintainActivityLogPartitions();
+        ((ActivityLogStorage) storage).maintainActivityLogPartitions(31);
         assertTrue(partitionExists(storage, table, thisMonth));
         assertFalse(partitionExists(storage, table, oldMonth));
 
@@ -152,7 +152,7 @@ public class ActivityLogPartitionTest {
 
         // Before the fix this threw: "updated partition constraint for default partition
         // \"activity_log_default\" would be violated by some row".
-        ((ActivityLogStorage) storage).maintainActivityLogPartitions();
+        ((ActivityLogStorage) storage).maintainActivityLogPartitions(31);
 
         // This month's row was moved into the freshly created partition; the expired one was purged.
         assertTrue(partitionExists(storage, table, thisMonth));
@@ -161,7 +161,7 @@ public class ActivityLogPartitionTest {
         assertEquals(0, countEventsIn(storage, table, expiredMonth));
 
         // Running it again is a no-op.
-        ((ActivityLogStorage) storage).maintainActivityLogPartitions();
+        ((ActivityLogStorage) storage).maintainActivityLogPartitions(31);
         assertEquals(1, countEventsIn(storage, table, thisMonth));
 
         process.kill();

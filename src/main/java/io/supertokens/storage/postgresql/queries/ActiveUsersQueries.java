@@ -1,5 +1,7 @@
 package io.supertokens.storage.postgresql.queries;
 
+import io.supertokens.pluginInterface.auditlog.LifecycleEventType;
+import io.supertokens.pluginInterface.auditlog.RollupEventTypes;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.storage.postgresql.Start;
@@ -192,6 +194,92 @@ public class ActiveUsersQueries {
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
+    }
+
+    /**
+     * Constant key for the transaction-scoped advisory lock that deduplicates concurrent rollup passes.
+     * The fold/reconcile below are idempotent, so the lock is purely work-deduplication, not correctness.
+     */
+    private static final String LAST_ACTIVE_ROLLUP_LOCK_KEY = "last_active_rollup";
+
+    /**
+     * Derives {@code user_last_active} from the activity log over {@code [windowStartMillis, now]}, on the
+     * caller's transaction connection. Two idempotent statements:
+     * <ol>
+     *   <li><b>Fold</b> — upsert each user's most recent activity into the projection, monotonically
+     *       ({@code GREATEST} never lowers a stored timestamp). The activity source is the semantic
+     *       activity/lifecycle event set in {@link RollupEventTypes#FOLD_SET},
+     *       credited to the event's {@code primary_or_recipe_user_id}. A single {@code app_id_to_user_id}
+     *       residency guard confines the fold to activity for a user whose auth record lives on this
+     *       storage. With per-storage routing a user's activity is colocated with their auth record, so
+     *       this normally matches; it doubles as insurance for the one tenant-less emit path
+     *       (SessionRemoveAPI's app-wide sign-out) and keeps the fold from resurrecting a since-deleted
+     *       user's retained {@code activity_log} rows (no user FK on {@code user_last_active}, but
+     *       {@code deleteUserActive_Transaction} had removed the projection row). It subsumes the old
+     *       {@code apps} existence guard: {@code app_id_to_user_id} cascades on app delete, so a
+     *       since-deleted app has no mapping rows here — its retained {@code activity_log} rows are not
+     *       folded and cannot violate the {@code user_last_active -> apps} foreign key.</li>
+     *   <li><b>Reconcile</b> — delete projection rows for users linked away within the same window
+     *       ({@code account_linking} events, matched on {@code app_id} + {@code recipe_user_id}), but
+     *       only when the link event is not older than the row's {@code last_active_time}. That ordering
+     *       guard is what makes the delete order-insensitive: a recipe user linked, then unlinked, then
+     *       active again inside one window is credited its post-unlink activity (a later
+     *       {@code last_active_time}) and must not be scrubbed by the stale earlier link event.</li>
+     * </ol>
+     * As the first statement it takes a non-blocking advisory lock with a constant key; if another
+     * instance holds it the pass is skipped (that instance is folding — the work is redundant, not lost)
+     * and this returns {@code false} so the caller leaves its watermark untouched; a completed fold
+     * returns {@code true}.
+     */
+    public static boolean rollupLastActiveFromActivityLog_Transaction(Start start, Connection con,
+                                                                   long windowStartMillis)
+            throws StorageQueryException, SQLException {
+        try {
+            io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(con, LAST_ACTIVE_ROLLUP_LOCK_KEY);
+        } catch (StorageQueryException e) {
+            if (e.getCause() instanceof io.supertokens.storage.postgresql.LockFailure) {
+                // Another instance is folding this pass; the fold/reconcile are idempotent, so skip.
+                return false;
+            }
+            throw e;
+        }
+
+        String userLastActiveTable = Config.getConfig(start).getUserLastActiveTable();
+        String activityLogTable = Config.getConfig(start).getActivityLogTable();
+        String appIdToUserIdTable = Config.getConfig(start).getAppIdToUserIdTable();
+
+        // A single app_id_to_user_id residency guard confines the fold to activity for a user whose auth
+        // record lives on this storage (mirrors the in-memory guard in core#1410). With per-storage
+        // routing a user's activity is colocated with their auth record, so this normally matches; it is
+        // insurance for the one tenant-less emit path (SessionRemoveAPI's app-wide sign-out) and keeps a
+        // deleted user's retained activity_log rows (no user FK on user_last_active, but
+        // deleteUserActive_Transaction had removed the projection row) from resurrecting. It subsumes the
+        // old apps existence guard: app_id_to_user_id cascades on app delete, so a since-deleted app has
+        // no mapping rows here, so its retained activity_log rows are not folded and cannot violate the
+        // user_last_active -> apps foreign key.
+        String FOLD_QUERY = "INSERT INTO " + userLastActiveTable + " (app_id, user_id, last_active_time)"
+                + " SELECT app_id, primary_or_recipe_user_id, MAX(created_at) FROM " + activityLogTable + " al"
+                + " WHERE event_type IN (" + RollupEventTypes.sqlInList() + ") AND created_at >= ?"
+                + " AND EXISTS (SELECT 1 FROM " + appIdToUserIdTable + " aiu"
+                + " WHERE aiu.app_id = al.app_id AND aiu.user_id = al.primary_or_recipe_user_id)"
+                + " GROUP BY app_id, primary_or_recipe_user_id"
+                + " ON CONFLICT (app_id, user_id) DO UPDATE"
+                + " SET last_active_time = GREATEST(" + userLastActiveTable + ".last_active_time,"
+                + " EXCLUDED.last_active_time)";
+        update(con, FOLD_QUERY, pst -> pst.setLong(1, windowStartMillis));
+
+        // The ordering guard (al.created_at >= ula.last_active_time) makes the reconcile
+        // order-insensitive: only delete a linked-away recipe user's projection row when the link event
+        // is not older than the row's stored last-active. A user linked, unlinked, then active again in
+        // one window keeps the post-unlink credit (its last_active_time is newer than the stale link),
+        // instead of being wrongly scrubbed by an earlier account_linking event in the same window.
+        String RECONCILE_QUERY = "DELETE FROM " + userLastActiveTable + " ula USING " + activityLogTable + " al"
+                + " WHERE al.event_type = '" + LifecycleEventType.ACCOUNT_LINKING.getValue() + "'"
+                + " AND al.created_at >= ?"
+                + " AND al.app_id = ula.app_id AND al.recipe_user_id = ula.user_id"
+                + " AND al.created_at >= ula.last_active_time";
+        update(con, RECONCILE_QUERY, pst -> pst.setLong(1, windowStartMillis));
+        return true;
     }
 
     public static void deleteUserActive_Transaction(Connection con, Start start, AppIdentifier appIdentifier,

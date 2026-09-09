@@ -5,7 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [9.9.0]
+
+- Implements the plugin-interface activity-log storage: retention parameter, transactional insert,
+  app-scoped window read (`getActivityLogEntriesForApp`), and a last-active rollup (fold + reconcile)
+  driven by the semantic activity/lifecycle events. The fold skips deleted apps/users via a single
+  `app_id_to_user_id` residency guard and the reconcile is order-insensitive, so a since-deleted or
+  link/unlink-churned user is never resurrected into `user_last_active` (which would overcount MAU).
+- `rollupLastActiveFromActivityLog_Transaction` returns `true` when the fold ran and `false` when it was
+  skipped after losing the non-blocking rollup advisory lock, so the last-active cron does not advance its
+  watermark past a window this instance never folded.
+- Adds the connection-taking count-affecting write variants from plugin-interface#216
+  (`signUp_Transaction`, `createUser_Transaction`, `removeUserIdFromTenant_Transaction`), so a mutation and
+  its lifecycle audit event commit on one connection; the existing auto-commit methods become thin wrappers.
+- `activity_log.payload` moves from `TEXT` to `JSONB` so structured lifecycle-event payloads are validated
+  at write time; applied to the partitioned parent (all partitions rewritten), at startup, guarded (skipped
+  when already `JSONB`).
+
+### Migration
+
+`activity_log.payload` changes from `TEXT` to `JSONB`. The plugin applies this at startup, guarded and
+idempotent (skipped when already `JSONB`), so an in-place upgrade needs no manual step. Canonical SQL:
+`migration-scripts/v9.9.0.sql`.
+
+**Large-deployment note:** this is an `ALTER COLUMN ... TYPE JSONB` on the partitioned `activity_log`
+parent, which rewrites every partition under an `ACCESS EXCLUSIVE` lock. On a large `activity_log` run it
+*before* upgrading to avoid a startup stall — all historical payloads are `NULL`, so it is a pure type
+rewrite:
+
+```sql
+ALTER TABLE activity_log ALTER COLUMN payload TYPE JSONB USING payload::jsonb;
+```
 
 ## [9.8.0]
 
