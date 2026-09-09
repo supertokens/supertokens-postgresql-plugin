@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [9.9.0]
 
 - Companion to core's per-storage active-user counting: the last-active fold now uses a single
   `app_id_to_user_id` residency guard, dropping the redundant `apps` guard it subsumes (the residency
@@ -14,9 +14,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `rollupLastActiveFromActivityLog_Transaction` now returns `true` when the fold ran and `false` when it
   was skipped after losing the non-blocking rollup advisory lock, so the last-active rollup cron does not
   advance its watermark past a window this instance never folded.
-- Creates whole-table extended statistics for the two dashboard-search index expressions (email-domain
-  and provider) and runs a one-time `ANALYZE` on `recipe_user_tenants`, so the planner stops misestimating
-  those search arms and rejecting the partial indexes on large tables (PostgreSQL >= 14; skipped on older versions).
+- `activity_log.payload` moves from `TEXT` to `JSONB` so the ledger's structured lifecycle-event payloads
+  are validated at write time; applied to the partitioned parent (all partitions rewritten). The plugin
+  applies it at startup, guarded (skipped when already `JSONB`).
 - Updates the `ActivityLogUserLastActiveTest` integration test to core's current
   `ActiveUsers.updateLastActive(TenantIdentifier, Main, String, ActivityEventType)` signature (the retired
   synthetic `user_last_active` event is now recorded as the concrete activity event), fixing the
@@ -24,16 +24,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Migration
 
-Applied automatically at startup. On large deployments already running 9.7.x, run it ahead of the
-upgrade so the first dashboard search doesn't wait on it (safe to run online; `ANALYZE` samples the
-table, it does not scan it):
+`activity_log.payload` changes from `TEXT` to `JSONB`. The plugin applies this at startup, guarded and
+idempotent (skipped when the column is already `JSONB`), so an in-place upgrade needs no manual step.
+Canonical SQL: `migration-scripts/v9.9.0.sql`.
+
+**Large-deployment note:** this is an `ALTER COLUMN ... TYPE JSONB` on the partitioned `activity_log`
+parent, which rewrites every partition under an `ACCESS EXCLUSIVE` lock. On a large `activity_log` run it
+*before* upgrading to avoid a startup stall — all historical payloads are `NULL`, so it is a pure type
+rewrite:
 
 ```sql
-CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_domain
-  ON (lower(split_part(account_info_value, '@', 2))) FROM recipe_user_tenants;
-CREATE STATISTICS IF NOT EXISTS st_recipe_user_tenants_search_tparty
-  ON (lower(account_info_value)) FROM recipe_user_tenants;
-ANALYZE recipe_user_tenants;
+ALTER TABLE activity_log ALTER COLUMN payload TYPE JSONB USING payload::jsonb;
 ```
 
 ## [9.8.0]

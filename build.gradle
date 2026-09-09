@@ -20,7 +20,7 @@ plugins {
 // `declare error` is enforced at build time (see that aspect for the rule).
 apply plugin: 'io.freefair.aspectj'
 
-version = "9.8.0"
+version = "9.9.0"
 
 repositories {
     mavenCentral()
