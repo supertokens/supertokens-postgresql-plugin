@@ -135,6 +135,7 @@ import javax.annotation.Nonnull;
 import java.lang.reflect.Field;
 import java.sql.*;
 import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 
@@ -155,7 +156,9 @@ public class Start
             "postgresql_minimum_idle_connections", "postgresql_connection_attributes", "postgresql_connection_scheme",
             "postgresql_table_names_prefix"
     };
-    private static final Object appenderLock = new Object();
+    // ReentrantLock, not a monitor: see ConnectionPool.initLock. Held only while wiring loggers, but a virtual
+    // thread parked on a monitor is pinned, so keep the storage-init path free of synchronized sections.
+    private static final ReentrantLock appenderLock = new ReentrantLock();
     public static boolean silent = false;
     private ResourceDistributor resourceDistributor = new ResourceDistributor();
     private String processId;
@@ -255,7 +258,8 @@ public class Start
             return;
         }
 
-        synchronized (appenderLock) {
+        appenderLock.lock();
+        try {
             Logging.initFileLogging(this, infoLogPath, errorLogPath);
 
             /*
@@ -277,19 +281,24 @@ public class Start
                 infoLog.setAdditive(false);
                 infoLog.addAppender(appender);
             }
+        } finally {
+            appenderLock.unlock();
         }
     }
 
     @Override
     public void stopLogging() {
         if (isBaseTenant) {
-            synchronized (appenderLock) {
+            appenderLock.lock();
+            try {
                 Logging.stopLogging(this);
 
                 final Logger infoLog = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
                 if (infoLog.getAppender(HikariLoggingAppender.NAME) != null) {
                     infoLog.detachAppender(HikariLoggingAppender.NAME);
                 }
+            } finally {
+                appenderLock.unlock();
             }
         }
     }
