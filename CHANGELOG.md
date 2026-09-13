@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.9.1]
+
+- Connection pool initialisation and Hikari logger wiring now use a `ReentrantLock` instead of `synchronized`, so a virtual thread initialising a storage is no longer pinned to its carrier while it waits (with core < 12.3.1 this could hang startup on JDK 21 when many tenant storages initialised at once with `log_level: DEBUG`).
+
 ## [9.9.0]
 
 - Implements the plugin-interface activity-log storage: retention parameter, transactional insert,
