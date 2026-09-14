@@ -35,6 +35,12 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
  * connections, ran DDL and logged every Hikari DEBUG line through the shared console appender; with enough
  * storages every carrier was held by a pinned waiter and core startup hung. The lock is a ReentrantLock now,
  * and this rule keeps it (and {@code Start}, which runs the rest of the init path) that way.
+ *
+ * <p><b>Scope:</b> this rule operates on compiled bytecode via ArchUnit, whose domain model only exposes the
+ * {@code synchronized} <em>method modifier</em>. It does <em>not</em> catch a {@code synchronized (obj) { ... }}
+ * <em>block</em> — which is the shape the {@code Start} fix removed ({@code synchronized (appenderLock)}).
+ * {@link StorageInitNoSynchronizedSourceTest} is the companion that covers synchronized blocks (and methods)
+ * for both classes by scanning their source.
  */
 @RunWith(ArchUnitRunner.class) // Remove this line for JUnit 5!!
 @AnalyzeClasses(packages = "io.supertokens.storage.postgresql")
