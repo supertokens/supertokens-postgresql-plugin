@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.9.1]
+
+- Makes the SAML callback RelayState single-use: `getRelayStateInfo` is renamed to `getRelayStateInfoAndRemove` and now reads and deletes the RelayState row in one atomic `DELETE ... RETURNING`, so a captured SAML callback cannot be replayed to mint additional authorization codes. (GHSA-3r7x-rhvc-fw28)
+- Extends the SAML callback replay hardening: adds `saml_relay_state.in_response_to` and `.acs_url` (InResponseTo binding and Destination/Recipient pinning) and a new single-use `saml_consumed_assertions` table, populated by an atomic `INSERT ... ON CONFLICT DO NOTHING`, which closes the IdP-initiated replay window. Expired rows are purged by the existing SAML cleanup sweep. (GHSA-3r7x-rhvc-fw28)
+
+### Migration
+
+Additive and online-safe; the plugin applies it at startup. Large deployments can run
+`migration-scripts/v9.9.1.sql` ahead of the upgrade:
+
+```sql
+ALTER TABLE saml_relay_state ADD COLUMN IF NOT EXISTS in_response_to VARCHAR(256);
+ALTER TABLE saml_relay_state ADD COLUMN IF NOT EXISTS acs_url TEXT;
+-- plus CREATE TABLE saml_consumed_assertions (see v9.9.1.sql)
+```
+
 ## [9.9.0]
 
 - Implements the plugin-interface activity-log storage: retention parameter, transactional insert,
@@ -35,22 +51,6 @@ rewrite:
 
 ```sql
 ALTER TABLE activity_log ALTER COLUMN payload TYPE JSONB USING payload::jsonb;
-```
-
-## [9.9.1]
-
-- Makes the SAML callback RelayState single-use: `getRelayStateInfo` is renamed to `getRelayStateInfoAndRemove` and now reads and deletes the RelayState row in one atomic `DELETE ... RETURNING`, so a captured SAML callback cannot be replayed to mint additional authorization codes. (GHSA-3r7x-rhvc-fw28)
-- Extends the SAML callback replay hardening: adds `saml_relay_state.in_response_to` and `.acs_url` (InResponseTo binding and Destination/Recipient pinning) and a new single-use `saml_consumed_assertions` table, populated by an atomic `INSERT ... ON CONFLICT DO NOTHING`, which closes the IdP-initiated replay window. Expired rows are purged by the existing SAML cleanup sweep. (GHSA-3r7x-rhvc-fw28)
-
-### Migration
-
-Additive and online-safe; the plugin applies it at startup. Large deployments can run
-`migration-scripts/v9.9.1.sql` ahead of the upgrade:
-
-```sql
-ALTER TABLE saml_relay_state ADD COLUMN IF NOT EXISTS in_response_to VARCHAR(256);
-ALTER TABLE saml_relay_state ADD COLUMN IF NOT EXISTS acs_url TEXT;
--- plus CREATE TABLE saml_consumed_assertions (see v9.9.1.sql)
 ```
 
 ## [9.8.0]
