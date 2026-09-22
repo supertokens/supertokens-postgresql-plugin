@@ -7,6 +7,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.8.1]
+
+- Makes the SAML callback RelayState single-use: `getRelayStateInfo` is renamed to `getRelayStateInfoAndRemove` and now reads and deletes the RelayState row in one atomic `DELETE ... RETURNING`, so a captured SAML callback cannot be replayed to mint additional authorization codes. (GHSA-3r7x-rhvc-fw28)
+- Extends the SAML callback replay hardening: adds `saml_relay_state.in_response_to` and `.acs_url` (InResponseTo binding and Destination/Recipient pinning) and a new single-use `saml_consumed_assertions` table, populated by an atomic `INSERT ... ON CONFLICT DO NOTHING`, which closes the IdP-initiated replay window. Expired rows are purged by the existing SAML cleanup sweep. (GHSA-3r7x-rhvc-fw28)
+
+### Migration
+
+Additive and online-safe; the plugin applies it at startup. Large deployments can run
+`migration-scripts/v9.9.1.sql` ahead of the upgrade:
+
+```sql
+ALTER TABLE saml_relay_state ADD COLUMN IF NOT EXISTS in_response_to VARCHAR(256);
+ALTER TABLE saml_relay_state ADD COLUMN IF NOT EXISTS acs_url TEXT;
+-- plus CREATE TABLE saml_consumed_assertions (see v9.9.1.sql)
+```
+
 ## [9.8.0]
 
 - **Upgrade note: the core (12.2.0) now verifies the database schema at startup and, by default, refuses to start until the manual migrations from the CHANGELOGs are applied**
