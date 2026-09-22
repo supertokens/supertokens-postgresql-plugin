@@ -812,6 +812,14 @@ public class GeneralQueries {
                     ddl.add(SAMLQueries.getQueryToCreateSAMLRelayStateExpiresAtIndex(start));
                 }
 
+                // Backfill: saml_relay_state gained in_response_to and acs_url in 9.9.0 (GHSA-3r7x).
+                // An in-place patch rollout never runs the migration script, so existing databases
+                // must get these columns at startup too, or SchemaVerifier fails the boot. ADD COLUMN
+                // IF NOT EXISTS is idempotent, so this is a no-op once the columns are present.
+                String samlRelayStateTable = Config.getConfig(start).getSAMLRelayStateTable();
+                ddl.add("ALTER TABLE " + samlRelayStateTable + " ADD COLUMN IF NOT EXISTS in_response_to VARCHAR(256)");
+                ddl.add("ALTER TABLE " + samlRelayStateTable + " ADD COLUMN IF NOT EXISTS acs_url TEXT");
+
                 if (!doesTableExists(existingTables, Config.getConfig(start).getSAMLClaimsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     ddl.add(SAMLQueries.getQueryToCreateSAMLClaimsTable(start));
@@ -819,6 +827,14 @@ public class GeneralQueries {
                     // indexes
                     ddl.add(SAMLQueries.getQueryToCreateSAMLClaimsAppIdTenantIdIndex(start));
                     ddl.add(SAMLQueries.getQueryToCreateSAMLClaimsExpiresAtIndex(start));
+                }
+
+                if (!doesTableExists(existingTables, Config.getConfig(start).getSAMLConsumedAssertionsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    ddl.add(SAMLQueries.getQueryToCreateSAMLConsumedAssertionsTable(start));
+
+                    // indexes
+                    ddl.add(SAMLQueries.getQueryToCreateSAMLConsumedAssertionsExpiresAtIndex(start));
                 }
 
                 if (!doesTableExists(existingTables, Config.getConfig(start).getRecipeUserAccountInfosTable())) {
