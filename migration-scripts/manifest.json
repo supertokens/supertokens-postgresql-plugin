@@ -68,6 +68,13 @@
             "coreVersion": "12.3.0",
             "sql": "v9.9.0.sql",
             "notes": "activity_log.payload moves from TEXT to JSONB so the ledger's structured lifecycle-event payloads are validated at write time. ALTER COLUMN ... TYPE JSONB on the partitioned activity_log parent rewrites every partition under an ACCESS EXCLUSIVE lock; all historical payloads are NULL so it is a pure type rewrite. The plugin applies it at startup, guarded (skipped when already JSONB)."
+        },
+        {
+            "pluginVersion": "9.9.1",
+            "coreVersion": "12.3.1",
+            "sql": "v9.9.1.sql",
+            "security": true,
+            "notes": "SAML callback replay hardening (GHSA-3r7x-rhvc-fw28): adds saml_relay_state.in_response_to and .acs_url for the callback's InResponseTo binding and Destination/Recipient pinning, and a new saml_consumed_assertions single-use table that closes the IdP-initiated replay window. All statements additive and online-safe; the plugin applies them at startup."
         }
     ]
 }
