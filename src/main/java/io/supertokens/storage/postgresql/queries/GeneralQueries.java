@@ -715,6 +715,15 @@ public class GeneralQueries {
                     update(con, SAMLQueries.getQueryToCreateSAMLRelayStateExpiresAtIndex(start), NO_OP_SETTER);
                 }
 
+                // Backfill: saml_relay_state gained in_response_to and acs_url for GHSA-3r7x. An in-place
+                // patch rollout never runs a migration script, so existing databases must get these columns
+                // at startup too. ADD COLUMN IF NOT EXISTS is idempotent — a no-op once the columns exist.
+                {
+                    String samlRelayStateTable = Config.getConfig(start).getSAMLRelayStateTable();
+                    update(con, "ALTER TABLE " + samlRelayStateTable + " ADD COLUMN IF NOT EXISTS in_response_to VARCHAR(256)", NO_OP_SETTER);
+                    update(con, "ALTER TABLE " + samlRelayStateTable + " ADD COLUMN IF NOT EXISTS acs_url TEXT", NO_OP_SETTER);
+                }
+
                 if (!doesTableExists(start, con, Config.getConfig(start).getSAMLClaimsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(con, SAMLQueries.getQueryToCreateSAMLClaimsTable(start), NO_OP_SETTER);
@@ -724,6 +733,14 @@ public class GeneralQueries {
                     update(con, SAMLQueries.getQueryToCreateSAMLClaimsExpiresAtIndex(start), NO_OP_SETTER);
                 }
 
+                // Single-use assertion ledger for SAML replay protection (GHSA-3r7x).
+                if (!doesTableExists(start, con, Config.getConfig(start).getSAMLConsumedAssertionsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, SAMLQueries.getQueryToCreateSAMLConsumedAssertionsTable(start), NO_OP_SETTER);
+
+                    // indexes
+                    update(con, SAMLQueries.getQueryToCreateSAMLConsumedAssertionsExpiresAtIndex(start), NO_OP_SETTER);
+                }
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {

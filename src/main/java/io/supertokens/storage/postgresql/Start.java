@@ -4533,16 +4533,25 @@ public class Start
     @Override
     public void saveRelayStateInfo(TenantIdentifier tenantIdentifier, SAMLRelayStateInfo relayStateInfo, long relayStateValidity) throws StorageQueryException {
         try {
-            SAMLQueries.saveRelayStateInfo(this, tenantIdentifier, relayStateInfo.relayState, relayStateInfo.clientId, relayStateInfo.state, relayStateInfo.redirectURI, relayStateValidity);
+            SAMLQueries.saveRelayStateInfo(this, tenantIdentifier, relayStateInfo.relayState, relayStateInfo.clientId, relayStateInfo.state, relayStateInfo.redirectURI, relayStateInfo.inResponseTo, relayStateInfo.acsURL, relayStateValidity);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
 
     @Override
-    public SAMLRelayStateInfo getRelayStateInfo(TenantIdentifier tenantIdentifier, String relayState) throws StorageQueryException {
+    public SAMLRelayStateInfo getRelayStateInfoAndRemove(TenantIdentifier tenantIdentifier, String relayState) throws StorageQueryException {
         try {
-            return SAMLQueries.getRelayStateInfo(this, tenantIdentifier, relayState);
+            return SAMLQueries.getRelayStateInfoAndRemove(this, tenantIdentifier, relayState);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean markSAMLAssertionConsumed(TenantIdentifier tenantIdentifier, String assertionId, long expiresAt) throws StorageQueryException {
+        try {
+            return SAMLQueries.markSAMLAssertionConsumed(this, tenantIdentifier, assertionId, expiresAt);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
