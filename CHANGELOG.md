@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.7.2]
+
+- SAML callback replay hardening (GHSA-3r7x-rhvc-fw28): adds `saml_relay_state.in_response_to` and `.acs_url` (InResponseTo binding, Destination/Recipient pinning) and a single-use `saml_consumed_assertions` table that closes the IdP-initiated replay window. The plugin applies the new columns and table at startup.
+
 ## [9.7.1]
 
 - Makes the dashboard user search (email/phone/provider) sargable: `ILIKE` scans on `account_info_value`

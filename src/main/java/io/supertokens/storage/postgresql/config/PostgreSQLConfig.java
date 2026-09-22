@@ -563,6 +563,8 @@ public class PostgreSQLConfig {
 
     public String getSAMLClaimsTable() { return addSchemaAndPrefixToTableName("saml_claims"); }
 
+    public String getSAMLConsumedAssertionsTable() { return addSchemaAndPrefixToTableName("saml_consumed_assertions"); }
+
     public String getBulkImportUsersTable() {
         return addSchemaAndPrefixToTableName("bulk_import_users");
     }
