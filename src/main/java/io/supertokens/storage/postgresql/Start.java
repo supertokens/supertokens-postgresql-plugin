@@ -597,6 +597,29 @@ public class Start
     }
 
     @Override
+    public void createNewSession_Transaction(TransactionConnection con, TenantIdentifier tenantIdentifier,
+                                             String sessionHandle, String userId, String refreshTokenHash2,
+                                             JsonObject userDataInDatabase, long expiry, JsonObject userDataInJWT,
+                                             long createdAtTime, boolean useStaticKey)
+            throws StorageQueryException, TenantOrAppNotFoundException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            SessionQueries.createNewSession_Transaction(this, sqlCon, tenantIdentifier, sessionHandle, userId,
+                    refreshTokenHash2, userDataInDatabase, expiry, userDataInJWT, createdAtTime, useStaticKey);
+        } catch (SQLException e) {
+            if (e instanceof PSQLException) {
+                PostgreSQLConfig config = Config.getConfig(this);
+                ServerErrorMessage serverMessage = ((PSQLException) e).getServerErrorMessage();
+
+                if (isForeignKeyConstraintError(serverMessage, config.getSessionInfoTable(), "tenant_id")) {
+                    throw new TenantOrAppNotFoundException(tenantIdentifier);
+                }
+            }
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public void deleteSessionsOfUser(AppIdentifier appIdentifier, String userId)
             throws StorageQueryException {
         try {
