@@ -19,7 +19,12 @@ name: "DB schema / migration manifest check"
 #      UN-migrated base schema ALSO reproduces the fresh-install schema — i.e.
 #      the core applies the index changes itself at startup, which is what
 #      makes the change safe for an in-place patch rollout (no migration hook
-#      there). Anything else must bump the minor version.
+#      there). Anything else must bump the minor version. The sole exception
+#      is a coordinated security fix: a new manifest entry marked
+#      `"security": true` may add non-index objects (e.g. a table) in a patch
+#      release, but the equivalence check and the startup-reproduction proof
+#      still apply, so the object must be created by the core at startup just
+#      the same (CREATE TABLE/INDEX IF NOT EXISTS in the boot backfill list).
 #   4. That the CHANGELOG.md section for this branch's version documents the
 #      migration under `### Migration` and references the script.
 #
@@ -164,14 +169,25 @@ jobs:
           patch_z=$(echo "$plugin_version" | cut -d. -f3)
           is_patch=$([ "$patch_z" != "0" ] && echo true || echo false)
           echo "is-patch=$is_patch" >> "$GITHUB_OUTPUT"
-          if [ "$is_patch" = "true" ] && [ "${{ steps.classify.outputs.code }}" != "10" ]; then
-            echo "::error::Plugin $plugin_version is a PATCH release, but this PR's schema change is not index-only (see the diff above). Patch releases may only add/drop indexes; columns, tables, constraints and data transforms must ship in a minor release (bump build.gradle to X.$((10#$(echo "$plugin_version" | cut -d. -f2)+1)).0)."
-            exit 1
-          fi
           if git show "$base_sha:migration-scripts/manifest.json" > /tmp/base-manifest.json 2>/dev/null; then
             base_manifest=/tmp/base-manifest.json
           else
             base_manifest=NONE
+          fi
+          # Coordinated security fixes are the one exception to the patch-release
+          # "index-only" rule: a new manifest entry marked "security": true may
+          # add non-index objects (e.g. a table) in a patch release. This is not
+          # a free pass - the equivalence check and the startup-reproduction
+          # proof below still run, so the object must also be created by the core
+          # at boot, which is what makes it safe for an in-place SaaS rollout.
+          is_security=false
+          if [ "$is_patch" = "true" ] && python3 .github/helpers/schema-migration-check.py is-security-migration migration-scripts/manifest.json "$base_manifest" "$plugin_version"; then
+            is_security=true
+          fi
+          echo "is-security=$is_security" >> "$GITHUB_OUTPUT"
+          if [ "$is_patch" = "true" ] && [ "$is_security" != "true" ] && [ "${{ steps.classify.outputs.code }}" != "10" ]; then
+            echo "::error::Plugin $plugin_version is a PATCH release, but this PR's schema change is not index-only (see the diff above). Patch releases may only add/drop indexes; columns, tables, constraints and data transforms must ship in a minor release (bump build.gradle to X.$((10#$(echo "$plugin_version" | cut -d. -f2)+1)).0) - unless this is a coordinated security fix, in which case mark the new manifest entry \"security\": true (it must still be created by the core at startup)."
+            exit 1
           fi
           python3 .github/helpers/schema-migration-check.py validate-new-entries migration-scripts/manifest.json "$base_manifest" "$plugin_version"
           changed_files=$(git diff --name-only "$base_sha" HEAD -- 'migration-scripts/*.sql')
@@ -181,8 +197,10 @@ jobs:
             exit 1
           fi
           echo "scripts=$(echo $scripts)" >> "$GITHUB_OUTPUT"
-          if [ "$is_patch" = "true" ]; then
-            # Patch scripts: CREATE/DROP INDEX CONCURRENTLY, nothing else.
+          if [ "$is_patch" = "true" ] && [ "$is_security" != "true" ]; then
+            # Non-security patch scripts: CREATE/DROP INDEX CONCURRENTLY, nothing else.
+            # (A security migration is allowed non-index statements; the
+            # equivalence + startup-reproduction checks below still guard it.)
             python3 .github/helpers/schema-migration-check.py patch-script-check $(for s in $scripts; do echo "migration-scripts/$s"; done)
           fi
           echo "Applying migration script(s) to the base schema, in manifest order:"
@@ -215,7 +233,7 @@ jobs:
       # schema into a fresh database, boot the NEW core on it WITHOUT running
       # the script, and require the result to equal the fresh-install schema.
       # If this fails, the change is missing from the startup backfill list.
-      - name: Verify the core applies the index changes at startup (patch releases)
+      - name: Verify the core applies the schema changes at startup (patch releases)
         if: steps.classify.outputs.code != '0' && steps.verify.outputs.is-patch == 'true'
         run: |
           echo "Patch release ${{ steps.verify.outputs.plugin-version }}: proving the new core applies ${{ steps.verify.outputs.scripts }} itself at startup"
@@ -232,7 +250,7 @@ jobs:
           docker run --rm --network host -e PGPASSWORD=root postgres:latest pg_dump -h localhost -U root --schema-only --no-owner --no-privileges schema_startup > /tmp/startup-schema.sql
           cd "$GITHUB_WORKSPACE"
           if ! python3 .github/helpers/schema-migration-check.py compare /tmp/startup-schema.sql /tmp/head-schema.sql; then
-            echo "::error::Patch release, but booting the new core on the un-migrated base schema does not reproduce the fresh-install schema - the core does NOT apply these index changes at startup, so existing SaaS databases would never receive them on an in-place rollout. Add them to GeneralQueries.createTablesIfNotExists' backfill list (CREATE INDEX IF NOT EXISTS / DROP INDEX IF EXISTS)."
+            echo "::error::Patch release, but booting the new core on the un-migrated base schema does not reproduce the fresh-install schema - the core does NOT apply these schema changes at startup, so existing SaaS databases would never receive them on an in-place rollout. Add them to GeneralQueries.createTablesIfNotExists' backfill list (CREATE TABLE/INDEX IF NOT EXISTS / DROP INDEX IF EXISTS). This gate also guards security migrations, which are exempt from the index-only rule precisely because they are still required to be created by the core at startup."
             exit 1
           fi
 

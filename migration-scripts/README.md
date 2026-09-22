@@ -58,6 +58,14 @@ What a release may *contain* depends on its kind:
   SaaS teleport chain stays complete. Anything else — columns, tables,
   constraints, non-concurrent index builds/drops — must bump the minor
   version.
+- **Security fixes are the one exception.** A coordinated security migration —
+  a new `manifest.json` entry marked `"security": true` — may add non-index
+  objects (e.g. a table) in a patch release. It is not a free pass: the
+  equivalence check and the startup-backfill proof still run, so the object
+  must also be created by the core at boot (`CREATE TABLE/INDEX IF NOT EXISTS`
+  in `GeneralQueries.createTablesIfNotExists`), which is exactly what makes it
+  safe for the in-place SaaS rollout. Use it only for embargoed security fixes
+  that must reach existing patch lines.
 
 ## Manifest entry fields
 
@@ -68,6 +76,7 @@ What a release may *contain* depends on its kind:
 | `sql`                       | The migration script file in this directory; must be `v<pluginVersion>.sql` (CI-enforced).                          |
 | `custom`                    | `true` when the SaaS side cannot be code-generated from the script and must be implemented by hand: multi-step migrations mixing transactional DDL with `CONCURRENTLY` builds, data transforms, etc. Not needed for plain transactional scripts, nor for patch scripts made only of `CREATE/DROP INDEX CONCURRENTLY` (the generator emits those statement-by-statement). Always note the run instructions in the file's header. |
 | `requiresBackfillMigration` | `true` when the release also needs the SaaS upgrade orchestrator's user-record backfill arm.                       |
+| `security`                  | `true` marks a coordinated security migration — the one exception to the patch index-only rule: it may add non-index objects in a patch release. The equivalence and startup-backfill checks still apply, so the object must be created by the core at boot. Use only for embargoed security fixes. |
 | `notes`                     | One-line summary of what changed.                                                                                  |
 
 ## Who consumes this
@@ -116,7 +125,11 @@ the PR-head plugin against fresh databases, diffs the `pg_dump`'d schemas, and
   EXISTS`, and **proves the startup
   backfill**: it restores the base schema into a fresh database, boots the
   new core on it *without* running the script, and requires the result to
-  equal the fresh-install schema too;
+  equal the fresh-install schema too. A migration whose new manifest entry is
+  marked `"security": true` is exempt from the index-only and
+  `CONCURRENTLY`-only requirements — but the equivalence and startup-backfill
+  proofs above still apply, so a security patch migration must still be created
+  by the core at boot;
 - requires `CHANGELOG.md`'s `## [X.Y.Z]` section for this branch's version
   to contain a `### Migration` subsection that references the script.
 
