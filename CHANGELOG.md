@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.3.4]
+
+- SAML callback replay hardening (GHSA-3r7x-rhvc-fw28): adds `saml_relay_state.in_response_to` and `.acs_url` (InResponseTo binding, Destination/Recipient pinning) and a single-use `saml_consumed_assertions` table that closes the IdP-initiated replay window. The plugin applies the new columns and table at startup (`CREATE TABLE` / `ADD COLUMN IF NOT EXISTS`); no manual migration step.
+
 ## [9.3.3]
 
 - Fixes env var parsing with a few types
