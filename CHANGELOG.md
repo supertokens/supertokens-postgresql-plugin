@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [unreleased]
+
+- Adds `isOAuthTokenRevokedByGID_Transaction`, a transaction-aware twin of `isOAuthTokenRevokedByGID`
+  that runs the revocation existence check on the caller's connection instead of borrowing a new one
+  from the pool, so the non-rotating OAuth refresh exchange does not nest a second pool acquisition.
+
 ## [9.9.0]
 
 - Implements the plugin-interface activity-log storage: retention parameter, transactional insert,
