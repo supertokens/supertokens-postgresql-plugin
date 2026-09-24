@@ -20,6 +20,7 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.oauth.OAuthClient;
 import io.supertokens.pluginInterface.oauth.OAuthLogoutChallenge;
+import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -636,21 +637,15 @@ public class OAuthQueries {
 
     public static boolean isOAuthSessionExistsByGID(Start start, AppIdentifier appIdentifier, String gid)
             throws SQLException, StorageQueryException {
-        String SELECT = "SELECT count(*) FROM " + Config.getConfig(start).getOAuthSessionsTable()
-                + " WHERE app_id = ? and gid = ?;";
-        return execute(start, SELECT, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, gid);
-        }, result -> {
-            if(result.next()){
-                return result.getInt(1) > 0;
-            }
-            return false;
-        });
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            return isOAuthSessionExistsByGID(start, con, appIdentifier, gid);
+        }
     }
 
     // Transaction-aware twin of isOAuthSessionExistsByGID: same existence check run on the
-    // caller's connection instead of borrowing a new one from the pool.
+    // caller's connection instead of borrowing a new one from the pool. This overload holds the
+    // single copy of the query and result mapping; the non-tx overload above delegates to it with a
+    // pooled connection.
     public static boolean isOAuthSessionExistsByGID(Start start, Connection con, AppIdentifier appIdentifier, String gid)
             throws SQLException, StorageQueryException {
         String SELECT = "SELECT count(*) FROM " + Config.getConfig(start).getOAuthSessionsTable()

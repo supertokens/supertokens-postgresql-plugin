@@ -7,9 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [unreleased]
 
-- Adds `isOAuthTokenRevokedByGID_Transaction`, a transaction-aware twin of `isOAuthTokenRevokedByGID`
-  that runs the revocation existence check on the caller's connection instead of borrowing a new one
-  from the pool, so the non-rotating OAuth refresh exchange does not nest a second pool acquisition.
+- Adds `isOAuthTokenRevokedByGID_Transaction`, a transaction-aware twin of `isOAuthTokenRevokedByGID`.
 
 ## [9.9.0]
 
