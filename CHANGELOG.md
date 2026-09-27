@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- Fixes slow passwordless, emailpassword, email verification and WebAuthn queries that read every row of
+  an app instead of using the table's key.
+- WebAuthn sign-up and sign-in now only accept generated options from the request's tenant.
+- Adds a test that fails when a query cannot use an index beyond `app_id` / `tenant_id`.
+
 ## [9.9.0]
 
 - Implements the plugin-interface activity-log storage: retention parameter, transactional insert,

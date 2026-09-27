@@ -174,12 +174,14 @@ public class EmailPasswordQueries {
         }
         if (mode.writesToOldTables()) { // emailpassword_user_to_tenant
             String QUERY = "UPDATE " + getConfig(start).getEmailPasswordUserToTenantTable()
-                    + " SET email = ? WHERE app_id = ? AND user_id = ?";
+                    + " SET email = ? WHERE app_id = ? AND tenant_id IN (SELECT tenant_id FROM "
+                    + getConfig(start).getTenantsTable() + " WHERE app_id = ?) AND user_id = ?";
 
             update(con, QUERY, pst -> {
                 pst.setString(1, newEmail);
                 pst.setString(2, appIdentifier.getAppId());
-                pst.setString(3, userId);
+                pst.setString(3, appIdentifier.getAppId());
+                pst.setString(4, userId);
             });
         }
     }
