@@ -83,6 +83,10 @@ dependencies {
 
     testImplementation 'com.tngtech.archunit:archunit-junit4:1.4.1'
 
+    // Parses the query sources for QueryIndexPrefixAuditTest.
+    // https://mvnrepository.com/artifact/com.github.javaparser/javaparser-core
+    testImplementation group: 'com.github.javaparser', name: 'javaparser-core', version: '3.28.2'
+
     // https://mvnrepository.com/artifact/com.fasterxml.jackson.dataformat/jackson-dataformat-yaml
     testImplementation group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-yaml', version: '2.22.1'
 
