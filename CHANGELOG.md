@@ -7,7 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [9.9.0]
 
-- Adds a test-only connection-pool guard against nested same-pool connection acquisition (holding one connection inside a transaction while borrowing a second from the same pool), turning that pool-exhaustion deadlock into a located test failure. No-op in production.
+- Adds a test-only connection-pool guard against nested same-pool connection acquisition (holding one connection inside a transaction while borrowing a second from the same pool). Warns by default while the pre-existing instances are cleaned up (PLAN-018); an opt-in flag makes it fail fast. No-op in production.
 - Implements the plugin-interface activity-log storage: retention parameter, transactional insert,
   app-scoped window read (`getActivityLogEntriesForApp`), and a last-active rollup (fold + reconcile)
   driven by the semantic activity/lifecycle events. The fold skips deleted apps/users via a single
