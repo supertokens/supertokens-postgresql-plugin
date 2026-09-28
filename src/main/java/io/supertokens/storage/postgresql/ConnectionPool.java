@@ -29,6 +29,8 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 public class ConnectionPool extends ResourceDistributor.SingletonResource {
@@ -239,6 +241,62 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         return getNewConnection(start);
     }
 
+    // ── Test-only guard: two connections from the same pool in one call chain ──────────────────────
+    // Under a small connection pool, a call chain that holds one connection (inside a startTransaction)
+    // and borrows a SECOND from the same pool causes hold-and-wait exhaustion — the deadlock class behind
+    // the OAuth non-rotating-refresh regression. This tripwire turns that otherwise-silent deadlock into a
+    // located test failure at the exact nested borrow, through any depth of helper indirection. It is keyed
+    // per pool, so a nested borrow on a DIFFERENT tenant's pool is allowed; BulkImportProxyStorage is
+    // naturally exempt (it reuses its transaction connection and never reaches getNewConnection). Active
+    // only under Start.isTesting — a no-op in production.
+    private static final ThreadLocal<Map<String, Integer>> TXN_DEPTH_BY_POOL =
+            ThreadLocal.withInitial(HashMap::new);
+
+    private static String poolKey(Start start) {
+        return start.getUserPoolId() + "~" + start.getConnectionPoolId();
+    }
+
+    // Called by Start.startTransactionHelper AFTER it has taken its own connection, wrapping the callback.
+    static void enterTransaction(Start start) {
+        if (!Start.isTesting) {
+            return;
+        }
+        TXN_DEPTH_BY_POOL.get().merge(poolKey(start), 1, Integer::sum);
+    }
+
+    static void exitTransaction(Start start) {
+        if (!Start.isTesting) {
+            return;
+        }
+        Map<String, Integer> depths = TXN_DEPTH_BY_POOL.get();
+        String key = poolKey(start);
+        Integer depth = depths.get(key);
+        if (depth == null) {
+            return;
+        }
+        if (depth <= 1) {
+            depths.remove(key);
+        } else {
+            depths.put(key, depth - 1);
+        }
+    }
+
+    private static void assertNoNestedPoolAcquisition(Start start) {
+        if (!Start.isTesting) {
+            return;
+        }
+        Integer depth = TXN_DEPTH_BY_POOL.get().get(poolKey(start));
+        if (depth != null && depth > 0) {
+            throw new IllegalStateException(
+                    "Nested same-pool connection acquisition on pool '" + poolKey(start) + "': this thread is"
+                    + " already inside a startTransaction on this pool and is borrowing a SECOND connection from"
+                    + " it. Under a small pool this causes hold-and-wait exhaustion (the OAuth-refresh deadlock"
+                    + " class). Thread the transaction's connection through the helper (use its *_Transaction"
+                    + " overload), or resolve the value before opening the transaction. (Guard active only under"
+                    + " Start.isTesting.)");
+        }
+    }
+
     public static Connection getConnection(Start start) throws SQLException, StorageQueryException {
         if (start.schemaMismatchMessage != null) {
             // Start.verifySchema() ran in strict mode (schema_check_strict_mode) and found missing
@@ -249,6 +307,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         if (start instanceof BulkImportProxyStorage) {
             return ((BulkImportProxyStorage) start).getTransactionConnection();
         }
+        assertNoNestedPoolAcquisition(start);
         return getNewConnection(start);
     }
 
