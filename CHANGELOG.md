@@ -7,6 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [9.9.0]
 
+- Add transaction-aware listPrimaryUsersByEmail/ByPhoneNumber reads.
 - Implements the plugin-interface activity-log storage: retention parameter, transactional insert,
   app-scoped window read (`getActivityLogEntriesForApp`), and a last-active rollup (fold + reconcile)
   driven by the semantic activity/lifecycle events. The fold skips deleted apps/users via a single
