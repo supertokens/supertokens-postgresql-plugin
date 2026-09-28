@@ -2094,6 +2094,30 @@ public class Start
     }
 
     @Override
+    public AuthRecipeUserInfo[] listPrimaryUsersByEmail_Transaction(TenantIdentifier tenantIdentifier,
+                                                                    TransactionConnection con, String email)
+            throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            return GeneralQueries.listPrimaryUsersByEmail_Transaction(this, sqlCon, tenantIdentifier, email);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber_Transaction(TenantIdentifier tenantIdentifier,
+                                                                          TransactionConnection con, String phoneNumber)
+            throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            return GeneralQueries.listPrimaryUsersByPhoneNumber_Transaction(this, sqlCon, tenantIdentifier, phoneNumber);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public AuthRecipeUserInfo getPrimaryUserByWebauthNCredentialId(TenantIdentifier tenantIdentifier,
                                                                    String webauthNCredentialId)
             throws StorageQueryException {
