@@ -10,6 +10,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [9.8.1]
 
 - Makes the SAML callback RelayState single-use: `getRelayStateInfo` is renamed to `getRelayStateInfoAndRemove` and now reads and deletes the RelayState row in one atomic `DELETE ... RETURNING`, so a captured SAML callback cannot be replayed to mint additional authorization codes. (GHSA-3r7x-rhvc-fw28)
+- Adds a nullable `saml_clients.acs_urls` column (an ACS-URL allow-list on the SAML client, backing IdP-initiated Recipient pinning). Additive and online-safe; the plugin applies it at startup. (GHSA-3r7x-rhvc-fw28 follow-up)
 - Extends the SAML callback replay hardening: adds `saml_relay_state.in_response_to` and `.acs_url` (InResponseTo binding and Destination/Recipient pinning) and a new single-use `saml_consumed_assertions` table, populated by an atomic `INSERT ... ON CONFLICT DO NOTHING`, which closes the IdP-initiated replay window. Expired rows are purged by the existing SAML cleanup sweep. (GHSA-3r7x-rhvc-fw28)
 
 ### Migration
