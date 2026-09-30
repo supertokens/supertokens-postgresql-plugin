@@ -5358,7 +5358,8 @@ public class Start
             return SAMLQueries.createOrUpdateSAMLClient(this, tenantIdentifier, samlClient.clientId, samlClient.clientSecret,
                     samlClient.ssoLoginURL, samlClient.redirectURIs.toString(), samlClient.defaultRedirectURI,
                     samlClient.idpEntityId, samlClient.idpSigningCertificate,
-                    samlClient.allowIDPInitiatedLogin, samlClient.enableRequestSigning);
+                    samlClient.allowIDPInitiatedLogin, samlClient.enableRequestSigning,
+                    samlClient.acsURLs == null ? null : samlClient.acsURLs.toString());
         } catch (SQLException e) {
             if (e instanceof PSQLException) {
                 PostgreSQLConfig config = Config.getConfig(this);
