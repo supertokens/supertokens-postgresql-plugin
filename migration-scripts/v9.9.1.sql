@@ -21,3 +21,7 @@ CREATE TABLE IF NOT EXISTS saml_consumed_assertions (
 );
 
 CREATE INDEX IF NOT EXISTS saml_consumed_assertions_expires_at_index ON saml_consumed_assertions (expires_at);
+
+-- SAML IdP-initiated ACS pinning (GHSA-3r7x follow-up): a nullable allow-list of ACS URLs on the
+-- SAML client. NULL = not configured (legacy behaviour preserved). Additive and online-safe.
+ALTER TABLE saml_clients ADD COLUMN IF NOT EXISTS acs_urls TEXT;
