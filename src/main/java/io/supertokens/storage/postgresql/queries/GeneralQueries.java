@@ -724,6 +724,13 @@ public class GeneralQueries {
                     update(con, "ALTER TABLE " + samlRelayStateTable + " ADD COLUMN IF NOT EXISTS acs_url TEXT", NO_OP_SETTER);
                 }
 
+                // Backfill: saml_clients gained a nullable acs_urls allow-list (IdP-initiated Recipient
+                // pinning / SP-initiated acsURL validation). Additive, online-safe; no-op once present.
+                {
+                    String samlClientsTable = Config.getConfig(start).getSAMLClientsTable();
+                    update(con, "ALTER TABLE " + samlClientsTable + " ADD COLUMN IF NOT EXISTS acs_urls TEXT", NO_OP_SETTER);
+                }
+
                 if (!doesTableExists(start, con, Config.getConfig(start).getSAMLClaimsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(con, SAMLQueries.getQueryToCreateSAMLClaimsTable(start), NO_OP_SETTER);
