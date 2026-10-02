@@ -845,9 +845,13 @@ public class GeneralQueries {
                     + getConfig(start).getWebAuthNUserToTenantTable() + ","
                     + getConfig(start).getWebAuthNUsersTable() + ","
                     + getConfig(start).getWebAuthNAccountRecoveryTokenTable() + ","
+                    + getConfig(start).getSAMLConsumedAssertionsTable() + ","
                     + getConfig(start).getSAMLClaimsTable() + ","
                     + getConfig(start).getSAMLRelayStateTable() + ","
-                    + getConfig(start).getSAMLClientsTable();
+                    + getConfig(start).getSAMLClientsTable()
+                    // CASCADE so teardown does not depend on table order: saml_consumed_assertions
+                    // has an FK to tenants, and dropping tenants first would otherwise fail.
+                    + " CASCADE";
 
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
