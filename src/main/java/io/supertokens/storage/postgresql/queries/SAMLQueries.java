@@ -55,6 +55,7 @@ public class SAMLQueries {
                 + "idp_signing_certificate TEXT NOT NULL,"
                 + "allow_idp_initiated_login BOOLEAN NOT NULL DEFAULT FALSE,"
                 + "enable_request_signing BOOLEAN NOT NULL DEFAULT FALSE,"
+                + "acs_urls TEXT,"
                 + "created_at BIGINT NOT NULL,"
                 + "updated_at BIGINT NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
@@ -85,6 +86,8 @@ public class SAMLQueries {
                 + "client_id VARCHAR(256) NOT NULL,"
                 + "state TEXT,"
                 + "redirect_uri TEXT NOT NULL,"
+                + "in_response_to VARCHAR(256),"
+                + "acs_url TEXT,"
                 + "created_at BIGINT NOT NULL,"
                 + "expires_at BIGINT NOT NULL,"
                 + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
@@ -140,13 +143,38 @@ public class SAMLQueries {
                 + Config.getConfig(start).getSAMLClaimsTable() + " (expires_at)";
     }
 
+    public static String getQueryToCreateSAMLConsumedAssertionsTable(Start start) {
+        String schema = Config.getConfig(start).getTableSchema();
+        String tableName = Config.getConfig(start).getSAMLConsumedAssertionsTable();
+        return "CREATE TABLE IF NOT EXISTS " + tableName + " ("
+                + "app_id VARCHAR(64) NOT NULL DEFAULT 'public',"
+                + "tenant_id VARCHAR(64) NOT NULL DEFAULT 'public',"
+                + "assertion_id VARCHAR(256) NOT NULL,"
+                + "expires_at BIGINT NOT NULL,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, null, "pkey")
+                + " PRIMARY KEY(app_id, tenant_id, assertion_id),"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "app_id", "fkey") + " "
+                + "FOREIGN KEY(app_id) "
+                + "REFERENCES " + Config.getConfig(start).getAppsTable() + " (app_id) ON DELETE CASCADE,"
+                + "CONSTRAINT " + Utils.getConstraintName(schema, tableName, "tenant_id", "fkey") + " "
+                + "FOREIGN KEY(app_id, tenant_id) "
+                + "REFERENCES " + Config.getConfig(start).getTenantsTable() + " (app_id, tenant_id) ON DELETE CASCADE"
+                + " );";
+    }
+
+    public static String getQueryToCreateSAMLConsumedAssertionsExpiresAtIndex(Start start) {
+        return "CREATE INDEX IF NOT EXISTS saml_consumed_assertions_expires_at_index ON "
+                + Config.getConfig(start).getSAMLConsumedAssertionsTable() + " (expires_at)";
+    }
+
     @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
     public static void saveRelayStateInfo(Start start, TenantIdentifier tenantIdentifier,
-                                          String relayState, String clientId, String state, String redirectURI, long relayStateValidity)
+                                          String relayState, String clientId, String state, String redirectURI,
+                                          String inResponseTo, String acsURL, long relayStateValidity)
             throws StorageQueryException, SQLException {
         String QUERY = "INSERT INTO " + getConfig(start).getSAMLRelayStateTable()
-                + "(app_id, tenant_id, relay_state, client_id, state, redirect_uri, created_at, expires_at)"
-                + " VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+                + "(app_id, tenant_id, relay_state, client_id, state, redirect_uri, in_response_to, acs_url, created_at, expires_at)"
+                + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         update(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
@@ -155,16 +183,25 @@ public class SAMLQueries {
             pst.setString(4, clientId);
             pst.setString(5, state);
             pst.setString(6, redirectURI);
+            pst.setString(7, inResponseTo);
+            pst.setString(8, acsURL);
             long now = System.currentTimeMillis();
-            pst.setLong(7, now);
-            pst.setLong(8, now + relayStateValidity);
+            pst.setLong(9, now);
+            pst.setLong(10, now + relayStateValidity);
         });
     }
 
-    public static SAMLRelayStateInfo getRelayStateInfo(Start start, TenantIdentifier tenantIdentifier, String relayState)
+    @AtomicAutoCommitWrite(justification = "single-use RelayState consume: one atomic DELETE ... RETURNING that reads and deletes the row in a single statement")
+    public static SAMLRelayStateInfo getRelayStateInfoAndRemove(Start start, TenantIdentifier tenantIdentifier, String relayState)
             throws StorageQueryException, SQLException {
-        String QUERY = "SELECT client_id, state, redirect_uri FROM " + getConfig(start).getSAMLRelayStateTable()
-                + " WHERE app_id = ? AND tenant_id = ? AND relay_state = ? AND expires_at >= ?";
+        // Delete-on-read in a single atomic statement: a RelayState (and the SAMLResponse submitted
+        // alongside it) must be usable at most once, otherwise a captured valid callback request can be
+        // replayed to mint further authorization codes without any further IdP interaction. RETURNING makes
+        // the read and the delete one atomic operation, so two concurrent replays cannot both observe the
+        // row and both succeed. See GHSA-3r7x-rhvc-fw28.
+        String QUERY = "DELETE FROM " + getConfig(start).getSAMLRelayStateTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND relay_state = ? AND expires_at >= ?"
+                + " RETURNING client_id, state, redirect_uri, in_response_to, acs_url";
 
         return execute(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
@@ -177,11 +214,32 @@ public class SAMLQueries {
                         relayState,
                         result.getString("client_id"),
                         result.getString("state"),
-                        result.getString("redirect_uri")
+                        result.getString("redirect_uri"),
+                        result.getString("in_response_to"),
+                        result.getString("acs_url")
                 );
             }
             return null;
         });
+    }
+
+    @AtomicAutoCommitWrite(justification = "single-use gate: one atomic insert-if-absent, whose row-count is the answer")
+    public static boolean markSAMLAssertionConsumed(Start start, TenantIdentifier tenantIdentifier,
+                                                    String assertionId, long expiresAt) throws StorageQueryException, SQLException {
+        // Insert-if-absent as one atomic statement: the primary key on (app_id, tenant_id, assertion_id)
+        // makes ON CONFLICT DO NOTHING a no-op for a second insert of the same assertion. A return of 0
+        // affected rows therefore means the assertion was already consumed (a replay), and two concurrent
+        // replays cannot both insert. See GHSA-3r7x-rhvc-fw28.
+        String QUERY = "INSERT INTO " + getConfig(start).getSAMLConsumedAssertionsTable()
+                + " (app_id, tenant_id, assertion_id, expires_at) VALUES (?, ?, ?, ?)"
+                + " ON CONFLICT (app_id, tenant_id, assertion_id) DO NOTHING";
+        int inserted = update(start, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, assertionId);
+            pst.setLong(4, expiresAt);
+        });
+        return inserted > 0;
     }
 
     @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
@@ -255,13 +313,14 @@ public class SAMLQueries {
             String idpEntityId,
             String idpSigningCertificate,
             boolean allowIDPInitiatedLogin,
-            boolean enableRequestSigning)
+            boolean enableRequestSigning,
+            String acsURLsJson)
             throws StorageQueryException, SQLException {
         String QUERY = "INSERT INTO " + getConfig(start).getSAMLClientsTable()
                 + "(app_id, tenant_id, client_id, client_secret, sso_login_url, redirect_uris, default_redirect_uri,"
                 + " idp_entity_id, idp_signing_certificate, allow_idp_initiated_login, enable_request_signing,"
-                + " created_at, updated_at)"
-                + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                + " created_at, updated_at, acs_urls)"
+                + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 + " ON CONFLICT (app_id, tenant_id, client_id)"
                 + " DO UPDATE SET"
                 + " client_secret = EXCLUDED.client_secret,"
@@ -272,6 +331,7 @@ public class SAMLQueries {
                 + " idp_signing_certificate = EXCLUDED.idp_signing_certificate,"
                 + " allow_idp_initiated_login = EXCLUDED.allow_idp_initiated_login,"
                 + " enable_request_signing = EXCLUDED.enable_request_signing,"
+                + " acs_urls = EXCLUDED.acs_urls,"
                 + " updated_at = EXCLUDED.updated_at";
 
         long now = System.currentTimeMillis();
@@ -289,6 +349,7 @@ public class SAMLQueries {
             pst.setBoolean(11, enableRequestSigning);
             pst.setLong(12, now);
             pst.setLong(13, now);
+            pst.setString(14, acsURLsJson);
         });
 
         // Return the created/updated client
@@ -298,7 +359,7 @@ public class SAMLQueries {
     public static SAMLClient getSAMLClient(Start start, TenantIdentifier tenantIdentifier, String clientId)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT client_id, client_secret, sso_login_url, redirect_uris, default_redirect_uri,"
-                + " idp_entity_id, idp_signing_certificate, allow_idp_initiated_login, enable_request_signing,"
+                + " idp_entity_id, idp_signing_certificate, allow_idp_initiated_login, enable_request_signing, acs_urls,"
                 + " created_at, updated_at FROM " + getConfig(start).getSAMLClientsTable()
                 + " WHERE app_id = ? AND tenant_id = ? AND client_id = ?";
 
@@ -311,6 +372,8 @@ public class SAMLQueries {
                 try {
                     JsonParser jp = new JsonParser();
                     JsonArray redirectURIs = jp.parse(result.getString("redirect_uris")).getAsJsonArray();
+                    String acsUrlsStr = result.getString("acs_urls");
+                    JsonArray acsURLs = acsUrlsStr == null ? null : jp.parse(acsUrlsStr).getAsJsonArray();
                     return new SAMLClient(
                             result.getString("client_id"),
                             result.getString("client_secret"),
@@ -320,7 +383,8 @@ public class SAMLQueries {
                             result.getString("idp_entity_id"),
                             result.getString("idp_signing_certificate"),
                             result.getBoolean("allow_idp_initiated_login"),
-                            result.getBoolean("enable_request_signing")
+                            result.getBoolean("enable_request_signing"),
+                            acsURLs
                     );
                 } catch (Exception e) {
                     throw new RuntimeException(e);
@@ -332,7 +396,7 @@ public class SAMLQueries {
 
     public static SAMLClient getSAMLClientByIDPEntityId(Start start, TenantIdentifier tenantIdentifier, String idpEntityId) throws StorageQueryException, SQLException {
         String QUERY = "SELECT client_id, client_secret, sso_login_url, redirect_uris, default_redirect_uri,"
-                + " idp_entity_id, idp_signing_certificate, allow_idp_initiated_login, enable_request_signing,"
+                + " idp_entity_id, idp_signing_certificate, allow_idp_initiated_login, enable_request_signing, acs_urls,"
                 + " created_at, updated_at FROM " + getConfig(start).getSAMLClientsTable()
                 + " WHERE app_id = ? AND tenant_id = ? AND idp_entity_id = ?";
 
@@ -345,6 +409,8 @@ public class SAMLQueries {
                 try {
                     JsonParser jp = new JsonParser();
                     JsonArray redirectURIs = jp.parse(result.getString("redirect_uris")).getAsJsonArray();
+                    String acsUrlsStr = result.getString("acs_urls");
+                    JsonArray acsURLs = acsUrlsStr == null ? null : jp.parse(acsUrlsStr).getAsJsonArray();
                     return new SAMLClient(
                             result.getString("client_id"),
                             result.getString("client_secret"),
@@ -354,7 +420,8 @@ public class SAMLQueries {
                             result.getString("idp_entity_id"),
                             result.getString("idp_signing_certificate"),
                             result.getBoolean("allow_idp_initiated_login"),
-                            result.getBoolean("enable_request_signing")
+                            result.getBoolean("enable_request_signing"),
+                            acsURLs
                     );
                 } catch (Exception e) {
                     throw new RuntimeException(e);
@@ -367,7 +434,7 @@ public class SAMLQueries {
     public static List<SAMLClient> getSAMLClients(Start start, TenantIdentifier tenantIdentifier)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT client_id, client_secret, sso_login_url, redirect_uris, default_redirect_uri,"
-                + " idp_entity_id, idp_signing_certificate, allow_idp_initiated_login, enable_request_signing,"
+                + " idp_entity_id, idp_signing_certificate, allow_idp_initiated_login, enable_request_signing, acs_urls,"
                 + " created_at, updated_at FROM " + getConfig(start).getSAMLClientsTable()
                 + " WHERE app_id = ? AND tenant_id = ? ORDER BY created_at ASC";
 
@@ -380,6 +447,8 @@ public class SAMLQueries {
                 try {
                     JsonParser jp = new JsonParser();
                     JsonArray redirectURIs = jp.parse(result.getString("redirect_uris")).getAsJsonArray();
+                    String acsUrlsStr = result.getString("acs_urls");
+                    JsonArray acsURLs = acsUrlsStr == null ? null : jp.parse(acsUrlsStr).getAsJsonArray();
                     clients.add(new SAMLClient(
                             result.getString("client_id"),
                             result.getString("client_secret"),
@@ -389,7 +458,8 @@ public class SAMLQueries {
                             result.getString("idp_entity_id"),
                             result.getString("idp_signing_certificate"),
                             result.getBoolean("allow_idp_initiated_login"),
-                            result.getBoolean("enable_request_signing")
+                            result.getBoolean("enable_request_signing"),
+                            acsURLs
                     ));
                 } catch (Exception e) {
                     throw new RuntimeException(e);
@@ -429,6 +499,13 @@ public class SAMLQueries {
         String CLAIMS_QUERY = "DELETE FROM " + getConfig(start).getSAMLClaimsTable()
                 + " WHERE expires_at <= ?";
         update(start, CLAIMS_QUERY, pst -> {
+            pst.setLong(1, now);
+        });
+
+        // Remove expired consumed-assertion records
+        String CONSUMED_QUERY = "DELETE FROM " + getConfig(start).getSAMLConsumedAssertionsTable()
+                + " WHERE expires_at <= ?";
+        update(start, CONSUMED_QUERY, pst -> {
             pst.setLong(1, now);
         });
     }

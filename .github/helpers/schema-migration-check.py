@@ -34,6 +34,14 @@ Subcommands:
       duplicates, `sql` named v<pluginVersion>.sql and present on disk.
       Exit 0 when valid, exit 1 otherwise.
 
+  is-security-migration <head-manifest.json> <base-manifest.json|NONE> <plugin-x.y.z>
+      Exit 0 iff every manifest entry the PR adds for its own plugin version is
+      marked `"security": true`. A coordinated security fix is the sole
+      exception to the patch-release "index-only" rule: it may add non-index
+      objects in a patch release. The equivalence and startup-creation checks
+      still run, so the object must also be created by the core at boot.
+      Exit 0 when it is a security migration, exit 1 otherwise.
+
   patch-script-check <sql-file> [<sql-file> ...]
       Patch releases (Z > 0) may only ADD or DROP indexes, and the script must
       do so without locking: every statement in the given scripts must be a
@@ -268,6 +276,43 @@ def cmd_validate_new_entries(head_path, base_path, plugin_xyz):
     return 0
 
 
+def cmd_is_security_migration(head_path, base_path, plugin_xyz):
+    """Exit 0 iff every manifest entry this PR adds for its own plugin version is
+    marked `"security": true`.
+
+    A coordinated security fix is the one exception to the patch-release
+    "index-only" restriction: such a migration may add non-index objects
+    (e.g. a table) in a patch release. It is NOT a free pass — the workflow
+    still runs the equivalence check AND the startup-reproduction proof, so the
+    object must also be created by the core at boot (CREATE TABLE/INDEX IF NOT
+    EXISTS in GeneralQueries.createTablesIfNotExists), which is what makes it
+    safe for an in-place SaaS patch rollout where the migration script never
+    runs against existing databases.
+    """
+    with open(head_path) as f:
+        head_entries = json.load(f)["migrations"]
+    base_versions = set()
+    if base_path != "NONE":
+        with open(base_path) as f:
+            base_versions = {e["pluginVersion"] for e in json.load(f)["migrations"]}
+    new_entries = [
+        e
+        for e in head_entries
+        if e["pluginVersion"] == plugin_xyz and e["pluginVersion"] not in base_versions
+    ]
+    if not new_entries:
+        return 1
+    if all(e.get("security") is True for e in new_entries):
+        plural = "y" if len(new_entries) == 1 else "ies"
+        print(
+            f"Security migration: new manifest entr{plural} for {plugin_xyz} "
+            'marked "security": true. The patch-release index-only restriction '
+            "is waived; the equivalence and startup-creation checks still apply."
+        )
+        return 0
+    return 1
+
+
 def cmd_check_changelog(changelog_path, version, sql_files):
     with open(changelog_path) as f:
         lines = f.read().splitlines()
@@ -320,6 +365,8 @@ def main():
         return cmd_patch_script_check(args)
     if cmd == "validate-new-entries" and len(args) == 3:
         return cmd_validate_new_entries(*args)
+    if cmd == "is-security-migration" and len(args) == 3:
+        return cmd_is_security_migration(*args)
     if cmd == "check-changelog" and len(args) >= 3:
         return cmd_check_changelog(args[0], args[1], args[2:])
     print(__doc__)

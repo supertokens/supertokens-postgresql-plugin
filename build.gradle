@@ -20,7 +20,7 @@ plugins {
 // `declare error` is enforced at build time (see that aspect for the rule).
 apply plugin: 'io.freefair.aspectj'
 
-version = "9.9.0"
+version = "9.9.1"
 
 repositories {
     mavenCentral()
@@ -92,6 +92,15 @@ dependencies {
 
 jar {
     archiveBaseName.set('postgresql-plugin')
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+// The io.freefair.aspectj plugin emits both the javac output (build/classes/java/main) and the woven
+// output (build/classes/aspectj/main), so every Jar task sees each class twice. EXCLUDE keeps the first
+// (woven) copy. supertokens-core sets this on its own jar; mirror it for all Jar tasks here (jar +
+// testFixturesJar) so the build no longer depends on the init-dup.gradle workaround.
+tasks.withType(Jar).configureEach {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 tasks.register('copyJars', Copy) {
