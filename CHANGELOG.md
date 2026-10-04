@@ -7,6 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [9.9.0]
 
+- Transactions no longer read, set and reset the session isolation level around every call (three extra round trips, each an implicit transaction): they run at the pool's session default, READ COMMITTED, and a caller asking for another level gets it via a transaction-scoped `SET TRANSACTION ISOLATION LEVEL`. Passwordless `createDeviceWithCode` now runs at the default instead of REPEATABLE READ.
 - Adds a test-only connection-pool guard against nested same-pool connection acquisition (holding one connection inside a transaction while borrowing a second from the same pool). Warns by default while the pre-existing instances are cleaned up (PLAN-018); an opt-in flag makes it fail fast. No-op in production.
 - Implements the plugin-interface activity-log storage: retention parameter, transactional insert,
   app-scoped window read (`getActivityLogEntriesForApp`), and a last-active rollup (fold + reconcile)
