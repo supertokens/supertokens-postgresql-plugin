@@ -715,6 +715,22 @@ public class GeneralQueries {
                     update(con, SAMLQueries.getQueryToCreateSAMLRelayStateExpiresAtIndex(start), NO_OP_SETTER);
                 }
 
+                // Backfill: saml_relay_state gained in_response_to and acs_url for GHSA-3r7x. An in-place
+                // patch rollout never runs a migration script, so existing databases must get these columns
+                // at startup too. ADD COLUMN IF NOT EXISTS is idempotent — a no-op once the columns exist.
+                {
+                    String samlRelayStateTable = Config.getConfig(start).getSAMLRelayStateTable();
+                    update(con, "ALTER TABLE " + samlRelayStateTable + " ADD COLUMN IF NOT EXISTS in_response_to VARCHAR(256)", NO_OP_SETTER);
+                    update(con, "ALTER TABLE " + samlRelayStateTable + " ADD COLUMN IF NOT EXISTS acs_url TEXT", NO_OP_SETTER);
+                }
+
+                // Backfill: saml_clients gained a nullable acs_urls allow-list (IdP-initiated Recipient
+                // pinning / SP-initiated acsURL validation). Additive, online-safe; no-op once present.
+                {
+                    String samlClientsTable = Config.getConfig(start).getSAMLClientsTable();
+                    update(con, "ALTER TABLE " + samlClientsTable + " ADD COLUMN IF NOT EXISTS acs_urls TEXT", NO_OP_SETTER);
+                }
+
                 if (!doesTableExists(start, con, Config.getConfig(start).getSAMLClaimsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     update(con, SAMLQueries.getQueryToCreateSAMLClaimsTable(start), NO_OP_SETTER);
@@ -724,6 +740,14 @@ public class GeneralQueries {
                     update(con, SAMLQueries.getQueryToCreateSAMLClaimsExpiresAtIndex(start), NO_OP_SETTER);
                 }
 
+                // Single-use assertion ledger for SAML replay protection (GHSA-3r7x).
+                if (!doesTableExists(start, con, Config.getConfig(start).getSAMLConsumedAssertionsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    update(con, SAMLQueries.getQueryToCreateSAMLConsumedAssertionsTable(start), NO_OP_SETTER);
+
+                    // indexes
+                    update(con, SAMLQueries.getQueryToCreateSAMLConsumedAssertionsExpiresAtIndex(start), NO_OP_SETTER);
+                }
             } catch (Exception e) {
                 if (e.getMessage().contains("schema") && e.getMessage().contains("does not exist")
                         && numberOfRetries < 1) {
@@ -821,9 +845,13 @@ public class GeneralQueries {
                     + getConfig(start).getWebAuthNUserToTenantTable() + ","
                     + getConfig(start).getWebAuthNUsersTable() + ","
                     + getConfig(start).getWebAuthNAccountRecoveryTokenTable() + ","
+                    + getConfig(start).getSAMLConsumedAssertionsTable() + ","
                     + getConfig(start).getSAMLClaimsTable() + ","
                     + getConfig(start).getSAMLRelayStateTable() + ","
-                    + getConfig(start).getSAMLClientsTable();
+                    + getConfig(start).getSAMLClientsTable()
+                    // CASCADE so teardown does not depend on table order: saml_consumed_assertions
+                    // has an FK to tenants, and dropping tenants first would otherwise fail.
+                    + " CASCADE";
 
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
@@ -1750,6 +1778,25 @@ public class GeneralQueries {
         return execute(start, QUERY, pst -> {
             pst.setString(1, id);
             pst.setString(2, appIdentifier.getAppId());
+        }, result -> {
+            if (result.next()) {
+                return result.getString("primary_or_recipe_user_id");
+            }
+            return null;
+        });
+    }
+
+    // GHSA-2pc4-vw9j-454c: locks the user's app_id_to_user_id row (SELECT ... FOR UPDATE) inside the caller's
+    // transaction and returns its primary_or_recipe_user_id, or null if the user is absent. Session creation and
+    // account unlink both take this lock on the same row, serializing them so a session created concurrently
+    // with an unlink cannot survive the unlink's revocation.
+    public static String lockUserAndGetPrimaryId_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
+                                                             String userId) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT primary_or_recipe_user_id FROM " + getConfig(start).getAppIdToUserIdTable() +
+                " WHERE app_id = ? AND user_id = ? FOR UPDATE";
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
         }, result -> {
             if (result.next()) {
                 return result.getString("primary_or_recipe_user_id");
