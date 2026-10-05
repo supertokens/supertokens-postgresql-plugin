@@ -62,6 +62,13 @@
             "coreVersion": "12.2.0",
             "sql": "v9.8.0.sql",
             "notes": "Extended statistics (st_recipe_user_tenants_search_domain / _tparty) on the dashboard-search index expressions plus a one-time ANALYZE of recipe_user_tenants, fixing planner misestimates that rejected the 9.7.1 partial indexes on large tables. PostgreSQL >= 14 only; the plugin applies this itself at startup."
+        },
+        {
+            "pluginVersion": "9.8.1",
+            "coreVersion": "12.2.1",
+            "sql": "v9.8.1.sql",
+            "security": true,
+            "notes": "SAML callback replay hardening (GHSA-3r7x-rhvc-fw28): adds saml_relay_state.in_response_to and .acs_url for the callback's InResponseTo binding and Destination/Recipient pinning, and a new saml_consumed_assertions single-use table that closes the IdP-initiated replay window. All statements additive and online-safe; the plugin applies them at startup."
         }
     ]
 }

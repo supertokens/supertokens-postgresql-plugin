@@ -62,7 +62,11 @@ import static org.junit.Assert.fail;
 public class AutoCommitWriteGuardBaselineTest {
 
     // Pinned exactly: methods whose auto-commit write has nothing to be atomic with.
-    private static final int ATOMIC_BASELINE = 17;
+    // Interim 19: admits the two single-statement atomic writes the SAML replay fix (GHSA-3r7x) added in
+    // SAMLQueries (RelayState DELETE ... RETURNING consume, consumed-assertion insert-if-absent).
+    // Follow-up: route them through a transaction and restore 17
+    // (see saml-callback-atomic-writes-to-transaction-plan.md).
+    private static final int ATOMIC_BASELINE = 19;
 
     // Shrink-only: legacy domain mutations still writing in auto-commit mode.
     // LOWER this when a site is converted to a transactional audited write.
