@@ -16,12 +16,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Migration
 
 Additive and online-safe; the plugin applies it at startup. Large deployments can run
-`migration-scripts/v9.9.1.sql` ahead of the upgrade:
+`migration-scripts/v9.8.1.sql` ahead of the upgrade:
 
 ```sql
 ALTER TABLE saml_relay_state ADD COLUMN IF NOT EXISTS in_response_to VARCHAR(256);
 ALTER TABLE saml_relay_state ADD COLUMN IF NOT EXISTS acs_url TEXT;
--- plus CREATE TABLE saml_consumed_assertions (see v9.9.1.sql)
+-- plus CREATE TABLE saml_consumed_assertions (see v9.8.1.sql)
 ```
 
 ## [9.8.0]
