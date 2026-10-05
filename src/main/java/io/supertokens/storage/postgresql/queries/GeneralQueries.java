@@ -841,6 +841,19 @@ public class GeneralQueries {
                     ddl.add(SAMLQueries.getQueryToCreateSAMLRelayStateExpiresAtIndex(start));
                 }
 
+                // Backfill: saml_relay_state gained in_response_to and acs_url in 9.9.0 (GHSA-3r7x).
+                // An in-place patch rollout never runs the migration script, so existing databases
+                // must get these columns at startup too, or SchemaVerifier fails the boot. ADD COLUMN
+                // IF NOT EXISTS is idempotent, so this is a no-op once the columns are present.
+                String samlRelayStateTable = Config.getConfig(start).getSAMLRelayStateTable();
+                ddl.add("ALTER TABLE " + samlRelayStateTable + " ADD COLUMN IF NOT EXISTS in_response_to VARCHAR(256)");
+                ddl.add("ALTER TABLE " + samlRelayStateTable + " ADD COLUMN IF NOT EXISTS acs_url TEXT");
+
+                // Backfill: saml_clients gained a nullable acs_urls allow-list (IdP-initiated Recipient
+                // pinning / SP-initiated acsURL validation). Additive, online-safe; no-op once present.
+                String samlClientsTable = Config.getConfig(start).getSAMLClientsTable();
+                ddl.add("ALTER TABLE " + samlClientsTable + " ADD COLUMN IF NOT EXISTS acs_urls TEXT");
+
                 if (!doesTableExists(existingTables, Config.getConfig(start).getSAMLClaimsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     ddl.add(SAMLQueries.getQueryToCreateSAMLClaimsTable(start));
@@ -848,6 +861,14 @@ public class GeneralQueries {
                     // indexes
                     ddl.add(SAMLQueries.getQueryToCreateSAMLClaimsAppIdTenantIdIndex(start));
                     ddl.add(SAMLQueries.getQueryToCreateSAMLClaimsExpiresAtIndex(start));
+                }
+
+                if (!doesTableExists(existingTables, Config.getConfig(start).getSAMLConsumedAssertionsTable())) {
+                    getInstance(start).addState(CREATING_NEW_TABLE, null);
+                    ddl.add(SAMLQueries.getQueryToCreateSAMLConsumedAssertionsTable(start));
+
+                    // indexes
+                    ddl.add(SAMLQueries.getQueryToCreateSAMLConsumedAssertionsExpiresAtIndex(start));
                 }
 
                 if (!doesTableExists(existingTables, Config.getConfig(start).getRecipeUserAccountInfosTable())) {
@@ -1074,9 +1095,13 @@ public class GeneralQueries {
                     + getConfig(start).getWebAuthNUserToTenantTable() + ","
                     + getConfig(start).getWebAuthNUsersTable() + ","
                     + getConfig(start).getWebAuthNAccountRecoveryTokenTable() + ","
+                    + getConfig(start).getSAMLConsumedAssertionsTable() + ","
                     + getConfig(start).getSAMLClaimsTable() + ","
                     + getConfig(start).getSAMLRelayStateTable() + ","
-                    + getConfig(start).getSAMLClientsTable();
+                    + getConfig(start).getSAMLClientsTable()
+                    // CASCADE so teardown does not depend on table order: saml_consumed_assertions
+                    // has an FK to tenants, and dropping tenants first would otherwise fail.
+                    + " CASCADE";
 
             update(start, DROP_QUERY, NO_OP_SETTER);
         }
@@ -2981,6 +3006,9 @@ public class GeneralQueries {
                 throw new StorageQueryException(e);
             }
         });
+        if (webauthnUser == null) {
+            return null; // no credential owner in the requested tenant (GHSA-6v34-w48w-44rc)
+        }
         return getPrimaryUserInfoForUserId(start, tenantIdentifier.toAppIdentifier(), webauthnUser.getSupertokensUserId());
     }
 
@@ -2991,6 +3019,11 @@ public class GeneralQueries {
             throws StorageQueryException, SQLException, StorageTransactionLogicException {
         AuthRecipeUserInfo webauthnUser = WebAuthNQueries.getUserInfoByCredentialId_Transaction(start, connection, tenantIdentifier,
                         credentialId);
+        if (webauthnUser == null) {
+            // No credential owner is a member of the requested tenant (GHSA-6v34-w48w-44rc); return null
+            // rather than dereferencing, so sign-in reports the credential as not existing for this tenant.
+            return null;
+        }
         return getPrimaryUserInfoForUserId(start, tenantIdentifier.toAppIdentifier(), webauthnUser.getSupertokensUserId());
     }
 
