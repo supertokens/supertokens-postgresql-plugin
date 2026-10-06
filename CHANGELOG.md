@@ -9,6 +9,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [9.0.6]
 
+- WebAuthn cross-tenant hardening (GHSA-6v34-w48w-44rc): `getUserInfoByCredentialId_Transaction` now requires the credential owner to be a member of the requested tenant (`all_users.tenant_id` filter), and `getPrimaryUserByWebauthNCredentialId[_Transaction]` null-guards the now-nullable result, matching the in-memory implementation. A cross-tenant passkey sign-in is rejected with a clean not-found instead of resolving cross-tenant. Query-logic only; no schema change.
+
 - Changes data path for postgresql in docker (CI)
 
 ## [9.0.5]
