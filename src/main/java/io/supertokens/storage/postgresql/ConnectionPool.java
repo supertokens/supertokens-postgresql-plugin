@@ -30,20 +30,37 @@ import java.sql.SQLException;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.Objects;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class ConnectionPool extends ResourceDistributor.SingletonResource {
 
     private static final String RESOURCE_KEY = "io.supertokens.storage.postgresql.ConnectionPool";
-    private HikariDataSource hikariDataSource;
+    // volatile: getConnection() checks it for null outside initLock (a racy read before this change too)
+    private volatile HikariDataSource hikariDataSource;
     private final Start start;
     private PostConnectCallback postConnectCallback;
+    // A ReentrantLock rather than a `synchronized` method: the core initialises storages from worker threads,
+    // and on JDK 21 a virtual thread that parks inside a synchronized section is pinned to its carrier. Pool
+    // setup parks a lot (TCP connect, DDL, and every Hikari DEBUG line contends for the shared logging locks);
+    // enough pinned waiters left the core's scheduler with no carrier to run the lock owner and hung startup.
+    private final ReentrantLock initLock = new ReentrantLock();
 
     private ConnectionPool(Start start, PostConnectCallback postConnectCallback) {
         this.start = start;
         this.postConnectCallback = postConnectCallback;
     }
 
-    private synchronized void initialiseHikariDataSource() throws SQLException, StorageQueryException {
+    private void initialiseHikariDataSource() throws SQLException, StorageQueryException {
+        initLock.lock();
+        try {
+            initialiseHikariDataSourceLocked();
+        } finally {
+            initLock.unlock();
+        }
+    }
+
+    // only ever called with initLock held
+    private void initialiseHikariDataSourceLocked() throws SQLException, StorageQueryException {
         if (this.hikariDataSource != null) {
             return;
         }
