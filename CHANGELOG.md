@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [unreleased]
+
+
 ## [9.9.1]
 
 - Connection pool initialisation and Hikari logger wiring now use a `ReentrantLock` instead of `synchronized`, so a virtual thread initialising a storage is no longer pinned to its carrier while it waits (with core < 12.3.1 this could hang startup on JDK 21 when many tenant storages initialised at once with `log_level: DEBUG`).
@@ -13,6 +16,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   an app instead of using the table's key.
 - WebAuthn sign-up and sign-in now only accept generated options from the request's tenant.
 - Adds a test that fails when a query cannot use an index beyond `app_id` / `tenant_id`.
+- Adds `isOAuthTokenRevokedByGID_Transaction`, a transaction-aware twin of `isOAuthTokenRevokedByGID`.
 
 ## [9.9.0]
 
