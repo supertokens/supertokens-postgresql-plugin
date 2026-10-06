@@ -10,6 +10,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [9.4.3]
 
 - WebAuthn cross-tenant hardening (GHSA-6v34-w48w-44rc): `getUserInfoByCredentialId_Transaction` now requires the credential owner to be a member of the requested tenant (`all_users.tenant_id` filter), matching the in-memory implementation. Query-logic only; no schema change.
+- Null-guard the now-nullable credential-owner lookup in `getPrimaryUserByWebauthNCredentialId[_Transaction]` so a cross-tenant sign-in returns a clean not-found result instead of a 500 (NPE), matching the in-memory implementation. (GHSA-6v34-w48w-44rc follow-up)
 - SAML callback replay hardening (GHSA-3r7x-rhvc-fw28): adds `saml_relay_state.in_response_to` and `.acs_url` (InResponseTo binding, Destination/Recipient pinning) and a single-use `saml_consumed_assertions` table that closes the IdP-initiated replay window. The plugin applies the new columns and table at startup (`CREATE TABLE` / `ADD COLUMN IF NOT EXISTS`); no manual migration step.
 - Adds a nullable `saml_clients.acs_urls` column (an ACS-URL allow-list on the SAML client, backing IdP-initiated Recipient pinning). Additive and online-safe; the plugin applies it at startup. (GHSA-3r7x-rhvc-fw28 follow-up)
 

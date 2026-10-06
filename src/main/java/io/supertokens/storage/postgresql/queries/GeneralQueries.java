@@ -1758,7 +1758,7 @@ public class GeneralQueries {
                 throw new StorageQueryException(e);
             }
         });
-        return getPrimaryUserInfoForUserId(start, tenantIdentifier.toAppIdentifier(), webauthnUser.getSupertokensUserId());
+        return webauthnUser;
     }
 
     public static AuthRecipeUserInfo getPrimaryUserByWebauthNCredentialId_Transaction(Start start,
@@ -1768,6 +1768,11 @@ public class GeneralQueries {
             throws StorageQueryException, SQLException, StorageTransactionLogicException {
         AuthRecipeUserInfo webauthnUser = WebAuthNQueries.getUserInfoByCredentialId_Transaction(start, connection, tenantIdentifier,
                         credentialId);
+        if (webauthnUser == null) {
+            // No credential owner is a member of the requested tenant (see GHSA-6v34-w48w-44rc). Return null
+            // rather than dereferencing, so sign-in reports the credential as not existing for this tenant.
+            return null;
+        }
         return getPrimaryUserInfoForUserId(start, tenantIdentifier.toAppIdentifier(), webauthnUser.getSupertokensUserId());
     }
 
