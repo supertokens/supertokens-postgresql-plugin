@@ -564,11 +564,15 @@ public class WebAuthNQueries {
                 "LEFT JOIN " + getConfig(start).getUserIdMappingTable() + " as user_id_mapping ON webauthn.user_id = user_id_mapping.supertokens_user_id " +
                 "LEFT JOIN " + getConfig(start).getEmailVerificationTable() + " as email_verification ON webauthn.app_id = email_verification.app_id AND (user_id_mapping.external_user_id = email_verification.user_id OR user_id_mapping.supertokens_user_id = email_verification.user_id OR webauthn.user_id = email_verification.user_id OR webauthn.user_id = email_verification.user_id) " +
                 " AND email_verification.email = webauthn.email " +
-                "WHERE webauthn.app_id = ? AND credentials.id = ?";
+                // Require the credential owner to be a member of the REQUESTED tenant (all_users is the
+                // membership row, legacy or migrated). Without this, a passkey registered in another
+                // tenant resolves here and sign-in crosses the tenant boundary. See GHSA-6v34-w48w-44rc.
+                "WHERE webauthn.app_id = ? AND all_users.tenant_id = ? AND credentials.id = ?";
 
         return execute(sqlCon, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, credentialId);
+            pst.setString(2, tenantIdentifier.getTenantId());
+            pst.setString(3, credentialId);
         }, result -> {
             if (result.next()) {
                 String userId = result.getString("user_id");
