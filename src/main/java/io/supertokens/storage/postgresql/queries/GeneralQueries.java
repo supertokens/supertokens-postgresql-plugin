@@ -1704,6 +1704,25 @@ public class GeneralQueries {
         });
     }
 
+    // GHSA-2pc4-vw9j-454c: locks the user's app_id_to_user_id row (SELECT ... FOR UPDATE) inside the caller's
+    // transaction and returns its primary_or_recipe_user_id, or null if the user is absent. Session creation and
+    // account unlink both take this lock on the same row, serializing them so a session created concurrently
+    // with an unlink cannot survive the unlink's revocation.
+    public static String lockUserAndGetPrimaryId_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
+                                                             String userId) throws SQLException, StorageQueryException {
+        String QUERY = "SELECT primary_or_recipe_user_id FROM " + getConfig(start).getAppIdToUserIdTable() +
+                " WHERE app_id = ? AND user_id = ? FOR UPDATE";
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, result -> {
+            if (result.next()) {
+                return result.getString("primary_or_recipe_user_id");
+            }
+            return null;
+        });
+    }
+
     public static AuthRecipeUserInfo getPrimaryUserInfoForUserId(Start start, AppIdentifier appIdentifier, String id)
             throws SQLException, StorageQueryException {
         List<String> ids = new ArrayList<>();
