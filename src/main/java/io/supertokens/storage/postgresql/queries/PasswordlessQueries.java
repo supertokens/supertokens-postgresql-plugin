@@ -557,10 +557,12 @@ public class PasswordlessQueries {
                 + "FROM " + getConfig(start).getPasswordlessUsersTable() + " AS pl_users "
                 + "JOIN " + getConfig(start).getPasswordlessUserToTenantTable() + " AS pl_users_to_tenant "
                 + "ON pl_users.app_id = pl_users_to_tenant.app_id AND pl_users.user_id = pl_users_to_tenant.user_id "
-                + "WHERE pl_users_to_tenant.app_id = ? AND pl_users_to_tenant.user_id = ?";
+                + "WHERE pl_users_to_tenant.app_id = ? AND pl_users_to_tenant.tenant_id IN (SELECT tenant_id FROM "
+                + getConfig(start).getTenantsTable() + " WHERE app_id = ?) AND pl_users_to_tenant.user_id = ?";
         return execute(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
-            pst.setString(2, userId);
+            pst.setString(2, appIdentifier.getAppId());
+            pst.setString(3, userId);
         }, result -> {
             List<UserInfoWithTenantId> userInfos = new ArrayList<>();
 
@@ -665,12 +667,14 @@ public class PasswordlessQueries {
 
         if (mode.writesToOldTables()) { // passwordless_user_to_tenant
             String QUERY = "UPDATE " + Config.getConfig(start).getPasswordlessUserToTenantTable()
-                    + " SET email = ? WHERE app_id = ? AND user_id = ?";
+                    + " SET email = ? WHERE app_id = ? AND tenant_id IN (SELECT tenant_id FROM "
+                    + Config.getConfig(start).getTenantsTable() + " WHERE app_id = ?) AND user_id = ?";
 
             update(con, QUERY, pst -> {
                 pst.setString(1, email);
                 pst.setString(2, appIdentifier.getAppId());
-                pst.setString(3, userId);
+                pst.setString(3, appIdentifier.getAppId());
+                pst.setString(4, userId);
             });
         }
         { // passwordless_users — ALWAYS
@@ -692,12 +696,14 @@ public class PasswordlessQueries {
 
         if (mode.writesToOldTables()) { // passwordless_user_to_tenant
             String QUERY = "UPDATE " + Config.getConfig(start).getPasswordlessUserToTenantTable()
-                    + " SET phone_number = ? WHERE app_id = ? AND user_id = ?";
+                    + " SET phone_number = ? WHERE app_id = ? AND tenant_id IN (SELECT tenant_id FROM "
+                    + Config.getConfig(start).getTenantsTable() + " WHERE app_id = ?) AND user_id = ?";
 
             update(con, QUERY, pst -> {
                 pst.setString(1, phoneNumber);
                 pst.setString(2, appIdentifier.getAppId());
-                pst.setString(3, userId);
+                pst.setString(3, appIdentifier.getAppId());
+                pst.setString(4, userId);
             });
         }
         { // passwordless_users — ALWAYS
