@@ -5,9 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [unreleased]
+
+
+## [9.9.1]
+
+- Connection pool initialisation and Hikari logger wiring now use a `ReentrantLock` instead of `synchronized`, so a virtual thread initialising a storage is no longer pinned to its carrier while it waits (with core < 12.3.1 this could hang startup on JDK 21 when many tenant storages initialised at once with `log_level: DEBUG`).
+- Fixes slow passwordless, emailpassword, email verification and WebAuthn queries that read every row of
+  an app instead of using the table's key.
+- WebAuthn sign-up and sign-in now only accept generated options from the request's tenant.
+- Adds a test that fails when a query cannot use an index beyond `app_id` / `tenant_id`.
+- Adds `isOAuthTokenRevokedByGID_Transaction`, a transaction-aware twin of `isOAuthTokenRevokedByGID`.
+- Adds a test-only connection-pool guard against nested same-pool connection acquisition (holding one connection inside a transaction while borrowing a second from the same pool). Warns by default while the pre-existing instances are cleaned up (PLAN-018); an opt-in flag makes it fail fast. No-op in production.
+
 ## [9.9.0]
 
-- Adds a test-only connection-pool guard against nested same-pool connection acquisition (holding one connection inside a transaction while borrowing a second from the same pool). Warns by default while the pre-existing instances are cleaned up (PLAN-018); an opt-in flag makes it fail fast. No-op in production.
 - Implements the plugin-interface activity-log storage: retention parameter, transactional insert,
   app-scoped window read (`getActivityLogEntriesForApp`), and a last-active rollup (fold + reconcile)
   driven by the semantic activity/lifecycle events. The fold skips deleted apps/users via a single
