@@ -32,6 +32,7 @@ import java.text.NumberFormat;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class ConnectionPool extends ResourceDistributor.SingletonResource {
@@ -269,33 +270,53 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
     private static final ThreadLocal<Map<String, Integer>> TXN_DEPTH_BY_POOL =
             ThreadLocal.withInitial(HashMap::new);
 
-    // During the PLAN-018 cleanup the guard WARNS by default so the suite stays green while the pre-existing
-    // instances are fixed; flip this to fail fast (intended to become the default once the cleanup lands).
+    // The guard WARNS by default so the suite stays green while the pre-existing instances are fixed; flip this to
+    // fail fast (intended to become the default once that cleanup lands).
     private static volatile boolean throwOnNestedAcquisition = false;
 
-    // Test hook: when true, a nested same-pool acquisition throws instead of only warning.
+    // Test hook: when true, a nested same-pool acquisition throws instead of only warning. The flag is
+    // process-global; it is reset to false when the base storage stops logging (i.e. when the core process under
+    // test shuts down), so a test that fails before restoring it cannot leak throw-mode into later tests.
     public static void setThrowOnNestedAcquisition(boolean value) {
         throwOnNestedAcquisition = value;
+    }
+
+    public static boolean isThrowOnNestedAcquisition() {
+        return throwOnNestedAcquisition;
+    }
+
+    // Process-global count of warn-mode hits, so tests (and the cleanup) can observe the guard firing.
+    private static final AtomicLong nestedAcquisitionWarningCount = new AtomicLong();
+
+    public static long getNestedAcquisitionWarningCount() {
+        return nestedAcquisitionWarningCount.get();
     }
 
     private static String poolKey(Start start) {
         return start.getUserPoolId() + "~" + start.getConnectionPoolId();
     }
 
-    // Called by Start.startTransactionHelper AFTER it has taken its own connection, wrapping the callback.
-    static void enterTransaction(Start start) {
-        if (!Start.isTesting) {
-            return;
-        }
-        TXN_DEPTH_BY_POOL.get().merge(poolKey(start), 1, Integer::sum);
+    // Called by Start.stopLogging on the base storage, i.e. at core process shutdown.
+    static void resetNestedAcquisitionGuard() {
+        throwOnNestedAcquisition = false;
     }
 
-    static void exitTransaction(Start start) {
+    // Called by Start.startTransactionHelper AFTER it has taken its own connection, wrapping the callback. Returns
+    // the pool key to hand back to exitTransaction (null when not testing), so exit never re-reads config.
+    static String enterTransaction(Start start) {
         if (!Start.isTesting) {
+            return null;
+        }
+        String key = poolKey(start);
+        TXN_DEPTH_BY_POOL.get().merge(key, 1, Integer::sum);
+        return key;
+    }
+
+    static void exitTransaction(String key) {
+        if (key == null) {
             return;
         }
         Map<String, Integer> depths = TXN_DEPTH_BY_POOL.get();
-        String key = poolKey(start);
         Integer depth = depths.get(key);
         if (depth == null) {
             return;
@@ -323,8 +344,15 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         if (throwOnNestedAcquisition) {
             throw new IllegalStateException(message);
         }
-        // Warn-mode default during the PLAN-018 cleanup: surface it without failing the suite.
+        // Warn-mode default: surface it without failing the suite — counted, and logged to both stderr and the
+        // storage's error log so it shows up in test logs.
+        nestedAcquisitionWarningCount.incrementAndGet();
         System.err.println("[nested-conn-guard][WARN] " + message);
+        try {
+            Logging.warn(start, "[nested-conn-guard] " + message);
+        } catch (Throwable ignored) {
+            // logging must never turn the warn-mode guard into a failure
+        }
     }
 
     // The nearest application frame that borrowed the second connection — for locating the site in warn-mode.

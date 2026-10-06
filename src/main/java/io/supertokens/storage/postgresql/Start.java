@@ -289,6 +289,7 @@ public class Start
     @Override
     public void stopLogging() {
         if (isBaseTenant) {
+            ConnectionPool.resetNestedAcquisitionGuard();
             appenderLock.lock();
             try {
                 Logging.stopLogging(this);
@@ -449,11 +450,11 @@ public class Start
             // Mark this thread as holding a connection from this pool for the duration of the callback, so
             // that a nested same-pool borrow (a helper not threading `con`) is caught by ConnectionPool's
             // test-only guard against pool-exhausting call chains.
-            ConnectionPool.enterTransaction(this);
+            String guardKey = ConnectionPool.enterTransaction(this);
             try {
                 return logic.mainLogicAndCommit(new TransactionConnection(con));
             } finally {
-                ConnectionPool.exitTransaction(this);
+                ConnectionPool.exitTransaction(guardKey);
             }
         } catch (Exception e) {
             if (con != null) {
