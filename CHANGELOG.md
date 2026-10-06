@@ -17,6 +17,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - WebAuthn sign-up and sign-in now only accept generated options from the request's tenant.
 - Adds a test that fails when a query cannot use an index beyond `app_id` / `tenant_id`.
 - Adds `isOAuthTokenRevokedByGID_Transaction`, a transaction-aware twin of `isOAuthTokenRevokedByGID`.
+- Adds a test-only connection-pool guard against nested same-pool connection acquisition (holding one connection inside a transaction while borrowing a second from the same pool). Warns by default; an opt-in flag makes it fail fast. No-op in production.
 
 ## [9.9.0]
 
