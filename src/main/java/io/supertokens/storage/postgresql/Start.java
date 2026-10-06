@@ -422,30 +422,19 @@ public class Start
     protected <T> T startTransactionHelper(TransactionLogic<T> logic, TransactionIsolationLevel isolationLevel)
             throws StorageQueryException, StorageTransactionLogicException, SQLException, TenantOrAppNotFoundException {
         Connection con = null;
-        Integer defaultTransactionIsolation = null;
         try {
             con = ConnectionPool.getConnection(this);
-            defaultTransactionIsolation = con.getTransactionIsolation();
-            int libIsolationLevel = Connection.TRANSACTION_SERIALIZABLE;
-            switch (isolationLevel) {
-                case SERIALIZABLE:
-                    libIsolationLevel = Connection.TRANSACTION_SERIALIZABLE;
-                    break;
-                case REPEATABLE_READ:
-                    libIsolationLevel = Connection.TRANSACTION_REPEATABLE_READ;
-                    break;
-                case READ_COMMITTED:
-                    libIsolationLevel = Connection.TRANSACTION_READ_COMMITTED;
-                    break;
-                case READ_UNCOMMITTED:
-                    libIsolationLevel = Connection.TRANSACTION_READ_UNCOMMITTED;
-                    break;
-                case NONE:
-                    libIsolationLevel = Connection.TRANSACTION_NONE;
-                    break;
-            }
-            con.setTransactionIsolation(libIsolationLevel);
             con.setAutoCommit(false);
+            // Pooled connections are already at READ COMMITTED (the pool's connectionInitSql), so the default
+            // costs no round trip. Any other level is set for this transaction only: SET TRANSACTION must be its
+            // first statement and ends with it, so the pooled connection is never left at a different level and
+            // there is nothing to read beforehand or reset afterwards.
+            String isolationLevelSQL = getSetTransactionIsolationLevelSQL(isolationLevel);
+            if (isolationLevelSQL != null) {
+                try (Statement st = con.createStatement()) {
+                    st.execute(isolationLevelSQL);
+                }
+            }
             // Mark this thread as holding a connection from this pool for the duration of the callback, so
             // that a nested same-pool borrow (a helper not threading `con`) is caught by ConnectionPool's
             // test-only guard against pool-exhausting call chains.
@@ -464,15 +453,32 @@ public class Start
             if (con != null) {
                 try {
                     con.setAutoCommit(true);
-                    if (defaultTransactionIsolation != null) {
-                        con.setTransactionIsolation(defaultTransactionIsolation);
-                    }
                 } finally {
-                    // must run even if the resets above throw: a connection that is never closed is never
+                    // must run even if the reset above throws: a connection that is never closed is never
                     // returned to the pool, permanently shrinking it
                     con.close();
                 }
             }
+        }
+    }
+
+    /**
+     * The transaction-scoped statement that switches a transaction to {@code isolationLevel}, or null for
+     * READ COMMITTED, which is the session default of every pooled connection.
+     */
+    private static String getSetTransactionIsolationLevelSQL(TransactionIsolationLevel isolationLevel)
+            throws SQLException {
+        switch (isolationLevel) {
+            case SERIALIZABLE:
+                return "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE";
+            case REPEATABLE_READ:
+                return "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ";
+            case READ_COMMITTED:
+                return null;
+            case READ_UNCOMMITTED:
+                return "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED";
+            default:
+                throw new SQLException("Transaction isolation level " + isolationLevel + " not supported.");
         }
     }
 
