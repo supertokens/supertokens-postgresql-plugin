@@ -40,7 +40,6 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 
 /**
  * PLAN-018 Unit 3 (issue #413): {@code listPrimaryUsersByEmail_Transaction} /
@@ -95,18 +94,7 @@ public class ListPrimaryUsersTransactionParityTest {
         // sets under DUAL_WRITE keeps the new-table read path populated too.
         Config.getConfig(start).setMigrationModeForTesting(mode);
 
-        // Three unlinked primary users that all carry SHARED_EMAIL, across three recipes, so the
-        // email fan-out (emailpassword + thirdparty + passwordless) returns more than one user and
-        // the de-duplication path is exercised.
-        EmailPassword.signUp(main, SHARED_EMAIL, "password123");
-        ThirdParty.signInUp(main, "google", "g-parity", SHARED_EMAIL);
-
-        Passwordless.CreateCodeResponse code = Passwordless.createCode(main, SHARED_EMAIL, null, null, null);
-        Passwordless.ConsumeCodeResponse plUser = Passwordless.consumeCode(
-                main, code.deviceId, code.deviceIdHash, code.userInputCode, null);
-        // Give the passwordless user a phone number so the phone-number read has something to find.
-        Passwordless.updateUser(main, plUser.user.getSupertokensUserId(),
-                null, new Passwordless.FieldUpdate(PHONE));
+        seedUsers(main);
 
         TenantIdentifier tenant = TenantIdentifier.BASE_TENANT;
 
@@ -115,7 +103,7 @@ public class ListPrimaryUsersTransactionParityTest {
         AuthRecipeUserInfo[] emailTx = start.startTransaction(
                 con -> start.listPrimaryUsersByEmail_Transaction(tenant, con, SHARED_EMAIL));
 
-        assertTrue("email fan-out should return the seeded users in mode " + mode, emailNonTx.length >= 2);
+        assertEquals("email fan-out should return all three seeded users in mode " + mode, 3, emailNonTx.length);
         assertUserIdsEqual("email lookup parity (" + mode + ")", emailNonTx, emailTx);
 
         // ----- phone number -----
@@ -125,6 +113,73 @@ public class ListPrimaryUsersTransactionParityTest {
 
         assertEquals("phone lookup should find the passwordless user in mode " + mode, 1, phoneNonTx.length);
         assertUserIdsEqual("phone lookup parity (" + mode + ")", phoneNonTx, phoneTx);
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    // Three unlinked primary users that all carry SHARED_EMAIL, across three recipes, so the email
+    // fan-out (emailpassword + thirdparty + passwordless) returns more than one user and the
+    // de-duplication path is exercised. The passwordless user also gets PHONE. WebAuthn is not
+    // seeded: that leg reuses the pre-existing getPrimaryUserIdForTenantUsingEmail_Transaction.
+    private static void seedUsers(Main main) throws Exception {
+        EmailPassword.signUp(main, SHARED_EMAIL, "password123");
+        ThirdParty.signInUp(main, "google", "g-parity", SHARED_EMAIL);
+
+        Passwordless.CreateCodeResponse code = Passwordless.createCode(main, SHARED_EMAIL, null, null, null);
+        Passwordless.ConsumeCodeResponse plUser = Passwordless.consumeCode(
+                main, code.deviceId, code.deviceIdHash, code.userInputCode, null);
+        Passwordless.updateUser(main, plUser.user.getSupertokensUserId(),
+                null, new Passwordless.FieldUpdate(PHONE));
+    }
+
+    @Test
+    public void testTransactionReadsReuseCallerConnectionLegacyReadOld() throws Exception {
+        runConnectionReuseCheck(MigrationMode.LEGACY);
+    }
+
+    @Test
+    public void testTransactionReadsReuseCallerConnectionDualWriteReadNew() throws Exception {
+        runConnectionReuseCheck(MigrationMode.DUAL_WRITE_READ_NEW);
+    }
+
+    // Parity alone cannot catch a nested borrow: a _Transaction read that calls a non-tx helper
+    // still returns the right rows. With a pool of one connection, the transaction holds the only
+    // connection, so any second borrow from the same pool times out and the read throws instead.
+    private void runConnectionReuseCheck(MigrationMode mode) throws Exception {
+        String[] args = {"../"};
+
+        // Seed with the default pool: the core-side sign-up flows are not what this test is about.
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        if (StorageLayer.getStorage(process.getProcess()).getType() != STORAGE_TYPE.SQL) {
+            process.kill();
+            return;
+        }
+
+        Config.getConfig((Start) StorageLayer.getStorage(process.getProcess())).setMigrationModeForTesting(mode);
+        seedUsers(process.getProcess());
+        process.kill(false);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+        Utils.setValueInConfig("postgresql_connection_pool_size", "1");
+        process = TestingProcessManager.start(args, false);
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        Start start = (Start) StorageLayer.getStorage(process.getProcess());
+        Config.getConfig(start).setMigrationModeForTesting(mode);
+        TenantIdentifier tenant = TenantIdentifier.BASE_TENANT;
+
+        AuthRecipeUserInfo[] emailTx = start.startTransaction(
+                con -> start.listPrimaryUsersByEmail_Transaction(tenant, con, SHARED_EMAIL));
+        AuthRecipeUserInfo[] phoneTx = start.startTransaction(
+                con -> start.listPrimaryUsersByPhoneNumber_Transaction(tenant, con, PHONE));
+
+        assertEquals("email tx read on a one-connection pool (" + mode + ")", 3, emailTx.length);
+        assertEquals("phone tx read on a one-connection pool (" + mode + ")", 1, phoneTx.length);
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
