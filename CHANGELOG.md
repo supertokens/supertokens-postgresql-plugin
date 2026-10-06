@@ -7,6 +7,37 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.3.4]
+
+- WebAuthn cross-tenant hardening (GHSA-6v34-w48w-44rc): `getUserInfoByCredentialId_Transaction` now requires the credential owner to be a member of the requested tenant (`all_users.tenant_id` filter), matching the in-memory implementation. Query-logic only; no schema change.
+- Null-guard the now-nullable credential-owner lookup in `getPrimaryUserByWebauthNCredentialId[_Transaction]` so a cross-tenant sign-in returns a clean not-found result instead of a 500 (NPE), matching the in-memory implementation. (GHSA-6v34-w48w-44rc follow-up)
+- SAML callback replay hardening (GHSA-3r7x-rhvc-fw28): adds `saml_relay_state.in_response_to` and `.acs_url` (InResponseTo binding, Destination/Recipient pinning) and a single-use `saml_consumed_assertions` table that closes the IdP-initiated replay window. The plugin applies the new columns and table at startup (`CREATE TABLE` / `ADD COLUMN IF NOT EXISTS`); no manual migration step.
+- Adds a nullable `saml_clients.acs_urls` column (an ACS-URL allow-list on the SAML client, backing IdP-initiated Recipient pinning). Additive and online-safe; the plugin applies it at startup. (GHSA-3r7x-rhvc-fw28 follow-up)
+
+### Migration
+
+The SAML replay hardening adds two columns to `saml_relay_state`, the `saml_consumed_assertions` table, and the `saml_clients.acs_urls` allow-list column. The plugin applies them automatically at startup (`CREATE TABLE` / `ADD COLUMN IF NOT EXISTS`); large PostgreSQL deployments can pre-apply the statements below ahead of the upgrade. Additive and online-safe.
+
+```sql
+ALTER TABLE saml_relay_state ADD COLUMN IF NOT EXISTS in_response_to VARCHAR(256);
+ALTER TABLE saml_relay_state ADD COLUMN IF NOT EXISTS acs_url TEXT;
+
+CREATE TABLE IF NOT EXISTS saml_consumed_assertions (
+    app_id VARCHAR(64) NOT NULL DEFAULT 'public',
+    tenant_id VARCHAR(64) NOT NULL DEFAULT 'public',
+    assertion_id VARCHAR(256) NOT NULL,
+    expires_at BIGINT NOT NULL,
+    CONSTRAINT saml_consumed_assertions_pkey PRIMARY KEY(app_id, tenant_id, assertion_id),
+    CONSTRAINT saml_consumed_assertions_app_id_fkey FOREIGN KEY(app_id) REFERENCES apps (app_id) ON DELETE CASCADE,
+    CONSTRAINT saml_consumed_assertions_tenant_id_fkey FOREIGN KEY(app_id, tenant_id) REFERENCES tenants (app_id, tenant_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS saml_consumed_assertions_expires_at_index ON saml_consumed_assertions (expires_at);
+
+ALTER TABLE saml_clients ADD COLUMN IF NOT EXISTS acs_urls TEXT;
+```
+
+
 ## [9.3.3]
 
 - Fixes env var parsing with a few types
