@@ -1580,64 +1580,8 @@ public class AccountInfoQueries {
     /**
      * Find all primary_or_recipe_user_ids that have a matching email in the given tenant.
      * Replaces 4 separate per-recipe queries (emailpassword, passwordless, thirdparty, webauthn).
+     * Runs on the caller's connection (no nested same-pool acquisition).
      */
-    public static List<String> listPrimaryUserIdsByEmail(Start start, TenantIdentifier tenantIdentifier,
-                                                          String email)
-            throws SQLException, StorageQueryException {
-        String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id"
-                + " FROM " + getConfig(start).getRecipeUserTenantsTable() + " rut"
-                + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " auid"
-                + " ON rut.app_id = auid.app_id AND rut.recipe_user_id = auid.user_id"
-                + " WHERE rut.app_id = ? AND rut.tenant_id = ?"
-                + " AND rut.account_info_type = ?"
-                + " AND rut.account_info_value = ?";
-
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, tenantIdentifier.getTenantId());
-            pst.setString(3, ACCOUNT_INFO_TYPE.EMAIL.toString());
-            pst.setString(4, email);
-        }, result -> {
-            List<String> userIds = new ArrayList<>();
-            while (result.next()) {
-                userIds.add(result.getString("primary_or_recipe_user_id"));
-            }
-            return userIds;
-        });
-    }
-
-    /**
-     * Find all primary_or_recipe_user_ids that have a matching phone number in the given tenant.
-     * Replaces PasswordlessQueries.getPrimaryUserByPhoneNumber().
-     */
-    public static List<String> listPrimaryUserIdsByPhoneNumber(Start start, TenantIdentifier tenantIdentifier,
-                                                                String phoneNumber)
-            throws SQLException, StorageQueryException {
-        // Phone number rows always have third_party_id = '' (Passwordless has no ThirdParty concept).
-        String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id"
-                + " FROM " + getConfig(start).getRecipeUserTenantsTable() + " rut"
-                + " JOIN " + getConfig(start).getAppIdToUserIdTable() + " auid"
-                + " ON rut.app_id = auid.app_id AND rut.recipe_user_id = auid.user_id"
-                + " WHERE rut.app_id = ? AND rut.tenant_id = ?"
-                + " AND rut.account_info_type = ? AND rut.third_party_id = ''"
-                + " AND rut.account_info_value = ?";
-
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, tenantIdentifier.getTenantId());
-            pst.setString(3, ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString());
-            pst.setString(4, phoneNumber);
-        }, result -> {
-            List<String> userIds = new ArrayList<>();
-            while (result.next()) {
-                userIds.add(result.getString("primary_or_recipe_user_id"));
-            }
-            return userIds;
-        });
-    }
-
-    // Transaction variant of listPrimaryUserIdsByEmail that reuses the caller's connection instead of
-    // borrowing a fresh pooled connection (avoids nested same-pool acquisition). Same SQL as the non-tx form.
     public static List<String> listPrimaryUserIdsByEmail_Transaction(Start start, Connection sqlCon,
                                                                      TenantIdentifier tenantIdentifier, String email)
             throws SQLException, StorageQueryException {
@@ -1663,8 +1607,11 @@ public class AccountInfoQueries {
         });
     }
 
-    // Transaction variant of listPrimaryUserIdsByPhoneNumber that reuses the caller's connection instead of
-    // borrowing a fresh pooled connection (avoids nested same-pool acquisition). Same SQL as the non-tx form.
+    /**
+     * Find all primary_or_recipe_user_ids that have a matching phone number in the given tenant.
+     * Replaces PasswordlessQueries.getPrimaryUserByPhoneNumber_Transaction().
+     * Runs on the caller's connection (no nested same-pool acquisition).
+     */
     public static List<String> listPrimaryUserIdsByPhoneNumber_Transaction(Start start, Connection sqlCon,
                                                                            TenantIdentifier tenantIdentifier,
                                                                            String phoneNumber)
