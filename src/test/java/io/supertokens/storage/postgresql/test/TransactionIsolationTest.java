@@ -21,7 +21,6 @@ import io.supertokens.ProcessState;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.passwordless.PasswordlessCode;
-import io.supertokens.pluginInterface.sqlStorage.SQLStorage.TransactionIsolationLevel;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storageLayer.StorageLayer;
 import org.junit.AfterClass;
@@ -49,10 +48,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Pooled connections are already at READ COMMITTED (the pool's connectionInitSql), so a transaction must not
- * spend round trips reading or setting the session isolation level. A caller asking for a stronger level gets
- * it for that transaction only, via a transaction-scoped SET TRANSACTION, so the session default is never
- * changed and the next transaction on the same connection is back at READ COMMITTED.
+ * Pooled connections are already at READ COMMITTED (the pool's connectionInitSql), and that is the only level
+ * a transaction runs at, so a transaction must not spend round trips reading or setting the isolation level.
  *
  * The SQL a transaction sends is observed through the PostgreSQL JDBC driver's own FINEST query log,
  * restricted to the test thread (startTransaction runs synchronously on its caller).
@@ -106,10 +103,10 @@ public class TransactionIsolationTest {
     }
 
     @Test
-    public void nonDefaultLevelIsScopedToItsTransaction() throws Exception {
+    public void transactionsRunAtReadCommitted() throws Exception {
         String[] args = {"../"};
 
-        // one connection, so the follow-up transaction provably reuses the same session
+        // one connection, so both transactions provably use the same session
         Utils.setValueInConfig("postgresql_connection_pool_size", "1");
 
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -123,39 +120,26 @@ public class TransactionIsolationTest {
 
         Start storage = (Start) StorageLayer.getStorage(process.getProcess());
 
-        for (TransactionIsolationLevel level : new TransactionIsolationLevel[]{
-                TransactionIsolationLevel.REPEATABLE_READ, TransactionIsolationLevel.SERIALIZABLE}) {
-            String expected = level == TransactionIsolationLevel.REPEATABLE_READ ? "repeatable read" : "serializable";
+        String[] first = runIsolationProbe(storage);
+        String[] second = runIsolationProbe(storage);
 
-            String[] inside = storage.startTransaction(con -> {
-                Connection sqlCon = (Connection) con.getConnection();
-                String[] result = new String[]{
-                        runQuery(sqlCon, "SHOW transaction_isolation"),
-                        runQuery(sqlCon, "SHOW default_transaction_isolation"),
-                        runQuery(sqlCon, "SELECT pg_backend_pid()::text")};
-                storage.commitTransaction(con);
-                return result;
-            }, level);
-
-            assertEquals(expected, inside[0]);
-            // the session default was never touched: the level applied to this transaction only
-            assertEquals("read committed", inside[1]);
-
-            String[] after = storage.startTransaction(con -> {
-                Connection sqlCon = (Connection) con.getConnection();
-                String[] result = new String[]{
-                        runQuery(sqlCon, "SHOW transaction_isolation"),
-                        runQuery(sqlCon, "SELECT pg_backend_pid()::text")};
-                storage.commitTransaction(con);
-                return result;
-            });
-
-            assertEquals(inside[2], after[1]);
-            assertEquals("read committed", after[0]);
-        }
+        assertEquals(first[1], second[1]);
+        assertEquals("read committed", first[0]);
+        assertEquals("read committed", second[0]);
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    private static String[] runIsolationProbe(Start storage) throws Exception {
+        return storage.startTransaction(con -> {
+            Connection sqlCon = (Connection) con.getConnection();
+            String[] result = new String[]{
+                    runQuery(sqlCon, "SHOW transaction_isolation"),
+                    runQuery(sqlCon, "SELECT pg_backend_pid()::text")};
+            storage.commitTransaction(con);
+            return result;
+        });
     }
 
     @Test
