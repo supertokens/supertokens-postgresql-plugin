@@ -431,23 +431,6 @@ public class WebAuthNQueries {
         return userInfo;
     }
 
-    public static String getPrimaryUserIdUsingEmail(Start start, TenantIdentifier tenantIdentifier, String email)
-            throws StorageQueryException {
-        try {
-            return start.startTransaction(con -> {
-                try {
-                    Connection sqlConnection = (Connection) con.getConnection();
-                    return getPrimaryUserIdForTenantUsingEmail_Transaction(start, sqlConnection, tenantIdentifier,
-                            email);
-                } catch (SQLException e) {
-                    throw new StorageQueryException(e);
-                }
-            });
-        } catch (StorageTransactionLogicException e) {
-            throw new StorageQueryException(e);
-        }
-    }
-
     public static String getPrimaryUserIdForTenantUsingEmail_Transaction(Start start, Connection sqlConnection,
                                                                          TenantIdentifier tenantIdentifier,
                                                                          String email)

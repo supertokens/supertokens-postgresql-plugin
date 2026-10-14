@@ -1580,9 +1580,10 @@ public class AccountInfoQueries {
     /**
      * Find all primary_or_recipe_user_ids that have a matching email in the given tenant.
      * Replaces 4 separate per-recipe queries (emailpassword, passwordless, thirdparty, webauthn).
+     * Runs on the caller's connection (no nested same-pool acquisition).
      */
-    public static List<String> listPrimaryUserIdsByEmail(Start start, TenantIdentifier tenantIdentifier,
-                                                          String email)
+    public static List<String> listPrimaryUserIdsByEmail_Transaction(Start start, Connection sqlCon,
+                                                                     TenantIdentifier tenantIdentifier, String email)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id"
                 + " FROM " + getConfig(start).getRecipeUserTenantsTable() + " rut"
@@ -1592,7 +1593,7 @@ public class AccountInfoQueries {
                 + " AND rut.account_info_type = ?"
                 + " AND rut.account_info_value = ?";
 
-        return execute(start, QUERY, pst -> {
+        return execute(sqlCon, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, ACCOUNT_INFO_TYPE.EMAIL.toString());
@@ -1608,10 +1609,12 @@ public class AccountInfoQueries {
 
     /**
      * Find all primary_or_recipe_user_ids that have a matching phone number in the given tenant.
-     * Replaces PasswordlessQueries.getPrimaryUserByPhoneNumber().
+     * Replaces PasswordlessQueries.getPrimaryUserByPhoneNumber_Transaction().
+     * Runs on the caller's connection (no nested same-pool acquisition).
      */
-    public static List<String> listPrimaryUserIdsByPhoneNumber(Start start, TenantIdentifier tenantIdentifier,
-                                                                String phoneNumber)
+    public static List<String> listPrimaryUserIdsByPhoneNumber_Transaction(Start start, Connection sqlCon,
+                                                                           TenantIdentifier tenantIdentifier,
+                                                                           String phoneNumber)
             throws SQLException, StorageQueryException {
         // Phone number rows always have third_party_id = '' (Passwordless has no ThirdParty concept).
         String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id"
@@ -1622,7 +1625,7 @@ public class AccountInfoQueries {
                 + " AND rut.account_info_type = ? AND rut.third_party_id = ''"
                 + " AND rut.account_info_value = ?";
 
-        return execute(start, QUERY, pst -> {
+        return execute(sqlCon, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, ACCOUNT_INFO_TYPE.PHONE_NUMBER.toString());
