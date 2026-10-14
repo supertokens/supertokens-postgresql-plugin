@@ -292,6 +292,15 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         return nestedAcquisitionWarningCount.get();
     }
 
+    // The same count, kept per thread. A warn hit is counted on the thread that made the nested borrow, so a test
+    // asserting on its own borrow cannot be satisfied by a warning a background cron raised on another thread.
+    private static final ThreadLocal<long[]> NESTED_ACQUISITION_WARNINGS_ON_THREAD =
+            ThreadLocal.withInitial(() -> new long[1]);
+
+    public static long getNestedAcquisitionWarningCountOnCurrentThread() {
+        return NESTED_ACQUISITION_WARNINGS_ON_THREAD.get()[0];
+    }
+
     private static String poolKey(Start start) {
         return start.getUserPoolId() + "~" + start.getConnectionPoolId();
     }
@@ -347,6 +356,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         // Warn-mode default: surface it without failing the suite — counted, and logged to both stderr and the
         // storage's error log so it shows up in test logs.
         nestedAcquisitionWarningCount.incrementAndGet();
+        NESTED_ACQUISITION_WARNINGS_ON_THREAD.get()[0]++;
         System.err.println("[nested-conn-guard][WARN] " + message);
         try {
             Logging.warn(start, "[nested-conn-guard] " + message);

@@ -18,6 +18,8 @@ package io.supertokens.storage.postgresql.test;
 
 import static org.junit.Assert.*;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -43,8 +45,8 @@ import io.supertokens.storageLayer.StorageLayer;
 /**
  * Exercises ConnectionPool's test-only guard against borrowing a second connection from the same pool while a
  * startTransaction on that pool holds one. "Allowed" cases run in throw-mode, so a false positive fails the test;
- * warn-mode cases assert on the process-global warning counter (background crons can only raise it, never hide a
- * missed warning).
+ * warn-mode cases assert on the test thread's own warning counter, so a warning a background cron raises on another
+ * thread cannot stand in for a missed one.
  */
 public class NestedConnectionAcquisitionGuardTest {
     @Rule
@@ -83,9 +85,9 @@ public class NestedConnectionAcquisitionGuardTest {
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
         Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
 
-        long before = ConnectionPool.getNestedAcquisitionWarningCount();
+        long before = ConnectionPool.getNestedAcquisitionWarningCountOnCurrentThread();
         start.startTransaction(con -> start.startTransaction(inner -> null));
-        assertTrue(ConnectionPool.getNestedAcquisitionWarningCount() > before);
+        assertEquals(before + 1, ConnectionPool.getNestedAcquisitionWarningCountOnCurrentThread());
 
         ConnectionPool.setThrowOnNestedAcquisition(true);
         try {
@@ -107,9 +109,9 @@ public class NestedConnectionAcquisitionGuardTest {
         Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
 
         // a plain (non-_Transaction) read borrows its own connection from the pool the transaction holds
-        long before = ConnectionPool.getNestedAcquisitionWarningCount();
+        long before = ConnectionPool.getNestedAcquisitionWarningCountOnCurrentThread();
         start.startTransaction(con -> start.getKeyValue(TenantIdentifier.BASE_TENANT, "nested-guard"));
-        assertTrue(ConnectionPool.getNestedAcquisitionWarningCount() > before);
+        assertEquals(before + 1, ConnectionPool.getNestedAcquisitionWarningCountOnCurrentThread());
 
         ConnectionPool.setThrowOnNestedAcquisition(true);
         try {
@@ -121,6 +123,35 @@ public class NestedConnectionAcquisitionGuardTest {
 
         // outside any transaction the same read is fine
         start.getKeyValue(TenantIdentifier.BASE_TENANT, "nested-guard");
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
+    public void warningOnAnotherThreadDoesNotCountForThisThread() throws Exception {
+        String[] args = {"../"};
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+        Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
+
+        long globalBefore = ConnectionPool.getNestedAcquisitionWarningCount();
+        long thisThreadBefore = ConnectionPool.getNestedAcquisitionWarningCountOnCurrentThread();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread other = new Thread(() -> {
+            try {
+                start.startTransaction(con -> start.startTransaction(inner -> null));
+            } catch (Throwable t) {
+                failure.set(t);
+            }
+        });
+        other.start();
+        other.join();
+        assertNull(failure.get());
+
+        // the other thread's nested borrow is a real warning, but it is not this thread's
+        assertTrue(ConnectionPool.getNestedAcquisitionWarningCount() > globalBefore);
+        assertEquals(thisThreadBefore, ConnectionPool.getNestedAcquisitionWarningCountOnCurrentThread());
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
