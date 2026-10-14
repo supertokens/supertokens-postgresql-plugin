@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [unreleased]
 
+- Transactions no longer read, set and reset the session isolation level around every call (three extra round trips, each an implicit transaction): every transaction runs at the pool's session default, READ COMMITTED. Following the plugin-interface contract change, `startTransaction(logic, TransactionIsolationLevel)` is removed, and passwordless `createDeviceWithCode` now runs at READ COMMITTED instead of REPEATABLE READ.
 
 ## [9.9.1]
 

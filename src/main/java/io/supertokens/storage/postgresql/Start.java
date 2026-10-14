@@ -337,18 +337,12 @@ public class Start
     @Override
     public <T> T startTransaction(TransactionLogic<T> logic)
             throws StorageTransactionLogicException, StorageQueryException {
-        return startTransaction(logic, TransactionIsolationLevel.READ_COMMITTED);
-    }
-
-    @Override
-    public <T> T startTransaction(TransactionLogic<T> logic, TransactionIsolationLevel isolationLevel)
-            throws StorageTransactionLogicException, StorageQueryException {
         final int NUM_TRIES = 50;
         int tries = 0;
         while (true) {
             tries++;
             try {
-                return startTransactionHelper(logic, isolationLevel);
+                return startTransactionHelper(logic);
             } catch (SQLException | StorageQueryException | StorageTransactionLogicException |
                      TenantOrAppNotFoundException e) {
                 Throwable actualException = e;
@@ -420,33 +414,14 @@ public class Start
         }
     }
 
-    protected <T> T startTransactionHelper(TransactionLogic<T> logic, TransactionIsolationLevel isolationLevel)
+    protected <T> T startTransactionHelper(TransactionLogic<T> logic)
             throws StorageQueryException, StorageTransactionLogicException, SQLException, TenantOrAppNotFoundException {
         Connection con = null;
-        Integer defaultTransactionIsolation = null;
         try {
             con = ConnectionPool.getConnection(this);
-            defaultTransactionIsolation = con.getTransactionIsolation();
-            int libIsolationLevel = Connection.TRANSACTION_SERIALIZABLE;
-            switch (isolationLevel) {
-                case SERIALIZABLE:
-                    libIsolationLevel = Connection.TRANSACTION_SERIALIZABLE;
-                    break;
-                case REPEATABLE_READ:
-                    libIsolationLevel = Connection.TRANSACTION_REPEATABLE_READ;
-                    break;
-                case READ_COMMITTED:
-                    libIsolationLevel = Connection.TRANSACTION_READ_COMMITTED;
-                    break;
-                case READ_UNCOMMITTED:
-                    libIsolationLevel = Connection.TRANSACTION_READ_UNCOMMITTED;
-                    break;
-                case NONE:
-                    libIsolationLevel = Connection.TRANSACTION_NONE;
-                    break;
-            }
-            con.setTransactionIsolation(libIsolationLevel);
             con.setAutoCommit(false);
+            // Transactions run at READ COMMITTED, which pooled connections are already at (the pool's
+            // connectionInitSql), so there is nothing to read, set or reset around the transaction.
             // Mark this thread as holding a connection from this pool for the duration of the callback, so
             // that a nested same-pool borrow (a helper not threading `con`) is caught by ConnectionPool's
             // test-only guard against pool-exhausting call chains.
@@ -465,11 +440,8 @@ public class Start
             if (con != null) {
                 try {
                     con.setAutoCommit(true);
-                    if (defaultTransactionIsolation != null) {
-                        con.setTransactionIsolation(defaultTransactionIsolation);
-                    }
                 } finally {
-                    // must run even if the resets above throw: a connection that is never closed is never
+                    // must run even if the reset above throws: a connection that is never closed is never
                     // returned to the pool, permanently shrinking it
                     con.close();
                 }
