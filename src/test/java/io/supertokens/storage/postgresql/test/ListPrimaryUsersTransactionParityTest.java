@@ -26,7 +26,14 @@ import io.supertokens.passwordless.Passwordless;
 import io.supertokens.pluginInterface.MigrationMode;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
+import io.supertokens.pluginInterface.authRecipe.exceptions.EmailChangeNotAllowedException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.PhoneNumberChangeNotAllowedException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.UnknownUserIdException;
+import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
+import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.passwordless.exception.DuplicatePhoneNumberException;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storageLayer.StorageLayer;
@@ -38,8 +45,10 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestRule;
 
+import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -238,6 +247,80 @@ public class ListPrimaryUsersTransactionParityTest {
         assertEmailResult(seeded, mode, emailTx);
         assertEquals("phone tx read on a one-connection pool (" + mode + ")",
                 Arrays.asList(seeded.passwordlessUserId), idsOf(phoneTx));
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
+    public void testTransactionReadsSeeUncommittedWritesLegacyReadOld() throws Exception {
+        runUncommittedWriteCheck(MigrationMode.LEGACY);
+    }
+
+    @Test
+    public void testTransactionReadsSeeUncommittedWritesDualWriteReadNew() throws Exception {
+        runUncommittedWriteCheck(MigrationMode.DUAL_WRITE_READ_NEW);
+    }
+
+    // The point of the _Transaction forms is that a caller can write and then read in one transaction. A
+    // read on any other connection would not see the uncommitted write (READ COMMITTED) and would return
+    // the old rows. This moves the passwordless user's email and phone on the transaction connection, reads
+    // through both lookups before commit, rolls back, and checks the committed state is unchanged.
+    private void runUncommittedWriteCheck(MigrationMode mode) throws Exception {
+        TestingProcessManager.TestingProcess process = startWithAccountLinking();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        if (StorageLayer.getStorage(process.getProcess()).getType() != STORAGE_TYPE.SQL) {
+            process.kill();
+            return;
+        }
+
+        Main main = process.getProcess();
+        Start start = (Start) StorageLayer.getStorage(main);
+        Config.getConfig(start).setMigrationModeForTesting(mode);
+        SeededUsers seeded = seedUsers(main);
+
+        TenantIdentifier tenant = TenantIdentifier.BASE_TENANT;
+        AppIdentifier app = tenant.toAppIdentifier();
+        String newEmail = "moved@parity.com";
+        String newPhone = "+15559876543";
+
+        List<List<String>> inTx = start.startTransaction(con -> {
+            try {
+                start.updateUserEmailAndPhone_Transaction(app, con, seeded.passwordlessUserId,
+                        newEmail, true, newPhone, true);
+            } catch (UnknownUserIdException | DuplicateEmailException | EmailChangeNotAllowedException
+                     | DuplicatePhoneNumberException | PhoneNumberChangeNotAllowedException e) {
+                throw new StorageTransactionLogicException(e);
+            }
+            List<List<String>> reads = Arrays.asList(
+                    idsOf(start.listPrimaryUsersByEmail_Transaction(tenant, con, newEmail)),
+                    idsOf(start.listPrimaryUsersByEmail_Transaction(tenant, con, SHARED_EMAIL)),
+                    idsOf(start.listPrimaryUsersByPhoneNumber_Transaction(tenant, con, newPhone)),
+                    idsOf(start.listPrimaryUsersByPhoneNumber_Transaction(tenant, con, PHONE)));
+            // Roll back on the connection itself: returning without a commit is not enough, because
+            // startTransaction's setAutoCommit(true) reset would commit the pending writes.
+            ((Connection) con.getConnection()).rollback();
+            return reads;
+        });
+
+        assertEquals("uncommitted new email is visible in the transaction (" + mode + ")",
+                Arrays.asList(seeded.passwordlessUserId), inTx.get(0));
+        assertEquals("passwordless user has left the shared email in the transaction (" + mode + ")",
+                Arrays.asList(seeded.thirdPartyUserId, seeded.emailPasswordUserId), inTx.get(1));
+        assertEquals("uncommitted new phone is visible in the transaction (" + mode + ")",
+                Arrays.asList(seeded.passwordlessUserId), inTx.get(2));
+        assertEquals("old phone no longer matches in the transaction (" + mode + ")",
+                Collections.emptyList(), inTx.get(3));
+
+        // After the rollback, the committed state is the seeded one.
+        assertEquals("new email rolled back (" + mode + ")",
+                Collections.emptyList(), idsOf(start.listPrimaryUsersByEmail(tenant, newEmail)));
+        assertEmailResult(seeded, mode, start.listPrimaryUsersByEmail(tenant, SHARED_EMAIL));
+        assertEquals("new phone rolled back (" + mode + ")",
+                Collections.emptyList(), idsOf(start.listPrimaryUsersByPhoneNumber(tenant, newPhone)));
+        assertEquals("old phone restored (" + mode + ")",
+                Arrays.asList(seeded.passwordlessUserId), idsOf(start.listPrimaryUsersByPhoneNumber(tenant, PHONE)));
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
