@@ -3220,6 +3220,15 @@ public class Start
     }
 
     @Override
+    public boolean hasUserIdMappings(AppIdentifier appIdentifier) throws StorageQueryException {
+        try {
+            return UserIdMappingQueries.hasUserIdMappings(this, appIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public void createTenant(TenantConfig tenantConfig)
             throws DuplicateTenantException, StorageQueryException, DuplicateThirdPartyIdException,
             DuplicateClientTypeException {
