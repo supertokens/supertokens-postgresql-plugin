@@ -300,7 +300,11 @@ public class ListPrimaryUsersTransactionParityTest {
                     idsOf(start.listPrimaryUsersByPhoneNumber_Transaction(tenant, con, PHONE)));
             // Roll back on the connection itself: returning without a commit is not enough, because
             // startTransaction's setAutoCommit(true) reset would commit the pending writes.
-            ((Connection) con.getConnection()).rollback();
+            try {
+                ((Connection) con.getConnection()).rollback();
+            } catch (java.sql.SQLException e) {
+                throw new StorageTransactionLogicException(e);
+            }
             return reads;
         });
 
