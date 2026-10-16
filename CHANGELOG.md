@@ -12,6 +12,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Implements `hasUserIdMappings(AppIdentifier)`: a single `LIMIT 1` probe on `userid_mapping` by `app_id` that tells whether the app has any user id mappings.
 - Add transaction-aware listPrimaryUsersByEmail/ByPhoneNumber reads; the non-transaction forms now borrow one
   connection and delegate to them, so each lookup query exists once.
+- Implements `getOAuthClientById_Transaction`, which reads an OAuth client on the caller's transaction connection;
+  the non-transaction form now borrows one connection and delegates to it.
 
 ## [9.9.1]
 
