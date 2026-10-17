@@ -51,7 +51,7 @@ import static org.junit.Assert.*;
  * <p>WebAuthn looks credentials up by {@code WHERE app_id = ? AND id = ?} (sign in, counter update, and the
  * app-wide credential id uniqueness check at registration). The primary key is {@code (app_id, rp_id, id)}, so
  * with many relying party ids it cannot serve that predicate. The test checks that the index is created on a
- * fresh install and re-created at startup on an existing table (the patch-release backfill path), and that the
+ * fresh install and re-created at startup on an existing table that lacks it (the patch-release backfill path), and that the
  * lookup plans an index scan on it over a seeded table, and is much more expensive without it.
  */
 public class WebAuthnCredentialIdIndexRegressionTest {
@@ -96,19 +96,29 @@ public class WebAuthnCredentialIdIndexRegressionTest {
         }
         Start storage = (Start) StorageLayer.getStorage(main);
         String credentials = Config.getConfig(storage).getWebAuthNCredentialsTable();
+        String users = Config.getConfig(storage).getWebAuthNUsersTable();
+        // a marker row: it must survive the restart, proving the second boot runs on the existing schema
+        WebAuthN.saveUser(storage, ResourceDistributor.getAppForTesting(), "marker@example.com",
+                UUID.randomUUID().toString(), "example.com");
         try (Connection con = ConnectionPool.getConnection(storage)) {
             con.setAutoCommit(true);
             assertEquals("(app_id, id)", indexColumns(con, credentials));
             exec(con, "DROP INDEX " + INDEX);
             assertNull(indexColumns(con, credentials));
         }
-        stop(process);
+        // keep the tables (kill() would drop them, making the restart a fresh install)
+        process.kill(false);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        StorageLayer.close();
 
         // restart on the existing schema: the startup backfill re-creates the index
         process = startProcess();
+        assertNull("restart must not create tables", process.checkOrWaitForEventInPlugin(
+                io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.CREATING_NEW_TABLE, 2000));
         storage = (Start) StorageLayer.getStorage(process.getProcess());
         try (Connection con = ConnectionPool.getConnection(storage)) {
             con.setAutoCommit(true);
+            assertEquals(1, count(con, "SELECT count(*) FROM " + users + " WHERE email = 'marker@example.com'"));
             assertEquals("(app_id, id)", indexColumns(con, credentials));
         }
         stop(process);
@@ -234,6 +244,13 @@ public class WebAuthnCredentialIdIndexRegressionTest {
             }
         }
         return out;
+    }
+
+    private long count(Connection con, String sql) throws Exception {
+        try (Statement st = con.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            assertTrue(rs.next());
+            return rs.getLong(1);
+        }
     }
 
     private void exec(Connection con, String sql) throws Exception {

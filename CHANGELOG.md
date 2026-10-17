@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+> Release note: this entry must ship as plugin **9.9.2**. The manifest entry and `migration-scripts/v9.9.2.sql` are keyed to 9.9.2, so the release commit must bump `build.gradle` to `9.9.2` and rename this heading to `## [9.9.2]`, otherwise the schema-migration check fails.
+
 - Adds the index `webauthn_credentials_app_id_id_index` on `webauthn_credentials (app_id, id)`. It backs the WebAuthn credential lookups by id (sign in, counter update, and the app-wide credential id uniqueness check that the core now runs at registration), which the `(app_id, rp_id, id)` primary key cannot serve.
 
 ### Migration
