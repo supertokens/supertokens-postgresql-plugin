@@ -1489,23 +1489,21 @@ public class Start
                             List.of("email~" + email));
                     // All reads below run on the transaction's own connection: other transactions may be queued
                     // on the lock above while holding pool connections, so this one must not need another.
-                    // Same rule as before: conflict if another primary user has a login method with this email
-                    // in one of this user's tenants.
-                    AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp_Transaction(
-                            this, sqlCon, appIdentifier, email);
-                    for (AuthRecipeUserInfo existingUser : existingUsers) {
-                        if (!existingUser.isPrimaryUser
+                    // Same rule as before: conflict if another primary user has a recipe user with this email in one
+                    // of this user's tenants (and is itself in that tenant).
+                    Map<String, Set<String>> tenantsByCandidate =
+                            GeneralQueries.listPrimaryOrRecipeUserIdsByEmailInTenants_legacy_Transaction(
+                                    this, sqlCon, appIdentifier, email, new HashSet<>(user.tenantIds));
+                    for (Map.Entry<String, Set<String>> candidate : tenantsByCandidate.entrySet()) {
+                        AuthRecipeUserInfo existingUser = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(
+                                this, sqlCon, appIdentifier, candidate.getKey());
+                        if (existingUser == null || !existingUser.isPrimaryUser
                                 || existingUser.getSupertokensUserId().equals(user.getSupertokensUserId())) {
                             continue;
                         }
-                        for (LoginMethod lm : existingUser.loginMethods) {
-                            if (!email.equals(lm.email)) {
-                                continue;
-                            }
-                            for (String tenantId : user.tenantIds) {
-                                if (lm.tenantIds.contains(tenantId) && existingUser.tenantIds.contains(tenantId)) {
-                                    throw new EmailChangeNotAllowedException();
-                                }
+                        for (String tenantId : candidate.getValue()) {
+                            if (existingUser.tenantIds.contains(tenantId)) {
+                                throw new EmailChangeNotAllowedException();
                             }
                         }
                     }
