@@ -28,6 +28,13 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS webauthn_credentials_app_id_id_index ON 
   statement, so concurrent verifications of one user are serialised and each sees the codes stored before it. Uses
   the existing `totp_used_codes_user_id_index`; no schema change.
 - `getSAMLClaimsAndRemoveCode` reads and deletes the SAML code row in one atomic `DELETE ... RETURNING` (previously a `SELECT` followed by a separate `DELETE`), so a code can be redeemed at most once, also under concurrent requests. No schema change.
+- In `LEGACY` migration mode, the account-info uniqueness checks of the account-linking write paths
+  (`makePrimaryUser_Transaction`, `linkAccounts_Transaction`, `addTenantIdToPrimaryUser_Transaction` and the
+  email / phone number updates of primary users) now take a transaction-scoped advisory lock on each email,
+  phone number and third-party identity they check. Under the default `READ_COMMITTED` isolation, two
+  concurrent transactions could otherwise both pass the check and leave two primary users with the same account
+  info in a tenant. The other migration modes are unchanged: there the reservation tables enforce uniqueness.
+  No schema change.
 
 ## [9.9.1]
 
