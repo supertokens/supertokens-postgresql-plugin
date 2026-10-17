@@ -1487,16 +1487,25 @@ public class Start
                 if (user != null && user.isPrimaryUser) {
                     lockLegacyAccountInfoKeys_Transaction(sqlCon, appIdentifier,
                             List.of("email~" + email));
-                    for (String tenantId : user.tenantIds) {
-                        AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByEmail_legacy(this,
-                                new TenantIdentifier(
-                                        appIdentifier.getConnectionUriDomain(), appIdentifier.getAppId(), tenantId),
-                                email);
-                        for (AuthRecipeUserInfo existingUser : existingUsers) {
-                            if (existingUser.isPrimaryUser
-                                    && !existingUser.getSupertokensUserId().equals(user.getSupertokensUserId())
-                                    && existingUser.tenantIds.contains(tenantId)) {
-                                throw new EmailChangeNotAllowedException();
+                    // All reads below run on the transaction's own connection: other transactions may be queued
+                    // on the lock above while holding pool connections, so this one must not need another.
+                    // Same rule as before: conflict if another primary user has a login method with this email
+                    // in one of this user's tenants.
+                    AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp_Transaction(
+                            this, sqlCon, appIdentifier, email);
+                    for (AuthRecipeUserInfo existingUser : existingUsers) {
+                        if (!existingUser.isPrimaryUser
+                                || existingUser.getSupertokensUserId().equals(user.getSupertokensUserId())) {
+                            continue;
+                        }
+                        for (LoginMethod lm : existingUser.loginMethods) {
+                            if (!email.equals(lm.email)) {
+                                continue;
+                            }
+                            for (String tenantId : user.tenantIds) {
+                                if (lm.tenantIds.contains(tenantId) && existingUser.tenantIds.contains(tenantId)) {
+                                    throw new EmailChangeNotAllowedException();
+                                }
                             }
                         }
                     }
