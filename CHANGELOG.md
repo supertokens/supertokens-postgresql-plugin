@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- TOTP: `getDevices_Transaction` locks the user's device rows again (`SELECT ... FOR UPDATE`), so concurrent
+  transactions on the same user's devices are serialised.
+- TOTP: implements the app-scoped `getAllUsedCodesDescOrder_Transaction(con, AppIdentifier, userId)`. It locks the
+  user's `totp_users` row (`FOR NO KEY UPDATE`) and then reads the used codes of all tenants of the app in a separate
+  statement, so concurrent verifications of one user are serialised and each sees the codes stored before it. Uses
+  the existing `totp_used_codes_user_id_index`; no schema change.
+
 ## [9.9.1]
 
 - Makes the SAML callback RelayState single-use: `getRelayStateInfo` is renamed to `getRelayStateInfoAndRemove` and now reads and deletes the RelayState row in one atomic `DELETE ... RETURNING`, so a captured SAML callback cannot be replayed to mint additional authorization codes. (GHSA-3r7x-rhvc-fw28)
