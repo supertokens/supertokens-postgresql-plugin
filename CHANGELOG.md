@@ -13,7 +13,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - TOTP: implements the app-scoped `getAllUsedCodesDescOrder_Transaction(con, AppIdentifier, userId)`. It locks the
   user's `totp_users` row (`FOR NO KEY UPDATE`) and then reads the used codes of all tenants of the app in a separate
   statement, so concurrent verifications of one user are serialised and each sees the codes stored before it. Uses
-  the existing `totp_used_codes_user_id_index`; no schema change.
+  the existing `totp_used_codes_user_id_index`; no schema change. Needs the plugin-interface version of this round (the app-scoped method is new there and abstract); pair this plugin release with the core release of this round, which calls it unconditionally.
 
 ## [9.9.1]
 
