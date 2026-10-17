@@ -8,7 +8,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 - TOTP: `getDevices_Transaction` locks the user's device rows again (`SELECT ... FOR UPDATE`), so concurrent
-  transactions on the same user's devices are serialised.
+  transactions on the same user's devices are serialised. It then reads the devices in a new statement, so a
+  device re-created by the transaction it waited for is included.
 - TOTP: implements the app-scoped `getAllUsedCodesDescOrder_Transaction(con, AppIdentifier, userId)`. It locks the
   user's `totp_users` row (`FOR NO KEY UPDATE`) and then reads the used codes of all tenants of the app in a separate
   statement, so concurrent verifications of one user are serialised and each sees the codes stored before it. Uses

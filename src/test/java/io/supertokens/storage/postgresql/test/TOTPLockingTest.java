@@ -201,6 +201,40 @@ public class TOTPLockingTest {
     }
 
     @Test
+    public void testGetDevicesTransactionSeesDeviceRecreatedByTheTransactionItWaitedFor() throws Exception {
+        String[] args = {"../"};
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        TOTPSQLStorage storage = (TOTPSQLStorage) StorageLayer.getStorage(process.getProcess());
+        storage.createDevice(APP, new TOTPDevice("user", "d1", "secret1", 30, 1, true, System.currentTimeMillis()));
+        storage.createDevice(APP, new TOTPDevice("user", "d2", "secret2", 30, 1, false, System.currentTimeMillis()));
+
+        // First: re-register the unverified device d2 (what Totp.createDevice does: lock it, delete it, insert a
+        // new one with the same name). Second: remove d1 and check which devices are left (Totp.removeDevice).
+        Object devices = assertSecondWaitsForFirst(storage,
+                (s, con) -> {
+                    assertNotNull(s.getDeviceByName_Transaction(con, APP, "user", "d2"));
+                    s.deleteDevice_Transaction(con, APP, "user", "d2");
+                    return s.createDevice_Transaction(con, APP,
+                            new TOTPDevice("user", "d2", "secret3", 30, 1, false, System.currentTimeMillis()));
+                },
+                (s, con) -> {
+                    assertEquals(1, s.deleteDevice_Transaction(con, APP, "user", "d1"));
+                    return s.getDevices_Transaction(con, APP, "user");
+                });
+
+        // The re-created d2 is still there, so removeDevice would not delete the user (and with it the new device):
+        TOTPDevice[] left = (TOTPDevice[]) devices;
+        assertEquals(1, left.length);
+        assertEquals("d2", left[0].deviceName);
+        assertEquals("secret3", left[0].secretKey);
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
     public void testAppScopedUsedCodeReadLocksUserAndSeesCodesCommittedMeanwhile() throws Exception {
         String[] args = {"../"};
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);

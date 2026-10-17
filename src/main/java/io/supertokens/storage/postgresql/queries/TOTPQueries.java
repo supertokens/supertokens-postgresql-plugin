@@ -338,8 +338,24 @@ public class TOTPQueries {
             throws StorageQueryException, SQLException {
         // FOR UPDATE: the TOTP storage methods take no LockedUser, and TOTP user ids need not exist in
         // app_id_to_user_id, so this row lock is what serialises concurrent transactions on a user's devices.
-        String QUERY = "SELECT * FROM " + Config.getConfig(start).getTotpUserDevicesTable()
+        String LOCK_QUERY = "SELECT device_name FROM " + Config.getConfig(start).getTotpUserDevicesTable()
                 + " WHERE app_id = ? AND user_id = ? FOR UPDATE;";
+        execute(con, LOCK_QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, result -> {
+            while (result.next()) {
+                // consume all rows so every one of them is locked
+            }
+            return null;
+        });
+
+        // Under READ COMMITTED, a statement that waited for a row lock keeps its snapshot: it skips rows deleted
+        // by the transaction it waited for, but does not see rows that transaction inserted (e.g. a device
+        // re-created under the same name). Read the devices again in a new statement, after the locks are held,
+        // so callers (removeDevice: "is any device left?") see the committed state.
+        String QUERY = "SELECT * FROM " + Config.getConfig(start).getTotpUserDevicesTable()
+                + " WHERE app_id = ? AND user_id = ?;";
 
         return execute(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
