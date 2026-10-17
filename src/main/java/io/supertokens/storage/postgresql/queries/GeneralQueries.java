@@ -576,6 +576,14 @@ public class GeneralQueries {
                             AccountInfoQueries.getQueryToCreateAccountInfoIndexForRecipeUserAccountInfoTable(start));
                 }
 
+                // Index backing the webauthn credential lookups by (app_id, id) - sign in, counter update and
+                // the app-wide credential id uniqueness check at registration - which the (app_id, rp_id, id)
+                // primary key cannot serve. Additive and idempotent; on large deployments operators should
+                // pre-create it with CREATE INDEX CONCURRENTLY before upgrading (see CHANGELOG).
+                if (doesTableExists(existingTables, Config.getConfig(start).getWebAuthNCredentialsTable())) {
+                    backfillIndexDdl.add(WebAuthNQueries.getQueryToCreateWebAuthNCredentialsAppIdIdIndex(start));
+                }
+
                 if (!doesTableExists(existingTables, Config.getConfig(start).getAccessTokenSigningKeysTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);
                     ddl.add(getQueryToCreateAccessTokenSigningKeysTable(start));
@@ -906,6 +914,7 @@ public class GeneralQueries {
 
                     //index
                     ddl.add(WebAuthNQueries.getQueryToCreateWebAuthNCredentialsUserIdIndex(start));
+                    ddl.add(WebAuthNQueries.getQueryToCreateWebAuthNCredentialsAppIdIdIndex(start));
                 }
 
                 if (!doesTableExists(existingTables, Config.getConfig(start).getWebAuthNAccountRecoveryTokenTable())) {

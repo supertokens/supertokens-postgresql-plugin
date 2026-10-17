@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- Adds the index `webauthn_credentials_app_id_id_index` on `webauthn_credentials (app_id, id)`. It backs the WebAuthn credential lookups by id (sign in, counter update, and the app-wide credential id uniqueness check that the core now runs at registration), which the `(app_id, rp_id, id)` primary key cannot serve.
+
+### Migration
+
+Index-only; the plugin creates the index at startup (`CREATE INDEX IF NOT EXISTS`). Large deployments can build it
+concurrently ahead of the upgrade with `migration-scripts/v9.9.2.sql`:
+
+```sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS webauthn_credentials_app_id_id_index ON webauthn_credentials (app_id, id);
+```
+
 ## [9.9.1]
 
 - Makes the SAML callback RelayState single-use: `getRelayStateInfo` is renamed to `getRelayStateInfoAndRemove` and now reads and deletes the RelayState row in one atomic `DELETE ... RETURNING`, so a captured SAML callback cannot be replayed to mint additional authorization codes. (GHSA-3r7x-rhvc-fw28)

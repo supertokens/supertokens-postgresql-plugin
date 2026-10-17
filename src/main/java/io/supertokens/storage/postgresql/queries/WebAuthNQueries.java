@@ -153,6 +153,14 @@ public class WebAuthNQueries {
                 " (user_id);";
     }
 
+    // Backs the credential lookups by id alone (sign in, counter update, and the app-wide uniqueness check at
+    // registration), which cannot use the (app_id, rp_id, id) primary key.
+    static String getQueryToCreateWebAuthNCredentialsAppIdIdIndex(Start start) {
+        return "CREATE INDEX IF NOT EXISTS webauthn_credentials_app_id_id_index ON " +
+                getConfig(start).getWebAuthNCredentialsTable() +
+                " (app_id, id);";
+    }
+
     public static String getQueryToCreateWebAuthNAccountRecoveryTokenTable(Start start) {
         // FK references app_id_to_user_id, not all_auth_recipe_users. The latter is the old
         // tenant-scoped table and is empty in MIGRATED mode — inserting recovery tokens would
