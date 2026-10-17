@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- `updateUserEmail_Transaction` (third party) now only updates the `thirdparty_users` row of the given recipe user (`user_id`), not every user in the app with the same `third_party_id` and `third_party_user_id`. If that user does not hold the third party identity, it throws `UnknownUserIdException` and changes nothing. No schema change.
+
 ## [9.9.1]
 
 - Makes the SAML callback RelayState single-use: `getRelayStateInfo` is renamed to `getRelayStateInfoAndRemove` and now reads and deletes the RelayState row in one atomic `DELETE ... RETURNING`, so a captured SAML callback cannot be replayed to mint additional authorization codes. (GHSA-3r7x-rhvc-fw28)
