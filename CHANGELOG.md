@@ -20,6 +20,13 @@ concurrently ahead of the upgrade with `migration-scripts/v9.9.2.sql`:
 ```sql
 CREATE INDEX CONCURRENTLY IF NOT EXISTS webauthn_credentials_app_id_id_index ON webauthn_credentials (app_id, id);
 ```
+- TOTP: `getDevices_Transaction` locks the user's device rows again (`SELECT ... FOR UPDATE`), so concurrent
+  transactions on the same user's devices are serialised. It then reads the devices in a new statement, so a
+  device re-created by the transaction it waited for is included.
+- TOTP: implements the app-scoped `getAllUsedCodesDescOrder_Transaction(con, AppIdentifier, userId)`. It locks the
+  user's `totp_users` row (`FOR NO KEY UPDATE`) and then reads the used codes of all tenants of the app in a separate
+  statement, so concurrent verifications of one user are serialised and each sees the codes stored before it. Uses
+  the existing `totp_used_codes_user_id_index`; no schema change.
 
 ## [9.9.1]
 
