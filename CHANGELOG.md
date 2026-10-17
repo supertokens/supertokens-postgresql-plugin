@@ -8,18 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 - `updateUserEmail_Transaction` (third party) now only updates the `thirdparty_users` row of the given recipe user (`user_id`), not every user in the app with the same `third_party_id` and `third_party_user_id`. If that user does not hold the third party identity, it throws `UnknownUserIdException` and changes nothing. No schema change.
-> Release note: this entry must ship as plugin **9.9.2**. The manifest entry and `migration-scripts/v9.9.2.sql` are keyed to 9.9.2, so the release commit must bump `build.gradle` to `9.9.2` and rename this heading to `## [9.9.2]`, otherwise the schema-migration check fails.
-
 - Adds the index `webauthn_credentials_app_id_id_index` on `webauthn_credentials (app_id, id)`. It backs the WebAuthn credential lookups by id (sign in, counter update, and the app-wide credential id uniqueness check that the core now runs at registration), which the `(app_id, rp_id, id)` primary key cannot serve.
 
-### Migration
+> Release note: this entry must ship as plugin **9.9.2**. The manifest entry and `migration-scripts/v9.9.2.sql` are keyed to 9.9.2, so the release commit must bump `build.gradle` to `9.9.2` and rename this heading to `## [9.9.2]`, otherwise the schema-migration check fails.
 
-Index-only; the plugin creates the index at startup (`CREATE INDEX IF NOT EXISTS`). Large deployments can build it
-concurrently ahead of the upgrade with `migration-scripts/v9.9.2.sql`:
-
-```sql
-CREATE INDEX CONCURRENTLY IF NOT EXISTS webauthn_credentials_app_id_id_index ON webauthn_credentials (app_id, id);
-```
 - TOTP: `getDevices_Transaction` locks the user's device rows again (`SELECT ... FOR UPDATE`), so concurrent
   transactions on the same user's devices are serialised. It then reads the devices in a new statement, so a
   device re-created by the transaction it waited for is included.
@@ -35,6 +27,15 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS webauthn_credentials_app_id_id_index ON 
   concurrent transactions could otherwise both pass the check and leave two primary users with the same account
   info in a tenant. The other migration modes are unchanged: there the reservation tables enforce uniqueness.
   No schema change.
+
+### Migration
+
+Index-only; the plugin creates the index at startup (`CREATE INDEX IF NOT EXISTS`). Large deployments can build it
+concurrently ahead of the upgrade with `migration-scripts/v9.9.2.sql`:
+
+```sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS webauthn_credentials_app_id_id_index ON webauthn_credentials (app_id, id);
+```
 
 ## [9.9.1]
 
