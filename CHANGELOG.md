@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- In `LEGACY` migration mode, the account-info uniqueness checks of the account-linking write paths
+  (`makePrimaryUser_Transaction`, `linkAccounts_Transaction`, `addTenantIdToPrimaryUser_Transaction` and the
+  email / phone number updates of primary users) now take a transaction-scoped advisory lock on each email,
+  phone number and third-party identity they check. Under the default `READ_COMMITTED` isolation, two
+  concurrent transactions could otherwise both pass the check and leave two primary users with the same account
+  info in a tenant. The other migration modes are unchanged: there the reservation tables enforce uniqueness.
+  No schema change.
+
 ## [9.9.1]
 
 - Makes the SAML callback RelayState single-use: `getRelayStateInfo` is renamed to `getRelayStateInfoAndRemove` and now reads and deletes the RelayState row in one atomic `DELETE ... RETURNING`, so a captured SAML callback cannot be replayed to mint additional authorization codes. (GHSA-3r7x-rhvc-fw28)
