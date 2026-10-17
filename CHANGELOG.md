@@ -27,6 +27,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS webauthn_credentials_app_id_id_index ON 
   user's `totp_users` row (`FOR NO KEY UPDATE`) and then reads the used codes of all tenants of the app in a separate
   statement, so concurrent verifications of one user are serialised and each sees the codes stored before it. Uses
   the existing `totp_used_codes_user_id_index`; no schema change.
+- `getSAMLClaimsAndRemoveCode` reads and deletes the SAML code row in one atomic `DELETE ... RETURNING` (previously a `SELECT` followed by a separate `DELETE`), so a code can be redeemed at most once, also under concurrent requests. No schema change.
 
 ## [9.9.1]
 
