@@ -130,7 +130,7 @@ public class WebAuthnRaceTest {
             Future<?> updateFuture = executor.submit(() -> {
                 try {
                     startLatch.await();
-                    WebAuthN.updateUserEmail(storage, tenantIdentifier,
+                    WebAuthN.updateUserEmail(main, storage, tenantIdentifier,
                             recipeUser.getSupertokensUserId(), "newwebauthn" + iterFinal + "@test.com");
                 } catch (Exception e) {
                     // Expected in race conditions
@@ -235,7 +235,7 @@ public class WebAuthnRaceTest {
         executor.submit(() -> {
             try {
                 startLatch.await();
-                WebAuthN.updateUserEmail(storage1, tenant1,
+                WebAuthN.updateUserEmail(main, storage1, tenant1,
                         user.getSupertokensUserId(), "updated@webauthn.com");
             } catch (Exception e) {
                 // Expected
@@ -342,7 +342,7 @@ public class WebAuthnRaceTest {
             executor.submit(() -> {
                 try {
                     startLatch.await();
-                    WebAuthN.updateUserEmail(storage, tenantIdentifier,
+                    WebAuthN.updateUserEmail(main, storage, tenantIdentifier,
                             recipeUser.getSupertokensUserId(), "iter" + iteration + "@webauthn.com");
                 } catch (Exception e) {
                     // Expected
@@ -487,7 +487,7 @@ public class WebAuthnRaceTest {
                     startLatch.await();
                     while (running.get()) {
                         try {
-                            WebAuthN.updateUserEmail(storage, tenantIdentifier,
+                            WebAuthN.updateUserEmail(main, storage, tenantIdentifier,
                                     recipeUser.getSupertokensUserId(),
                                     "email_t" + threadId + "_i" + (i++) + "@webauthn.com");
                             operations.incrementAndGet();
