@@ -3275,6 +3275,19 @@ public class Start
         }
     }
 
+    // Apps with disable_user_id_mapping on, as core last told this storage. The queries that read userid_mapping on
+    // their own (user hydration, session lookup) skip that read for these apps.
+    private volatile Set<AppIdentifier> appsWithUserIdMappingDisabled = Set.of();
+
+    @Override
+    public void setAppsWithUserIdMappingDisabled(Set<AppIdentifier> appIdentifiers) {
+        this.appsWithUserIdMappingDisabled = Set.copyOf(appIdentifiers);
+    }
+
+    public boolean isUserIdMappingDisabled(AppIdentifier appIdentifier) {
+        return appsWithUserIdMappingDisabled.contains(appIdentifier);
+    }
+
     @Override
     public void createTenant(TenantConfig tenantConfig)
             throws DuplicateTenantException, StorageQueryException, DuplicateThirdPartyIdException,
