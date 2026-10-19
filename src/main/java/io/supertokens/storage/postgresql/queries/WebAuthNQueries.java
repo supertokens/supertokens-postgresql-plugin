@@ -251,13 +251,14 @@ public class WebAuthNQueries {
         });
     }
 
-    public static WebAuthNStoredCredential loadCredentialById_Transaction(Start start, Connection sqlConnection, TenantIdentifier tenantIdentifier, String credentialId)
+    public static WebAuthNStoredCredential loadCredentialById_Transaction(Start start, Connection sqlConnection, TenantIdentifier tenantIdentifier, String rpId, String credentialId)
             throws SQLException, StorageQueryException {
         String QUERY = "SELECT * FROM " + getConfig(start).getWebAuthNCredentialsTable()
-                + " WHERE app_id = ? AND id = ?";
+                + " WHERE app_id = ? AND rp_id = ? AND id = ?";
         return execute(sqlConnection, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, credentialId);
+            pst.setString(2, rpId);
+            pst.setString(3, credentialId);
         }, result -> {
             if(result.next()){
                 return WebAuthnStoredCredentialRowMapper.getInstance().mapOrThrow(result); // we are expecting one or zero results
@@ -429,23 +430,6 @@ public class WebAuthNQueries {
             }
         }
         return userInfo;
-    }
-
-    public static String getPrimaryUserIdUsingEmail(Start start, TenantIdentifier tenantIdentifier, String email)
-            throws StorageQueryException {
-        try {
-            return start.startTransaction(con -> {
-                try {
-                    Connection sqlConnection = (Connection) con.getConnection();
-                    return getPrimaryUserIdForTenantUsingEmail_Transaction(start, sqlConnection, tenantIdentifier,
-                            email);
-                } catch (SQLException e) {
-                    throw new StorageQueryException(e);
-                }
-            });
-        } catch (StorageTransactionLogicException e) {
-            throw new StorageQueryException(e);
-        }
     }
 
     public static String getPrimaryUserIdForTenantUsingEmail_Transaction(Start start, Connection sqlConnection,
@@ -775,16 +759,17 @@ public class WebAuthNQueries {
         });
     }
 
-    public static void updateCounter_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String credentialId, long counter)
+    public static void updateCounter_Transaction(Start start, Connection sqlCon, TenantIdentifier tenantIdentifier, String rpId, String credentialId, long counter)
             throws SQLException, StorageQueryException {
         String UPDATE = "UPDATE " + getConfig(start).getWebAuthNCredentialsTable()
-                + " SET counter = ?, updated_at = ? WHERE app_id = ? AND id = ?";
+                + " SET counter = ?, updated_at = ? WHERE app_id = ? AND rp_id = ? AND id = ?";
 
         update(sqlCon, UPDATE, pst -> {
             pst.setLong(1, counter);
             pst.setLong(2, System.currentTimeMillis());
             pst.setString(3, tenantIdentifier.getAppId());
-            pst.setString(4, credentialId);
+            pst.setString(4, rpId);
+            pst.setString(5, credentialId);
         });
     }
 

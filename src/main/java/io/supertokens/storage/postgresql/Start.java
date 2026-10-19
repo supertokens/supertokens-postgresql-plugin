@@ -135,6 +135,7 @@ import javax.annotation.Nonnull;
 import java.lang.reflect.Field;
 import java.sql.*;
 import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 
@@ -155,7 +156,9 @@ public class Start
             "postgresql_minimum_idle_connections", "postgresql_connection_attributes", "postgresql_connection_scheme",
             "postgresql_table_names_prefix"
     };
-    private static final Object appenderLock = new Object();
+    // ReentrantLock, not a monitor: see ConnectionPool.initLock. Held only while wiring loggers, but a virtual
+    // thread parked on a monitor is pinned, so keep the storage-init path free of synchronized sections.
+    private static final ReentrantLock appenderLock = new ReentrantLock();
     public static boolean silent = false;
     private ResourceDistributor resourceDistributor = new ResourceDistributor();
     private String processId;
@@ -255,7 +258,8 @@ public class Start
             return;
         }
 
-        synchronized (appenderLock) {
+        appenderLock.lock();
+        try {
             Logging.initFileLogging(this, infoLogPath, errorLogPath);
 
             /*
@@ -277,19 +281,25 @@ public class Start
                 infoLog.setAdditive(false);
                 infoLog.addAppender(appender);
             }
+        } finally {
+            appenderLock.unlock();
         }
     }
 
     @Override
     public void stopLogging() {
         if (isBaseTenant) {
-            synchronized (appenderLock) {
+            ConnectionPool.resetNestedAcquisitionGuard();
+            appenderLock.lock();
+            try {
                 Logging.stopLogging(this);
 
                 final Logger infoLog = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
                 if (infoLog.getAppender(HikariLoggingAppender.NAME) != null) {
                     infoLog.detachAppender(HikariLoggingAppender.NAME);
                 }
+            } finally {
+                appenderLock.unlock();
             }
         }
     }
@@ -327,18 +337,12 @@ public class Start
     @Override
     public <T> T startTransaction(TransactionLogic<T> logic)
             throws StorageTransactionLogicException, StorageQueryException {
-        return startTransaction(logic, TransactionIsolationLevel.READ_COMMITTED);
-    }
-
-    @Override
-    public <T> T startTransaction(TransactionLogic<T> logic, TransactionIsolationLevel isolationLevel)
-            throws StorageTransactionLogicException, StorageQueryException {
         final int NUM_TRIES = 50;
         int tries = 0;
         while (true) {
             tries++;
             try {
-                return startTransactionHelper(logic, isolationLevel);
+                return startTransactionHelper(logic);
             } catch (SQLException | StorageQueryException | StorageTransactionLogicException |
                      TenantOrAppNotFoundException e) {
                 Throwable actualException = e;
@@ -410,34 +414,23 @@ public class Start
         }
     }
 
-    protected <T> T startTransactionHelper(TransactionLogic<T> logic, TransactionIsolationLevel isolationLevel)
+    protected <T> T startTransactionHelper(TransactionLogic<T> logic)
             throws StorageQueryException, StorageTransactionLogicException, SQLException, TenantOrAppNotFoundException {
         Connection con = null;
-        Integer defaultTransactionIsolation = null;
         try {
             con = ConnectionPool.getConnection(this);
-            defaultTransactionIsolation = con.getTransactionIsolation();
-            int libIsolationLevel = Connection.TRANSACTION_SERIALIZABLE;
-            switch (isolationLevel) {
-                case SERIALIZABLE:
-                    libIsolationLevel = Connection.TRANSACTION_SERIALIZABLE;
-                    break;
-                case REPEATABLE_READ:
-                    libIsolationLevel = Connection.TRANSACTION_REPEATABLE_READ;
-                    break;
-                case READ_COMMITTED:
-                    libIsolationLevel = Connection.TRANSACTION_READ_COMMITTED;
-                    break;
-                case READ_UNCOMMITTED:
-                    libIsolationLevel = Connection.TRANSACTION_READ_UNCOMMITTED;
-                    break;
-                case NONE:
-                    libIsolationLevel = Connection.TRANSACTION_NONE;
-                    break;
-            }
-            con.setTransactionIsolation(libIsolationLevel);
             con.setAutoCommit(false);
-            return logic.mainLogicAndCommit(new TransactionConnection(con));
+            // Transactions run at READ COMMITTED, which pooled connections are already at (the pool's
+            // connectionInitSql), so there is nothing to read, set or reset around the transaction.
+            // Mark this thread as holding a connection from this pool for the duration of the callback, so
+            // that a nested same-pool borrow (a helper not threading `con`) is caught by ConnectionPool's
+            // test-only guard against pool-exhausting call chains.
+            String guardKey = ConnectionPool.enterTransaction(this);
+            try {
+                return logic.mainLogicAndCommit(new TransactionConnection(con));
+            } finally {
+                ConnectionPool.exitTransaction(guardKey);
+            }
         } catch (Exception e) {
             if (con != null) {
                 con.rollback();
@@ -447,11 +440,8 @@ public class Start
             if (con != null) {
                 try {
                     con.setAutoCommit(true);
-                    if (defaultTransactionIsolation != null) {
-                        con.setTransactionIsolation(defaultTransactionIsolation);
-                    }
                 } finally {
-                    // must run even if the resets above throw: a connection that is never closed is never
+                    // must run even if the reset above throws: a connection that is never closed is never
                     // returned to the pool, permanently shrinking it
                     con.close();
                 }
@@ -2117,6 +2107,30 @@ public class Start
     }
 
     @Override
+    public AuthRecipeUserInfo[] listPrimaryUsersByEmail_Transaction(TenantIdentifier tenantIdentifier,
+                                                                    TransactionConnection con, String email)
+            throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            return GeneralQueries.listPrimaryUsersByEmail_Transaction(this, sqlCon, tenantIdentifier, email);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber_Transaction(TenantIdentifier tenantIdentifier,
+                                                                          TransactionConnection con, String phoneNumber)
+            throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            return GeneralQueries.listPrimaryUsersByPhoneNumber_Transaction(this, sqlCon, tenantIdentifier, phoneNumber);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public AuthRecipeUserInfo getPrimaryUserByWebauthNCredentialId(TenantIdentifier tenantIdentifier,
                                                                    String webauthNCredentialId)
             throws StorageQueryException {
@@ -3247,6 +3261,15 @@ public class Start
             throws StorageQueryException {
         try {
             return UserIdMappingQueries.getUserIdMappingWithUserIds(this, appIdentifier, userIds);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean hasUserIdMappings(AppIdentifier appIdentifier) throws StorageQueryException {
+        try {
+            return UserIdMappingQueries.hasUserIdMappings(this, appIdentifier);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -5174,6 +5197,32 @@ public class Start
     }
 
     @Override
+    public OAuthClient getOAuthClientById_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                      String clientId)
+            throws StorageQueryException, OAuthClientNotFoundException {
+        try {
+            OAuthClient client = OAuthQueries.getOAuthClientById(this, (Connection) con.getConnection(), clientId,
+                    appIdentifier);
+            if (client == null) {
+                throw new OAuthClientNotFoundException();
+            }
+            return client;
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean isOAuthTokenRevokedByGID_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                        String gid) throws StorageQueryException {
+        try {
+            return !OAuthQueries.isOAuthSessionExistsByGID(this, (Connection) con.getConnection(), appIdentifier, gid);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public boolean isOAuthTokenRevokedByJTI(AppIdentifier appIdentifier, String gid, String jti)
             throws StorageQueryException {
         try {
@@ -5276,11 +5325,11 @@ public class Start
 
     @Override
     public WebAuthNStoredCredential loadCredentialById_Transaction(TenantIdentifier tenantIdentifier,
-                                                                   TransactionConnection con, String credentialId)
+                                                                   TransactionConnection con, String rpId, String credentialId)
             throws StorageQueryException {
         try {
             Connection sqlCon = (Connection) con.getConnection();
-            return WebAuthNQueries.loadCredentialById_Transaction(this, sqlCon, tenantIdentifier, credentialId);
+            return WebAuthNQueries.loadCredentialById_Transaction(this, sqlCon, tenantIdentifier, rpId, credentialId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -5384,11 +5433,11 @@ public class Start
 
     @Override
     public void updateCounter_Transaction(TenantIdentifier tenantIdentifier,
-                                          TransactionConnection con, String credentialId,
+                                          TransactionConnection con, String rpId, String credentialId,
                                           long counter) throws StorageQueryException {
         try {
             Connection sqlCon = (Connection) con.getConnection();
-            WebAuthNQueries.updateCounter_Transaction(this, sqlCon, tenantIdentifier, credentialId, counter);
+            WebAuthNQueries.updateCounter_Transaction(this, sqlCon, tenantIdentifier, rpId, credentialId, counter);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

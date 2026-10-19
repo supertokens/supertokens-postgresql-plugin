@@ -174,12 +174,14 @@ public class EmailPasswordQueries {
         }
         if (mode.writesToOldTables()) { // emailpassword_user_to_tenant
             String QUERY = "UPDATE " + getConfig(start).getEmailPasswordUserToTenantTable()
-                    + " SET email = ? WHERE app_id = ? AND user_id = ?";
+                    + " SET email = ? WHERE app_id = ? AND tenant_id IN (SELECT tenant_id FROM "
+                    + getConfig(start).getTenantsTable() + " WHERE app_id = ?) AND user_id = ?";
 
             update(con, QUERY, pst -> {
                 pst.setString(1, newEmail);
                 pst.setString(2, appIdentifier.getAppId());
-                pst.setString(3, userId);
+                pst.setString(3, appIdentifier.getAppId());
+                pst.setString(4, userId);
             });
         }
     }
@@ -624,17 +626,18 @@ public class EmailPasswordQueries {
         return Collections.emptyList();
     }
 
-    public static String getPrimaryUserIdUsingEmail(Start start, TenantIdentifier tenantIdentifier,
-                                                    String email)
+    // Runs on the caller's connection (no nested same-pool acquisition).
+    public static String getPrimaryUserIdUsingEmail_Transaction(Start start, Connection sqlCon,
+                                                                TenantIdentifier tenantIdentifier, String email)
             throws StorageQueryException, SQLException {
         if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
-            return getPrimaryUserIdUsingEmail_new(start, tenantIdentifier, email);
+            return getPrimaryUserIdUsingEmail_Transaction_new(start, sqlCon, tenantIdentifier, email);
         }
-        return getPrimaryUserIdUsingEmail_legacy(start, tenantIdentifier, email);
+        return getPrimaryUserIdUsingEmail_Transaction_legacy(start, sqlCon, tenantIdentifier, email);
     }
 
-    private static String getPrimaryUserIdUsingEmail_legacy(Start start, TenantIdentifier tenantIdentifier,
-                                                             String email)
+    private static String getPrimaryUserIdUsingEmail_Transaction_legacy(Start start, Connection sqlCon,
+                                                                        TenantIdentifier tenantIdentifier, String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getEmailPasswordUserToTenantTable() + " AS ep"
@@ -642,7 +645,7 @@ public class EmailPasswordQueries {
                 + " ON ep.app_id = all_users.app_id AND ep.user_id = all_users.user_id"
                 + " WHERE ep.app_id = ? AND ep.tenant_id = ? AND ep.email = ?";
 
-        return execute(start, QUERY, pst -> {
+        return execute(sqlCon, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, email);
@@ -654,8 +657,8 @@ public class EmailPasswordQueries {
         });
     }
 
-    private static String getPrimaryUserIdUsingEmail_new(Start start, TenantIdentifier tenantIdentifier,
-                                                          String email)
+    private static String getPrimaryUserIdUsingEmail_Transaction_new(Start start, Connection sqlCon,
+                                                                     TenantIdentifier tenantIdentifier, String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT auid.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getRecipeUserTenantsTable() + " AS rut"
@@ -664,7 +667,7 @@ public class EmailPasswordQueries {
                 + " WHERE rut.app_id = ? AND rut.tenant_id = ? AND rut.account_info_type = 'email'"
                 + " AND rut.account_info_value = ? AND rut.recipe_id = 'emailpassword'";
 
-        return execute(start, QUERY, pst -> {
+        return execute(sqlCon, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, email);

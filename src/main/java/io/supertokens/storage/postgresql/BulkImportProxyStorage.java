@@ -67,7 +67,7 @@ public class BulkImportProxyStorage extends Start implements BulkImportProxySQLS
     }
 
     @Override
-    protected <T> T startTransactionHelper(TransactionLogic<T> logic, TransactionIsolationLevel isolationLevel)
+    protected <T> T startTransactionHelper(TransactionLogic<T> logic)
             throws StorageQueryException, StorageTransactionLogicException, SQLException, TenantOrAppNotFoundException {
         return logic.mainLogicAndCommit(new TransactionConnection(getTransactionConnection()));
     }
