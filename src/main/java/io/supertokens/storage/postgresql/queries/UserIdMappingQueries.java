@@ -198,6 +198,13 @@ public class UserIdMappingQueries {
         });
     }
 
+    public static boolean hasUserIdMappings(Start start, AppIdentifier appIdentifier)
+            throws SQLException, StorageQueryException {
+        // app_id leads the primary key, so this is a single index probe regardless of the mapping count
+        String QUERY = "SELECT 1 FROM " + Config.getConfig(start).getUserIdMappingTable() + " WHERE app_id = ? LIMIT 1";
+        return execute(start, QUERY, pst -> pst.setString(1, appIdentifier.getAppId()), ResultSet::next);
+    }
+
     public static HashMap<String, String> getUserIdMappingWithUserIds_Transaction(Start start, Connection sqlCon,
                                                                                   AppIdentifier appIdentifier,
                                                                                   List<String> userIds)

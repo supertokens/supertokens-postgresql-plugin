@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [unreleased]
+
+## [9.10.0]
+
+- Transactions no longer read, set and reset the session isolation level around every call (three extra round trips, each an implicit transaction): every transaction runs at the pool's session default, READ COMMITTED. Following the plugin-interface contract change, `startTransaction(logic, TransactionIsolationLevel)` is removed, and passwordless `createDeviceWithCode` now runs at READ COMMITTED instead of REPEATABLE READ.
+- Implements `hasUserIdMappings(AppIdentifier)`: a single `LIMIT 1` probe on `userid_mapping` by `app_id` that tells whether the app has any user id mappings.
+- Add transaction-aware listPrimaryUsersByEmail/ByPhoneNumber reads; the non-transaction forms now borrow one
+  connection and delegate to them, so each lookup query exists once.
+- Implements `getOAuthClientById_Transaction`, which reads an OAuth client on the caller's transaction connection;
+  the non-transaction form now borrows one connection and delegates to it.
+- Connection pool initialisation and Hikari logger wiring now use a `ReentrantLock` instead of `synchronized`, so a virtual thread initialising a storage is no longer pinned to its carrier while it waits (with core < 12.3.1 this could hang startup on JDK 21 when many tenant storages initialised at once with `log_level: DEBUG`).
+- Fixes slow passwordless, emailpassword, email verification and WebAuthn queries that read every row of
+  an app instead of using the table's key.
+- WebAuthn sign-up and sign-in now only accept generated options from the request's tenant.
+- Adds a test that fails when a query cannot use an index beyond `app_id` / `tenant_id`.
+- Adds `isOAuthTokenRevokedByGID_Transaction`, a transaction-aware twin of `isOAuthTokenRevokedByGID`.
+- Adds a test-only connection-pool guard against nested same-pool connection acquisition (holding one connection inside a transaction while borrowing a second from the same pool). Warns by default; an opt-in flag makes it fail fast. No-op in production.
+
 ## [9.9.1]
 
 - Makes the SAML callback RelayState single-use: `getRelayStateInfo` is renamed to `getRelayStateInfoAndRemove` and now reads and deletes the RelayState row in one atomic `DELETE ... RETURNING`, so a captured SAML callback cannot be replayed to mint additional authorization codes. (GHSA-3r7x-rhvc-fw28)

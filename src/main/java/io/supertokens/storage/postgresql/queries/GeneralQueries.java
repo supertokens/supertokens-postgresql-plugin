@@ -2737,24 +2737,9 @@ public class GeneralQueries {
     public static AuthRecipeUserInfo[] listPrimaryUsersByEmail(Start start, TenantIdentifier tenantIdentifier,
                                                                String email)
             throws StorageQueryException, SQLException {
-        if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
-            return listPrimaryUsersByEmail_new(start, tenantIdentifier, email);
+        try (Connection sqlCon = ConnectionPool.getConnection(start)) {
+            return listPrimaryUsersByEmail_Transaction(start, sqlCon, tenantIdentifier, email);
         }
-        return listPrimaryUsersByEmail_legacy(start, tenantIdentifier, email);
-    }
-
-    private static AuthRecipeUserInfo[] listPrimaryUsersByEmail_new(Start start, TenantIdentifier tenantIdentifier,
-                                                                     String email)
-            throws StorageQueryException, SQLException {
-        List<String> userIds = AccountInfoQueries.listPrimaryUserIdsByEmail(start, tenantIdentifier, email);
-
-        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, tenantIdentifier.toAppIdentifier(),
-                userIds);
-
-        // this is going to order them based on oldest that joined to newest that joined.
-        result.sort(Comparator.comparingLong(o -> o.timeJoined));
-
-        return result.toArray(new AuthRecipeUserInfo[0]);
     }
 
     public static AuthRecipeUserInfo[] listPrimaryUsersByEmail_legacy_forApp(Start start, AppIdentifier appIdentifier,
@@ -2991,23 +2976,70 @@ public class GeneralQueries {
     public static AuthRecipeUserInfo[] listPrimaryUsersByEmail_legacy(Start start, TenantIdentifier tenantIdentifier,
                                                                         String email)
             throws StorageQueryException, SQLException {
-        List<String> userIds = new ArrayList<>();
-        String emailPasswordUserId = EmailPasswordQueries.getPrimaryUserIdUsingEmail(start, tenantIdentifier,
+        try (Connection sqlCon = ConnectionPool.getConnection(start)) {
+            return listPrimaryUsersByEmail_legacy_Transaction(start, sqlCon, tenantIdentifier, email);
+        }
+    }
+
+    public static AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber(Start start,
+                                                                     TenantIdentifier tenantIdentifier,
+                                                                     String phoneNumber)
+            throws StorageQueryException, SQLException {
+        try (Connection sqlCon = ConnectionPool.getConnection(start)) {
+            return listPrimaryUsersByPhoneNumber_Transaction(start, sqlCon, tenantIdentifier, phoneNumber);
+        }
+    }
+
+    // Every read runs on sqlCon, so transactional callers never borrow a second pooled connection (no nested
+    // same-pool acquisition). The non-tx listPrimaryUsersByEmail borrows one connection and delegates here.
+    public static AuthRecipeUserInfo[] listPrimaryUsersByEmail_Transaction(Start start, Connection sqlCon,
+                                                                           TenantIdentifier tenantIdentifier,
+                                                                           String email)
+            throws StorageQueryException, SQLException {
+        if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
+            return listPrimaryUsersByEmail_new_Transaction(start, sqlCon, tenantIdentifier, email);
+        }
+        return listPrimaryUsersByEmail_legacy_Transaction(start, sqlCon, tenantIdentifier, email);
+    }
+
+    private static AuthRecipeUserInfo[] listPrimaryUsersByEmail_new_Transaction(Start start, Connection sqlCon,
+                                                                                TenantIdentifier tenantIdentifier,
+                                                                                String email)
+            throws StorageQueryException, SQLException {
+        List<String> userIds = AccountInfoQueries.listPrimaryUserIdsByEmail_Transaction(start, sqlCon, tenantIdentifier,
                 email);
+
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds_Transaction(start, sqlCon,
+                tenantIdentifier.toAppIdentifier(), userIds);
+
+        // this is going to order them based on oldest that joined to newest that joined.
+        result.sort(Comparator.comparingLong(o -> o.timeJoined));
+
+        return result.toArray(new AuthRecipeUserInfo[0]);
+    }
+
+    private static AuthRecipeUserInfo[] listPrimaryUsersByEmail_legacy_Transaction(Start start, Connection sqlCon,
+                                                                                   TenantIdentifier tenantIdentifier,
+                                                                                   String email)
+            throws StorageQueryException, SQLException {
+        List<String> userIds = new ArrayList<>();
+        String emailPasswordUserId = EmailPasswordQueries.getPrimaryUserIdUsingEmail_Transaction(start, sqlCon,
+                tenantIdentifier, email);
         if (emailPasswordUserId != null) {
             userIds.add(emailPasswordUserId);
         }
 
-        String passwordlessUserId = PasswordlessQueries.getPrimaryUserIdUsingEmail(start, tenantIdentifier,
-                email);
+        String passwordlessUserId = PasswordlessQueries.getPrimaryUserIdUsingEmail_Transaction(start, sqlCon,
+                tenantIdentifier, email);
         if (passwordlessUserId != null) {
             userIds.add(passwordlessUserId);
         }
 
-        userIds.addAll(ThirdPartyQueries.getPrimaryUserIdUsingEmail(start, tenantIdentifier, email));
+        userIds.addAll(ThirdPartyQueries.getPrimaryUserIdUsingEmail_Transaction(start, sqlCon, tenantIdentifier, email));
 
-        String webauthnUserId = WebAuthNQueries.getPrimaryUserIdUsingEmail(start, tenantIdentifier, email);
-        if(webauthnUserId != null) {
+        String webauthnUserId = WebAuthNQueries.getPrimaryUserIdForTenantUsingEmail_Transaction(start, sqlCon,
+                tenantIdentifier, email);
+        if (webauthnUserId != null) {
             userIds.add(webauthnUserId);
         }
 
@@ -3015,8 +3047,8 @@ public class GeneralQueries {
         Set<String> userIdsSet = new HashSet<>(userIds);
         userIds = new ArrayList<>(userIdsSet);
 
-        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, tenantIdentifier.toAppIdentifier(),
-                userIds);
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds_Transaction(start, sqlCon,
+                tenantIdentifier.toAppIdentifier(), userIds);
 
         // this is going to order them based on oldest that joined to newest that joined.
         result.sort(Comparator.comparingLong(o -> o.timeJoined));
@@ -3024,24 +3056,27 @@ public class GeneralQueries {
         return result.toArray(new AuthRecipeUserInfo[0]);
     }
 
-    public static AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber(Start start,
-                                                                     TenantIdentifier tenantIdentifier,
-                                                                     String phoneNumber)
+    // Every read runs on sqlCon (see listPrimaryUsersByEmail_Transaction). The non-tx listPrimaryUsersByPhoneNumber
+    // borrows one connection and delegates here.
+    public static AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber_Transaction(Start start, Connection sqlCon,
+                                                                                 TenantIdentifier tenantIdentifier,
+                                                                                 String phoneNumber)
             throws StorageQueryException, SQLException {
         if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
-            return listPrimaryUsersByPhoneNumber_new(start, tenantIdentifier, phoneNumber);
+            return listPrimaryUsersByPhoneNumber_new_Transaction(start, sqlCon, tenantIdentifier, phoneNumber);
         }
-        return listPrimaryUsersByPhoneNumber_legacy(start, tenantIdentifier, phoneNumber);
+        return listPrimaryUsersByPhoneNumber_legacy_Transaction(start, sqlCon, tenantIdentifier, phoneNumber);
     }
 
-    private static AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber_new(Start start,
-                                                                           TenantIdentifier tenantIdentifier,
-                                                                           String phoneNumber)
+    private static AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber_new_Transaction(Start start, Connection sqlCon,
+                                                                                      TenantIdentifier tenantIdentifier,
+                                                                                      String phoneNumber)
             throws StorageQueryException, SQLException {
-        List<String> userIds = AccountInfoQueries.listPrimaryUserIdsByPhoneNumber(start, tenantIdentifier, phoneNumber);
+        List<String> userIds = AccountInfoQueries.listPrimaryUserIdsByPhoneNumber_Transaction(start, sqlCon,
+                tenantIdentifier, phoneNumber);
 
-        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, tenantIdentifier.toAppIdentifier(),
-                userIds);
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds_Transaction(start, sqlCon,
+                tenantIdentifier.toAppIdentifier(), userIds);
 
         // this is going to order them based on oldest that joined to newest that joined.
         result.sort(Comparator.comparingLong(o -> o.timeJoined));
@@ -3049,20 +3084,20 @@ public class GeneralQueries {
         return result.toArray(new AuthRecipeUserInfo[0]);
     }
 
-    private static AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber_legacy(Start start,
-                                                                              TenantIdentifier tenantIdentifier,
-                                                                              String phoneNumber)
+    private static AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber_legacy_Transaction(Start start, Connection sqlCon,
+                                                                                         TenantIdentifier tenantIdentifier,
+                                                                                         String phoneNumber)
             throws StorageQueryException, SQLException {
         List<String> userIds = new ArrayList<>();
 
-        String passwordlessUserId = PasswordlessQueries.getPrimaryUserByPhoneNumber(start, tenantIdentifier,
-                phoneNumber);
+        String passwordlessUserId = PasswordlessQueries.getPrimaryUserByPhoneNumber_Transaction(start, sqlCon,
+                tenantIdentifier, phoneNumber);
         if (passwordlessUserId != null) {
             userIds.add(passwordlessUserId);
         }
 
-        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds(start, tenantIdentifier.toAppIdentifier(),
-                userIds);
+        List<AuthRecipeUserInfo> result = getPrimaryUserInfoForUserIds_Transaction(start, sqlCon,
+                tenantIdentifier.toAppIdentifier(), userIds);
 
         // this is going to order them based on oldest that joined to newest that joined.
         result.sort(Comparator.comparingLong(o -> o.timeJoined));
