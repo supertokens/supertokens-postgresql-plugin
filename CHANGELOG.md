@@ -7,8 +7,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [unreleased]
 
-## [9.10.0]
+## [10.0.0]
 
+- Major release: implements plugin-interface 11.0 (a breaking interface change), so it works with core 12.4 and later only.
 - Transactions no longer read, set and reset the session isolation level around every call (three extra round trips, each an implicit transaction): every transaction runs at the pool's session default, READ COMMITTED. Following the plugin-interface contract change, `startTransaction(logic, TransactionIsolationLevel)` is removed, and passwordless `createDeviceWithCode` now runs at READ COMMITTED instead of REPEATABLE READ.
 - Implements `hasUserIdMappings(AppIdentifier)`: a single `LIMIT 1` probe on `userid_mapping` by `app_id` that tells whether the app has any user id mappings.
 - Implements `setAppsWithUserIdMappingDisabled`: for apps with `disable_user_id_mapping` on, loading users, sessions and WebAuthn users no longer reads `userid_mapping`.
