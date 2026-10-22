@@ -59,9 +59,10 @@ public class ProcessState extends ResourceDistributor.SingletonResource {
     /**
      * CREATING_NEW_TABLE: When the program is attempting to create new tables.
      * DEADLOCK_FOUND: In case of a deadlock situation, we put this event
+     * APP_USERS_COUNT_COMPUTED: getOrComputeAppUsersCount ran a full count (no stored count was fresh enough)
      */
     public enum PROCESS_STATE {
-        CREATING_NEW_TABLE, DEADLOCK_FOUND, DEADLOCK_NOT_RESOLVED
+        CREATING_NEW_TABLE, DEADLOCK_FOUND, DEADLOCK_NOT_RESOLVED, APP_USERS_COUNT_COMPUTED
     }
 
     public static class EventAndException {

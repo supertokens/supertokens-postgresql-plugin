@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [unreleased]
 
+## [10.1.0]
+
+- Implements plugin-interface 11.1 `getOrComputeAppUsersCount`: the app user count is stored in `key_value` and reused while younger than the caller's max age; a per-app advisory lock makes concurrent callers on all cores wait for one count, which runs with a 10-minute statement timeout instead of the pool's 60s socket timeout.
+
 ## [10.0.0]
 
 - Major release: implements plugin-interface 11.0 (a breaking interface change), so it works with core 12.4 and later only.

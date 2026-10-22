@@ -1315,12 +1315,36 @@ public class GeneralQueries {
         // count is unchanged because every row of a linked group carries the same
         // primary_or_recipe_user_time_joined (invariant I6), so distinct (time, id) pairs are in
         // one-to-one correspondence with distinct primary ids.
-        String QUERY = "SELECT COUNT(*) AS total FROM ("
+        return execute(start, getUnfilteredAppUsersCountQuery_new(start), pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+        }, result -> {
+            if (result.next()) {
+                return result.getLong("total");
+            }
+            return 0L;
+        });
+    }
+
+    private static String getUnfilteredAppUsersCountQuery_new(Start start) {
+        return "SELECT COUNT(*) AS total FROM ("
                 + "SELECT primary_or_recipe_user_time_joined, primary_or_recipe_user_id FROM "
                 + getConfig(start).getAppIdToUserIdTable()
                 + " WHERE app_id = ? GROUP BY 1, 2) AS uniq_users";
+    }
 
-        return execute(start, QUERY, pst -> {
+    /**
+     * The unfiltered app user count ({@link #getUsersCount(Start, AppIdentifier, RECIPE_ID[])} with no recipe
+     * filter), run on the caller's connection.
+     */
+    public static long getUsersCount_Transaction(Start start, Connection con, AppIdentifier appIdentifier)
+            throws SQLException, StorageQueryException {
+        String QUERY = Config.getConfig(start).getMigrationMode().readsFromNewTables()
+                ? getUnfilteredAppUsersCountQuery_new(start)
+                : "SELECT COUNT(*) AS total FROM (SELECT primary_or_recipe_user_id FROM "
+                        + getConfig(start).getUsersTable()
+                        + " WHERE app_id = ? GROUP BY primary_or_recipe_user_id) AS uniq_users";
+
+        return execute(con, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
         }, result -> {
             if (result.next()) {

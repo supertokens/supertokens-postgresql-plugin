@@ -24,6 +24,7 @@ import com.zaxxer.hikari.pool.HikariPool;
 import io.supertokens.pluginInterface.*;
 import io.supertokens.pluginInterface.accountinfo.AccountInfoStorage;
 import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
+import io.supertokens.pluginInterface.authRecipe.AppUsersCountCacheStorage;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.CanBecomePrimaryResult;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
@@ -146,7 +147,7 @@ public class Start
         UserIdMappingSQLStorage, MultitenancyStorage, MultitenancySQLStorage, DashboardSQLStorage, TOTPSQLStorage,
         ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage, OAuthStorage, OAuthSQLStorage,
         BulkImportSQLStorage, WebAuthNSQLStorage, SAMLStorage, UserLockingStorage, AccountInfoStorage,
-        MigrationBackfillStorage, ActivityLogSQLStorage {
+        MigrationBackfillStorage, ActivityLogSQLStorage, AppUsersCountCacheStorage {
 
     // these configs are protected from being modified / viewed by the dev using the SuperTokens
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
@@ -1972,6 +1973,20 @@ public class Start
             return GeneralQueries.getUsersCount(this, appIdentifier, includeRecipeIds);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public long getOrComputeAppUsersCount(AppIdentifier appIdentifier, long maxAgeMs) throws StorageQueryException {
+        try {
+            return this.startTransaction(con -> {
+                long count = AppUsersCountQueries.getOrComputeAppUsersCount_Transaction(this,
+                        (Connection) con.getConnection(), appIdentifier, maxAgeMs);
+                this.commitTransaction(con);
+                return count;
+            });
+        } catch (StorageTransactionLogicException e) {
+            throw new StorageQueryException(e.actualException);
         }
     }
 
