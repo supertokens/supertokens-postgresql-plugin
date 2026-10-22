@@ -421,12 +421,15 @@ public class UsersCountCacheQueries {
     private static long tenantCountNew(Start start, Connection con, Scope scope, Budget budget)
             throws SQLException, StorageQueryException {
         PostgreSQLConfig config = getConfig(start);
-        // enable_hashjoin is off for this transaction (set with the snapshot), as for the standalone D/L query
-        String dlQuery = "WITH r AS (SELECT DISTINCT recipe_user_id FROM " + config.getRecipeUserTenantsTable()
-                + " WHERE app_id = ? AND tenant_id = ? AND recipe_user_id > ? ORDER BY recipe_user_id LIMIT ?)"
-                + " SELECT (SELECT COUNT(*) FROM r) AS keys, (SELECT MAX(recipe_user_id) FROM r) AS last_id,"
+        // enable_hashjoin is off for this transaction (set with the snapshot), as for the standalone D/L query.
+        // The chunk is read once and aggregated as it streams: a CTE referenced more than once is materialised, and a
+        // chunk of recipe user ids does not fit work_mem, so it spilled to disk. The left join keeps every key of the
+        // chunk (app_id_to_user_id has one row per (app_id, user_id)), so COUNT(*) is the chunk's key count.
+        String dlQuery = "SELECT COUNT(*) AS keys, MAX(r.recipe_user_id) AS last_id,"
                 + " COUNT(a.user_id) AS d, COUNT(*) FILTER (WHERE a.is_linked_or_is_a_primary_user) AS l"
-                + " FROM r JOIN " + config.getAppIdToUserIdTable() + " a"
+                + " FROM (SELECT DISTINCT recipe_user_id FROM " + config.getRecipeUserTenantsTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND recipe_user_id > ? ORDER BY recipe_user_id LIMIT ?) r"
+                + " LEFT JOIN " + config.getAppIdToUserIdTable() + " a"
                 + " ON a.app_id = ? AND a.user_id = r.recipe_user_id";
         long dMinusL = 0;
         String last = "";
