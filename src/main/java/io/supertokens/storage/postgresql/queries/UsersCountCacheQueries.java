@@ -141,13 +141,15 @@ public class UsersCountCacheQueries {
                 return new UsersCountSnapshot(0, System.currentTimeMillis(), true);
             }
 
-            KeyValueInfo stored = read(start, con, scope.app, storedOn, scope.key);
+            // the stored count and the failure record, in one round trip
+            KeyValueInfo[] rows = readWithFailure(start, con, scope.app, storedOn, scope.key);
+            KeyValueInfo stored = rows[0];
+            KeyValueInfo failed = rows[1];
             long now = System.currentTimeMillis();
             if (stored != null && stored.createdAtTime <= now && now - stored.createdAtTime < maxAgeMs) {
                 return new UsersCountSnapshot(Long.parseLong(stored.value), stored.createdAtTime, false);
             }
 
-            KeyValueInfo failed = read(start, con, scope.app, storedOn, scope.key + FAILED_SUFFIX);
             if (failed != null && failed.createdAtTime <= now
                     && now - failed.createdAtTime < config.getUsersCountChunkTimeout()) {
                 throw new StorageQueryException(new UsersCountBackoffException(failed.createdAtTime));
@@ -172,7 +174,9 @@ public class UsersCountCacheQueries {
             }
             GeneralQueries.setKeyValue_Transaction(start, con, storedOnTenant, scope.key,
                     new KeyValueInfo(Long.toString(count), countStartedAt));
-            GeneralQueries.deleteKeyValue_Transaction(start, con, storedOnTenant, scope.key + FAILED_SUFFIX);
+            if (failed != null) {
+                GeneralQueries.deleteKeyValue_Transaction(start, con, storedOnTenant, scope.key + FAILED_SUFFIX);
+            }
             ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.USERS_COUNT_COMPUTED, null);
             return new UsersCountSnapshot(count, countStartedAt, true);
         } finally {
@@ -198,6 +202,25 @@ public class UsersCountCacheQueries {
                 pst -> pst.setString(1, scope.app.getAppId()), r -> r.next() ? r.getString("tenant_id") : null);
     }
 
+    // {stored count, failure record} of the key; either may be null
+    private static KeyValueInfo[] readWithFailure(Start start, Connection con, AppIdentifier app, String tenantId,
+                                                  String key) throws SQLException, StorageQueryException {
+        return execute(con, "SELECT name, value, created_at_time FROM " + getConfig(start).getKeyValueTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND name IN (?, ?)", pst -> {
+            pst.setString(1, app.getAppId());
+            pst.setString(2, tenantId);
+            pst.setString(3, key);
+            pst.setString(4, key + FAILED_SUFFIX);
+        }, r -> {
+            KeyValueInfo[] rows = new KeyValueInfo[2];
+            while (r.next()) {
+                rows[key.equals(r.getString("name")) ? 0 : 1] = new KeyValueInfo(r.getString("value"),
+                        r.getLong("created_at_time"));
+            }
+            return rows;
+        });
+    }
+
     @Nullable
     private static KeyValueInfo read(Start start, Connection con, AppIdentifier app, String tenantId, String key)
             throws SQLException, StorageQueryException {
@@ -216,13 +239,16 @@ public class UsersCountCacheQueries {
         boolean autoCommit = con.getAutoCommit();
         con.setAutoCommit(false);
         try {
+            boolean newTables = Config.getConfig(start).getMigrationMode().readsFromNewTables();
             try (Statement st = con.createStatement()) {
-                // one snapshot for every chunk, so the sum is exact as of the first chunk
-                st.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY");
-                st.execute("SET LOCAL statement_timeout = " + config.getUsersCountChunkTimeout());
+                // one round trip: one snapshot for every chunk (so the sum is exact as of the first chunk), the chunk
+                // timeout, and for the new-table tenant count the standalone D/L query's planner setting
+                st.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY; SET LOCAL statement_timeout = "
+                        + config.getUsersCountChunkTimeout()
+                        + (newTables && scope.tenantId != null && scope.recipes == null
+                        ? "; SET LOCAL enable_hashjoin = off" : ""));
             }
             Budget budget = new Budget(config, countStartedAt);
-            boolean newTables = Config.getConfig(start).getMigrationMode().readsFromNewTables();
             long count;
             if (scope.tenantId == null) {
                 count = newTables ? appCountNew(start, con, scope, budget) : appCountLegacy(start, con, scope, budget);
@@ -395,9 +421,7 @@ public class UsersCountCacheQueries {
     private static long tenantCountNew(Start start, Connection con, Scope scope, Budget budget)
             throws SQLException, StorageQueryException {
         PostgreSQLConfig config = getConfig(start);
-        try (Statement st = con.createStatement()) {
-            st.execute("SET LOCAL enable_hashjoin = off"); // as the standalone D/L query
-        }
+        // enable_hashjoin is off for this transaction (set with the snapshot), as for the standalone D/L query
         String dlQuery = "WITH r AS (SELECT DISTINCT recipe_user_id FROM " + config.getRecipeUserTenantsTable()
                 + " WHERE app_id = ? AND tenant_id = ? AND recipe_user_id > ? ORDER BY recipe_user_id LIMIT ?)"
                 + " SELECT (SELECT COUNT(*) FROM r) AS keys, (SELECT MAX(recipe_user_id) FROM r) AS last_id,"
