@@ -76,6 +76,23 @@ postgresql_config_version: 0
 # active. If not set, minimum idle connections will be same as the connection pool size.
 # postgresql_minimum_idle_connections:
 
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: 100000) integer value. Number of users (or user groups) each
+# statement of a full user count covers. The count runs as many short statements of this size inside one snapshot.
+# Values below 1000 make many round trips and are meant for tests.
+# postgresql_users_count_chunk_size:
+
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: 60000) long value. Timeout in milliseconds for each statement of a
+# full user count. A count that hits it fails, and counts of the same scope are not retried for this long.
+# postgresql_users_count_chunk_timeout:
+
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: 0) long value. Pause in milliseconds between the statements of a
+# full user count, to cap its share of database CPU. 0 means no pause.
+# postgresql_users_count_chunk_pause:
+
+# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: 0) long value. Maximum duration in milliseconds of a full user
+# count; it stops between statements once exceeded and fails. 0 means no limit.
+# postgresql_users_count_max_duration:
+
 # (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: "LEGACY") string value. Migration mode for all_auth_recipe_users
 # table deprecation. Values: LEGACY, DUAL_WRITE_READ_OLD, DUAL_WRITE_READ_NEW, MIGRATED
 # migration_mode:

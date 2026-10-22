@@ -1315,36 +1315,12 @@ public class GeneralQueries {
         // count is unchanged because every row of a linked group carries the same
         // primary_or_recipe_user_time_joined (invariant I6), so distinct (time, id) pairs are in
         // one-to-one correspondence with distinct primary ids.
-        return execute(start, getUnfilteredAppUsersCountQuery_new(start), pst -> {
-            pst.setString(1, appIdentifier.getAppId());
-        }, result -> {
-            if (result.next()) {
-                return result.getLong("total");
-            }
-            return 0L;
-        });
-    }
-
-    private static String getUnfilteredAppUsersCountQuery_new(Start start) {
-        return "SELECT COUNT(*) AS total FROM ("
+        String QUERY = "SELECT COUNT(*) AS total FROM ("
                 + "SELECT primary_or_recipe_user_time_joined, primary_or_recipe_user_id FROM "
                 + getConfig(start).getAppIdToUserIdTable()
                 + " WHERE app_id = ? GROUP BY 1, 2) AS uniq_users";
-    }
 
-    /**
-     * The unfiltered app user count ({@link #getUsersCount(Start, AppIdentifier, RECIPE_ID[])} with no recipe
-     * filter), run on the caller's connection.
-     */
-    public static long getUsersCount_Transaction(Start start, Connection con, AppIdentifier appIdentifier)
-            throws SQLException, StorageQueryException {
-        String QUERY = Config.getConfig(start).getMigrationMode().readsFromNewTables()
-                ? getUnfilteredAppUsersCountQuery_new(start)
-                : "SELECT COUNT(*) AS total FROM (SELECT primary_or_recipe_user_id FROM "
-                        + getConfig(start).getUsersTable()
-                        + " WHERE app_id = ? GROUP BY primary_or_recipe_user_id) AS uniq_users";
-
-        return execute(con, QUERY, pst -> {
+        return execute(start, QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
         }, result -> {
             if (result.next()) {
@@ -1484,36 +1460,6 @@ public class GeneralQueries {
     // (e.g. autoanalyze lag right after a large import). So callers run this with hash joins disabled
     // for the statement's transaction. The planner is still free to pick a nested loop for genuinely
     // small tenants - both remaining plans stream over the pre-sorted indexes and never spill.
-    /**
-     * The unfiltered tenant user count ({@link #getUsersCount(Start, TenantIdentifier, RECIPE_ID[])} with no recipe
-     * filter), run on the caller's transaction connection. In the new-table read modes it disables hash joins for
-     * the rest of that transaction, as the standalone count does for its D/L query.
-     */
-    public static long getUsersCount_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier)
-            throws SQLException, StorageQueryException {
-        if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
-            try (Statement st = con.createStatement()) {
-                st.execute("SET LOCAL enable_hashjoin = off");
-            }
-            long[] dl = runTenantExactCountDL(start, con, tenantIdentifier);
-            long g = runTenantExactCountG(start, con, tenantIdentifier);
-            return dl[0] - dl[1] + g;
-        }
-
-        String QUERY = "SELECT COUNT(*) AS total FROM (SELECT primary_or_recipe_user_id FROM "
-                + getConfig(start).getUsersTable()
-                + " WHERE app_id = ? AND tenant_id = ? GROUP BY primary_or_recipe_user_id) AS uniq_users";
-        return execute(con, QUERY, pst -> {
-            pst.setString(1, tenantIdentifier.getAppId());
-            pst.setString(2, tenantIdentifier.getTenantId());
-        }, result -> {
-            if (result.next()) {
-                return result.getLong("total");
-            }
-            return 0L;
-        });
-    }
-
     private static long[] runTenantExactCountDL(Start start, Connection con, TenantIdentifier tenantIdentifier)
             throws SQLException, StorageQueryException {
         String QUERY_DL = "SELECT COUNT(*) AS d,"

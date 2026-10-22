@@ -156,7 +156,8 @@ public class Start
             "postgresql_connection_uri", "postgresql_host", "postgresql_port", "postgresql_user", "postgresql_password",
             "postgresql_database_name", "postgresql_table_schema", "postgresql_idle_connection_timeout",
             "postgresql_minimum_idle_connections", "postgresql_connection_attributes", "postgresql_connection_scheme",
-            "postgresql_table_names_prefix"
+            "postgresql_table_names_prefix", "postgresql_users_count_chunk_size", "postgresql_users_count_chunk_timeout",
+            "postgresql_users_count_chunk_pause", "postgresql_users_count_max_duration"
     };
     // ReentrantLock, not a monitor: see ConnectionPool.initLock. Held only while wiring loggers, but a virtual
     // thread parked on a monitor is pinned, so keep the storage-init path free of synchronized sections.
@@ -1978,32 +1979,31 @@ public class Start
     }
 
     @Override
-    public UsersCountSnapshot getOrComputeAppUsersCount(AppIdentifier appIdentifier, long maxAgeMs) throws StorageQueryException {
-        try {
-            return this.startTransaction(con -> {
-                UsersCountSnapshot count = UsersCountCacheQueries.getOrComputeAppUsersCount_Transaction(this,
-                        (Connection) con.getConnection(), appIdentifier, maxAgeMs);
-                this.commitTransaction(con);
-                return count;
-            });
-        } catch (StorageTransactionLogicException e) {
-            throw new StorageQueryException(e.actualException);
-        }
+    public UsersCountSnapshot getOrComputeAppUsersCount(AppIdentifier appIdentifier, RECIPE_ID[] includeRecipeIds,
+                                                        long maxAgeMs) throws StorageQueryException {
+        return UsersCountCacheQueries.getOrCompute(this,
+                UsersCountCacheQueries.Scope.app(appIdentifier, includeRecipeIds), maxAgeMs);
     }
 
     @Override
-    public UsersCountSnapshot getOrComputeTenantUsersCount(TenantIdentifier tenantIdentifier, long maxAgeMs)
+    public UsersCountSnapshot getOrComputeTenantUsersCount(TenantIdentifier tenantIdentifier,
+                                                           RECIPE_ID[] includeRecipeIds, long maxAgeMs)
             throws StorageQueryException {
-        try {
-            return this.startTransaction(con -> {
-                UsersCountSnapshot count = UsersCountCacheQueries.getOrComputeTenantUsersCount_Transaction(this,
-                        (Connection) con.getConnection(), tenantIdentifier, maxAgeMs);
-                this.commitTransaction(con);
-                return count;
-            });
-        } catch (StorageTransactionLogicException e) {
-            throw new StorageQueryException(e.actualException);
-        }
+        return UsersCountCacheQueries.getOrCompute(this,
+                UsersCountCacheQueries.Scope.tenant(tenantIdentifier, includeRecipeIds), maxAgeMs);
+    }
+
+    @Override
+    public UsersCountSnapshot getStoredAppUsersCount(AppIdentifier appIdentifier, RECIPE_ID[] includeRecipeIds)
+            throws StorageQueryException {
+        return UsersCountCacheQueries.getStored(this, UsersCountCacheQueries.Scope.app(appIdentifier, includeRecipeIds));
+    }
+
+    @Override
+    public UsersCountSnapshot getStoredTenantUsersCount(TenantIdentifier tenantIdentifier,
+                                                        RECIPE_ID[] includeRecipeIds) throws StorageQueryException {
+        return UsersCountCacheQueries.getStored(this,
+                UsersCountCacheQueries.Scope.tenant(tenantIdentifier, includeRecipeIds));
     }
 
     @Override

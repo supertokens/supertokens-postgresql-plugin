@@ -204,6 +204,36 @@ public class PostgreSQLConfig {
     private Integer postgresql_minimum_idle_connections = null;
 
 
+    @EnvName("POSTGRESQL_USERS_COUNT_CHUNK_SIZE")
+    @JsonProperty
+    @NotConflictingWithinUserPool
+    @DashboardInfo(description = "Number of users (or user groups) each statement of a full user count covers. The " +
+            "count runs as many short statements of this size inside one snapshot.", defaultValue = "100000",
+            isOptional = true, isEditable = true)
+    private int postgresql_users_count_chunk_size = 100000;
+
+    @EnvName("POSTGRESQL_USERS_COUNT_CHUNK_TIMEOUT")
+    @JsonProperty
+    @NotConflictingWithinUserPool
+    @DashboardInfo(description = "Timeout in milliseconds for each statement of a full user count. A count that hits " +
+            "it fails, and counts of the same scope are not retried for this long.", defaultValue = "60000",
+            isOptional = true, isEditable = true)
+    private long postgresql_users_count_chunk_timeout = 60000;
+
+    @EnvName("POSTGRESQL_USERS_COUNT_CHUNK_PAUSE")
+    @JsonProperty
+    @NotConflictingWithinUserPool
+    @DashboardInfo(description = "Pause in milliseconds between the statements of a full user count, to cap its " +
+            "share of database CPU. 0 means no pause.", defaultValue = "0", isOptional = true, isEditable = true)
+    private long postgresql_users_count_chunk_pause = 0;
+
+    @EnvName("POSTGRESQL_USERS_COUNT_MAX_DURATION")
+    @JsonProperty
+    @NotConflictingWithinUserPool
+    @DashboardInfo(description = "Maximum duration in milliseconds of a full user count; it stops between statements " +
+            "once exceeded and fails. 0 means no limit.", defaultValue = "0", isOptional = true, isEditable = true)
+    private long postgresql_users_count_max_duration = 0;
+
     @EnvName("SUPERTOKENS_MIGRATION_MODE")
     @JsonProperty
     // migration_mode participates in the connection pool identity so that a mode change on an
@@ -450,6 +480,22 @@ public class PostgreSQLConfig {
         return postgresql_thirdparty_users_table_name;
     }
 
+    public int getUsersCountChunkSize() {
+        return postgresql_users_count_chunk_size;
+    }
+
+    public long getUsersCountChunkTimeout() {
+        return postgresql_users_count_chunk_timeout;
+    }
+
+    public long getUsersCountChunkPause() {
+        return postgresql_users_count_chunk_pause;
+    }
+
+    public long getUsersCountMaxDuration() {
+        return postgresql_users_count_max_duration;
+    }
+
     public long getIdleConnectionTimeout() {
         return postgresql_idle_connection_timeout;
     }
@@ -640,6 +686,19 @@ public class PostgreSQLConfig {
                             "'postgresql_minimum_idle_connections' must be less than or equal to "
                                     + "'postgresql_connection_pool_size'");
                 }
+            }
+
+            if (postgresql_users_count_chunk_size <= 0) {
+                throw new InvalidConfigException("'postgresql_users_count_chunk_size' must be > 0");
+            }
+            if (postgresql_users_count_chunk_timeout <= 0) {
+                throw new InvalidConfigException("'postgresql_users_count_chunk_timeout' must be > 0");
+            }
+            if (postgresql_users_count_chunk_pause < 0) {
+                throw new InvalidConfigException("'postgresql_users_count_chunk_pause' must be >= 0");
+            }
+            if (postgresql_users_count_max_duration < 0) {
+                throw new InvalidConfigException("'postgresql_users_count_max_duration' must be >= 0");
             }
 
             if (migration_mode != null) {
