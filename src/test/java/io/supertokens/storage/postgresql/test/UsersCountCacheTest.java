@@ -4,6 +4,7 @@ import io.supertokens.Main;
 import io.supertokens.ProcessState;
 import io.supertokens.emailpassword.EmailPassword;
 import io.supertokens.pluginInterface.KeyValueInfo;
+import io.supertokens.pluginInterface.authRecipe.UsersCountSnapshot;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.Start;
@@ -56,18 +57,25 @@ public class UsersCountCacheTest {
         EmailPassword.signUp(main, "user1@example.com", "password123");
         EmailPassword.signUp(main, "user2@example.com", "password123");
 
-        assertEquals(2, storage.getOrComputeAppUsersCount(app, TEN_MINUTES));
+        long before = System.currentTimeMillis();
+        UsersCountSnapshot first = storage.getOrComputeAppUsersCount(app, TEN_MINUTES);
+        assertEquals(2, first.count);
+        assertTrue(first.newlyCounted);
+        assertTrue(first.countedAtMs >= before);
         assertNotNull(computed(storage));
 
         EmailPassword.signUp(main, "user3@example.com", "password123");
         io.supertokens.storage.postgresql.ProcessState.getInstance(storage).clear();
 
-        // Still fresh: the stored 2 is served without counting.
-        assertEquals(2, storage.getOrComputeAppUsersCount(app, TEN_MINUTES));
+        // Still fresh: the stored 2 is served without counting, with the time it was counted.
+        UsersCountSnapshot reused = storage.getOrComputeAppUsersCount(app, TEN_MINUTES);
+        assertEquals(2, reused.count);
+        assertFalse(reused.newlyCounted);
+        assertEquals(first.countedAtMs, reused.countedAtMs);
         assertNull(computed(storage));
 
         // Too old for a zero max age: counted again.
-        assertEquals(3, storage.getOrComputeAppUsersCount(app, 0));
+        assertEquals(3, storage.getOrComputeAppUsersCount(app, 0).count);
         assertNotNull(computed(storage));
 
         process.kill();
@@ -90,7 +98,7 @@ public class UsersCountCacheTest {
 
         long exact = storage.getUsersCount(tenant, null);
         assertEquals(2, exact);
-        assertEquals(exact, storage.getOrComputeTenantUsersCount(tenant, TEN_MINUTES));
+        assertEquals(exact, storage.getOrComputeTenantUsersCount(tenant, TEN_MINUTES).count);
         assertNotNull(computed(storage));
         KeyValueInfo stored = storage.getKeyValue(tenant, "TENANT_USERS_COUNT");
         assertNotNull(stored);
@@ -99,9 +107,9 @@ public class UsersCountCacheTest {
         EmailPassword.signUp(main, "user3@example.com", "password123");
         io.supertokens.storage.postgresql.ProcessState.getInstance(storage).clear();
 
-        assertEquals(2, storage.getOrComputeTenantUsersCount(tenant, TEN_MINUTES));
+        assertEquals(2, storage.getOrComputeTenantUsersCount(tenant, TEN_MINUTES).count);
         assertNull(computed(storage));
-        assertEquals(3, storage.getOrComputeTenantUsersCount(tenant, 0));
+        assertEquals(3, storage.getOrComputeTenantUsersCount(tenant, 0).count);
         assertNotNull(computed(storage));
 
         process.kill();
@@ -141,7 +149,7 @@ public class UsersCountCacheTest {
 
             ExecutorService executor = Executors.newSingleThreadExecutor();
             try {
-                Future<Long> result = executor.submit(() -> storage.getOrComputeAppUsersCount(app, TEN_MINUTES));
+                Future<Long> result = executor.submit(() -> storage.getOrComputeAppUsersCount(app, TEN_MINUTES).count);
 
                 Thread.sleep(1500);
                 assertFalse("the caller must queue on the lock while the other core counts", result.isDone());

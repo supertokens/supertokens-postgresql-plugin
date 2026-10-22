@@ -1,6 +1,7 @@
 package io.supertokens.storage.postgresql.queries;
 
 import io.supertokens.pluginInterface.KeyValueInfo;
+import io.supertokens.pluginInterface.authRecipe.UsersCountSnapshot;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
@@ -33,7 +34,7 @@ public class UsersCountCacheQueries {
     static final int STATEMENT_TIMEOUT_MS = 10 * 60 * 1000;
     private static final int NETWORK_TIMEOUT_MS = STATEMENT_TIMEOUT_MS + 30 * 1000;
 
-    public static long getOrComputeAppUsersCount_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
+    public static UsersCountSnapshot getOrComputeAppUsersCount_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                              long maxAgeMs)
             throws SQLException, StorageQueryException {
         return getOrCompute(start, con, appIdentifier.getAsPublicTenantIdentifier(), APP_USERS_COUNT_KEY,
@@ -41,7 +42,7 @@ public class UsersCountCacheQueries {
                 () -> GeneralQueries.getUsersCount_Transaction(start, con, appIdentifier));
     }
 
-    public static long getOrComputeTenantUsersCount_Transaction(Start start, Connection con,
+    public static UsersCountSnapshot getOrComputeTenantUsersCount_Transaction(Start start, Connection con,
                                                                 TenantIdentifier tenantIdentifier, long maxAgeMs)
             throws SQLException, StorageQueryException {
         return getOrCompute(start, con, tenantIdentifier, TENANT_USERS_COUNT_KEY,
@@ -55,7 +56,7 @@ public class UsersCountCacheQueries {
      * callers on any core queue behind one count and then read the value it stored. The lock is released when the
      * transaction ends, including when the connection of a core that died mid-count is closed.
      */
-    private static long getOrCompute(Start start, Connection con, TenantIdentifier storedOn, String key,
+    private static UsersCountSnapshot getOrCompute(Start start, Connection con, TenantIdentifier storedOn, String key,
                                      String lockKey, long maxAgeMs, Count count)
             throws SQLException, StorageQueryException {
         con.setNetworkTimeout(Runnable::run, NETWORK_TIMEOUT_MS);
@@ -74,7 +75,7 @@ public class UsersCountCacheQueries {
 
         long now = System.currentTimeMillis();
         if (stored != null && stored.createdAtTime <= now && now - stored.createdAtTime < maxAgeMs) {
-            return Long.parseLong(stored.value);
+            return new UsersCountSnapshot(Long.parseLong(stored.value), stored.createdAtTime, false);
         }
 
         // Stamped before counting, so the stored age never understates how old the count is.
@@ -83,7 +84,7 @@ public class UsersCountCacheQueries {
         GeneralQueries.setKeyValue_Transaction(start, con, storedOn, key,
                 new KeyValueInfo(Long.toString(counted), countStartedAt));
         ProcessState.getInstance(start).addState(ProcessState.PROCESS_STATE.USERS_COUNT_COMPUTED, null);
-        return counted;
+        return new UsersCountSnapshot(counted, countStartedAt, true);
     }
 
     @FunctionalInterface

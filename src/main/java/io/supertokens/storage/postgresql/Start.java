@@ -25,6 +25,7 @@ import io.supertokens.pluginInterface.*;
 import io.supertokens.pluginInterface.accountinfo.AccountInfoStorage;
 import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
 import io.supertokens.pluginInterface.authRecipe.UsersCountCacheStorage;
+import io.supertokens.pluginInterface.authRecipe.UsersCountSnapshot;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.CanBecomePrimaryResult;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
@@ -1977,10 +1978,10 @@ public class Start
     }
 
     @Override
-    public long getOrComputeAppUsersCount(AppIdentifier appIdentifier, long maxAgeMs) throws StorageQueryException {
+    public UsersCountSnapshot getOrComputeAppUsersCount(AppIdentifier appIdentifier, long maxAgeMs) throws StorageQueryException {
         try {
             return this.startTransaction(con -> {
-                long count = UsersCountCacheQueries.getOrComputeAppUsersCount_Transaction(this,
+                UsersCountSnapshot count = UsersCountCacheQueries.getOrComputeAppUsersCount_Transaction(this,
                         (Connection) con.getConnection(), appIdentifier, maxAgeMs);
                 this.commitTransaction(con);
                 return count;
@@ -1991,11 +1992,11 @@ public class Start
     }
 
     @Override
-    public long getOrComputeTenantUsersCount(TenantIdentifier tenantIdentifier, long maxAgeMs)
+    public UsersCountSnapshot getOrComputeTenantUsersCount(TenantIdentifier tenantIdentifier, long maxAgeMs)
             throws StorageQueryException {
         try {
             return this.startTransaction(con -> {
-                long count = UsersCountCacheQueries.getOrComputeTenantUsersCount_Transaction(this,
+                UsersCountSnapshot count = UsersCountCacheQueries.getOrComputeTenantUsersCount_Transaction(this,
                         (Connection) con.getConnection(), tenantIdentifier, maxAgeMs);
                 this.commitTransaction(con);
                 return count;
