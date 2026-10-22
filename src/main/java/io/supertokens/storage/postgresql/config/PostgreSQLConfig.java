@@ -208,7 +208,8 @@ public class PostgreSQLConfig {
     @JsonProperty
     @NotConflictingWithinUserPool
     @DashboardInfo(description = "Number of users (or user groups) each statement of a full user count covers. The " +
-            "count runs as many short statements of this size inside one snapshot.", defaultValue = "100000",
+            "count runs as many short statements of this size inside one snapshot. Values below 1000 make many " +
+            "round trips and are meant for tests.", defaultValue = "100000",
             isOptional = true, isEditable = true)
     private int postgresql_users_count_chunk_size = 100000;
 
