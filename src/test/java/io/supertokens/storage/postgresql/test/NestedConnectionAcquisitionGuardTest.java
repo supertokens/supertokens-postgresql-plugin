@@ -44,9 +44,9 @@ import io.supertokens.storageLayer.StorageLayer;
 
 /**
  * Exercises ConnectionPool's test-only guard against borrowing a second connection from the same pool while a
- * startTransaction on that pool holds one. "Allowed" cases run in throw-mode, so a false positive fails the test;
- * warn-mode cases assert on the test thread's own warning counter, so a warning a background cron raises on another
- * thread cannot stand in for a missed one.
+ * startTransaction on that pool holds one. The guard throws by default, so "allowed" cases fail the test on a false
+ * positive; warn-mode (opt-out) cases assert on the test thread's own warning counter, so a warning a background cron
+ * raises on another thread cannot stand in for a missed one.
  */
 public class NestedConnectionAcquisitionGuardTest {
     @Rule
@@ -60,12 +60,11 @@ public class NestedConnectionAcquisitionGuardTest {
     @Before
     public void beforeEach() {
         Utils.reset();
-        ConnectionPool.setThrowOnNestedAcquisition(false);
     }
 
     @After
     public void afterEach() {
-        ConnectionPool.setThrowOnNestedAcquisition(false);
+        ConnectionPool.setThrowOnNestedAcquisition(true);
     }
 
     private static boolean causedByIllegalState(Throwable t) {
@@ -79,47 +78,48 @@ public class NestedConnectionAcquisitionGuardTest {
     }
 
     @Test
-    public void nestedTransactionOnSamePoolWarnsByDefaultAndThrowsWhenEnabled() throws Exception {
+    public void nestedTransactionOnSamePoolThrowsByDefaultAndWarnsWhenOptedOut() throws Exception {
         String[] args = {"../"};
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
         Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
 
-        long before = ConnectionPool.getNestedAcquisitionWarningCountOnCurrentThread();
-        start.startTransaction(con -> start.startTransaction(inner -> null));
-        assertEquals(before + 1, ConnectionPool.getNestedAcquisitionWarningCountOnCurrentThread());
-
-        ConnectionPool.setThrowOnNestedAcquisition(true);
+        assertTrue(ConnectionPool.isThrowOnNestedAcquisition());
         try {
             start.startTransaction(con -> start.startTransaction(inner -> null));
-            fail("nested same-pool startTransaction should throw in throw-mode");
+            fail("nested same-pool startTransaction should throw by default");
         } catch (Exception e) {
             assertTrue("unexpected exception: " + e, causedByIllegalState(e));
         }
+
+        ConnectionPool.setThrowOnNestedAcquisition(false);
+        long before = ConnectionPool.getNestedAcquisitionWarningCountOnCurrentThread();
+        start.startTransaction(con -> start.startTransaction(inner -> null));
+        assertEquals(before + 1, ConnectionPool.getNestedAcquisitionWarningCountOnCurrentThread());
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
 
     @Test
-    public void plainQueryInsideTransactionWarnsByDefaultAndThrowsWhenEnabled() throws Exception {
+    public void plainQueryInsideTransactionThrowsByDefaultAndWarnsWhenOptedOut() throws Exception {
         String[] args = {"../"};
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
         Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
 
         // a plain (non-_Transaction) read borrows its own connection from the pool the transaction holds
-        long before = ConnectionPool.getNestedAcquisitionWarningCountOnCurrentThread();
-        start.startTransaction(con -> start.getKeyValue(TenantIdentifier.BASE_TENANT, "nested-guard"));
-        assertEquals(before + 1, ConnectionPool.getNestedAcquisitionWarningCountOnCurrentThread());
-
-        ConnectionPool.setThrowOnNestedAcquisition(true);
         try {
             start.startTransaction(con -> start.getKeyValue(TenantIdentifier.BASE_TENANT, "nested-guard"));
-            fail("plain same-pool read inside a transaction should throw in throw-mode");
+            fail("plain same-pool read inside a transaction should throw by default");
         } catch (Exception e) {
             assertTrue("unexpected exception: " + e, causedByIllegalState(e));
         }
+
+        ConnectionPool.setThrowOnNestedAcquisition(false);
+        long before = ConnectionPool.getNestedAcquisitionWarningCountOnCurrentThread();
+        start.startTransaction(con -> start.getKeyValue(TenantIdentifier.BASE_TENANT, "nested-guard"));
+        assertEquals(before + 1, ConnectionPool.getNestedAcquisitionWarningCountOnCurrentThread());
 
         // outside any transaction the same read is fine
         start.getKeyValue(TenantIdentifier.BASE_TENANT, "nested-guard");
@@ -135,6 +135,7 @@ public class NestedConnectionAcquisitionGuardTest {
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
         Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
 
+        ConnectionPool.setThrowOnNestedAcquisition(false);
         long globalBefore = ConnectionPool.getNestedAcquisitionWarningCount();
         long thisThreadBefore = ConnectionPool.getNestedAcquisitionWarningCountOnCurrentThread();
         AtomicReference<Throwable> failure = new AtomicReference<>();
@@ -177,7 +178,7 @@ public class NestedConnectionAcquisitionGuardTest {
         Start t1Start = (Start) StorageLayer.getStorage(t1, process.getProcess());
         assertNotEquals(baseStart.getUserPoolId(), t1Start.getUserPoolId());
 
-        ConnectionPool.setThrowOnNestedAcquisition(true);
+        // the default throw mode is on, so a false positive fails here
         baseStart.startTransaction(con -> t1Start.getKeyValue(t1, "nested-guard"));
         baseStart.startTransaction(con -> t1Start.startTransaction(inner -> null));
 
@@ -192,7 +193,6 @@ public class NestedConnectionAcquisitionGuardTest {
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
         Start start = (Start) StorageLayer.getBaseStorage(process.getProcess());
 
-        ConnectionPool.setThrowOnNestedAcquisition(true);
         try {
             start.startTransaction(con -> {
                 throw new RuntimeException("callback failure");
@@ -211,15 +211,15 @@ public class NestedConnectionAcquisitionGuardTest {
     }
 
     @Test
-    public void throwModeIsResetWhenTheProcessStops() throws Exception {
+    public void warnModeOptOutIsResetWhenTheProcessStops() throws Exception {
         String[] args = {"../"};
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
-        ConnectionPool.setThrowOnNestedAcquisition(true);
+        ConnectionPool.setThrowOnNestedAcquisition(false);
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
-        assertFalse(ConnectionPool.isThrowOnNestedAcquisition());
+        assertTrue(ConnectionPool.isThrowOnNestedAcquisition());
     }
 }
