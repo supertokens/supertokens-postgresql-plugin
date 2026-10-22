@@ -1484,6 +1484,36 @@ public class GeneralQueries {
     // (e.g. autoanalyze lag right after a large import). So callers run this with hash joins disabled
     // for the statement's transaction. The planner is still free to pick a nested loop for genuinely
     // small tenants - both remaining plans stream over the pre-sorted indexes and never spill.
+    /**
+     * The unfiltered tenant user count ({@link #getUsersCount(Start, TenantIdentifier, RECIPE_ID[])} with no recipe
+     * filter), run on the caller's transaction connection. In the new-table read modes it disables hash joins for
+     * the rest of that transaction, as the standalone count does for its D/L query.
+     */
+    public static long getUsersCount_Transaction(Start start, Connection con, TenantIdentifier tenantIdentifier)
+            throws SQLException, StorageQueryException {
+        if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
+            try (Statement st = con.createStatement()) {
+                st.execute("SET LOCAL enable_hashjoin = off");
+            }
+            long[] dl = runTenantExactCountDL(start, con, tenantIdentifier);
+            long g = runTenantExactCountG(start, con, tenantIdentifier);
+            return dl[0] - dl[1] + g;
+        }
+
+        String QUERY = "SELECT COUNT(*) AS total FROM (SELECT primary_or_recipe_user_id FROM "
+                + getConfig(start).getUsersTable()
+                + " WHERE app_id = ? AND tenant_id = ? GROUP BY primary_or_recipe_user_id) AS uniq_users";
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, tenantIdentifier.getTenantId());
+        }, result -> {
+            if (result.next()) {
+                return result.getLong("total");
+            }
+            return 0L;
+        });
+    }
+
     private static long[] runTenantExactCountDL(Start start, Connection con, TenantIdentifier tenantIdentifier)
             throws SQLException, StorageQueryException {
         String QUERY_DL = "SELECT COUNT(*) AS d,"

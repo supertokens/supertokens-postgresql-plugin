@@ -9,7 +9,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [10.1.0]
 
-- Implements plugin-interface 11.1 `getOrComputeAppUsersCount`: the app user count is stored in `key_value` and reused while younger than the caller's max age; a per-app advisory lock makes concurrent callers on all cores wait for one count, which runs with a 10-minute statement timeout instead of the pool's 60s socket timeout.
+- Implements plugin-interface 11.1 `UsersCountCacheStorage`: app and tenant user counts are stored in `key_value` and reused while younger than the caller's max age; an advisory lock per app or tenant makes concurrent callers on all cores wait for one count, which runs with a 10-minute statement timeout instead of the pool's 60s socket timeout.
 
 ## [10.0.0]
 

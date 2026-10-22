@@ -3,7 +3,9 @@ package io.supertokens.storage.postgresql.test;
 import io.supertokens.Main;
 import io.supertokens.ProcessState;
 import io.supertokens.emailpassword.EmailPassword;
+import io.supertokens.pluginInterface.KeyValueInfo;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storageLayer.StorageLayer;
@@ -23,7 +25,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.*;
 
-public class AppUsersCountCacheTest {
+public class UsersCountCacheTest {
 
     private static final long TEN_MINUTES = 10 * 60 * 1000L;
 
@@ -66,6 +68,40 @@ public class AppUsersCountCacheTest {
 
         // Too old for a zero max age: counted again.
         assertEquals(3, storage.getOrComputeAppUsersCount(app, 0));
+        assertNotNull(computed(storage));
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    // The tenant count is the same value as getUsersCount(tenant), stored on that tenant and reused while fresh.
+    @Test
+    public void tenantCountMatchesTheExactCountAndIsReusedWhileFresh() throws Exception {
+        String[] args = {"../"};
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        Main main = process.getProcess();
+        Start storage = (Start) StorageLayer.getStorage(main);
+        TenantIdentifier tenant = new TenantIdentifier(null, null, null);
+
+        EmailPassword.signUp(main, "user1@example.com", "password123");
+        EmailPassword.signUp(main, "user2@example.com", "password123");
+
+        long exact = storage.getUsersCount(tenant, null);
+        assertEquals(2, exact);
+        assertEquals(exact, storage.getOrComputeTenantUsersCount(tenant, TEN_MINUTES));
+        assertNotNull(computed(storage));
+        KeyValueInfo stored = storage.getKeyValue(tenant, "TENANT_USERS_COUNT");
+        assertNotNull(stored);
+        assertEquals("2", stored.value);
+
+        EmailPassword.signUp(main, "user3@example.com", "password123");
+        io.supertokens.storage.postgresql.ProcessState.getInstance(storage).clear();
+
+        assertEquals(2, storage.getOrComputeTenantUsersCount(tenant, TEN_MINUTES));
+        assertNull(computed(storage));
+        assertEquals(3, storage.getOrComputeTenantUsersCount(tenant, 0));
         assertNotNull(computed(storage));
 
         process.kill();
@@ -128,6 +164,6 @@ public class AppUsersCountCacheTest {
 
     private static io.supertokens.storage.postgresql.ProcessState.EventAndException computed(Start storage) {
         return io.supertokens.storage.postgresql.ProcessState.getInstance(storage).getLastEventByName(
-                io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.APP_USERS_COUNT_COMPUTED);
+                io.supertokens.storage.postgresql.ProcessState.PROCESS_STATE.USERS_COUNT_COMPUTED);
     }
 }

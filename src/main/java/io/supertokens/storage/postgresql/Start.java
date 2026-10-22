@@ -24,7 +24,7 @@ import com.zaxxer.hikari.pool.HikariPool;
 import io.supertokens.pluginInterface.*;
 import io.supertokens.pluginInterface.accountinfo.AccountInfoStorage;
 import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
-import io.supertokens.pluginInterface.authRecipe.AppUsersCountCacheStorage;
+import io.supertokens.pluginInterface.authRecipe.UsersCountCacheStorage;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.CanBecomePrimaryResult;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
@@ -147,7 +147,7 @@ public class Start
         UserIdMappingSQLStorage, MultitenancyStorage, MultitenancySQLStorage, DashboardSQLStorage, TOTPSQLStorage,
         ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage, OAuthStorage, OAuthSQLStorage,
         BulkImportSQLStorage, WebAuthNSQLStorage, SAMLStorage, UserLockingStorage, AccountInfoStorage,
-        MigrationBackfillStorage, ActivityLogSQLStorage, AppUsersCountCacheStorage {
+        MigrationBackfillStorage, ActivityLogSQLStorage, UsersCountCacheStorage {
 
     // these configs are protected from being modified / viewed by the dev using the SuperTokens
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
@@ -1980,8 +1980,23 @@ public class Start
     public long getOrComputeAppUsersCount(AppIdentifier appIdentifier, long maxAgeMs) throws StorageQueryException {
         try {
             return this.startTransaction(con -> {
-                long count = AppUsersCountQueries.getOrComputeAppUsersCount_Transaction(this,
+                long count = UsersCountCacheQueries.getOrComputeAppUsersCount_Transaction(this,
                         (Connection) con.getConnection(), appIdentifier, maxAgeMs);
+                this.commitTransaction(con);
+                return count;
+            });
+        } catch (StorageTransactionLogicException e) {
+            throw new StorageQueryException(e.actualException);
+        }
+    }
+
+    @Override
+    public long getOrComputeTenantUsersCount(TenantIdentifier tenantIdentifier, long maxAgeMs)
+            throws StorageQueryException {
+        try {
+            return this.startTransaction(con -> {
+                long count = UsersCountCacheQueries.getOrComputeTenantUsersCount_Transaction(this,
+                        (Connection) con.getConnection(), tenantIdentifier, maxAgeMs);
                 this.commitTransaction(con);
                 return count;
             });
