@@ -157,7 +157,7 @@ public class Start
             "postgresql_database_name", "postgresql_table_schema", "postgresql_idle_connection_timeout",
             "postgresql_minimum_idle_connections", "postgresql_connection_attributes", "postgresql_connection_scheme",
             "postgresql_table_names_prefix", "postgresql_users_count_chunk_size", "postgresql_users_count_chunk_timeout",
-            "postgresql_users_count_chunk_pause", "postgresql_users_count_max_duration"
+            "postgresql_users_count_max_duration"
     };
     // ReentrantLock, not a monitor: see ConnectionPool.initLock. Held only while wiring loggers, but a virtual
     // thread parked on a monitor is pinned, so keep the storage-init path free of synchronized sections.

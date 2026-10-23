@@ -221,13 +221,6 @@ public class PostgreSQLConfig {
             isOptional = true, isEditable = true)
     private long postgresql_users_count_chunk_timeout = 60000;
 
-    @EnvName("POSTGRESQL_USERS_COUNT_CHUNK_PAUSE")
-    @JsonProperty
-    @NotConflictingWithinUserPool
-    @DashboardInfo(description = "Pause in milliseconds between the statements of a full user count, to cap its " +
-            "share of database CPU. 0 means no pause.", defaultValue = "0", isOptional = true, isEditable = true)
-    private long postgresql_users_count_chunk_pause = 0;
-
     @EnvName("POSTGRESQL_USERS_COUNT_MAX_DURATION")
     @JsonProperty
     @NotConflictingWithinUserPool
@@ -489,10 +482,6 @@ public class PostgreSQLConfig {
         return postgresql_users_count_chunk_timeout;
     }
 
-    public long getUsersCountChunkPause() {
-        return postgresql_users_count_chunk_pause;
-    }
-
     public long getUsersCountMaxDuration() {
         return postgresql_users_count_max_duration;
     }
@@ -696,9 +685,6 @@ public class PostgreSQLConfig {
             if (postgresql_users_count_chunk_timeout <= 0 || postgresql_users_count_chunk_timeout > Integer.MAX_VALUE) {
                 throw new InvalidConfigException(
                         "'postgresql_users_count_chunk_timeout' must be > 0 and <= " + Integer.MAX_VALUE);
-            }
-            if (postgresql_users_count_chunk_pause < 0) {
-                throw new InvalidConfigException("'postgresql_users_count_chunk_pause' must be >= 0");
             }
             if (postgresql_users_count_max_duration < 0) {
                 throw new InvalidConfigException("'postgresql_users_count_max_duration' must be >= 0");

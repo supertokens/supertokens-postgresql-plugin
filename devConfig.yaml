@@ -87,10 +87,6 @@ postgresql_config_version: 0
 # full user count. A count that hits it fails, and counts of the same scope are not retried for this long.
 # postgresql_users_count_chunk_timeout:
 
-# (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: 0) long value. Pause in milliseconds between the statements of a
-# full user count, to cap its share of database CPU. 0 means no pause.
-# postgresql_users_count_chunk_pause:
-
 # (DIFFERENT_ACROSS_TENANTS | OPTIONAL | Default: 0) long value. Maximum duration in milliseconds of a full user
 # count; it stops between statements once exceeded and fails. 0 means no limit.
 # postgresql_users_count_max_duration:

@@ -15,6 +15,8 @@ import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
 
+import org.jetbrains.annotations.TestOnly;
+
 import javax.annotation.Nullable;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -598,32 +600,36 @@ public class UsersCountCacheQueries {
         }
     }
 
-    // chunk size, the pause between chunks, and the overall budget
+    // Called between the chunks of a count, inside its snapshot; for tests that act while a count is running.
+    private static volatile Runnable betweenChunksForTesting;
+
+    @TestOnly
+    public static void setBetweenChunksHookForTesting(@Nullable Runnable hook) {
+        betweenChunksForTesting = hook;
+    }
+
+    // chunk size and the overall budget
     private static final class Budget {
         final int chunkSize;
-        final long pauseMs;
         final long maxDurationMs;
         final long startedAt;
 
         Budget(PostgreSQLConfig config, long startedAt) {
             this.chunkSize = config.getUsersCountChunkSize();
-            this.pauseMs = config.getUsersCountChunkPause();
             this.maxDurationMs = config.getUsersCountMaxDuration();
             this.startedAt = startedAt;
         }
 
+        // No pause between chunks: the count's snapshot stays open until it commits, and while it is open VACUUM
+        // cannot remove dead rows anywhere in the database, so the count runs straight through.
         void afterChunk() throws StorageQueryException {
             if (maxDurationMs > 0 && System.currentTimeMillis() - startedAt > maxDurationMs) {
                 throw new StorageQueryException(new TimeoutException(
                         "user count exceeded postgresql_users_count_max_duration (" + maxDurationMs + "ms)"));
             }
-            if (pauseMs > 0) {
-                try {
-                    Thread.sleep(pauseMs);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new StorageQueryException(e);
-                }
+            Runnable hook = betweenChunksForTesting;
+            if (hook != null) {
+                hook.run();
             }
         }
     }

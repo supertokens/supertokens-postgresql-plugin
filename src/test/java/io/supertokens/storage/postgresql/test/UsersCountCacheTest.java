@@ -45,6 +45,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.*;
 
@@ -452,7 +453,6 @@ public class UsersCountCacheTest {
     @Test
     public void failedCountBacksOffAndKeepsTheLastGoodCount() throws Exception {
         Utils.setValueInConfig("postgresql_users_count_chunk_size", "1");
-        Utils.setValueInConfig("postgresql_users_count_chunk_pause", "20");
         Utils.setValueInConfig("postgresql_users_count_max_duration", "1");
         String[] args = {"../"};
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
@@ -465,12 +465,12 @@ public class UsersCountCacheTest {
         // no users: one short chunk, within the budget
         assertEquals(0, storage.getOrComputeAppUsersCount(app, null, 0).count);
 
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 20; i++) {
             EmailPassword.signUp(main, "user" + i + "@example.com", "password123");
         }
         try {
             storage.getOrComputeAppUsersCount(app, null, 0);
-            fail("three chunks with 20ms pauses cannot fit in a 1ms budget");
+            fail("twenty one-user chunks, each a round trip, cannot fit in a 1ms budget");
         } catch (StorageQueryException e) {
             assertTrue(e.getCause() instanceof TimeoutException);
         }
@@ -490,7 +490,6 @@ public class UsersCountCacheTest {
     @Test
     public void usersAddedDuringACountDoNotChangeIt() throws Exception {
         Utils.setValueInConfig("postgresql_users_count_chunk_size", "1");
-        Utils.setValueInConfig("postgresql_users_count_chunk_pause", "300");
         String[] args = {"../"};
         TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
@@ -502,16 +501,24 @@ public class UsersCountCacheTest {
             EmailPassword.signUp(main, "user" + i + "@example.com", "password123");
         }
 
-        ExecutorService executor = Executors.newSingleThreadExecutor();
+        // two users sign up after the first chunk, while the count's snapshot is open
+        AtomicBoolean added = new AtomicBoolean();
+        UsersCountCacheQueries.setBetweenChunksHookForTesting(() -> {
+            if (added.compareAndSet(false, true)) {
+                try {
+                    EmailPassword.signUp(main, "late1@example.com", "password123");
+                    EmailPassword.signUp(main, "late2@example.com", "password123");
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
         try {
-            Future<Long> counting = executor.submit(() -> storage.getOrComputeAppUsersCount(app, null, 0).count);
-            Thread.sleep(150); // the first chunk (and with it the snapshot) has run; the count pauses after it
-            EmailPassword.signUp(main, "late1@example.com", "password123");
-            EmailPassword.signUp(main, "late2@example.com", "password123");
-            assertEquals(3L, (long) counting.get(20, TimeUnit.SECONDS));
+            assertEquals(3, storage.getOrComputeAppUsersCount(app, null, 0).count);
         } finally {
-            executor.shutdownNow();
+            UsersCountCacheQueries.setBetweenChunksHookForTesting(null);
         }
+        assertTrue("the users were added during the count", added.get());
         assertEquals(5, storage.getOrComputeAppUsersCount(app, null, 0).count);
 
         process.kill();
