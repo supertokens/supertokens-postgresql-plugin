@@ -692,8 +692,10 @@ public class PostgreSQLConfig {
             if (postgresql_users_count_chunk_size <= 0) {
                 throw new InvalidConfigException("'postgresql_users_count_chunk_size' must be > 0");
             }
-            if (postgresql_users_count_chunk_timeout <= 0) {
-                throw new InvalidConfigException("'postgresql_users_count_chunk_timeout' must be > 0");
+            // it becomes the statement_timeout of each chunk, an int setting in Postgres
+            if (postgresql_users_count_chunk_timeout <= 0 || postgresql_users_count_chunk_timeout > Integer.MAX_VALUE) {
+                throw new InvalidConfigException(
+                        "'postgresql_users_count_chunk_timeout' must be > 0 and <= " + Integer.MAX_VALUE);
             }
             if (postgresql_users_count_chunk_pause < 0) {
                 throw new InvalidConfigException("'postgresql_users_count_chunk_pause' must be >= 0");

@@ -1,6 +1,8 @@
 package io.supertokens.storage.postgresql.test;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.supertokens.Main;
 import io.supertokens.ProcessState;
 import io.supertokens.authRecipe.AuthRecipe;
@@ -18,6 +20,7 @@ import io.supertokens.pluginInterface.authRecipe.UsersCountSnapshot;
 import io.supertokens.pluginInterface.authRecipe.exceptions.UsersCountBackoffException;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.*;
+import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.queries.UsersCountCacheQueries;
@@ -32,6 +35,11 @@ import org.junit.rules.TestRule;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -181,6 +189,199 @@ public class UsersCountCacheTest {
 
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    // The max age is measured from the call, not from when the lock is acquired: a caller that queued behind another
+    // core's count reuses that count even if the wait itself took longer than the max age.
+    @Test
+    public void callerReusesTheCountItWaitedForEvenIfTheWaitExceedsMaxAge() throws Exception {
+        String[] args = {"../"};
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        Main main = process.getProcess();
+        Start storage = (Start) StorageLayer.getStorage(main);
+        AppIdentifier app = new AppIdentifier(null, null);
+        String table = Config.getConfig(storage).getKeyValueTable();
+        long maxAge = 2000;
+
+        try (Connection otherCore = DriverManager.getConnection(DatabaseTestHelper.getTestDatabaseUrl(),
+                DatabaseTestHelper.getUser(), DatabaseTestHelper.getPassword())) {
+            otherCore.setAutoCommit(false);
+            try (PreparedStatement lock = otherCore.prepareStatement("SELECT pg_advisory_xact_lock(hashtext(?))")) {
+                lock.setString(1, UsersCountCacheQueries.Scope.app(app, null).getLockKeyForTesting());
+                lock.execute();
+            }
+            // the other core's count starts (and is stamped) just before the caller queues
+            long otherCountStartedAt = System.currentTimeMillis();
+
+            ExecutorService executor = Executors.newSingleThreadExecutor();
+            try {
+                Future<Long> result = executor.submit(
+                        () -> storage.getOrComputeAppUsersCount(app, null, maxAge).count);
+
+                // the other core's count lasts longer than the caller's max age
+                Thread.sleep(maxAge + 1000);
+                assertFalse("the caller must queue on the lock while the other core counts", result.isDone());
+                try (PreparedStatement insert = otherCore.prepareStatement("INSERT INTO " + table
+                        + "(app_id, tenant_id, name, value, created_at_time) VALUES(?, ?, ?, ?, ?)")) {
+                    insert.setString(1, app.getAppId());
+                    insert.setString(2, "public");
+                    insert.setString(3, "APP_USERS_COUNT");
+                    insert.setString(4, "42");
+                    insert.setLong(5, otherCountStartedAt);
+                    insert.execute();
+                }
+                otherCore.commit();
+
+                assertEquals(42L, (long) result.get(10, TimeUnit.SECONDS));
+                assertNull("the caller must not run its own count", computed(storage));
+            } finally {
+                executor.shutdownNow();
+            }
+        }
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    // Postgres's statement_timeout is an int; a larger chunk timeout would make every count fail at its first SET.
+    @Test
+    public void chunkTimeoutAboveTheStatementTimeoutRangeIsRejected() throws Exception {
+        Utils.setValueInConfig("postgresql_users_count_chunk_timeout", "2147483648");
+        String[] args = {"../"};
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+
+        ProcessState.EventAndException e = process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.INIT_FAILURE);
+        assertNotNull(e);
+        assertEquals("'postgresql_users_count_chunk_timeout' must be > 0 and <= 2147483647",
+                e.exception.getCause().getMessage());
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    // Every chunk seeks to its cursor, so a full count reads a number of table rows linear in the users counted. (A
+    // cursor the index cannot seek on, or a lookup the planner hashes over the whole app, makes each chunk re-read
+    // the chunks before it or every row after it: quadratic in total.) Each statement is EXPLAIN ANALYZEd on the
+    // count's own connection.
+    @Test
+    public void aCountReadsRowsLinearInTheUsersCounted() throws Exception {
+        int chunkSize = 200;
+        int users = 10000;
+        Utils.setValueInConfig("postgresql_users_count_chunk_size", Integer.toString(chunkSize));
+        String[] args = {"../"};
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        Main main = process.getProcess();
+        Start storage = (Start) StorageLayer.getStorage(main);
+        AppIdentifier app = new AppIdentifier(null, null);
+        TenantIdentifier tenant = new TenantIdentifier(null, null, null);
+        seedUsers(storage, users);
+
+        List<Long> rowsPerStatement = Collections.synchronizedList(new ArrayList<>());
+        UsersCountCacheQueries.chunkObserverForTesting = (con, query, setter) -> {
+            try (PreparedStatement pst = con.prepareStatement("EXPLAIN (ANALYZE, FORMAT JSON) " + query)) {
+                setter.setValues(pst);
+                try (ResultSet r = pst.executeQuery()) {
+                    r.next();
+                    JsonObject plan = new JsonParser().parse(r.getString(1)).getAsJsonArray().get(0)
+                            .getAsJsonObject().getAsJsonObject("Plan");
+                    rowsPerStatement.add(tableRowsRead(plan));
+                }
+            }
+        };
+        try {
+            RECIPE_ID[] ep = {RECIPE_ID.EMAIL_PASSWORD};
+            for (MigrationMode mode : new MigrationMode[]{MigrationMode.LEGACY, MigrationMode.MIGRATED}) {
+                Config.getConfig(storage).setMigrationModeForTesting(mode);
+                for (RECIPE_ID[] filter : new RECIPE_ID[][]{null, ep}) {
+                    String what = mode + " recipes=" + (filter == null ? "all" : "emailpassword");
+
+                    rowsPerStatement.clear();
+                    assertEquals("app " + what, storage.getUsersCount(app, filter),
+                            storage.getOrComputeAppUsersCount(app, filter, 0).count);
+                    assertChunksAreBounded("app " + what, rowsPerStatement, chunkSize, users);
+
+                    rowsPerStatement.clear();
+                    assertEquals("tenant " + what, storage.getUsersCount(tenant, filter),
+                            storage.getOrComputeTenantUsersCount(tenant, filter, 0).count);
+                    assertChunksAreBounded("tenant " + what, rowsPerStatement, chunkSize, users);
+                }
+            }
+        } finally {
+            UsersCountCacheQueries.chunkObserverForTesting = null;
+        }
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    private static void assertChunksAreBounded(String what, List<Long> rowsPerStatement, int chunkSize, int users) {
+        int groups = users - users / 10;
+        assertTrue(what + ": expected many chunks, got " + rowsPerStatement.size(),
+                rowsPerStatement.size() >= groups / chunkSize);
+        long total = rowsPerStatement.stream().mapToLong(Long::longValue).sum();
+        // about one row per user plus one or two lookups per group; a quadratic count reads users / (2 * chunkSize)
+        // times more
+        assertTrue(what + ": the count read " + total + " table rows for " + users + " users (per statement: "
+                + rowsPerStatement + ")", total <= 4L * users);
+    }
+
+    // rows read from tables and indexes (returned plus filtered out, over all loops) by an EXPLAIN ANALYZE plan
+    private static long tableRowsRead(JsonObject node) {
+        long rows = 0;
+        if (node.has("Relation Name")) {
+            double perLoop = node.get("Actual Rows").getAsDouble();
+            for (String removed : new String[]{"Rows Removed by Filter", "Rows Removed by Index Recheck"}) {
+                if (node.has(removed)) {
+                    perLoop += node.get(removed).getAsDouble();
+                }
+            }
+            rows += Math.round(perLoop * node.get("Actual Loops").getAsDouble());
+        }
+        if (node.has("Plans")) {
+            for (JsonElement child : node.getAsJsonArray("Plans")) {
+                rows += tableRowsRead(child.getAsJsonObject());
+            }
+        }
+        return rows;
+    }
+
+    // `users` users in the public tenant, in the legacy and the new tables: every tenth user is a primary user
+    // linked with the next one, and every other user is an emailpassword user (the rest third-party).
+    private static void seedUsers(Start storage, int users) throws Exception {
+        String auid = Config.getConfig(storage).getAppIdToUserIdTable();
+        String legacy = Config.getConfig(storage).getUsersTable();
+        String rut = Config.getConfig(storage).getRecipeUserTenantsTable();
+        String put = Config.getConfig(storage).getPrimaryUserTenantsTable();
+        String id = "'u' || lpad(i::text, 35, '0')";
+        String primary = "'u' || lpad((i - i % 10 * (i % 10 = 1)::int)::text, 35, '0')";
+        String recipe = "CASE WHEN i % 2 = 0 THEN 'emailpassword' ELSE 'thirdparty' END";
+        String linked = "(i % 10 < 2)";
+        String primaryTime = "(1000000 + i - i % 10 * (i % 10 = 1)::int)";
+        String series = " FROM generate_series(0, " + (users - 1) + ") AS i";
+        try (Connection con = ConnectionPool.getConnection(storage); Statement st = con.createStatement()) {
+            st.execute("INSERT INTO " + auid + " (app_id, user_id, recipe_id, primary_or_recipe_user_id,"
+                    + " is_linked_or_is_a_primary_user, time_joined, primary_or_recipe_user_time_joined)"
+                    + " SELECT 'public', " + id + ", " + recipe + ", " + primary + ", " + linked + ", 1000000 + i, "
+                    + primaryTime + series);
+            st.execute("INSERT INTO " + legacy + " (app_id, tenant_id, user_id, primary_or_recipe_user_id,"
+                    + " is_linked_or_is_a_primary_user, recipe_id, time_joined, primary_or_recipe_user_time_joined)"
+                    + " SELECT 'public', 'public', " + id + ", " + primary + ", " + linked + ", " + recipe
+                    + ", 1000000 + i, " + primaryTime + series);
+            st.execute("INSERT INTO " + rut + " (app_id, recipe_user_id, tenant_id, recipe_id, account_info_type,"
+                    + " third_party_id, third_party_user_id, account_info_value)"
+                    + " SELECT 'public', " + id + ", 'public', " + recipe + ", 'email', '', '', 'e' || i || '@t.com'"
+                    + series);
+            st.execute("INSERT INTO " + put + " (app_id, tenant_id, account_info_type, account_info_value,"
+                    + " primary_user_id) SELECT 'public', 'public', 'email', 'e' || i || '@t.com', " + id + series
+                    + " WHERE i % 10 = 0");
+            for (String table : new String[]{auid, legacy, rut, put}) {
+                st.execute("VACUUM ANALYZE " + table);
+            }
+        }
     }
 
     // The chunked count equals the exact single-statement count for every scope and recipe filter, in every read

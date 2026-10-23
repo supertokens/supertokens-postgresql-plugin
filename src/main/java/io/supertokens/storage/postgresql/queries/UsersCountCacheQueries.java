@@ -8,7 +8,9 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.storage.postgresql.ConnectionPool;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.ProcessState;
+import io.supertokens.storage.postgresql.ResultSetValueExtractor;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.config.PostgreSQLConfig;
@@ -50,6 +52,17 @@ public class UsersCountCacheQueries {
 
     // the client network timeout of a chunk is the chunk's statement timeout plus this, so the server's cancel wins
     private static final long NETWORK_TIMEOUT_MARGIN_MS = 30_000;
+
+    /**
+     * For tests: sees every statement of a count, with its parameters and on the count's connection (so inside its
+     * snapshot), just before it runs.
+     */
+    public interface ChunkObserver {
+        void beforeChunk(Connection con, String query, PreparedStatementValueSetter setter) throws SQLException;
+    }
+
+    @Nullable
+    public static volatile ChunkObserver chunkObserverForTesting = null;
 
     /**
      * What is counted, and the key_value name of its stored count. An app count is stored on a tenant of the app that
@@ -128,6 +141,9 @@ public class UsersCountCacheQueries {
     private static UsersCountSnapshot getOrCompute(Start start, Connection con, Scope scope, long maxAgeMs)
             throws SQLException, StorageQueryException {
         PostgreSQLConfig config = getConfig(start);
+        // The max age counts from this call, so the time spent waiting for another core's count does not age out
+        // the count this caller waited for.
+        long freshAfter = System.currentTimeMillis() - maxAgeMs;
 
         // Waiting for the lock lasts as long as another core's count does; that count is bounded by its own chunk
         // timeout and budget, and Postgres releases the lock if its connection dies. So wait without a timeout.
@@ -146,7 +162,7 @@ public class UsersCountCacheQueries {
             KeyValueInfo stored = rows[0];
             KeyValueInfo failed = rows[1];
             long now = System.currentTimeMillis();
-            if (stored != null && stored.createdAtTime <= now && now - stored.createdAtTime < maxAgeMs) {
+            if (stored != null && stored.createdAtTime <= now && stored.createdAtTime > freshAfter) {
                 return new UsersCountSnapshot(Long.parseLong(stored.value), stored.createdAtTime, false);
             }
 
@@ -245,16 +261,14 @@ public class UsersCountCacheQueries {
                 // timeout, and for the new-table tenant count the standalone D/L query's planner setting
                 st.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY; SET LOCAL statement_timeout = "
                         + config.getUsersCountChunkTimeout()
-                        + (newTables && scope.tenantId != null && scope.recipes == null
-                        ? "; SET LOCAL enable_hashjoin = off" : ""));
+                        + (newTables && scope.tenantId != null ? "; SET LOCAL enable_hashjoin = off" : ""));
             }
             Budget budget = new Budget(config, countStartedAt);
             long count;
             if (scope.tenantId == null) {
                 count = newTables ? appCountNew(start, con, scope, budget) : appCountLegacy(start, con, scope, budget);
             } else if (newTables) {
-                count = scope.recipes == null ? tenantCountNew(start, con, scope, budget)
-                        : tenantCountNewFiltered(start, con, scope, budget);
+                count = tenantCountNew(start, con, scope, budget);
             } else {
                 count = tenantCountLegacy(start, con, scope, budget);
             }
@@ -271,14 +285,17 @@ public class UsersCountCacheQueries {
     // ---- chunk queries. Each returns {keys scanned, counted, cursor...}; the loop stops on a short chunk. ----
 
     // App, new tables: groups are (primary_or_recipe_user_time_joined, primary_or_recipe_user_id), walked in the
-    // order of app_id_to_user_id_pagination_index2 (app_id, time ASC, id DESC).
+    // order of app_id_to_user_id_pagination_index2 (app_id, time ASC, id DESC). The cursor's OR cannot be an index
+    // condition, so the redundant `time >= cursor` bound is what makes each chunk seek to its cursor instead of
+    // re-reading the app from its first user (as in GeneralQueries.getUsers_new).
     private static long appCountNew(Start start, Connection con, Scope scope, Budget budget)
             throws SQLException, StorageQueryException {
         String table = getConfig(start).getAppIdToUserIdTable();
         String hit = scope.recipes == null ? "TRUE" : "recipe_id IN (" + placeholders(scope.recipes) + ")";
         String query = "WITH g AS (SELECT t, id, bool_or(h) AS hit FROM ("
                 + "SELECT primary_or_recipe_user_time_joined AS t, primary_or_recipe_user_id AS id, " + hit + " AS h"
-                + " FROM " + table + " WHERE app_id = ? AND (primary_or_recipe_user_time_joined > ?"
+                + " FROM " + table + " WHERE app_id = ? AND primary_or_recipe_user_time_joined >= ?"
+                + " AND (primary_or_recipe_user_time_joined > ?"
                 + " OR (primary_or_recipe_user_time_joined = ? AND primary_or_recipe_user_id < ?))) x"
                 + " GROUP BY t, id ORDER BY t ASC, id DESC LIMIT ?)"
                 + " SELECT (SELECT COUNT(*) FROM g) AS keys, (SELECT COUNT(*) FROM g WHERE hit) AS counted,"
@@ -290,9 +307,10 @@ public class UsersCountCacheQueries {
         while (true) {
             long cursorT = lastT;
             String cursorId = lastId;
-            Chunk chunk = execute(con, query, pst -> {
+            Chunk chunk = chunk(con, query, pst -> {
                 int i = setRecipes(pst, 1, scope.recipes);
                 pst.setString(i++, scope.app.getAppId());
+                pst.setLong(i++, cursorT);
                 pst.setLong(i++, cursorT);
                 pst.setLong(i++, cursorT);
                 pst.setString(i++, cursorId);
@@ -313,64 +331,78 @@ public class UsersCountCacheQueries {
     }
 
     // App, legacy table: all_auth_recipe_users has one row per (tenant, recipe user), so a group spans tenants. Walk
-    // all_auth_recipe_users_pagination_index1 (app_id, tenant_id, time DESC, id DESC) and count each group once, in
-    // its first tenant; the lookups use all_auth_recipe_users_primary_user_id_index (primary_or_recipe_user_id,
-    // app_id). Walking that index directly would also scan other apps' rows, unbounded per chunk on a shared database.
+    // all_auth_recipe_users_pagination_index1 (app_id, tenant_id, time DESC, id DESC) one tenant at a time, with the
+    // row-comparison cursor tenantCountLegacy uses (an index condition, so each chunk seeks to its cursor), and count
+    // each group once, in its first tenant; the lookups use all_auth_recipe_users_primary_user_id_index
+    // (primary_or_recipe_user_id, app_id). Walking that index directly would also scan other apps' rows, unbounded per
+    // chunk on a shared database. The lookups are LATERAL ... LIMIT 1, one probe per group: as (NOT) EXISTS the
+    // planner may hash the whole app's rows instead, once per chunk.
     private static long appCountLegacy(Start start, Connection con, Scope scope, Budget budget)
             throws SQLException, StorageQueryException {
         String table = getConfig(start).getUsersTable();
-        String recipeFilter = scope.recipes == null ? "" : " AND EXISTS (SELECT 1 FROM " + table + " c"
+        String recipeJoin = scope.recipes == null ? "" : " LEFT JOIN LATERAL (SELECT 1 AS hit FROM " + table + " c"
                 + " WHERE c.primary_or_recipe_user_id = g.id AND c.app_id = ? AND c.recipe_id IN ("
-                + placeholders(scope.recipes) + "))";
-        String query = "WITH g AS (SELECT tenant_id AS tn, primary_or_recipe_user_time_joined AS t,"
-                + " primary_or_recipe_user_id AS id FROM " + table
-                + " WHERE app_id = ? AND (tenant_id > ? OR (tenant_id = ?"
-                + " AND (primary_or_recipe_user_time_joined, primary_or_recipe_user_id) < (?, ?)))"
-                + " GROUP BY tenant_id, primary_or_recipe_user_time_joined, primary_or_recipe_user_id"
-                + " ORDER BY tn ASC, t DESC, id DESC LIMIT ?)"
+                + placeholders(scope.recipes) + ") LIMIT 1) h ON TRUE";
+        String nextTenantQuery = "SELECT tenant_id FROM " + table
+                + " WHERE app_id = ? AND tenant_id > ? ORDER BY tenant_id LIMIT 1";
+        String query = "WITH g AS (SELECT primary_or_recipe_user_time_joined AS t, primary_or_recipe_user_id AS id"
+                + " FROM " + table + " WHERE app_id = ? AND tenant_id = ?"
+                + " AND (primary_or_recipe_user_time_joined, primary_or_recipe_user_id) < (?, ?)"
+                + " GROUP BY primary_or_recipe_user_time_joined, primary_or_recipe_user_id"
+                + " ORDER BY t DESC, id DESC LIMIT ?)"
                 + " SELECT (SELECT COUNT(*) FROM g) AS keys,"
-                + " (SELECT COUNT(*) FROM g WHERE NOT EXISTS (SELECT 1 FROM " + table + " b"
-                + " WHERE b.primary_or_recipe_user_id = g.id AND b.app_id = ? AND b.tenant_id < g.tn)"
-                + recipeFilter + ") AS counted,"
-                + " (SELECT tn FROM g ORDER BY tn DESC, t ASC, id ASC LIMIT 1) AS last_tn,"
-                + " (SELECT t FROM g ORDER BY tn DESC, t ASC, id ASC LIMIT 1) AS last_t,"
-                + " (SELECT id FROM g ORDER BY tn DESC, t ASC, id ASC LIMIT 1) AS last_id";
+                + " (SELECT COUNT(*) FROM g LEFT JOIN LATERAL (SELECT 1 AS earlier FROM " + table + " b"
+                + " WHERE b.primary_or_recipe_user_id = g.id AND b.app_id = ? AND b.tenant_id < ? LIMIT 1) e ON TRUE"
+                + recipeJoin + " WHERE e.earlier IS NULL" + (scope.recipes == null ? "" : " AND h.hit IS NOT NULL")
+                + ") AS counted,"
+                + " (SELECT t FROM g ORDER BY t ASC, id ASC LIMIT 1) AS last_t,"
+                + " (SELECT id FROM g ORDER BY t ASC, id ASC LIMIT 1) AS last_id";
         long total = 0;
-        String lastTenant = "";
-        long lastT = Long.MAX_VALUE;
-        String lastId = "";
+        int chunks = 0;
+        String tenant = "";
         while (true) {
-            String cursorTenant = lastTenant;
-            long cursorT = lastT;
-            String cursorId = lastId;
-            Chunk chunk = execute(con, query, pst -> {
-                int i = 1;
-                pst.setString(i++, scope.app.getAppId());
-                pst.setString(i++, cursorTenant);
-                pst.setString(i++, cursorTenant);
-                pst.setLong(i++, cursorT);
-                pst.setString(i++, cursorId);
-                pst.setInt(i++, budget.chunkSize);
-                pst.setString(i++, scope.app.getAppId());
-                if (scope.recipes != null) {
-                    pst.setString(i++, scope.app.getAppId());
-                    setRecipes(pst, i, scope.recipes);
-                }
-            }, r -> {
-                r.next();
-                Chunk c = new Chunk(r.getLong("keys"), r.getLong("counted"), r.getLong("last_t"),
-                        r.getString("last_id"));
-                c.lastTenant = r.getString("last_tn");
-                return c;
-            });
-            total += chunk.counted;
-            if (chunk.keys < budget.chunkSize) {
+            String previousTenant = tenant;
+            tenant = chunk(con, nextTenantQuery, pst -> {
+                pst.setString(1, scope.app.getAppId());
+                pst.setString(2, previousTenant);
+            }, r -> r.next() ? r.getString("tenant_id") : null);
+            if (tenant == null) {
                 return total;
             }
-            lastTenant = chunk.lastTenant;
-            lastT = chunk.lastLong;
-            lastId = chunk.lastString;
-            budget.afterChunk();
+            String chunkTenant = tenant;
+            long lastT = Long.MAX_VALUE;
+            String lastId = "";
+            while (true) {
+                long cursorT = lastT;
+                String cursorId = lastId;
+                if (chunks++ > 0) {
+                    budget.afterChunk(); // between chunks, also across tenants
+                }
+                Chunk chunk = chunk(con, query, pst -> {
+                    int i = 1;
+                    pst.setString(i++, scope.app.getAppId());
+                    pst.setString(i++, chunkTenant);
+                    pst.setLong(i++, cursorT);
+                    pst.setString(i++, cursorId);
+                    pst.setInt(i++, budget.chunkSize);
+                    pst.setString(i++, scope.app.getAppId());
+                    pst.setString(i++, chunkTenant);
+                    if (scope.recipes != null) {
+                        pst.setString(i++, scope.app.getAppId());
+                        setRecipes(pst, i, scope.recipes);
+                    }
+                }, r -> {
+                    r.next();
+                    return new Chunk(r.getLong("keys"), r.getLong("counted"), r.getLong("last_t"),
+                            r.getString("last_id"));
+                });
+                total += chunk.counted;
+                if (chunk.keys < budget.chunkSize) {
+                    break;
+                }
+                lastT = chunk.lastLong;
+                lastId = chunk.lastString;
+            }
         }
     }
 
@@ -393,7 +425,7 @@ public class UsersCountCacheQueries {
         while (true) {
             long cursorT = lastT;
             String cursorId = lastId;
-            Chunk chunk = execute(con, query, pst -> {
+            Chunk chunk = chunk(con, query, pst -> {
                 int i = setRecipes(pst, 1, scope.recipes);
                 pst.setString(i++, scope.app.getAppId());
                 pst.setString(i++, scope.tenantId);
@@ -415,32 +447,44 @@ public class UsersCountCacheQueries {
         }
     }
 
-    // Tenant, new tables, unfiltered: D - L + G as the standalone count (GeneralQueries.getUsersCount_new), each part
-    // walked in key order: D and L over idx_recipe_user_tenants_tenant_recipe_user, G over
+    // Tenant, new tables: D - L + G as the standalone count (GeneralQueries.getUsersCount_new), each part walked in
+    // key order: D and L over idx_recipe_user_tenants_tenant_recipe_user, G over
     // idx_primary_user_tenants_tenant_primary.
+    // With a recipe filter the same parts are restricted to the recipe users of the tenant with one of the recipes (as
+    // getUsersCountByRecipe_new): D and L count only those, and G only the groups with at least one of them. So a
+    // tenant's count reads that tenant's rows, not the whole app's.
     private static long tenantCountNew(Start start, Connection con, Scope scope, Budget budget)
             throws SQLException, StorageQueryException {
         PostgreSQLConfig config = getConfig(start);
+        boolean filtered = scope.recipes != null;
         // enable_hashjoin is off for this transaction (set with the snapshot), as for the standalone D/L query.
         // The chunk is read once and aggregated as it streams: a CTE referenced more than once is materialised, and a
         // chunk of recipe user ids does not fit work_mem, so it spilled to disk. The left join keeps every key of the
         // chunk (app_id_to_user_id has one row per (app_id, user_id)), so COUNT(*) is the chunk's key count.
         String dlQuery = "SELECT COUNT(*) AS keys, MAX(r.recipe_user_id) AS last_id,"
-                + " COUNT(a.user_id) AS d, COUNT(*) FILTER (WHERE a.is_linked_or_is_a_primary_user) AS l"
+                + (filtered
+                ? " COUNT(a.user_id) FILTER (WHERE r.hit) AS d,"
+                + " COUNT(*) FILTER (WHERE a.is_linked_or_is_a_primary_user AND r.hit) AS l"
+                + " FROM (SELECT recipe_user_id, bool_or(recipe_id IN (" + placeholders(scope.recipes) + ")) AS hit"
+                + " FROM " + config.getRecipeUserTenantsTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND recipe_user_id > ?"
+                + " GROUP BY recipe_user_id ORDER BY recipe_user_id LIMIT ?) r"
+                : " COUNT(a.user_id) AS d, COUNT(*) FILTER (WHERE a.is_linked_or_is_a_primary_user) AS l"
                 + " FROM (SELECT DISTINCT recipe_user_id FROM " + config.getRecipeUserTenantsTable()
-                + " WHERE app_id = ? AND tenant_id = ? AND recipe_user_id > ? ORDER BY recipe_user_id LIMIT ?) r"
+                + " WHERE app_id = ? AND tenant_id = ? AND recipe_user_id > ? ORDER BY recipe_user_id LIMIT ?) r")
                 + " LEFT JOIN " + config.getAppIdToUserIdTable() + " a"
                 + " ON a.app_id = ? AND a.user_id = r.recipe_user_id";
         long dMinusL = 0;
         String last = "";
         while (true) {
             String cursor = last;
-            Chunk chunk = execute(con, dlQuery, pst -> {
-                pst.setString(1, scope.app.getAppId());
-                pst.setString(2, scope.tenantId);
-                pst.setString(3, cursor);
-                pst.setInt(4, budget.chunkSize);
-                pst.setString(5, scope.app.getAppId());
+            Chunk chunk = chunk(con, dlQuery, pst -> {
+                int i = setRecipes(pst, 1, scope.recipes);
+                pst.setString(i++, scope.app.getAppId());
+                pst.setString(i++, scope.tenantId);
+                pst.setString(i++, cursor);
+                pst.setInt(i++, budget.chunkSize);
+                pst.setString(i, scope.app.getAppId());
             }, r -> {
                 r.next();
                 return new Chunk(r.getLong("keys"), r.getLong("d") - r.getLong("l"), 0, r.getString("last_id"));
@@ -453,21 +497,34 @@ public class UsersCountCacheQueries {
             budget.afterChunk();
         }
 
-        String gQuery = "WITH g AS (SELECT DISTINCT primary_user_id FROM " + config.getPrimaryUserTenantsTable()
-                + " WHERE app_id = ? AND tenant_id = ? AND primary_user_id > ? ORDER BY primary_user_id LIMIT ?)"
-                + " SELECT COUNT(*) AS keys, MAX(primary_user_id) AS last_id FROM g";
+        String groups = "SELECT DISTINCT primary_user_id FROM " + config.getPrimaryUserTenantsTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND primary_user_id > ? ORDER BY primary_user_id LIMIT ?";
+        String gQuery = filtered
+                ? "SELECT COUNT(*) AS keys, MAX(g.primary_user_id) AS last_id, COUNT(h.hit) AS counted"
+                + " FROM (" + groups + ") g LEFT JOIN LATERAL (SELECT 1 AS hit FROM "
+                + config.getAppIdToUserIdTable() + " a JOIN " + config.getRecipeUserTenantsTable() + " rut"
+                + " ON rut.app_id = a.app_id AND rut.tenant_id = ? AND rut.recipe_user_id = a.user_id"
+                + " WHERE a.app_id = ? AND a.primary_or_recipe_user_id = g.primary_user_id AND rut.recipe_id IN ("
+                + placeholders(scope.recipes) + ") LIMIT 1) h ON TRUE"
+                : "WITH g AS (" + groups + ") SELECT COUNT(*) AS keys, MAX(primary_user_id) AS last_id,"
+                + " COUNT(*) AS counted FROM g";
         long g = 0;
         last = "";
         while (true) {
             String cursor = last;
-            Chunk chunk = execute(con, gQuery, pst -> {
+            Chunk chunk = chunk(con, gQuery, pst -> {
                 pst.setString(1, scope.app.getAppId());
                 pst.setString(2, scope.tenantId);
                 pst.setString(3, cursor);
                 pst.setInt(4, budget.chunkSize);
+                if (filtered) {
+                    pst.setString(5, scope.tenantId);
+                    pst.setString(6, scope.app.getAppId());
+                    setRecipes(pst, 7, scope.recipes);
+                }
             }, r -> {
                 r.next();
-                return new Chunk(r.getLong("keys"), r.getLong("keys"), 0, r.getString("last_id"));
+                return new Chunk(r.getLong("keys"), r.getLong("counted"), 0, r.getString("last_id"));
             });
             g += chunk.counted;
             if (chunk.keys < budget.chunkSize) {
@@ -478,50 +535,13 @@ public class UsersCountCacheQueries {
         }
     }
 
-    // Tenant, new tables, recipe filter: the app's groups in app_id_to_user_id_pagination_index2 order, a group
-    // counting if any of its recipe users is in the tenant with one of the recipes (as getUsersCountByRecipe_new).
-    private static long tenantCountNewFiltered(Start start, Connection con, Scope scope, Budget budget)
-            throws SQLException, StorageQueryException {
-        PostgreSQLConfig config = getConfig(start);
-        String query = "WITH g AS (SELECT t, id, bool_or(h) AS hit FROM ("
-                + "SELECT a.primary_or_recipe_user_time_joined AS t, a.primary_or_recipe_user_id AS id,"
-                + " EXISTS (SELECT 1 FROM " + config.getRecipeUserTenantsTable() + " rut WHERE rut.app_id = a.app_id"
-                + " AND rut.recipe_user_id = a.user_id AND rut.tenant_id = ? AND rut.recipe_id IN ("
-                + placeholders(scope.recipes) + ")) AS h"
-                + " FROM " + config.getAppIdToUserIdTable() + " a WHERE a.app_id = ?"
-                + " AND (a.primary_or_recipe_user_time_joined > ? OR (a.primary_or_recipe_user_time_joined = ?"
-                + " AND a.primary_or_recipe_user_id < ?))) x"
-                + " GROUP BY t, id ORDER BY t ASC, id DESC LIMIT ?)"
-                + " SELECT (SELECT COUNT(*) FROM g) AS keys, (SELECT COUNT(*) FROM g WHERE hit) AS counted,"
-                + " (SELECT t FROM g ORDER BY t DESC, id ASC LIMIT 1) AS last_t,"
-                + " (SELECT id FROM g ORDER BY t DESC, id ASC LIMIT 1) AS last_id";
-        long total = 0;
-        long lastT = Long.MIN_VALUE;
-        String lastId = "";
-        while (true) {
-            long cursorT = lastT;
-            String cursorId = lastId;
-            Chunk chunk = execute(con, query, pst -> {
-                pst.setString(1, scope.tenantId);
-                int i = setRecipes(pst, 2, scope.recipes);
-                pst.setString(i++, scope.app.getAppId());
-                pst.setLong(i++, cursorT);
-                pst.setLong(i++, cursorT);
-                pst.setString(i++, cursorId);
-                pst.setInt(i, budget.chunkSize);
-            }, r -> {
-                r.next();
-                return new Chunk(r.getLong("keys"), r.getLong("counted"), r.getLong("last_t"),
-                        r.getString("last_id"));
-            });
-            total += chunk.counted;
-            if (chunk.keys < budget.chunkSize) {
-                return total;
-            }
-            lastT = chunk.lastLong;
-            lastId = chunk.lastString;
-            budget.afterChunk();
+    private static <T> T chunk(Connection con, String query, PreparedStatementValueSetter setter,
+                               ResultSetValueExtractor<T> mapper) throws SQLException, StorageQueryException {
+        ChunkObserver observer = chunkObserverForTesting;
+        if (observer != null) {
+            observer.beforeChunk(con, query, setter);
         }
+        return execute(con, query, setter, mapper);
     }
 
     private static String placeholders(RECIPE_ID[] recipes) {
@@ -545,7 +565,6 @@ public class UsersCountCacheQueries {
         final long counted;
         final long lastLong;
         final String lastString;
-        String lastTenant;
 
         Chunk(long keys, long counted, long lastLong, String lastString) {
             this.keys = keys;
