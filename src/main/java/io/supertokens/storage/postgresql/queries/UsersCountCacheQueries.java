@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.TreeSet;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeoutException;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
@@ -97,8 +98,8 @@ public class UsersCountCacheQueries {
         }
 
         // the advisory lock key, for tests that hold the lock as "another core"
-        public String getLockKeyForTesting() {
-            return lockKey;
+        public String getLockKeyForTesting(Start start) {
+            return lockKeyOf(start, this);
         }
 
         private static RECIPE_ID[] normalise(@Nullable RECIPE_ID[] recipes) {
@@ -138,6 +139,29 @@ public class UsersCountCacheQueries {
         }
     }
 
+    // Advisory locks are per database, and user pools can share one (different schemas or table prefixes): the key
+    // names this pool's key_value table. Hashed to 64 bits, so unrelated scopes practically never share a lock.
+    private static String lockKeyOf(Start start, Scope scope) {
+        return getConfig(start).getKeyValueTable() + "~" + scope.lockKey;
+    }
+
+    private static final long LOCK_POLL_MS = 500;
+
+    // Waits for the scope's lock as long as another core's count holds it - the wait has no limit, as that count is
+    // bounded by its own chunk timeout and budget - but in short polls, each under the pool's socket timeout, so a
+    // broken connection is noticed instead of blocking for hours on a half-open socket.
+    private static void lock(Connection con, String key) throws SQLException, StorageQueryException {
+        while (!execute(con, "SELECT pg_try_advisory_lock(hashtextextended(?, 0))", pst -> pst.setString(1, key),
+                r -> r.next() && r.getBoolean(1))) {
+            try {
+                Thread.sleep(LOCK_POLL_MS / 2 + ThreadLocalRandom.current().nextLong(LOCK_POLL_MS));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new StorageQueryException(e);
+            }
+        }
+    }
+
     private static UsersCountSnapshot getOrCompute(Start start, Connection con, Scope scope, long maxAgeMs)
             throws SQLException, StorageQueryException {
         PostgreSQLConfig config = getConfig(start);
@@ -145,11 +169,8 @@ public class UsersCountCacheQueries {
         // the count this caller waited for.
         long freshAfter = System.currentTimeMillis() - maxAgeMs;
 
-        // Waiting for the lock lasts as long as another core's count does; that count is bounded by its own chunk
-        // timeout and budget, and Postgres releases the lock if its connection dies. So wait without a timeout.
-        // Hikari restores the pool's network timeout when the connection is returned.
-        con.setNetworkTimeout(Runnable::run, 0);
-        execute(con, "SELECT pg_advisory_lock(hashtext(?))", pst -> pst.setString(1, scope.lockKey), r -> null);
+        String lockKey = lockKeyOf(start, scope);
+        lock(con, lockKey);
         try {
             String storedOn = storedOnTenant(start, con, scope);
             if (storedOn == null) {
@@ -197,7 +218,7 @@ public class UsersCountCacheQueries {
             return new UsersCountSnapshot(count, countStartedAt, true);
         } finally {
             try {
-                execute(con, "SELECT pg_advisory_unlock(hashtext(?))", pst -> pst.setString(1, scope.lockKey),
+                execute(con, "SELECT pg_advisory_unlock(hashtextextended(?, 0))", pst -> pst.setString(1, lockKey),
                         r -> null);
             } catch (SQLException | StorageQueryException e) {
                 // the connection is broken; closing it ends the session, which releases the lock

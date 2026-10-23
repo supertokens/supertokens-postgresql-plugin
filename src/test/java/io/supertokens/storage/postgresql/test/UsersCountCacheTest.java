@@ -156,8 +156,8 @@ public class UsersCountCacheTest {
         try (Connection otherCore = DriverManager.getConnection(DatabaseTestHelper.getTestDatabaseUrl(),
                 DatabaseTestHelper.getUser(), DatabaseTestHelper.getPassword())) {
             otherCore.setAutoCommit(false);
-            try (PreparedStatement lock = otherCore.prepareStatement("SELECT pg_advisory_xact_lock(hashtext(?))")) {
-                lock.setString(1, UsersCountCacheQueries.Scope.app(app, null).getLockKeyForTesting());
+            try (PreparedStatement lock = otherCore.prepareStatement("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")) {
+                lock.setString(1, UsersCountCacheQueries.Scope.app(app, null).getLockKeyForTesting(storage));
                 lock.execute();
             }
             try (PreparedStatement insert = otherCore.prepareStatement("INSERT INTO " + table
@@ -208,8 +208,8 @@ public class UsersCountCacheTest {
         try (Connection otherCore = DriverManager.getConnection(DatabaseTestHelper.getTestDatabaseUrl(),
                 DatabaseTestHelper.getUser(), DatabaseTestHelper.getPassword())) {
             otherCore.setAutoCommit(false);
-            try (PreparedStatement lock = otherCore.prepareStatement("SELECT pg_advisory_xact_lock(hashtext(?))")) {
-                lock.setString(1, UsersCountCacheQueries.Scope.app(app, null).getLockKeyForTesting());
+            try (PreparedStatement lock = otherCore.prepareStatement("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")) {
+                lock.setString(1, UsersCountCacheQueries.Scope.app(app, null).getLockKeyForTesting(storage));
                 lock.execute();
             }
             // the other core's count starts (and is stamped) just before the caller queues

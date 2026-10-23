@@ -9,7 +9,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [10.1.0]
 
-- Implements plugin-interface 11.1 `UsersCountCacheStorage`: app and tenant user counts are stored in `key_value` and reused while younger than the caller's max age; an advisory lock per app or tenant makes concurrent callers on all cores wait for one count, which runs with a 10-minute statement timeout instead of the pool's 60s socket timeout.
+- Implements plugin-interface 11.1 `UsersCountCacheStorage`: user counts are stored in `key_value` and counted by one core at a time, in chunks of one read-only snapshot.
+- New config: `postgresql_users_count_chunk_size`, `postgresql_users_count_chunk_timeout`, `postgresql_users_count_chunk_pause`, `postgresql_users_count_max_duration`.
 
 ## [10.0.0]
 
