@@ -36,6 +36,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -187,6 +188,14 @@ public class ActivityLogQueries {
      * query, never after materialising the window, so a caller can pass {@code cap + 1} to detect an
      * over-cap window without reading all of it. {@code payload} is cast to text ({@code ::text}) so the
      * JSONB column comes back as its serialised JSON string; a null payload stays null.
+     *
+     * The table has no index that returns rows in {@code created_at} order (only BRIN), so the first {@code limit}
+     * rows are found by sorting {@code created_at} alone - a top-N of 8-byte values that fits {@code work_mem} -
+     * and only the rows up to that cutoff are then read in full, unordered, and sorted here. Sorting the full rows
+     * (payload included) in the database spilled the whole range to disk when it held many events (a burst). Of the
+     * rows sharing the cutoff millisecond at most {@code limit} are read (a bulk import stamps many events with one
+     * time), so fewer than 2 x {@code limit} rows reach Java; those beyond {@code limit} are dropped, as {@code LIMIT}
+     * drops them.
      */
     public static List<AuditLogEvent> getActivityLogEntriesForApp(Start start, AppIdentifier appIdentifier,
                                                                   Set<String> eventTypes, long fromExclusiveMillis,
@@ -199,25 +208,41 @@ public class ActivityLogQueries {
             throw new IllegalArgumentException("eventTypes must be non-empty");
         }
         String[] eventTypesArray = eventTypes.toArray(new String[0]);
-        String QUERY = "SELECT app_id, tenant_id, recipe_user_id, primary_or_recipe_user_id, event_type, status,"
-                + " auth_principal, identifier, created_at, payload::text AS payload FROM "
-                + Config.getConfig(start).getActivityLogTable()
+        String table = Config.getConfig(start).getActivityLogTable();
+        String columns = "app_id, tenant_id, recipe_user_id, primary_or_recipe_user_id, event_type, status,"
+                + " auth_principal, identifier, created_at, payload::text AS payload";
+        // the rows before the cutoff millisecond (fewer than limit), and at most limit of the rows in it
+        String QUERY = "WITH c AS (SELECT MAX(created_at) AS cut FROM (SELECT created_at FROM " + table
                 + " WHERE app_id = ? AND event_type = ANY(?) AND created_at > ? AND created_at <= ?"
-                + " ORDER BY created_at ASC LIMIT ?";
-        return execute(start, QUERY, pst -> {
-            pst.setString(1, appIdentifier.getAppId());
+                + " ORDER BY created_at ASC LIMIT ?) x)"
+                // the cutoff as a scalar subquery (an InitPlan), so the partitions after it are pruned at run time
+                + " SELECT " + columns + " FROM " + table
+                + " WHERE app_id = ? AND event_type = ANY(?) AND created_at > ? AND created_at < (SELECT cut FROM c)"
+                + " UNION ALL"
+                + " (SELECT " + columns + " FROM " + table
+                + " WHERE app_id = ? AND event_type = ANY(?) AND created_at = (SELECT cut FROM c) LIMIT ?)";
+        List<AuditLogEvent> events = execute(start, QUERY, pst -> {
             Array eventTypesSqlArray = pst.getConnection().createArrayOf("VARCHAR", eventTypesArray);
+            pst.setString(1, appIdentifier.getAppId());
             pst.setArray(2, eventTypesSqlArray);
             pst.setLong(3, fromExclusiveMillis);
             pst.setLong(4, toInclusiveMillis);
             pst.setInt(5, limit);
+            pst.setString(6, appIdentifier.getAppId());
+            pst.setArray(7, eventTypesSqlArray);
+            pst.setLong(8, fromExclusiveMillis);
+            pst.setString(9, appIdentifier.getAppId());
+            pst.setArray(10, eventTypesSqlArray);
+            pst.setInt(11, limit);
         }, result -> {
-            List<AuditLogEvent> events = new ArrayList<>();
+            List<AuditLogEvent> rows = new ArrayList<>();
             while (result.next()) {
-                events.add(auditLogEventFromRow(result));
+                rows.add(auditLogEventFromRow(result));
             }
-            return events;
+            return rows;
         });
+        events.sort(Comparator.comparingLong(event -> event.createdAt));
+        return events.size() > limit ? new ArrayList<>(events.subList(0, limit)) : events;
     }
 
     private static AuditLogEvent auditLogEventFromRow(ResultSet result) throws SQLException {
