@@ -24,6 +24,8 @@ import com.zaxxer.hikari.pool.HikariPool;
 import io.supertokens.pluginInterface.*;
 import io.supertokens.pluginInterface.accountinfo.AccountInfoStorage;
 import io.supertokens.pluginInterface.authRecipe.ACCOUNT_INFO_TYPE;
+import io.supertokens.pluginInterface.authRecipe.UsersCountCacheStorage;
+import io.supertokens.pluginInterface.authRecipe.UsersCountSnapshot;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
 import io.supertokens.pluginInterface.authRecipe.CanBecomePrimaryResult;
 import io.supertokens.pluginInterface.authRecipe.LoginMethod;
@@ -146,7 +148,7 @@ public class Start
         UserIdMappingSQLStorage, MultitenancyStorage, MultitenancySQLStorage, DashboardSQLStorage, TOTPSQLStorage,
         ActiveUsersStorage, ActiveUsersSQLStorage, AuthRecipeSQLStorage, OAuthStorage, OAuthSQLStorage,
         BulkImportSQLStorage, WebAuthNSQLStorage, SAMLStorage, UserLockingStorage, AccountInfoStorage,
-        MigrationBackfillStorage, ActivityLogSQLStorage {
+        MigrationBackfillStorage, ActivityLogSQLStorage, UsersCountCacheStorage {
 
     // these configs are protected from being modified / viewed by the dev using the SuperTokens
     // SaaS. If the core is not running in SuperTokens SaaS, this array has no effect.
@@ -154,7 +156,8 @@ public class Start
             "postgresql_connection_uri", "postgresql_host", "postgresql_port", "postgresql_user", "postgresql_password",
             "postgresql_database_name", "postgresql_table_schema", "postgresql_idle_connection_timeout",
             "postgresql_minimum_idle_connections", "postgresql_connection_attributes", "postgresql_connection_scheme",
-            "postgresql_table_names_prefix"
+            "postgresql_table_names_prefix", "postgresql_users_count_chunk_size", "postgresql_users_count_chunk_timeout",
+            "postgresql_users_count_max_duration"
     };
     // ReentrantLock, not a monitor: see ConnectionPool.initLock. Held only while wiring loggers, but a virtual
     // thread parked on a monitor is pinned, so keep the storage-init path free of synchronized sections.
@@ -1973,6 +1976,34 @@ public class Start
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
+    }
+
+    @Override
+    public UsersCountSnapshot getOrComputeAppUsersCount(AppIdentifier appIdentifier, RECIPE_ID[] includeRecipeIds,
+                                                        long maxAgeMs) throws StorageQueryException {
+        return UsersCountCacheQueries.getOrCompute(this,
+                UsersCountCacheQueries.Scope.app(appIdentifier, includeRecipeIds), maxAgeMs);
+    }
+
+    @Override
+    public UsersCountSnapshot getOrComputeTenantUsersCount(TenantIdentifier tenantIdentifier,
+                                                           RECIPE_ID[] includeRecipeIds, long maxAgeMs)
+            throws StorageQueryException {
+        return UsersCountCacheQueries.getOrCompute(this,
+                UsersCountCacheQueries.Scope.tenant(tenantIdentifier, includeRecipeIds), maxAgeMs);
+    }
+
+    @Override
+    public UsersCountSnapshot getStoredAppUsersCount(AppIdentifier appIdentifier, RECIPE_ID[] includeRecipeIds)
+            throws StorageQueryException {
+        return UsersCountCacheQueries.getStored(this, UsersCountCacheQueries.Scope.app(appIdentifier, includeRecipeIds));
+    }
+
+    @Override
+    public UsersCountSnapshot getStoredTenantUsersCount(TenantIdentifier tenantIdentifier,
+                                                        RECIPE_ID[] includeRecipeIds) throws StorageQueryException {
+        return UsersCountCacheQueries.getStored(this,
+                UsersCountCacheQueries.Scope.tenant(tenantIdentifier, includeRecipeIds));
     }
 
     @Override
