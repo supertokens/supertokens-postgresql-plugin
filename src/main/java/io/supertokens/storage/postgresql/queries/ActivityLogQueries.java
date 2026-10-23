@@ -215,11 +215,12 @@ public class ActivityLogQueries {
         String QUERY = "WITH c AS (SELECT MAX(created_at) AS cut FROM (SELECT created_at FROM " + table
                 + " WHERE app_id = ? AND event_type = ANY(?) AND created_at > ? AND created_at <= ?"
                 + " ORDER BY created_at ASC LIMIT ?) x)"
-                + " SELECT " + columns + " FROM " + table + ", c"
-                + " WHERE app_id = ? AND event_type = ANY(?) AND created_at > ? AND created_at < c.cut"
+                // the cutoff as a scalar subquery (an InitPlan), so the partitions after it are pruned at run time
+                + " SELECT " + columns + " FROM " + table
+                + " WHERE app_id = ? AND event_type = ANY(?) AND created_at > ? AND created_at < (SELECT cut FROM c)"
                 + " UNION ALL"
-                + " (SELECT " + columns + " FROM " + table + ", c"
-                + " WHERE app_id = ? AND event_type = ANY(?) AND created_at = c.cut LIMIT ?)";
+                + " (SELECT " + columns + " FROM " + table
+                + " WHERE app_id = ? AND event_type = ANY(?) AND created_at = (SELECT cut FROM c) LIMIT ?)";
         List<AuditLogEvent> events = execute(start, QUERY, pst -> {
             Array eventTypesSqlArray = pst.getConnection().createArrayOf("VARCHAR", eventTypesArray);
             pst.setString(1, appIdentifier.getAppId());
