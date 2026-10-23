@@ -279,10 +279,13 @@ public class UsersCountCacheQueries {
             boolean newTables = Config.getConfig(start).getMigrationMode().readsFromNewTables();
             try (Statement st = con.createStatement()) {
                 // one round trip: one snapshot for every chunk (so the sum is exact as of the first chunk), the chunk
-                // timeout, and for the new-table tenant count the standalone D/L query's planner setting
+                // timeout, and for the new-table tenant count a nested loop for the chunk joins: one index probe per
+                // key of the chunk. A hash join would read the whole app's app_id_to_user_id per chunk, and a merge
+                // join reads it from the app's first user up to the chunk's last key - both quadratic over the chunks.
                 st.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY; SET LOCAL statement_timeout = "
                         + config.getUsersCountChunkTimeout()
-                        + (newTables && scope.tenantId != null ? "; SET LOCAL enable_hashjoin = off" : ""));
+                        + (newTables && scope.tenantId != null
+                        ? "; SET LOCAL enable_hashjoin = off; SET LOCAL enable_mergejoin = off" : ""));
             }
             Budget budget = new Budget(config, countStartedAt);
             long count;
@@ -478,7 +481,7 @@ public class UsersCountCacheQueries {
             throws SQLException, StorageQueryException {
         PostgreSQLConfig config = getConfig(start);
         boolean filtered = scope.recipes != null;
-        // enable_hashjoin is off for this transaction (set with the snapshot), as for the standalone D/L query.
+        // Hash and merge joins are off for this transaction (set with the snapshot): the join probes per key.
         // The chunk is read once and aggregated as it streams: a CTE referenced more than once is materialised, and a
         // chunk of recipe user ids does not fit work_mem, so it spilled to disk. The left join keeps every key of the
         // chunk (app_id_to_user_id has one row per (app_id, user_id)), so COUNT(*) is the chunk's key count.
