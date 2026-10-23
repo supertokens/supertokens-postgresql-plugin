@@ -7,8 +7,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [unreleased]
 
+## [10.1.0]
+
 - WebAuthn sign-in and a primary user's email change in `LEGACY` migration mode no longer borrow a second pool connection inside their transaction.
-- The test-only nested same-pool connection-acquisition guard now fails fast by default.
 
 ## [10.0.0]
 
