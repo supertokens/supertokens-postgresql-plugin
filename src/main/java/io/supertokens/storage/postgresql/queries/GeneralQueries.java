@@ -3018,9 +3018,9 @@ public class GeneralQueries {
         return result.toArray(new AuthRecipeUserInfo[0]);
     }
 
-    private static AuthRecipeUserInfo[] listPrimaryUsersByEmail_legacy_Transaction(Start start, Connection sqlCon,
-                                                                                   TenantIdentifier tenantIdentifier,
-                                                                                   String email)
+    public static AuthRecipeUserInfo[] listPrimaryUsersByEmail_legacy_Transaction(Start start, Connection sqlCon,
+                                                                                  TenantIdentifier tenantIdentifier,
+                                                                                  String email)
             throws StorageQueryException, SQLException {
         List<String> userIds = new ArrayList<>();
         String emailPasswordUserId = EmailPasswordQueries.getPrimaryUserIdUsingEmail_Transaction(start, sqlCon,
@@ -3167,7 +3167,8 @@ public class GeneralQueries {
             // rather than dereferencing, so sign-in reports the credential as not existing for this tenant.
             return null;
         }
-        return getPrimaryUserInfoForUserId(start, tenantIdentifier.toAppIdentifier(), webauthnUser.getSupertokensUserId());
+        return getPrimaryUserInfoForUserId_Transaction(start, connection, tenantIdentifier.toAppIdentifier(),
+                webauthnUser.getSupertokensUserId());
     }
 
     public static String getPrimaryUserIdStrForUserId(Start start, AppIdentifier appIdentifier, String id)

@@ -1479,8 +1479,8 @@ public class Start
                         appIdentifier, userId);
                 if (user != null && user.isPrimaryUser) {
                     for (String tenantId : user.tenantIds) {
-                        AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByEmail_legacy(this,
-                                new TenantIdentifier(
+                        AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByEmail_legacy_Transaction(
+                                this, sqlCon, new TenantIdentifier(
                                         appIdentifier.getConnectionUriDomain(), appIdentifier.getAppId(), tenantId),
                                 email);
                         for (AuthRecipeUserInfo existingUser : existingUsers) {

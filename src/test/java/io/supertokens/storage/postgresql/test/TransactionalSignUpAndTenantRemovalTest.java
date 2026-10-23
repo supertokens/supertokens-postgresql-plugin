@@ -45,6 +45,9 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 
 import static org.junit.Assert.*;
 
@@ -464,14 +467,27 @@ public class TransactionalSignUpAndTenantRemovalTest {
                 assertEquals("removal must be visible on the caller's own connection", 0L,
                         tenantRowsOnConnection(sqlCon, storage, PUBLIC, "rm1"));
 
-                // NOT visible to another connection until commit
-                long fromAnotherConnection = (long) storage.startTransaction(innerCon -> {
-                    try {
-                        return tenantRowsOnConnection((Connection) innerCon.getConnection(), storage, PUBLIC, "rm1");
-                    } catch (SQLException e) {
-                        throw new StorageTransactionLogicException(e);
-                    }
-                });
+                // NOT visible to another connection until commit. The other connection is read on another thread, as
+                // a concurrent request would; on this thread it would be a nested same-pool borrow.
+                long fromAnotherConnection;
+                try {
+                    fromAnotherConnection = CompletableFuture.supplyAsync(() -> {
+                        try {
+                            return (long) storage.startTransaction(innerCon -> {
+                                try {
+                                    return tenantRowsOnConnection((Connection) innerCon.getConnection(), storage,
+                                            PUBLIC, "rm1");
+                                } catch (SQLException e) {
+                                    throw new StorageTransactionLogicException(e);
+                                }
+                            });
+                        } catch (Exception e) {
+                            throw new CompletionException(e);
+                        }
+                    }).get();
+                } catch (InterruptedException | ExecutionException e) {
+                    throw new StorageTransactionLogicException(e);
+                }
                 assertEquals("uncommitted removal must not be visible to another connection", 1L,
                         fromAnotherConnection);
 

@@ -9,6 +9,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [10.1.0]
 
+- WebAuthn sign-in and a primary user's email change in `LEGACY` migration mode no longer borrow a second pool connection inside their transaction.
 - Implements `UsersCountCacheStorage`: user counts are stored in `key_value` and counted by one core at a time, in chunks.
 - Reading lifecycle events from `activity_log` no longer spills to disk after a burst of events.
 - New config: `postgresql_users_count_chunk_size`, `postgresql_users_count_chunk_timeout`, `postgresql_users_count_max_duration`.
