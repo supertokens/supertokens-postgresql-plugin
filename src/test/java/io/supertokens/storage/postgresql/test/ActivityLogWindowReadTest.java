@@ -240,6 +240,14 @@ public class ActivityLogWindowReadTest {
                 new AppIdentifier(null, null), Set.of("account_linking"), base, base + 1000, 4);
         assertEquals(List.of(base + 10, base + 20, base + 20, base + 20), createdAtsOf(four));
 
+        // many rows in one millisecond (as a bulk import stamps them): still exactly `limit` come back
+        for (int i = 0; i < 20; i++) {
+            insertEvent(storage, table, "public", "public", "account_linking", base + 5, null);
+        }
+        List<AuditLogEvent> tied = ((ActivityLogStorage) storage).getActivityLogEntriesForApp(
+                new AppIdentifier(null, null), Set.of("account_linking"), base, base + 1000, 3);
+        assertEquals(List.of(base + 5, base + 5, base + 5), createdAtsOf(tied));
+
         process.kill();
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
