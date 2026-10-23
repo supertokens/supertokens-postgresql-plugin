@@ -9,7 +9,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [10.1.0]
 
-- Implements plugin-interface 11.1 `UsersCountCacheStorage`: user counts are stored in `key_value` and counted by one core at a time, in chunks of one read-only snapshot.
+- Implements `UsersCountCacheStorage`: user counts are stored in `key_value` and counted by one core at a time, in chunks.
+- Reading lifecycle events from `activity_log` no longer spills to disk after a burst of events.
 - New config: `postgresql_users_count_chunk_size`, `postgresql_users_count_chunk_timeout`, `postgresql_users_count_max_duration`.
 
 ## [10.0.0]
