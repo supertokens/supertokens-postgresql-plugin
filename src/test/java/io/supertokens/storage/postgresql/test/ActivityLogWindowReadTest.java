@@ -210,6 +210,40 @@ public class ActivityLogWindowReadTest {
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
     }
 
+    /**
+     * With several rows in the millisecond the limit falls in, exactly `limit` rows come back, still ascending, and
+     * the rows after that millisecond are left out.
+     */
+    @Test
+    public void limitFallingInsideAMillisecondReturnsExactlyLimitRows() throws Exception {
+        String[] args = {"../"};
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args);
+        Start storage = startStorage(process);
+        if (storage == null) {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+            return;
+        }
+        String table = Config.getConfig(storage).getActivityLogTable();
+
+        long base = monthStartMillis(YearMonth.now(ZoneOffset.UTC)) + 5 * MILLIS_PER_DAY;
+        long[] times = {base + 30, base + 20, base + 20, base + 10, base + 20, base + 40};
+        for (long t : times) {
+            insertEvent(storage, table, "public", "public", "account_linking", t, null);
+        }
+
+        List<AuditLogEvent> limited = ((ActivityLogStorage) storage).getActivityLogEntriesForApp(
+                new AppIdentifier(null, null), Set.of("account_linking"), base, base + 1000, 3);
+        assertEquals(List.of(base + 10, base + 20, base + 20), createdAtsOf(limited));
+
+        List<AuditLogEvent> four = ((ActivityLogStorage) storage).getActivityLogEntriesForApp(
+                new AppIdentifier(null, null), Set.of("account_linking"), base, base + 1000, 4);
+        assertEquals(List.of(base + 10, base + 20, base + 20, base + 20), createdAtsOf(four));
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
     /** JSONB payload round-trips as JSON-equal text (key order/whitespace normalised); null stays null. */
     @Test
     public void payloadRoundTripsAsJsonAndNullStaysNull() throws Exception {
