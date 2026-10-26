@@ -443,11 +443,13 @@ public class EmailVerificationQueries {
 
         {
             String QUERY = "DELETE FROM " + getConfig(start).getEmailVerificationTokensTable()
-                    + " WHERE app_id = ? AND user_id = ?";
+                    + " WHERE app_id = ? AND tenant_id IN (SELECT tenant_id FROM " + getConfig(start).getTenantsTable()
+                    + " WHERE app_id = ?) AND user_id = ?";
 
             update(sqlCon, QUERY, pst -> {
                 pst.setString(1, appIdentifier.getAppId());
-                pst.setString(2, userId);
+                pst.setString(2, appIdentifier.getAppId());
+                pst.setString(3, userId);
             });
         }
     }
@@ -497,11 +499,13 @@ public class EmailVerificationQueries {
             throws SQLException, StorageQueryException {
         {
             String QUERY = "SELECT * FROM " + getConfig(start).getEmailVerificationTokensTable()
-                    + " WHERE app_id = ? AND user_id = ?";
+                    + " WHERE app_id = ? AND tenant_id IN (SELECT tenant_id FROM " + getConfig(start).getTenantsTable()
+                    + " WHERE app_id = ?) AND user_id = ?";
 
             boolean isUsed = execute(start, QUERY, pst -> {
                 pst.setString(1, appIdentifier.getAppId());
-                pst.setString(2, userId);
+                pst.setString(2, appIdentifier.getAppId());
+                pst.setString(3, userId);
             }, ResultSet::next);
             if (isUsed) {
                 return true;
@@ -529,12 +533,14 @@ public class EmailVerificationQueries {
         Set<String> foundUserIds = new HashSet<>();
 
         String email_verificiation_tokens_QUERY = "SELECT * FROM " + getConfig(start).getEmailVerificationTokensTable()
-                + " WHERE app_id = ? AND user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +")";
+                + " WHERE app_id = ? AND tenant_id IN (SELECT tenant_id FROM " + getConfig(start).getTenantsTable()
+                + " WHERE app_id = ?) AND user_id IN (" + Utils.generateCommaSeperatedQuestionMarks(userIds.size()) +")";
 
         foundUserIds.addAll(execute(start, email_verificiation_tokens_QUERY, pst -> {
             pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, appIdentifier.getAppId());
             for (int i = 0; i < userIds.size(); i++) {
-                pst.setString(2 + i, userIds.get(i));
+                pst.setString(3 + i, userIds.get(i));
             }
         }, result -> {
             Set<String> userIdsFound = new HashSet<>();
@@ -580,11 +586,13 @@ public class EmailVerificationQueries {
                     }
                     {
                         String QUERY = "UPDATE " + getConfig(start).getEmailVerificationTokensTable()
-                                + " SET user_id = ? WHERE app_id = ? AND user_id = ?";
+                                + " SET user_id = ? WHERE app_id = ? AND tenant_id IN (SELECT tenant_id FROM "
+                                + getConfig(start).getTenantsTable() + " WHERE app_id = ?) AND user_id = ?";
                         update(sqlCon, QUERY, pst -> {
                             pst.setString(1, externalUserId);
                             pst.setString(2, appIdentifier.getAppId());
-                            pst.setString(3, supertokensUserId);
+                            pst.setString(3, appIdentifier.getAppId());
+                            pst.setString(4, supertokensUserId);
                         });
                     }
                 } catch (SQLException e) {
@@ -608,7 +616,8 @@ public class EmailVerificationQueries {
                     String update_email_verification_table_query = "UPDATE " + getConfig(start).getEmailVerificationTable()
                             + " SET user_id = ? WHERE app_id = ? AND user_id = ?";
                     String update_email_verification_tokens_table_query = "UPDATE " + getConfig(start).getEmailVerificationTokensTable()
-                            + " SET user_id = ? WHERE app_id = ? AND user_id = ?";
+                            + " SET user_id = ? WHERE app_id = ? AND tenant_id IN (SELECT tenant_id FROM "
+                            + getConfig(start).getTenantsTable() + " WHERE app_id = ?) AND user_id = ?";
 
                     List<PreparedStatementValueSetter> emailVerificationSetters = new ArrayList<>();
                     List<PreparedStatementValueSetter> emalVerificationTokensSetters = new ArrayList<>();
@@ -623,7 +632,8 @@ public class EmailVerificationQueries {
                         emalVerificationTokensSetters.add(pst -> {
                             pst.setString(1, supertokensUserIdToExternalUserId.get(supertokensUserId));
                             pst.setString(2, appIdentifier.getAppId());
-                            pst.setString(3, supertokensUserId);
+                            pst.setString(3, appIdentifier.getAppId());
+                            pst.setString(4, supertokensUserId);
                         });
                     }
 

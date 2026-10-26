@@ -15,6 +15,30 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   statement, so concurrent verifications of one user are serialised and each sees the codes stored before it. Uses
   the existing `totp_used_codes_user_id_index`; no schema change. Needs the plugin-interface version of this round (the app-scoped method is new there and abstract); pair this plugin release with the core release of this round, which calls it unconditionally.
 
+## [10.1.0]
+
+- WebAuthn sign-in and a primary user's email change in `LEGACY` migration mode no longer borrow a second pool connection inside their transaction.
+- Implements `UsersCountCacheStorage`: user counts are stored in `key_value` and counted by one core at a time, in chunks.
+- Reading lifecycle events from `activity_log` no longer spills to disk after a burst of events.
+- New config: `postgresql_users_count_chunk_size`, `postgresql_users_count_chunk_timeout`, `postgresql_users_count_max_duration`.
+
+## [10.0.0]
+
+- Major release: implements plugin-interface 11.0 (a breaking interface change), so it works with core 12.4 and later only.
+- Transactions no longer read, set and reset the session isolation level around every call (three extra round trips, each an implicit transaction): every transaction runs at the pool's session default, READ COMMITTED. Following the plugin-interface contract change, `startTransaction(logic, TransactionIsolationLevel)` is removed, and passwordless `createDeviceWithCode` now runs at READ COMMITTED instead of REPEATABLE READ.
+- Implements `hasUserIdMappings(AppIdentifier)`: a single `LIMIT 1` probe on `userid_mapping` by `app_id` that tells whether the app has any user id mappings.
+- Add transaction-aware listPrimaryUsersByEmail/ByPhoneNumber reads; the non-transaction forms now borrow one
+  connection and delegate to them, so each lookup query exists once.
+- Implements `getOAuthClientById_Transaction`, which reads an OAuth client on the caller's transaction connection;
+  the non-transaction form now borrows one connection and delegates to it.
+- Connection pool initialisation and Hikari logger wiring now use a `ReentrantLock` instead of `synchronized`, so a virtual thread initialising a storage is no longer pinned to its carrier while it waits (with core < 12.3.1 this could hang startup on JDK 21 when many tenant storages initialised at once with `log_level: DEBUG`).
+- Fixes slow passwordless, emailpassword, email verification and WebAuthn queries that read every row of
+  an app instead of using the table's key.
+- WebAuthn sign-up and sign-in now only accept generated options from the request's tenant.
+- Adds a test that fails when a query cannot use an index beyond `app_id` / `tenant_id`.
+- Adds `isOAuthTokenRevokedByGID_Transaction`, a transaction-aware twin of `isOAuthTokenRevokedByGID`.
+- Adds a test-only connection-pool guard against nested same-pool connection acquisition (holding one connection inside a transaction while borrowing a second from the same pool). Warns by default; an opt-in flag makes it fail fast. No-op in production.
+
 ## [9.9.1]
 
 - Makes the SAML callback RelayState single-use: `getRelayStateInfo` is renamed to `getRelayStateInfoAndRemove` and now reads and deletes the RelayState row in one atomic `DELETE ... RETURNING`, so a captured SAML callback cannot be replayed to mint additional authorization codes. (GHSA-3r7x-rhvc-fw28)

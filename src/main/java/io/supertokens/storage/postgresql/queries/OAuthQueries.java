@@ -20,6 +20,7 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.oauth.OAuthClient;
 import io.supertokens.pluginInterface.oauth.OAuthLogoutChallenge;
+import io.supertokens.storage.postgresql.ConnectionPool;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -216,10 +217,21 @@ public class OAuthQueries {
 
     public static OAuthClient getOAuthClientById(Start start, String clientId, AppIdentifier appIdentifier)
             throws SQLException, StorageQueryException {
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            return getOAuthClientById(start, con, clientId, appIdentifier);
+        }
+    }
+
+    // Transaction-aware twin of getOAuthClientById: same read run on the caller's connection instead of
+    // borrowing a new one from the pool. This overload holds the single copy of the query and result
+    // mapping; the non-tx overload above delegates to it with a pooled connection.
+    public static OAuthClient getOAuthClientById(Start start, Connection con, String clientId,
+                                                 AppIdentifier appIdentifier)
+            throws SQLException, StorageQueryException {
         String QUERY = "SELECT client_secret, is_client_credentials_only, enable_refresh_token_rotation FROM " + Config.getConfig(start).getOAuthClientsTable() +
             " WHERE client_id = ? AND app_id = ?";
 
-        return execute(start, QUERY, pst -> {
+        return execute(con, QUERY, pst -> {
             pst.setString(1, clientId);
             pst.setString(2, appIdentifier.getAppId());
         }, (result) -> {
@@ -636,9 +648,20 @@ public class OAuthQueries {
 
     public static boolean isOAuthSessionExistsByGID(Start start, AppIdentifier appIdentifier, String gid)
             throws SQLException, StorageQueryException {
+        try (Connection con = ConnectionPool.getConnection(start)) {
+            return isOAuthSessionExistsByGID(start, con, appIdentifier, gid);
+        }
+    }
+
+    // Transaction-aware twin of isOAuthSessionExistsByGID: same existence check run on the
+    // caller's connection instead of borrowing a new one from the pool. This overload holds the
+    // single copy of the query and result mapping; the non-tx overload above delegates to it with a
+    // pooled connection.
+    public static boolean isOAuthSessionExistsByGID(Start start, Connection con, AppIdentifier appIdentifier, String gid)
+            throws SQLException, StorageQueryException {
         String SELECT = "SELECT count(*) FROM " + Config.getConfig(start).getOAuthSessionsTable()
                 + " WHERE app_id = ? and gid = ?;";
-        return execute(start, SELECT, pst -> {
+        return execute(con, SELECT, pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setString(2, gid);
         }, result -> {
