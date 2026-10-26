@@ -1,0 +1,340 @@
+/*
+ *    Copyright (c) 2026, VRAI Labs and/or its affiliates. All rights reserved.
+ *
+ *    This software is licensed under the Apache License, Version 2.0 (the
+ *    "License") as published by the Apache Software Foundation.
+ *
+ *    You may not use this file except in compliance with the License. You may
+ *    obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *    Unless required by applicable law or agreed to in writing, software
+ *    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ *    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ *    License for the specific language governing permissions and limitations
+ *    under the License.
+ */
+
+package io.supertokens.storage.postgresql.test;
+
+import io.supertokens.Main;
+import io.supertokens.ProcessState;
+import io.supertokens.authRecipe.AuthRecipe;
+import io.supertokens.emailpassword.EmailPassword;
+import io.supertokens.featureflag.EE_FEATURES;
+import io.supertokens.featureflag.FeatureFlagTestContent;
+import io.supertokens.passwordless.Passwordless;
+import io.supertokens.pluginInterface.MigrationMode;
+import io.supertokens.pluginInterface.STORAGE_TYPE;
+import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
+import io.supertokens.pluginInterface.authRecipe.exceptions.EmailChangeNotAllowedException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.PhoneNumberChangeNotAllowedException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.UnknownUserIdException;
+import io.supertokens.pluginInterface.emailpassword.exceptions.DuplicateEmailException;
+import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
+import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
+import io.supertokens.pluginInterface.passwordless.exception.DuplicatePhoneNumberException;
+import io.supertokens.storage.postgresql.Start;
+import io.supertokens.storage.postgresql.config.Config;
+import io.supertokens.storageLayer.StorageLayer;
+import io.supertokens.thirdparty.ThirdParty;
+
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TestRule;
+
+import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * PLAN-018 Unit 3 (issue #413): {@code listPrimaryUsersByEmail_Transaction} /
+ * {@code listPrimaryUsersByPhoneNumber_Transaction} must behave identically to the non-transaction
+ * forms, differing only in that every read runs on the caller's connection instead of borrowing a
+ * fresh pooled one. This test seeds users across recipes that share an email (and a phone), then
+ * asserts the transaction reads return the expected primary users, de-duplicated and oldest-first,
+ * and that they match the non-transaction reads, in both the legacy (read-old) and new (read-new)
+ * migration-mode branches.
+ */
+public class ListPrimaryUsersTransactionParityTest {
+
+    @Rule
+    public TestRule watchman = Utils.getOnFailure();
+
+    @AfterClass
+    public static void afterTesting() {
+        Utils.afterTesting();
+    }
+
+    @Before
+    public void beforeEach() {
+        Utils.reset();
+    }
+
+    private static final String SHARED_EMAIL = "shared@parity.com";
+    private static final String PHONE = "+15551234567";
+
+    @Test
+    public void testParityLegacyReadOld() throws Exception {
+        runParityCheck(MigrationMode.LEGACY);
+    }
+
+    @Test
+    public void testParityDualWriteReadNew() throws Exception {
+        runParityCheck(MigrationMode.DUAL_WRITE_READ_NEW);
+    }
+
+    private void runParityCheck(MigrationMode mode) throws Exception {
+        TestingProcessManager.TestingProcess process = startWithAccountLinking();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        if (StorageLayer.getStorage(process.getProcess()).getType() != STORAGE_TYPE.SQL) {
+            process.kill();
+            return;
+        }
+
+        Main main = process.getProcess();
+        Start start = (Start) StorageLayer.getStorage(main);
+        // The read branch (new vs legacy) is picked from the migration mode. Writing to both table
+        // sets under DUAL_WRITE keeps the new-table read path populated too.
+        Config.getConfig(start).setMigrationModeForTesting(mode);
+
+        SeededUsers seeded = seedUsers(main);
+
+        TenantIdentifier tenant = TenantIdentifier.BASE_TENANT;
+
+        // ----- email -----
+        AuthRecipeUserInfo[] emailTx = start.startTransaction(
+                con -> start.listPrimaryUsersByEmail_Transaction(tenant, con, SHARED_EMAIL));
+        assertEmailResult(seeded, mode, emailTx);
+
+        // Both entry points share one implementation now, so parity is a secondary check only.
+        AuthRecipeUserInfo[] emailNonTx = start.listPrimaryUsersByEmail(tenant, SHARED_EMAIL);
+        assertEquals("email lookup parity (" + mode + ")", idsOf(emailTx), idsOf(emailNonTx));
+
+        // ----- phone number -----
+        AuthRecipeUserInfo[] phoneTx = start.startTransaction(
+                con -> start.listPrimaryUsersByPhoneNumber_Transaction(tenant, con, PHONE));
+        assertEquals("phone lookup should find only the passwordless user (" + mode + ")",
+                Arrays.asList(seeded.passwordlessUserId), idsOf(phoneTx));
+
+        AuthRecipeUserInfo[] phoneNonTx = start.listPrimaryUsersByPhoneNumber(tenant, PHONE);
+        assertEquals("phone lookup parity (" + mode + ")", idsOf(phoneTx), idsOf(phoneNonTx));
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    private static TestingProcessManager.TestingProcess startWithAccountLinking() throws Exception {
+        String[] args = {"../"};
+        TestingProcessManager.TestingProcess process = TestingProcessManager.start(args, false);
+        FeatureFlagTestContent.getInstance(process.getProcess())
+                .setKeyValue(FeatureFlagTestContent.ENABLED_FEATURES,
+                        new EE_FEATURES[]{EE_FEATURES.ACCOUNT_LINKING, EE_FEATURES.MULTI_TENANCY});
+        process.startProcess();
+        return process;
+    }
+
+    private static final class SeededUsers {
+        final String passwordlessUserId;
+        final String thirdPartyUserId;
+        final String emailPasswordUserId;
+
+        SeededUsers(String passwordlessUserId, String thirdPartyUserId, String emailPasswordUserId) {
+            this.passwordlessUserId = passwordlessUserId;
+            this.thirdPartyUserId = thirdPartyUserId;
+            this.emailPasswordUserId = emailPasswordUserId;
+        }
+
+        // Oldest first: the seeding order below.
+        List<String> expectedEmailOrder() {
+            return Arrays.asList(passwordlessUserId, thirdPartyUserId, emailPasswordUserId);
+        }
+    }
+
+    // Four recipe users carry SHARED_EMAIL and resolve to three primary users:
+    //  - passwordless (oldest; also gets PHONE), a google thirdparty user, then emailpassword (newest).
+    //    The join order is the reverse of the legacy fan-out order (emailpassword, passwordless,
+    //    thirdparty), so a missing time_joined sort would return the wrong order.
+    //  - a github thirdparty user linked into the emailpassword primary. Its email row resolves to the
+    //    emailpassword primary as well, so the primary must be returned once, not twice.
+    // The sleeps keep the time_joined values distinct. WebAuthn is not seeded: that leg reuses the
+    // pre-existing getPrimaryUserIdForTenantUsingEmail_Transaction.
+    private static SeededUsers seedUsers(Main main) throws Exception {
+        Passwordless.CreateCodeResponse code = Passwordless.createCode(main, SHARED_EMAIL, null, null, null);
+        Passwordless.ConsumeCodeResponse plUser = Passwordless.consumeCode(
+                main, code.deviceId, code.deviceIdHash, code.userInputCode, null);
+        Passwordless.updateUser(main, plUser.user.getSupertokensUserId(),
+                null, new Passwordless.FieldUpdate(PHONE));
+        Thread.sleep(20);
+
+        AuthRecipeUserInfo tpUser = ThirdParty.signInUp(main, "google", "g-parity", SHARED_EMAIL).user;
+        Thread.sleep(20);
+
+        AuthRecipeUserInfo epUser = EmailPassword.signUp(main, SHARED_EMAIL, "password123");
+        Thread.sleep(20);
+
+        AuthRecipeUserInfo linkedTpUser = ThirdParty.signInUp(main, "github", "gh-parity", SHARED_EMAIL).user;
+        AuthRecipe.createPrimaryUser(main, epUser.getSupertokensUserId());
+        AuthRecipe.linkAccounts(main, linkedTpUser.getSupertokensUserId(), epUser.getSupertokensUserId());
+
+        return new SeededUsers(plUser.user.getSupertokensUserId(), tpUser.getSupertokensUserId(),
+                epUser.getSupertokensUserId());
+    }
+
+    private static void assertEmailResult(SeededUsers seeded, MigrationMode mode, AuthRecipeUserInfo[] users) {
+        assertEquals("email lookup: three primary users, linked primary once, oldest first (" + mode + ")",
+                seeded.expectedEmailOrder(), idsOf(users));
+
+        AuthRecipeUserInfo linkedPrimary = users[2];
+        assertTrue("emailpassword user should be primary (" + mode + ")", linkedPrimary.isPrimaryUser);
+        assertEquals("linked primary should carry both login methods (" + mode + ")",
+                2, linkedPrimary.loginMethods.length);
+    }
+
+    @Test
+    public void testTransactionReadsReuseCallerConnectionLegacyReadOld() throws Exception {
+        runConnectionReuseCheck(MigrationMode.LEGACY);
+    }
+
+    @Test
+    public void testTransactionReadsReuseCallerConnectionDualWriteReadNew() throws Exception {
+        runConnectionReuseCheck(MigrationMode.DUAL_WRITE_READ_NEW);
+    }
+
+    // Parity alone cannot catch a nested borrow: a _Transaction read that calls a non-tx helper
+    // still returns the right rows. With a pool of one connection, the transaction holds the only
+    // connection, so any second borrow from the same pool times out and the read throws instead.
+    private void runConnectionReuseCheck(MigrationMode mode) throws Exception {
+        String[] args = {"../"};
+
+        // Seed with the default pool: the core-side sign-up flows are not what this test is about.
+        TestingProcessManager.TestingProcess process = startWithAccountLinking();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        if (StorageLayer.getStorage(process.getProcess()).getType() != STORAGE_TYPE.SQL) {
+            process.kill();
+            return;
+        }
+
+        Config.getConfig((Start) StorageLayer.getStorage(process.getProcess())).setMigrationModeForTesting(mode);
+        SeededUsers seeded = seedUsers(process.getProcess());
+        process.kill(false);
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+
+        Utils.setValueInConfig("postgresql_connection_pool_size", "1");
+        process = TestingProcessManager.start(args, false);
+        process.startProcess();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        Start start = (Start) StorageLayer.getStorage(process.getProcess());
+        Config.getConfig(start).setMigrationModeForTesting(mode);
+        TenantIdentifier tenant = TenantIdentifier.BASE_TENANT;
+
+        AuthRecipeUserInfo[] emailTx = start.startTransaction(
+                con -> start.listPrimaryUsersByEmail_Transaction(tenant, con, SHARED_EMAIL));
+        AuthRecipeUserInfo[] phoneTx = start.startTransaction(
+                con -> start.listPrimaryUsersByPhoneNumber_Transaction(tenant, con, PHONE));
+
+        assertEmailResult(seeded, mode, emailTx);
+        assertEquals("phone tx read on a one-connection pool (" + mode + ")",
+                Arrays.asList(seeded.passwordlessUserId), idsOf(phoneTx));
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    @Test
+    public void testTransactionReadsSeeUncommittedWritesLegacyReadOld() throws Exception {
+        runUncommittedWriteCheck(MigrationMode.LEGACY);
+    }
+
+    @Test
+    public void testTransactionReadsSeeUncommittedWritesDualWriteReadNew() throws Exception {
+        runUncommittedWriteCheck(MigrationMode.DUAL_WRITE_READ_NEW);
+    }
+
+    // The point of the _Transaction forms is that a caller can write and then read in one transaction. A
+    // read on any other connection would not see the uncommitted write (READ COMMITTED) and would return
+    // the old rows. This moves the passwordless user's email and phone on the transaction connection, reads
+    // through both lookups before commit, rolls back, and checks the committed state is unchanged.
+    private void runUncommittedWriteCheck(MigrationMode mode) throws Exception {
+        TestingProcessManager.TestingProcess process = startWithAccountLinking();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
+
+        if (StorageLayer.getStorage(process.getProcess()).getType() != STORAGE_TYPE.SQL) {
+            process.kill();
+            return;
+        }
+
+        Main main = process.getProcess();
+        Start start = (Start) StorageLayer.getStorage(main);
+        Config.getConfig(start).setMigrationModeForTesting(mode);
+        SeededUsers seeded = seedUsers(main);
+
+        TenantIdentifier tenant = TenantIdentifier.BASE_TENANT;
+        AppIdentifier app = tenant.toAppIdentifier();
+        String newEmail = "moved@parity.com";
+        String newPhone = "+15559876543";
+
+        List<List<String>> inTx = start.startTransaction(con -> {
+            try {
+                start.updateUserEmailAndPhone_Transaction(app, con, seeded.passwordlessUserId,
+                        newEmail, true, newPhone, true);
+            } catch (UnknownUserIdException | DuplicateEmailException | EmailChangeNotAllowedException
+                     | DuplicatePhoneNumberException | PhoneNumberChangeNotAllowedException e) {
+                throw new StorageTransactionLogicException(e);
+            }
+            List<List<String>> reads = Arrays.asList(
+                    idsOf(start.listPrimaryUsersByEmail_Transaction(tenant, con, newEmail)),
+                    idsOf(start.listPrimaryUsersByEmail_Transaction(tenant, con, SHARED_EMAIL)),
+                    idsOf(start.listPrimaryUsersByPhoneNumber_Transaction(tenant, con, newPhone)),
+                    idsOf(start.listPrimaryUsersByPhoneNumber_Transaction(tenant, con, PHONE)));
+            // Roll back on the connection itself: returning without a commit is not enough, because
+            // startTransaction's setAutoCommit(true) reset would commit the pending writes.
+            try {
+                ((Connection) con.getConnection()).rollback();
+            } catch (java.sql.SQLException e) {
+                throw new StorageTransactionLogicException(e);
+            }
+            return reads;
+        });
+
+        assertEquals("uncommitted new email is visible in the transaction (" + mode + ")",
+                Arrays.asList(seeded.passwordlessUserId), inTx.get(0));
+        assertEquals("passwordless user has left the shared email in the transaction (" + mode + ")",
+                Arrays.asList(seeded.thirdPartyUserId, seeded.emailPasswordUserId), inTx.get(1));
+        assertEquals("uncommitted new phone is visible in the transaction (" + mode + ")",
+                Arrays.asList(seeded.passwordlessUserId), inTx.get(2));
+        assertEquals("old phone no longer matches in the transaction (" + mode + ")",
+                Collections.emptyList(), inTx.get(3));
+
+        // After the rollback, the committed state is the seeded one.
+        assertEquals("new email rolled back (" + mode + ")",
+                Collections.emptyList(), idsOf(start.listPrimaryUsersByEmail(tenant, newEmail)));
+        assertEmailResult(seeded, mode, start.listPrimaryUsersByEmail(tenant, SHARED_EMAIL));
+        assertEquals("new phone rolled back (" + mode + ")",
+                Collections.emptyList(), idsOf(start.listPrimaryUsersByPhoneNumber(tenant, newPhone)));
+        assertEquals("old phone restored (" + mode + ")",
+                Arrays.asList(seeded.passwordlessUserId), idsOf(start.listPrimaryUsersByPhoneNumber(tenant, PHONE)));
+
+        process.kill();
+        assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+    }
+
+    private static List<String> idsOf(AuthRecipeUserInfo[] users) {
+        List<String> ids = new ArrayList<>();
+        for (AuthRecipeUserInfo u : users) {
+            ids.add(u.getSupertokensUserId());
+        }
+        return ids;
+    }
+}
