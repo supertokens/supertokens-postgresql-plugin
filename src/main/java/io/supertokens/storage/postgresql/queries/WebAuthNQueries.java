@@ -153,8 +153,8 @@ public class WebAuthNQueries {
                 " (user_id);";
     }
 
-    // Backs the credential lookups by id alone (sign in, counter update, and the app-wide uniqueness check at
-    // registration), which cannot use the (app_id, rp_id, id) primary key.
+    // Backs the app-wide credential id uniqueness check at registration (a lookup by id alone, any relying party),
+    // which cannot use the (app_id, rp_id, id) primary key.
     static String getQueryToCreateWebAuthNCredentialsAppIdIdIndex(Start start) {
         return "CREATE INDEX IF NOT EXISTS webauthn_credentials_app_id_id_index ON " +
                 getConfig(start).getWebAuthNCredentialsTable() +
@@ -270,6 +270,25 @@ public class WebAuthNQueries {
         }, result -> {
             if(result.next()){
                 return WebAuthnStoredCredentialRowMapper.getInstance().mapOrThrow(result); // we are expecting one or zero results
+            }
+            return null;
+        });
+    }
+
+    public static WebAuthNStoredCredential loadCredentialByIdInApp_Transaction(Start start, Connection sqlConnection,
+                                                                               TenantIdentifier tenantIdentifier,
+                                                                               String credentialId)
+            throws SQLException, StorageQueryException {
+        // Any relying party: credential ids are only unique per (app_id, rp_id). Served by
+        // webauthn_credentials_app_id_id_index.
+        String QUERY = "SELECT * FROM " + getConfig(start).getWebAuthNCredentialsTable()
+                + " WHERE app_id = ? AND id = ? LIMIT 1";
+        return execute(sqlConnection, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, credentialId);
+        }, result -> {
+            if (result.next()) {
+                return WebAuthnStoredCredentialRowMapper.getInstance().mapOrThrow(result);
             }
             return null;
         });

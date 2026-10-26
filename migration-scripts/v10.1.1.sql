@@ -1,8 +1,8 @@
--- Plugin 9.9.2: index on webauthn_credentials (app_id, id).
+-- Plugin 10.1.1: index on webauthn_credentials (app_id, id).
 --
--- WebAuthn credential lookups by id alone (sign in, the counter update, and the app-wide credential id
--- uniqueness check at registration) cannot use the (app_id, rp_id, id) primary key, so without this index
--- each of them scans every credential of the app.
+-- The app-wide credential id uniqueness check at registration looks credentials up by id alone, which the
+-- (app_id, rp_id, id) primary key cannot serve, so without this index it scans every credential of the app.
+-- (Sign in and the counter update are rp-scoped on 10.x and use the primary key.)
 --
 -- PATCH-RELEASE MIGRATION, applied by the core itself at startup: the new core creates this index in
 -- GeneralQueries.createTablesIfNotExists' backfill list, so an in-place upgrade needs no manual step. This

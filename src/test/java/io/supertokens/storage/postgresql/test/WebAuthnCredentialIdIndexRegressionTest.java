@@ -48,8 +48,9 @@ import static org.junit.Assert.*;
 /**
  * Index regression test for {@code webauthn_credentials_app_id_id_index} ({@code (app_id, id)}).
  *
- * <p>WebAuthn looks credentials up by {@code WHERE app_id = ? AND id = ?} (sign in, counter update, and the
- * app-wide credential id uniqueness check at registration). The primary key is {@code (app_id, rp_id, id)}, so
+ * <p>The app-wide credential id uniqueness check at registration looks credentials up by
+ * {@code WHERE app_id = ? AND id = ?} ({@code loadCredentialByIdInApp_Transaction}); sign in and the counter update
+ * are rp-scoped and use the primary key. The primary key is {@code (app_id, rp_id, id)}, so
  * with many relying party ids it cannot serve that predicate. The test checks that the index is created on a
  * fresh install and re-created at startup on an existing table that lacks it (the patch-release backfill path), and that the
  * lookup plans an index scan on it over a seeded table, and is much more expensive without it.
