@@ -77,10 +77,10 @@
             "notes": "SAML callback replay hardening (GHSA-3r7x-rhvc-fw28): adds saml_relay_state.in_response_to and .acs_url for the callback's InResponseTo binding and Destination/Recipient pinning, and a new saml_consumed_assertions single-use table that closes the IdP-initiated replay window. All statements additive and online-safe; the plugin applies them at startup."
         },
         {
-            "pluginVersion": "9.9.2",
-            "coreVersion": "12.3.2",
-            "sql": "v9.9.2.sql",
-            "notes": "Index webauthn_credentials_app_id_id_index on webauthn_credentials (app_id, id), backing the credential lookups by id (sign in, counter update, app-wide credential id uniqueness check at registration) that the (app_id, rp_id, id) primary key cannot serve. Built CONCURRENTLY by the script; the core creates it at startup."
+            "pluginVersion": "10.1.1",
+            "coreVersion": "12.4.2",
+            "sql": "v10.1.1.sql",
+            "notes": "Index webauthn_credentials_app_id_id_index on webauthn_credentials (app_id, id), backing the app-wide credential id uniqueness check at registration (a lookup by id alone, any relying party), which the (app_id, rp_id, id) primary key cannot serve. Built CONCURRENTLY by the script; the core creates it at startup."
         }
     ]
 }
