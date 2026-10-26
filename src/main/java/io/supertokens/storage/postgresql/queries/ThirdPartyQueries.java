@@ -497,17 +497,19 @@ public class ThirdPartyQueries {
         });
     }
 
-    public static List<String> getPrimaryUserIdUsingEmail(Start start,
-                                                          TenantIdentifier tenantIdentifier, String email)
+    // Runs on the caller's connection (no nested same-pool acquisition).
+    public static List<String> getPrimaryUserIdUsingEmail_Transaction(Start start, Connection sqlCon,
+                                                                      TenantIdentifier tenantIdentifier, String email)
             throws StorageQueryException, SQLException {
         if (Config.getConfig(start).getMigrationMode().readsFromNewTables()) {
-            return getPrimaryUserIdUsingEmail_new(start, tenantIdentifier, email);
+            return getPrimaryUserIdUsingEmail_Transaction_new(start, sqlCon, tenantIdentifier, email);
         }
-        return getPrimaryUserIdUsingEmail_legacy(start, tenantIdentifier, email);
+        return getPrimaryUserIdUsingEmail_Transaction_legacy(start, sqlCon, tenantIdentifier, email);
     }
 
-    private static List<String> getPrimaryUserIdUsingEmail_legacy(Start start,
-                                                                    TenantIdentifier tenantIdentifier, String email)
+    private static List<String> getPrimaryUserIdUsingEmail_Transaction_legacy(Start start, Connection sqlCon,
+                                                                              TenantIdentifier tenantIdentifier,
+                                                                              String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getThirdPartyUsersTable() + " AS tp"
@@ -517,7 +519,7 @@ public class ThirdPartyQueries {
                 + " ON tp_tenants.app_id = all_users.app_id AND tp_tenants.user_id = all_users.user_id"
                 + " WHERE tp.app_id = ? AND tp_tenants.tenant_id = ? AND tp.email = ?";
 
-        return execute(start, QUERY, pst -> {
+        return execute(sqlCon, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, email);
@@ -530,8 +532,9 @@ public class ThirdPartyQueries {
         });
     }
 
-    private static List<String> getPrimaryUserIdUsingEmail_new(Start start,
-                                                                TenantIdentifier tenantIdentifier, String email)
+    private static List<String> getPrimaryUserIdUsingEmail_Transaction_new(Start start, Connection sqlCon,
+                                                                           TenantIdentifier tenantIdentifier,
+                                                                           String email)
             throws StorageQueryException, SQLException {
         String QUERY = "SELECT DISTINCT a.primary_or_recipe_user_id AS user_id "
                 + "FROM " + getConfig(start).getRecipeUserTenantsTable() + " AS rut"
@@ -541,7 +544,7 @@ public class ThirdPartyQueries {
                 + " AND rut.account_info_type = 'email' AND rut.account_info_value = ?"
                 + " AND rut.recipe_id = 'thirdparty'";
 
-        return execute(start, QUERY, pst -> {
+        return execute(sqlCon, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, email);
