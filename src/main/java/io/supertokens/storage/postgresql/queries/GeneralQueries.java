@@ -2919,68 +2919,6 @@ public class GeneralQueries {
         return result.toArray(new AuthRecipeUserInfo[0]);
     }
 
-    /**
-     * LEGACY tables: for each of the given tenants, the primary_or_recipe_user_id of every recipe user that has this
-     * email in that tenant, as primary_or_recipe_user_id -> the given tenants it has the email in. Same per-tenant
-     * lookups as {@link #listPrimaryUsersByEmail_legacy(Start, TenantIdentifier, String)}, but for several tenants
-     * at once, on the caller's connection, and served by the (app_id, tenant_id, email) / (app_id, email) indexes in
-     * every recipe arm.
-     */
-    public static Map<String, Set<String>> listPrimaryOrRecipeUserIdsByEmailInTenants_legacy_Transaction(
-            Start start, Connection sqlCon, AppIdentifier appIdentifier, String email, Set<String> tenantIds)
-            throws StorageQueryException, SQLException {
-        Map<String, Set<String>> tenantsByUserId = new HashMap<>();
-        if (tenantIds.isEmpty()) {
-            return tenantsByUserId;
-        }
-        String usersTable = getConfig(start).getUsersTable();
-        String[] queries = new String[]{
-                "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id, ep.tenant_id AS tenant_id"
-                        + " FROM " + getConfig(start).getEmailPasswordUserToTenantTable() + " AS ep"
-                        + " JOIN " + usersTable + " AS all_users"
-                        + " ON ep.app_id = all_users.app_id AND ep.user_id = all_users.user_id"
-                        + " WHERE ep.app_id = ? AND ep.tenant_id = ANY(?) AND ep.email = ?",
-                "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id, pless.tenant_id AS tenant_id"
-                        + " FROM " + getConfig(start).getPasswordlessUserToTenantTable() + " AS pless"
-                        + " JOIN " + usersTable + " AS all_users"
-                        + " ON pless.app_id = all_users.app_id AND pless.user_id = all_users.user_id"
-                        + " WHERE pless.app_id = ? AND pless.tenant_id = ANY(?) AND pless.email = ?",
-                "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id, tp_tenants.tenant_id AS tenant_id"
-                        + " FROM " + getConfig(start).getThirdPartyUsersTable() + " AS tp"
-                        + " JOIN " + usersTable + " AS all_users"
-                        + " ON tp.app_id = all_users.app_id AND tp.user_id = all_users.user_id"
-                        + " JOIN " + getConfig(start).getThirdPartyUserToTenantTable() + " AS tp_tenants"
-                        + " ON tp_tenants.app_id = all_users.app_id AND tp_tenants.user_id = all_users.user_id"
-                        + " WHERE tp.app_id = ? AND tp_tenants.tenant_id = ANY(?) AND tp.email = ?",
-                "SELECT DISTINCT all_users.primary_or_recipe_user_id AS user_id, webauthn.tenant_id AS tenant_id"
-                        + " FROM " + getConfig(start).getWebAuthNUserToTenantTable() + " AS webauthn"
-                        + " JOIN " + usersTable + " AS all_users"
-                        + " ON webauthn.tenant_id = all_users.tenant_id"
-                        + " AND webauthn.app_id = all_users.app_id"
-                        + " AND webauthn.user_id = all_users.user_id"
-                        + " WHERE webauthn.app_id = ? AND webauthn.tenant_id = ANY(?) AND webauthn.email = ?"
-        };
-        java.sql.Array tenantIdsArray = sqlCon.createArrayOf("VARCHAR", tenantIds.toArray(new String[0]));
-        try {
-            for (String query : queries) {
-                execute(sqlCon, query, pst -> {
-                    pst.setString(1, appIdentifier.getAppId());
-                    pst.setArray(2, tenantIdsArray);
-                    pst.setString(3, email);
-                }, result -> {
-                    while (result.next()) {
-                        tenantsByUserId.computeIfAbsent(result.getString("user_id").trim(), k -> new HashSet<>())
-                                .add(result.getString("tenant_id"));
-                    }
-                    return null;
-                });
-            }
-        } finally {
-            tenantIdsArray.free();
-        }
-        return tenantsByUserId;
-    }
-
     public static AuthRecipeUserInfo[] listPrimaryUsersByPhoneNumber_legacy_forApp(Start start,
                                                                                     AppIdentifier appIdentifier,
                                                                                     String phoneNumber)
