@@ -7,14 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-> Release note: this entry must ship as plugin **10.1.1**. The manifest entry and `migration-scripts/v10.1.1.sql` are keyed to 10.1.1, so the release commit must bump `build.gradle` to `10.1.1` and rename this heading to `## [10.1.1]`, otherwise the schema-migration check fails.
+## [10.2.0]
 
-- Adds the index `webauthn_credentials_app_id_id_index` on `webauthn_credentials (app_id, id)`. It backs the app-wide WebAuthn credential id uniqueness check that the core now runs at registration (a lookup by id alone), which the `(app_id, rp_id, id)` primary key cannot serve.
+- Adds the index `webauthn_credentials_app_id_id_index` on `webauthn_credentials (app_id, id)` for the app-wide WebAuthn credential id check.
+- Supports plugin interface 11.2.
 
 ### Migration
 
-Index-only; the plugin creates the index at startup (`CREATE INDEX IF NOT EXISTS`). Large deployments can build it
-concurrently ahead of the upgrade with `migration-scripts/v10.1.1.sql`:
+Index-only; the plugin creates the index at startup. Large deployments can build it concurrently ahead of the upgrade with `migration-scripts/v10.2.0.sql`:
 
 ```sql
 CREATE INDEX CONCURRENTLY IF NOT EXISTS webauthn_credentials_app_id_id_index ON webauthn_credentials (app_id, id);
