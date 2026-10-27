@@ -1,4 +1,4 @@
--- Plugin 10.1.1: index on webauthn_credentials (app_id, id).
+-- Plugin 10.2.0: index on webauthn_credentials (app_id, id).
 --
 -- The app-wide credential id uniqueness check at registration looks credentials up by id alone, which the
 -- (app_id, rp_id, id) primary key cannot serve, so without this index it scans every credential of the app.

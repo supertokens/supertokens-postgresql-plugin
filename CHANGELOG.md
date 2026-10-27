@@ -7,31 +7,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- `updateUserEmail_Transaction` (third party) now only updates the `thirdparty_users` row of the given recipe user (`user_id`), not every user in the app with the same `third_party_id` and `third_party_user_id`. If that user does not hold the third party identity, it throws `UnknownUserIdException` and changes nothing. No schema change.
-- Adds the index `webauthn_credentials_app_id_id_index` on `webauthn_credentials (app_id, id)`. It backs the app-wide WebAuthn credential id uniqueness check that the core now runs at registration (a lookup by id alone), which the `(app_id, rp_id, id)` primary key cannot serve.
+## [10.2.0]
 
-> Release note: this entry must ship as plugin **10.1.1**. The manifest entry and `migration-scripts/v10.1.1.sql` are keyed to 10.1.1, so the release commit must bump `build.gradle` to `10.1.1` and rename this heading to `## [10.1.1]`, otherwise the schema-migration check fails.
-
-- TOTP: `getDevices_Transaction` locks the user's device rows again (`SELECT ... FOR UPDATE`), so concurrent
-  transactions on the same user's devices are serialised. It then reads the devices in a new statement, so a
-  device re-created by the transaction it waited for is included.
-- TOTP: implements the app-scoped `getAllUsedCodesDescOrder_Transaction(con, AppIdentifier, userId)`. It locks the
-  user's `totp_users` row (`FOR NO KEY UPDATE`) and then reads the used codes of all tenants of the app in a separate
-  statement, so concurrent verifications of one user are serialised and each sees the codes stored before it. Uses
-  the existing `totp_used_codes_user_id_index`; no schema change. Needs the plugin-interface version of this round (the app-scoped method is new there and abstract); pair this plugin release with the core release of this round, which calls it unconditionally.
-- `getSAMLClaimsAndRemoveCode` reads and deletes the SAML code row in one atomic `DELETE ... RETURNING` (previously a `SELECT` followed by a separate `DELETE`), so a code can be redeemed at most once, also under concurrent requests. No schema change.
-- In `LEGACY` migration mode, the account-info uniqueness checks of the account-linking write paths
-  (`makePrimaryUser_Transaction`, `linkAccounts_Transaction`, `addTenantIdToPrimaryUser_Transaction` and the
-  email / phone number updates of primary users) now take a transaction-scoped advisory lock on each email,
-  phone number and third-party identity they check. Under the default `READ_COMMITTED` isolation, two
-  concurrent transactions could otherwise both pass the check and leave two primary users with the same account
-  info in a tenant. The other migration modes are unchanged: there the reservation tables enforce uniqueness.
-  No schema change.
+- Third-party email updates change only the given recipe user's row.
+- TOTP: `getDevices_Transaction` locks the user's device rows again.
+- TOTP: implements the app-wide, user-locking `getAllUsedCodesDescOrder_Transaction`.
+- SAML codes are read and deleted in one atomic statement, so each is redeemed at most once.
+- `LEGACY` migration mode: account-linking uniqueness checks take advisory locks on the account info they check.
+- Adds the index `webauthn_credentials_app_id_id_index` on `webauthn_credentials (app_id, id)` for the app-wide WebAuthn credential id check.
+- Supports plugin interface 11.2.
 
 ### Migration
 
-Index-only; the plugin creates the index at startup (`CREATE INDEX IF NOT EXISTS`). Large deployments can build it
-concurrently ahead of the upgrade with `migration-scripts/v10.1.1.sql`:
+Index-only; the plugin creates the index at startup. Large deployments can build it concurrently ahead of the upgrade with `migration-scripts/v10.2.0.sql`:
 
 ```sql
 CREATE INDEX CONCURRENTLY IF NOT EXISTS webauthn_credentials_app_id_id_index ON webauthn_credentials (app_id, id);
