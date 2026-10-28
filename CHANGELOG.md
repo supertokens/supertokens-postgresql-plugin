@@ -38,6 +38,15 @@ ALTER TABLE saml_clients ADD COLUMN IF NOT EXISTS acs_urls TEXT;
 
 ## [Unreleased]
 
+## [9.6.4]
+
+### Security
+
+- Third-party email updates only change the given recipe user, not users with the same third-party identity in other tenants.
+- TOTP: device and used-code reads lock the user, and used codes are checked across all tenants of the app.
+- `LEGACY` migration mode: account-info uniqueness checks of account-linking writes are serialised with advisory locks.
+- SAML login codes are consumed with one atomic `DELETE ... RETURNING`, so a code can be redeemed only once.
+
 ## [9.6.2]
 
 - Adds two additive indexes on `oauth_sessions`, `(app_id, client_id)` and `(app_id, session_handle)`, so the
