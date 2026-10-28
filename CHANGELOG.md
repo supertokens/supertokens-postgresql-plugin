@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [unreleased]
 
+- WebAuthn: sign-in locks the sign-in options row (`SELECT ... FOR UPDATE`) before consuming it, so concurrent sign-ins with the same options are processed one after the other and only the first succeeds.
+
 ## [10.1.0]
 
 - WebAuthn sign-in and a primary user's email change in `LEGACY` migration mode no longer borrow a second pool connection inside their transaction.
