@@ -46,6 +46,7 @@ ALTER TABLE saml_clients ADD COLUMN IF NOT EXISTS acs_urls TEXT;
 - TOTP: device and used-code reads lock the user, and used codes are checked across all tenants of the app.
 - `LEGACY` migration mode: account-info uniqueness checks of account-linking writes are serialised with advisory locks.
 - SAML login codes are consumed with one atomic `DELETE ... RETURNING`, so a code can be redeemed only once.
+- WebAuthn: sign-in locks the sign-in options row (`SELECT ... FOR UPDATE`), so the options are consumed by at most one concurrent sign-in.
 
 ## [9.6.2]
 
