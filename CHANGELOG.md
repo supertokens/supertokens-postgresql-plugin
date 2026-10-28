@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.7.3]
+
+### Security
+
+- Third-party email updates only change the given recipe user, not users with the same third-party identity in other tenants.
+- TOTP: device and used-code reads lock the user, and used codes are checked across all tenants of the app.
+- `LEGACY` migration mode: account-info uniqueness checks of account-linking writes are serialised with advisory locks.
+- SAML login codes are consumed with one atomic `DELETE ... RETURNING`, so a code can be redeemed only once.
+
 ## [9.7.2]
 
 - SAML callback replay hardening (GHSA-3r7x-rhvc-fw28): adds `saml_relay_state.in_response_to` and `.acs_url` (InResponseTo binding, Destination/Recipient pinning) and a single-use `saml_consumed_assertions` table that closes the IdP-initiated replay window. The plugin applies the new columns and table at startup.
