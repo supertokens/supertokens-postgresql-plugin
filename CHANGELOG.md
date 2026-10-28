@@ -16,6 +16,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `LEGACY` migration mode: account-linking uniqueness checks take advisory locks on the account info they check.
 - Adds the index `webauthn_credentials_app_id_id_index` on `webauthn_credentials (app_id, id)` for the app-wide WebAuthn credential id check.
 - Supports plugin interface 11.2.
+- WebAuthn: sign-in locks the sign-in options row (`SELECT ... FOR UPDATE`), so the options are consumed by at most one concurrent sign-in.
 
 ### Migration
 
