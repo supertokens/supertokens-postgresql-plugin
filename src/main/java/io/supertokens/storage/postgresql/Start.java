@@ -1540,6 +1540,24 @@ public class Start
     }
 
     @Override
+    public void updateUserEmail_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                            String thirdPartyId, String userId, String thirdPartyUserId,
+                                            String newEmail)
+            throws StorageQueryException, UnknownUserIdException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            int updatedRows = ThirdPartyQueries.updateUserEmail_Transaction(this, sqlCon, appIdentifier, userId,
+                    thirdPartyId, thirdPartyUserId, newEmail);
+            if (updatedRows != 1) {
+                // userId does not hold this third party login method; nothing must be changed.
+                throw new UnknownUserIdException();
+            }
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public AuthRecipeUserInfo signUp(
             TenantIdentifier tenantIdentifier, String id, String email,
             LoginMethod.ThirdParty thirdParty, long timeJoined)
