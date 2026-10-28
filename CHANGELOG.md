@@ -7,6 +7,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [unreleased]
 
+## [10.2.0]
+
+- Stores the optional SAML client attribute mapping (plugin-interface 11.2 `SAMLClient.attributeMapping`) in a new
+  nullable `saml_clients.attribute_mapping` column, as JSON object text. `createOrUpdateSAMLClient` writes it (insert
+  and update) and all three SAML client reads return it. NULL means not configured. Additive and online-safe; the
+  plugin adds the column at startup.
+
+### Migration
+
+Additive and online-safe; the plugin applies it at startup. Large deployments can run
+`migration-scripts/v10.2.0.sql` ahead of the upgrade:
+
+```sql
+ALTER TABLE saml_clients ADD COLUMN IF NOT EXISTS attribute_mapping TEXT;
+```
+
 ## [10.1.0]
 
 - WebAuthn sign-in and a primary user's email change in `LEGACY` migration mode no longer borrow a second pool connection inside their transaction.
