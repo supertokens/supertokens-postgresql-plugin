@@ -1403,17 +1403,22 @@ public class Start
                 if (user != null && user.isPrimaryUser) {
                     lockLegacyAccountInfoKeys_Transaction(sqlCon, appIdentifier,
                             List.of("email~" + email));
-                    // Reads below stay on the transaction's own connection: other transactions may be queued on
-                    // the lock above while holding pool connections, so this one must not need another.
-                    for (String tenantId : user.tenantIds) {
-                        AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByEmail_legacy(this,
-                                new TenantIdentifier(
-                                        appIdentifier.getConnectionUriDomain(), appIdentifier.getAppId(), tenantId),
-                                email);
-                        for (AuthRecipeUserInfo existingUser : existingUsers) {
-                            if (existingUser.isPrimaryUser
-                                    && !existingUser.getSupertokensUserId().equals(user.getSupertokensUserId())
-                                    && existingUser.tenantIds.contains(tenantId)) {
+                    // All reads below run on the transaction's own connection: other transactions may be queued
+                    // on the lock above while holding pool connections, so this one must not need another.
+                    // Same rule as before: conflict if another primary user has a recipe user with this email in one
+                    // of this user's tenants (and is itself in that tenant).
+                    Map<String, Set<String>> tenantsByCandidate =
+                            GeneralQueries.listPrimaryOrRecipeUserIdsByEmailInTenants_legacy_Transaction(
+                                    this, sqlCon, appIdentifier, email, new HashSet<>(user.tenantIds));
+                    for (Map.Entry<String, Set<String>> candidate : tenantsByCandidate.entrySet()) {
+                        AuthRecipeUserInfo existingUser = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(
+                                this, sqlCon, appIdentifier, candidate.getKey());
+                        if (existingUser == null || !existingUser.isPrimaryUser
+                                || existingUser.getSupertokensUserId().equals(user.getSupertokensUserId())) {
+                            continue;
+                        }
+                        for (String tenantId : candidate.getValue()) {
+                            if (existingUser.tenantIds.contains(tenantId)) {
                                 throw new EmailChangeNotAllowedException();
                             }
                         }
