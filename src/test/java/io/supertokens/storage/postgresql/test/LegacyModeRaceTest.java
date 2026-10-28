@@ -663,4 +663,62 @@ public class LegacyModeRaceTest {
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
         }
     }
+
+    /**
+     * Concurrent LEGACY email changes of primary users to the same email queue on the email lock, each holding a
+     * pool connection. The lock holder's conflict check must run on its own connection, otherwise it waits for a
+     * free one until the pool times out, and the next lock holder does the same.
+     */
+    @Test
+    public void testLegacyEmailChangesToSameEmailDoNotExhaustThePool() throws Exception {
+        Utils.setValueInConfig("postgresql_connection_pool_size", "2");
+        TestingProcessManager.TestingProcess process = startProcess();
+        try {
+            Main main = process.getProcess();
+            if (StorageLayer.getStorage(main).getType() != STORAGE_TYPE.SQL) return;
+
+            Start storage = (Start) StorageLayer.getStorage(main);
+            Config.getConfig(storage).setMigrationModeForTesting(MigrationMode.LEGACY);
+
+            int n = 6;
+            List<String> primaryUserIds = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                AuthRecipeUserInfo user = EmailPassword.signUp(main, "pool-" + i + "@test.com", "password123");
+                AuthRecipe.createPrimaryUser(main, user.getSupertokensUserId());
+                primaryUserIds.add(user.getSupertokensUserId());
+            }
+
+            String email = "pool-target@test.com";
+            ExecutorService executor = Executors.newFixedThreadPool(n);
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<Object>> futures = new ArrayList<>();
+            for (String userId : primaryUserIds) {
+                futures.add(executor.submit(() -> {
+                    start.await();
+                    try {
+                        EmailPassword.updateUsersEmailOrPassword(main, userId, email, null);
+                        return "OK";
+                    } catch (Exception e) {
+                        return e;
+                    }
+                }));
+            }
+            start.countDown();
+
+            int succeeded = 0;
+            for (Future<Object> future : futures) {
+                Object result = future.get(60, TimeUnit.SECONDS);
+                if ("OK".equals(result)) {
+                    succeeded++;
+                } else {
+                    assertTrue("unexpected result: " + result, result instanceof EmailChangeNotAllowedException);
+                }
+            }
+            executor.shutdownNow();
+            assertEquals(1, succeeded);
+        } finally {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
 }
