@@ -10,6 +10,7 @@ on:
 
 jobs:
   pr-run-test-action:
+    if: github.repository != 'supertokens/supertokens-postgresql-plugin-security'
     name: Check if "Run tests" action succeeded
     timeout-minutes: 60
     concurrency:
