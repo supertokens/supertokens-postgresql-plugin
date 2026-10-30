@@ -1478,6 +1478,10 @@ public class Start
                 AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(this, sqlCon,
                         appIdentifier, userId);
                 if (user != null && user.isPrimaryUser) {
+                    lockLegacyAccountInfoKeys_Transaction(sqlCon, appIdentifier,
+                            List.of("email~" + email));
+                    // Reads below stay on the transaction's own connection: other transactions may be queued on
+                    // the lock above while holding pool connections, so this one must not need another.
                     for (String tenantId : user.tenantIds) {
                         AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByEmail_legacy_Transaction(
                                 this, sqlCon, new TenantIdentifier(
@@ -1769,6 +1773,8 @@ public class Start
                 AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(this, sqlCon,
                         appIdentifier, userId);
                 if (user != null && user.isPrimaryUser) {
+                    lockLegacyAccountInfoKeys_Transaction(sqlCon, appIdentifier,
+                            List.of("email~" + newEmail));
                     AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp_Transaction(
                             this, sqlCon, appIdentifier, newEmail);
                     for (AuthRecipeUserInfo existingUser : existingUsers) {
@@ -1784,8 +1790,12 @@ public class Start
                     }
                 }
             }
-            ThirdPartyQueries.updateUserEmail_Transaction(this, sqlCon, appIdentifier, thirdPartyId,
-                    thirdPartyUserId, newEmail);
+            int updatedRows = ThirdPartyQueries.updateUserEmail_Transaction(this, sqlCon, appIdentifier, userId,
+                    thirdPartyId, thirdPartyUserId, newEmail);
+            if (updatedRows != 1) {
+                // userId does not hold this third party login method; nothing must be changed.
+                throw new UnknownUserIdException();
+            }
         } catch (PhoneNumberChangeNotAllowedException | DuplicatePhoneNumberException | DuplicateThirdPartyUserException e) {
             throw new IllegalStateException("should never happen");
         } catch (SQLException e) {
@@ -3965,6 +3975,18 @@ public class Start
     }
 
     @Override
+    public TOTPUsedCode[] getAllUsedCodesDescOrder_Transaction(TransactionConnection con,
+                                                               AppIdentifier appIdentifier, String userId)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return TOTPQueries.getAllUsedCodesDescOrder_Transaction(this, sqlCon, appIdentifier, userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public int removeExpiredCodes(TenantIdentifier tenantIdentifier, long expiredBefore)
             throws StorageQueryException {
         try {
@@ -4091,7 +4113,7 @@ public class Start
                             "This user ID is already linked to another user ID");
                 } else {
                     // Check for conflicting account info
-                    CanBecomePrimaryResult checkResult = checkIfLoginMethodCanBecomePrimary_legacy(sqlCon, appIdentifier, userId);
+                    CanBecomePrimaryResult checkResult = checkIfLoginMethodCanBecomePrimary_legacy(sqlCon, appIdentifier, userId, true);
                     if (checkResult.status == CanBecomePrimaryResult.RESULT.CONFLICTING_ACCOUNT_INFO) {
                         throw new AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException(
                                 checkResult.conflictingPrimaryUserId, checkResult.message);
@@ -4141,7 +4163,7 @@ public class Start
             } else {
                 // In LEGACY mode, check for conflicts using legacy tables
                 io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult checkResult =
-                        checkIfLoginMethodsCanBeLinked_legacy(sqlCon, appIdentifier, primaryUserId, recipeUserId);
+                        checkIfLoginMethodsCanBeLinked_legacy(sqlCon, appIdentifier, primaryUserId, recipeUserId, true);
                 switch (checkResult.status) {
                     case OK:
                         didLinkAccounts = true;
@@ -4246,7 +4268,7 @@ public class Start
             return AccountInfoQueries.checkIfLoginMethodCanBecomePrimary(this, appIdentifier, recipeUserId);
         }
         try (Connection sqlCon = ConnectionPool.getConnection(this)) {
-            return checkIfLoginMethodCanBecomePrimary_legacy(sqlCon, appIdentifier, recipeUserId);
+            return checkIfLoginMethodCanBecomePrimary_legacy(sqlCon, appIdentifier, recipeUserId, false);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
@@ -4258,6 +4280,8 @@ public class Start
             AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(this, sqlCon,
                     appIdentifier, userId);
             if (user != null && user.isPrimaryUser) {
+                lockLegacyAccountInfoKeys_Transaction(sqlCon, appIdentifier,
+                        List.of("email~" + newEmail));
                 AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp_Transaction(
                         this, sqlCon, appIdentifier, newEmail);
                 for (AuthRecipeUserInfo existingUser : existingUsers) {
@@ -4282,6 +4306,8 @@ public class Start
             AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(this, sqlCon,
                     appIdentifier, userId);
             if (user != null && user.isPrimaryUser) {
+                lockLegacyAccountInfoKeys_Transaction(sqlCon, appIdentifier,
+                        List.of("phone~" + newPhone));
                 AuthRecipeUserInfo[] existingUsers = GeneralQueries.listPrimaryUsersByPhoneNumber_legacy_forApp_Transaction(
                         this, sqlCon, appIdentifier, newPhone);
                 for (AuthRecipeUserInfo existingUser : existingUsers) {
@@ -4300,9 +4326,51 @@ public class Start
         }
     }
 
+    /*
+     * LEGACY migration mode only. There the "one primary user per email / phone number / third-party identity per
+     * tenant" checks are plain reads of the old tables, and no reservation-table constraint backs them. Under
+     * READ_COMMITTED two transactions can each pass the check before the other commits, and both commit. Every
+     * transaction that checks or claims an account info for a primary user therefore takes a transaction-scoped
+     * advisory lock on that account info (app-wide, like the checks) before running the check. A waiting
+     * transaction then runs its checks only after the holder committed, and sees its changes. The keys of one
+     * call are locked in sorted order; a deadlock that still occurs (e.g. together with user row locks) is
+     * detected by PostgreSQL (SQLState 40P01), rolled back and retried by startTransaction.
+     */
+    private static void addLegacyAccountInfoLockKeys(Set<String> keys, LoginMethod lm) {
+        if (lm.email != null) {
+            keys.add("email~" + lm.email);
+        }
+        if (lm.phoneNumber != null) {
+            keys.add("phone~" + lm.phoneNumber);
+        }
+        if (lm.thirdParty != null) {
+            keys.add("thirdparty~" + lm.thirdParty.id + "~" + lm.thirdParty.userId);
+        }
+    }
+
+    private void lockLegacyAccountInfoKeys_Transaction(Connection sqlCon, AppIdentifier appIdentifier,
+                                                       Collection<String> keys)
+            throws SQLException, StorageQueryException {
+        for (String key : new TreeSet<>(keys)) {
+            io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLockBlocking(sqlCon,
+                    "legacy_account_info~" + appIdentifier.getAppId() + "~" + key);
+        }
+    }
+
+    private void lockLegacyAccountInfos_Transaction(Connection sqlCon, AppIdentifier appIdentifier,
+                                                    Collection<LoginMethod> loginMethods)
+            throws SQLException, StorageQueryException {
+        Set<String> keys = new HashSet<>();
+        for (LoginMethod lm : loginMethods) {
+            addLegacyAccountInfoLockKeys(keys, lm);
+        }
+        lockLegacyAccountInfoKeys_Transaction(sqlCon, appIdentifier, keys);
+    }
+
     private CanBecomePrimaryResult checkIfLoginMethodCanBecomePrimary_legacy(Connection sqlCon,
                                                                              AppIdentifier appIdentifier,
-                                                                             String recipeUserId)
+                                                                             String recipeUserId,
+                                                                             boolean lockAccountInfos)
             throws StorageQueryException, UnknownUserIdException {
         try {
             AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(this, sqlCon,
@@ -4317,6 +4385,16 @@ public class Start
                 } else {
                     return CanBecomePrimaryResult.linkedWithAnotherPrimaryUserResult(user.getSupertokensUserId());
                 }
+            }
+
+            if (lockAccountInfos) {
+                List<LoginMethod> ownLoginMethods = new ArrayList<>();
+                for (LoginMethod lm : user.loginMethods) {
+                    if (lm.getSupertokensUserId().equals(recipeUserId)) {
+                        ownLoginMethods.add(lm);
+                    }
+                }
+                lockLegacyAccountInfos_Transaction(sqlCon, appIdentifier, ownLoginMethods);
             }
 
             // Check for conflicting account info with other primary users
@@ -4391,14 +4469,15 @@ public class Start
                     primaryUserId, recipeUserId);
         }
         try (Connection sqlCon = ConnectionPool.getConnection(this)) {
-            return checkIfLoginMethodsCanBeLinked_legacy(sqlCon, appIdentifier, primaryUserId, recipeUserId);
+            return checkIfLoginMethodsCanBeLinked_legacy(sqlCon, appIdentifier, primaryUserId, recipeUserId, false);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }
     }
 
     private io.supertokens.pluginInterface.authRecipe.CanLinkAccountsResult checkIfLoginMethodsCanBeLinked_legacy(
-            Connection sqlCon, AppIdentifier appIdentifier, String inputPrimaryUserId, String recipeUserId)
+            Connection sqlCon, AppIdentifier appIdentifier, String inputPrimaryUserId, String recipeUserId,
+            boolean lockAccountInfos)
             throws StorageQueryException, UnknownUserIdException {
         try {
             AuthRecipeUserInfo primaryUser = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(this, sqlCon,
@@ -4435,6 +4514,10 @@ public class Start
             List<LoginMethod> allLoginMethods = new java.util.ArrayList<>();
             allLoginMethods.addAll(java.util.Arrays.asList(primaryUser.loginMethods));
             allLoginMethods.addAll(java.util.Arrays.asList(recipeUser.loginMethods));
+
+            if (lockAccountInfos) {
+                lockLegacyAccountInfos_Transaction(sqlCon, appIdentifier, allLoginMethods);
+            }
 
             for (LoginMethod lm : allLoginMethods) {
                 if (lm.email != null) {
@@ -4518,6 +4601,7 @@ public class Start
                 AuthRecipeUserInfo user = GeneralQueries.getPrimaryUserInfoForUserId_Transaction(this, sqlCon,
                         appIdentifier, primaryUserId);
                 if (user != null && user.isPrimaryUser) {
+                    lockLegacyAccountInfos_Transaction(sqlCon, appIdentifier, Arrays.asList(user.loginMethods));
                     for (LoginMethod lm : user.loginMethods) {
                         if (lm.email != null) {
                             AuthRecipeUserInfo[] usersWithEmail = GeneralQueries.listPrimaryUsersByEmail_legacy_forApp_Transaction(
@@ -5361,6 +5445,18 @@ public class Start
         try {
             Connection sqlCon = (Connection) con.getConnection();
             return WebAuthNQueries.loadCredentialById_Transaction(this, sqlCon, tenantIdentifier, rpId, credentialId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public WebAuthNStoredCredential loadCredentialByIdInApp_Transaction(TenantIdentifier tenantIdentifier,
+                                                                        TransactionConnection con, String credentialId)
+            throws StorageQueryException {
+        try {
+            Connection sqlCon = (Connection) con.getConnection();
+            return WebAuthNQueries.loadCredentialByIdInApp_Transaction(this, sqlCon, tenantIdentifier, credentialId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

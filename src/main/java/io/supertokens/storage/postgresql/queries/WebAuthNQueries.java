@@ -153,6 +153,14 @@ public class WebAuthNQueries {
                 " (user_id);";
     }
 
+    // Backs the app-wide credential id uniqueness check at registration (a lookup by id alone, any relying party),
+    // which cannot use the (app_id, rp_id, id) primary key.
+    static String getQueryToCreateWebAuthNCredentialsAppIdIdIndex(Start start) {
+        return "CREATE INDEX IF NOT EXISTS webauthn_credentials_app_id_id_index ON " +
+                getConfig(start).getWebAuthNCredentialsTable() +
+                " (app_id, id);";
+    }
+
     public static String getQueryToCreateWebAuthNAccountRecoveryTokenTable(Start start) {
         // FK references app_id_to_user_id, not all_auth_recipe_users. The latter is the old
         // tenant-scoped table and is empty in MIGRATED mode — inserting recovery tokens would
@@ -262,6 +270,25 @@ public class WebAuthNQueries {
         }, result -> {
             if(result.next()){
                 return WebAuthnStoredCredentialRowMapper.getInstance().mapOrThrow(result); // we are expecting one or zero results
+            }
+            return null;
+        });
+    }
+
+    public static WebAuthNStoredCredential loadCredentialByIdInApp_Transaction(Start start, Connection sqlConnection,
+                                                                               TenantIdentifier tenantIdentifier,
+                                                                               String credentialId)
+            throws SQLException, StorageQueryException {
+        // Any relying party: credential ids are only unique per (app_id, rp_id). Served by
+        // webauthn_credentials_app_id_id_index.
+        String QUERY = "SELECT * FROM " + getConfig(start).getWebAuthNCredentialsTable()
+                + " WHERE app_id = ? AND id = ? LIMIT 1";
+        return execute(sqlConnection, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getAppId());
+            pst.setString(2, credentialId);
+        }, result -> {
+            if (result.next()) {
+                return WebAuthnStoredCredentialRowMapper.getInstance().mapOrThrow(result);
             }
             return null;
         });
@@ -745,8 +772,11 @@ public class WebAuthNQueries {
         // Tenant-scoped: the generated-options (challenge) table is keyed (app_id, tenant_id, id) and the
         // non-transactional loadOptionsById filters on tenant_id too. Sign-in uses this transactional path,
         // so it must not accept a challenge issued for another tenant. See GHSA-6v34-w48w-44rc.
+        // FOR UPDATE: sign-in consumes the options in this transaction, so concurrent sign-ins with the same
+        // options must queue here. Without the lock both read the row, both verify, and the second DELETE
+        // removes nothing, so the same assertion signs in twice.
         String QUERY = "SELECT * FROM " + getConfig(start).getWebAuthNGeneratedOptionsTable()
-                + " WHERE app_id = ? AND tenant_id = ? AND id = ?";
+                + " WHERE app_id = ? AND tenant_id = ? AND id = ? FOR UPDATE";
         return execute(sqlCon, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
