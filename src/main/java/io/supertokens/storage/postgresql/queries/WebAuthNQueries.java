@@ -761,8 +761,11 @@ public class WebAuthNQueries {
         // Tenant-scoped: the generated-options (challenge) table is keyed (app_id, tenant_id, id) and the
         // non-transactional loadOptionsById filters on tenant_id too. Sign-in uses this transactional path,
         // so it must not accept a challenge issued for another tenant. See GHSA-6v34-w48w-44rc.
+        // FOR UPDATE: sign-in consumes the options in this transaction, so concurrent sign-ins with the same
+        // options must queue here. Without the lock both read the row, both verify, and the second DELETE
+        // removes nothing, so the same assertion signs in twice.
         String QUERY = "SELECT * FROM " + getConfig(start).getWebAuthNGeneratedOptionsTable()
-                + " WHERE app_id = ? AND tenant_id = ? AND id = ?";
+                + " WHERE app_id = ? AND tenant_id = ? AND id = ? FOR UPDATE";
         return execute(sqlCon, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
