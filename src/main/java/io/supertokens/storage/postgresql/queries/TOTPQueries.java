@@ -331,7 +331,24 @@ public class TOTPQueries {
     public static TOTPDevice[] getDevices_Transaction(Start start, Connection con, AppIdentifier appIdentifier,
                                                       String userId)
             throws StorageQueryException, SQLException {
-        // Note: FOR UPDATE removed - caller should obtain user lock via UserLockingStorage before calling this method
+        // FOR UPDATE: the TOTP storage methods take no LockedUser, and TOTP user ids need not exist in
+        // app_id_to_user_id, so this row lock is what serialises concurrent transactions on a user's devices.
+        String LOCK_QUERY = "SELECT device_name FROM " + Config.getConfig(start).getTotpUserDevicesTable()
+                + " WHERE app_id = ? AND user_id = ? FOR UPDATE;";
+        execute(con, LOCK_QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, result -> {
+            while (result.next()) {
+                // consume all rows so every one of them is locked
+            }
+            return null;
+        });
+
+        // Under READ COMMITTED, a statement that waited for a row lock keeps its snapshot: it skips rows deleted
+        // by the transaction it waited for, but does not see rows that transaction inserted (e.g. a device
+        // re-created under the same name). Read the devices again in a new statement, after the locks are held,
+        // so callers (removeDevice: "is any device left?") see the committed state.
         String QUERY = "SELECT * FROM " + Config.getConfig(start).getTotpUserDevicesTable()
                 + " WHERE app_id = ? AND user_id = ?;";
 
@@ -383,6 +400,43 @@ public class TOTPQueries {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, userId);
+        }, result -> {
+            List<TOTPUsedCode> codes = new ArrayList<>();
+            while (result.next()) {
+                codes.add(TOTPUsedCodeRowMapper.getInstance().map(result));
+            }
+
+            return codes.toArray(TOTPUsedCode[]::new);
+        });
+    }
+
+    /**
+     * Query to get all used codes (expired/non-expired) of a user across all tenants of the app, in descending
+     * order of creation time.
+     *
+     * It first locks the user's totp_users row (which exists for as long as the user has a device), so concurrent
+     * calls for the same (app_id, user_id) are serialised until the transaction ends. FOR NO KEY UPDATE conflicts
+     * with itself and with deleting the row, but not with the FOR KEY SHARE taken by foreign-key checks, so
+     * inserting devices or used codes for the user is not blocked by it. The used codes are then read
+     * in a separate statement, which under READ COMMITTED takes a new snapshot and so includes the codes committed
+     * by the transaction that held the lock before.
+     */
+    public static TOTPUsedCode[] getAllUsedCodesDescOrder_Transaction(Start start, Connection con,
+                                                                      AppIdentifier appIdentifier, String userId)
+            throws SQLException, StorageQueryException {
+        String LOCK_QUERY = "SELECT user_id FROM " + Config.getConfig(start).getTotpUsersTable()
+                + " WHERE app_id = ? AND user_id = ? FOR NO KEY UPDATE;";
+        execute(con, LOCK_QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
+        }, ResultSet::next);
+
+        String QUERY = "SELECT * FROM " +
+                Config.getConfig(start).getTotpUsedCodesTable()
+                + " WHERE app_id = ? AND user_id = ? ORDER BY created_time_ms DESC;";
+        return execute(con, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, userId);
         }, result -> {
             List<TOTPUsedCode> codes = new ArrayList<>();
             while (result.next()) {
