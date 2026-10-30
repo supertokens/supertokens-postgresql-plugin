@@ -7,6 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [9.3.5]
+
+### Security
+
+- Third-party email updates only change the given recipe user, not users with the same third-party identity in other tenants.
+- TOTP: device and used-code reads lock the user, and used codes are checked across all tenants of the app.
+- SAML login codes are consumed with one atomic `DELETE ... RETURNING`, so a code can be redeemed only once.
+
 ## [9.3.4]
 
 - WebAuthn cross-tenant hardening (GHSA-6v34-w48w-44rc): `getUserInfoByCredentialId_Transaction` now requires the credential owner to be a member of the requested tenant (`all_users.tenant_id` filter), matching the in-memory implementation. Query-logic only; no schema change.
