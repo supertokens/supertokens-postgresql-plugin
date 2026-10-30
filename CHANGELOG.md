@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.9.2]
+
+### Security
+
+- Third-party email updates only change the given recipe user, not users with the same third-party identity in other tenants.
+- TOTP: device and used-code reads lock the user, and used codes are checked across all tenants of the app.
+- `LEGACY` migration mode: account-info uniqueness checks of account-linking writes are serialised with advisory locks.
+- SAML login codes are consumed with one atomic `DELETE ... RETURNING`, so a code can be redeemed only once.
+- WebAuthn: sign-in locks the sign-in options row (`SELECT ... FOR UPDATE`), so the options are consumed by at most one concurrent sign-in.
+
 ## [9.9.1]
 
 - Makes the SAML callback RelayState single-use: `getRelayStateInfo` is renamed to `getRelayStateInfoAndRemove` and now reads and deletes the RelayState row in one atomic `DELETE ... RETURNING`, so a captured SAML callback cannot be replayed to mint additional authorization codes. (GHSA-3r7x-rhvc-fw28)
