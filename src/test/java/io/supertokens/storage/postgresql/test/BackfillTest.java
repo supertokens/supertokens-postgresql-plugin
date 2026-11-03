@@ -228,7 +228,7 @@ public class BackfillTest {
     }
 
     /**
-     * Bulk import before core 12.4.3 accepted timeJoinedInMSSinceEpoch: 0, so the source tables
+     * Bulk import before core 12.5.0 accepted timeJoinedInMSSinceEpoch: 0, so the source tables
      * (all_auth_recipe_users and the recipe table) can hold a real time_joined of 0. The backfill
      * used to copy that 0 back into app_id_to_user_id, where 0 is the "pending" marker, so the user
      * stayed pending forever and the MIGRATED transition could never pass. A copied 0 must be
@@ -252,7 +252,7 @@ public class BackfillTest {
 
             simulateLegacyState(storage, userId);
 
-            // Simulate a pre-12.4.3 bulk import with timeJoinedInMSSinceEpoch: 0.
+            // Simulate a pre-12.5.0 bulk import with timeJoinedInMSSinceEpoch: 0.
             storage.startTransaction(con -> {
                 Connection sqlCon = (Connection) con.getConnection();
                 try (Statement stmt = sqlCon.createStatement()) {

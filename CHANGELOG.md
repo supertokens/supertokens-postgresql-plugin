@@ -7,7 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [unreleased]
 
-## [10.2.1]
+## [10.3.0]
 
 - The reservation-table backfill no longer leaves users imported with `timeJoinedInMSSinceEpoch: 0` pending forever: a copied `time_joined` of 0 now falls back to 1, so the `MIGRATED` transition can pass.
 

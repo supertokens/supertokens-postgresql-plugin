@@ -103,7 +103,7 @@ public class MigrationBackfillQueries {
         // fall back to it; the final constant 1 is a liveness backstop for dangling rows with no
         // recipe row at all, so a row can never stay 0 once processed.
         // Every copied value is wrapped in NULLIF(.., 0): time_joined = 0 is the "pending" marker
-        // here, but bulk import before 12.4.3 accepted timeJoinedInMSSinceEpoch: 0, so the source
+        // here, but bulk import before 12.5.0 accepted timeJoinedInMSSinceEpoch: 0, so the source
         // tables can hold a real 0. COALESCE only skips NULL, so without NULLIF that 0 would be
         // copied back and the user would stay pending forever, blocking the MIGRATED transition.
         String recipeUsersTable = getRecipeUsersTable(start, user.recipeId);
