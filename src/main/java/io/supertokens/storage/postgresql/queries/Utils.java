@@ -75,4 +75,16 @@ public class Utils {
             pst.setString(1, key);
         }, result -> null);
     }
+
+    /**
+     * Shared counterpart of {@link #takeAdvisoryLockBlocking}: holders of the shared lock don't block each other,
+     * but they wait for (and block) a holder of the exclusive lock on the same key. Transaction-scoped.
+     */
+    public static void takeSharedAdvisoryLockBlocking(Connection con, String key)
+            throws SQLException, StorageQueryException {
+        String LOCK_QUERY = "SELECT pg_advisory_xact_lock_shared(hashtext(?))";
+        execute(con, LOCK_QUERY, pst -> {
+            pst.setString(1, key);
+        }, result -> null);
+    }
 }

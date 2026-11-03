@@ -3155,31 +3155,37 @@ public class Start
             UserIdMappingQueries.createUserIdMapping(this, appIdentifier, superTokensUserId, externalUserId,
                     externalUserIdInfo);
         } catch (SQLException e) {
-            if (e instanceof PSQLException) {
-                PostgreSQLConfig config = Config.getConfig(this);
-                ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
-                if (isForeignKeyConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
-                        "supertokens_user_id")) {
-                    throw new UnknownSuperTokensUserIdException();
-                }
-
-                if (isPrimaryKeyError(serverErrorMessage, config.getUserIdMappingTable())) {
-                    throw new UserIdMappingAlreadyExistsException(true, true);
-                }
-
-                if (isUniqueConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
-                        "supertokens_user_id")) {
-                    throw new UserIdMappingAlreadyExistsException(true, false);
-                }
-
-                if (isUniqueConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
-                        "external_user_id")) {
-                    throw new UserIdMappingAlreadyExistsException(false, true);
-                }
-            }
-            throw new StorageQueryException(e);
+            throw toCreateUserIdMappingException(e);
         }
 
+    }
+
+    // Translates a failed user id mapping insert into the exception the interface declares for it.
+    private StorageQueryException toCreateUserIdMappingException(SQLException e)
+            throws UnknownSuperTokensUserIdException, UserIdMappingAlreadyExistsException {
+        if (e instanceof PSQLException) {
+            PostgreSQLConfig config = Config.getConfig(this);
+            ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
+            if (isForeignKeyConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
+                    "supertokens_user_id")) {
+                throw new UnknownSuperTokensUserIdException();
+            }
+
+            if (isPrimaryKeyError(serverErrorMessage, config.getUserIdMappingTable())) {
+                throw new UserIdMappingAlreadyExistsException(true, true);
+            }
+
+            if (isUniqueConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
+                    "supertokens_user_id")) {
+                throw new UserIdMappingAlreadyExistsException(true, false);
+            }
+
+            if (isUniqueConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
+                    "external_user_id")) {
+                throw new UserIdMappingAlreadyExistsException(false, true);
+            }
+        }
+        return new StorageQueryException(e);
     }
 
     @Override
@@ -3357,18 +3363,47 @@ public class Start
             if (e.actualException instanceof TenantOrAppNotFoundException) {
                 throw (TenantOrAppNotFoundException) e.actualException;
             }
-            if (e.actualException instanceof PSQLException) {
-                PostgreSQLConfig config = Config.getConfig(this);
-                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(),
-                        config.getTenantThirdPartyProvidersTable())) {
-                    throw new DuplicateThirdPartyIdException();
-                }
-                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(),
-                        config.getTenantThirdPartyProviderClientsTable())) {
-                    throw new DuplicateClientTypeException();
-                }
+            throw toOverwriteTenantConfigException(e.actualException);
+        }
+    }
+
+    @Override
+    public void overwriteTenantConfig_Transaction(TransactionConnection con, TenantConfig tenantConfig)
+            throws TenantOrAppNotFoundException, StorageQueryException, DuplicateThirdPartyIdException,
+            DuplicateClientTypeException {
+        try {
+            MultitenancyQueries.overwriteTenantConfig_Transaction(this, (Connection) con.getConnection(),
+                    tenantConfig);
+        } catch (SQLException e) {
+            throw toOverwriteTenantConfigException(e);
+        }
+    }
+
+    // Translates a failed tenant config write into the exception the interface declares for it.
+    private StorageQueryException toOverwriteTenantConfigException(Exception e)
+            throws DuplicateThirdPartyIdException, DuplicateClientTypeException {
+        if (e instanceof PSQLException) {
+            PostgreSQLConfig config = Config.getConfig(this);
+            if (isPrimaryKeyError(((PSQLException) e).getServerErrorMessage(),
+                    config.getTenantThirdPartyProvidersTable())) {
+                throw new DuplicateThirdPartyIdException();
             }
-            throw new StorageQueryException(e.actualException);
+            if (isPrimaryKeyError(((PSQLException) e).getServerErrorMessage(),
+                    config.getTenantThirdPartyProviderClientsTable())) {
+                throw new DuplicateClientTypeException();
+            }
+        }
+        return new StorageQueryException(e);
+    }
+
+    @Override
+    public JsonObject getTenantCoreConfig_Transaction(TransactionConnection con, TenantIdentifier tenantIdentifier)
+            throws StorageQueryException {
+        try {
+            return MultitenancyQueries.getTenantCoreConfig_Transaction(this, (Connection) con.getConnection(),
+                    tenantIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
         }
     }
 
@@ -4778,6 +4813,66 @@ public class Start
                         sqlCon, appIdentifier, userIds);
             }
             return result;
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void lockAppForUserIdMappingCreation_Transaction(TransactionConnection con, AppIdentifier appIdentifier)
+            throws StorageQueryException {
+        try {
+            io.supertokens.storage.postgresql.queries.Utils.takeSharedAdvisoryLockBlocking(
+                    (Connection) con.getConnection(),
+                    UserIdMappingQueries.getUserIdMappingCreationLockKey(appIdentifier));
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void lockAppForDisablingUserIdMapping_Transaction(TransactionConnection con, AppIdentifier appIdentifier)
+            throws StorageQueryException {
+        try {
+            io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLockBlocking(
+                    (Connection) con.getConnection(),
+                    UserIdMappingQueries.getUserIdMappingCreationLockKey(appIdentifier));
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean hasUserIdMappings_Transaction(TransactionConnection con, AppIdentifier appIdentifier)
+            throws StorageQueryException {
+        try {
+            return UserIdMappingQueries.hasUserIdMappings_Transaction(this, (Connection) con.getConnection(),
+                    appIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void createUserIdMapping_Transaction(TransactionConnection con, AppIdentifier appIdentifier,
+                                                String superTokensUserId, String externalUserId,
+                                                @org.jetbrains.annotations.Nullable String externalUserIdInfo)
+            throws StorageQueryException, UnknownSuperTokensUserIdException, UserIdMappingAlreadyExistsException {
+        try {
+            UserIdMappingQueries.createUserIdMapping_Transaction(this, (Connection) con.getConnection(),
+                    appIdentifier, superTokensUserId, externalUserId, externalUserIdInfo);
+        } catch (SQLException e) {
+            throw toCreateUserIdMappingException(e);
+        }
+    }
+
+    @Override
+    public void createBulkUserIdMapping_Transaction(TransactionConnection con, AppIdentifier appIdentifier,
+                                                    Map<String, String> superTokensUserIdToExternalUserId)
+            throws StorageQueryException {
+        try {
+            UserIdMappingQueries.createBulkUserIdMapping_Transaction(this, (Connection) con.getConnection(),
+                    appIdentifier, superTokensUserIdToExternalUserId);
         } catch (SQLException e) {
             throw new StorageQueryException(e);
         }

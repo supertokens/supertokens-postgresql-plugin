@@ -16,6 +16,7 @@
 
 package io.supertokens.storage.postgresql.queries;
 
+import com.google.gson.JsonObject;
 import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
 import io.supertokens.pluginInterface.multitenancy.TenantConfig;
@@ -28,6 +29,7 @@ import io.supertokens.storage.postgresql.queries.multitenancy.MfaSqlHelper;
 import io.supertokens.storage.postgresql.queries.multitenancy.TenantConfigSQLHelper;
 import io.supertokens.storage.postgresql.queries.multitenancy.ThirdPartyProviderClientSQLHelper;
 import io.supertokens.storage.postgresql.queries.multitenancy.ThirdPartyProviderSQLHelper;
+import io.supertokens.storage.postgresql.queries.utils.JsonUtils;
 import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
@@ -243,39 +245,49 @@ public class MultitenancyQueries {
             throws StorageQueryException, StorageTransactionLogicException {
         start.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
-            {
-                try {
-                    {
-                        io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(
-                                sqlCon, tenantConfig.tenantIdentifier.getConnectionUriDomain() + "~" + tenantConfig.tenantIdentifier.getAppId() + "~" + tenantConfig.tenantIdentifier.getTenantId());
-                    }
-                    {
-                        String QUERY = "DELETE FROM " + getConfig(start).getTenantConfigsTable()
-                                + " WHERE connection_uri_domain = ? AND app_id = ? AND tenant_id = ?;";
-                        int rowsAffected = update(sqlCon, QUERY, pst -> {
-                            pst.setString(1, tenantConfig.tenantIdentifier.getConnectionUriDomain());
-                            pst.setString(2, tenantConfig.tenantIdentifier.getAppId());
-                            pst.setString(3, tenantConfig.tenantIdentifier.getTenantId());
-                        });
-                        if (rowsAffected == 0) {
-                            throw new StorageTransactionLogicException(
-                                    new TenantOrAppNotFoundException(tenantConfig.tenantIdentifier));
-                        }
-                    }
-
-                    {
-                        executeCreateTenantQueries(start, sqlCon, tenantConfig);
-                    }
-
-                    sqlCon.commit();
-
-                } catch (SQLException throwables) {
-                    throw new StorageTransactionLogicException(throwables);
-                }
+            try {
+                overwriteTenantConfig_Transaction(start, sqlCon, tenantConfig);
+                sqlCon.commit();
+            } catch (SQLException throwables) {
+                throw new StorageTransactionLogicException(throwables);
+            } catch (TenantOrAppNotFoundException e) {
+                throw new StorageTransactionLogicException(e);
             }
-
             return null;
         });
+    }
+
+    public static void overwriteTenantConfig_Transaction(Start start, Connection sqlCon, TenantConfig tenantConfig)
+            throws SQLException, StorageQueryException, TenantOrAppNotFoundException {
+        io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(
+                sqlCon, tenantConfig.tenantIdentifier.getConnectionUriDomain() + "~"
+                        + tenantConfig.tenantIdentifier.getAppId() + "~"
+                        + tenantConfig.tenantIdentifier.getTenantId());
+
+        String QUERY = "DELETE FROM " + getConfig(start).getTenantConfigsTable()
+                + " WHERE connection_uri_domain = ? AND app_id = ? AND tenant_id = ?;";
+        int rowsAffected = update(sqlCon, QUERY, pst -> {
+            pst.setString(1, tenantConfig.tenantIdentifier.getConnectionUriDomain());
+            pst.setString(2, tenantConfig.tenantIdentifier.getAppId());
+            pst.setString(3, tenantConfig.tenantIdentifier.getTenantId());
+        });
+        if (rowsAffected == 0) {
+            throw new TenantOrAppNotFoundException(tenantConfig.tenantIdentifier);
+        }
+
+        executeCreateTenantQueries(start, sqlCon, tenantConfig);
+    }
+
+    public static JsonObject getTenantCoreConfig_Transaction(Start start, Connection sqlCon,
+                                                             TenantIdentifier tenantIdentifier)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT core_config FROM " + getConfig(start).getTenantConfigsTable()
+                + " WHERE connection_uri_domain = ? AND app_id = ? AND tenant_id = ?";
+        return execute(sqlCon, QUERY, pst -> {
+            pst.setString(1, tenantIdentifier.getConnectionUriDomain());
+            pst.setString(2, tenantIdentifier.getAppId());
+            pst.setString(3, tenantIdentifier.getTenantId());
+        }, result -> result.next() ? JsonUtils.stringToJsonObject(result.getString("core_config")) : null);
     }
 
     public static TenantConfig[] getAllTenants(Start start) throws StorageQueryException {
