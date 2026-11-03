@@ -227,6 +227,71 @@ public class BackfillTest {
         }
     }
 
+    /**
+     * Bulk import before core 12.4.3 accepted timeJoinedInMSSinceEpoch: 0, so the source tables
+     * (all_auth_recipe_users and the recipe table) can hold a real time_joined of 0. The backfill
+     * used to copy that 0 back into app_id_to_user_id, where 0 is the "pending" marker, so the user
+     * stayed pending forever and the MIGRATED transition could never pass. A copied 0 must be
+     * treated as missing and fall through to the constant 1.
+     */
+    @Test
+    public void backfillCompletesForUsersImportedWithTimeJoinedZero() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        try {
+            Main main = process.getProcess();
+            if (StorageLayer.getStorage(main).getType() != STORAGE_TYPE.SQL) {
+                return;
+            }
+
+            Start storage = (Start) StorageLayer.getStorage(main);
+            MigrationBackfillStorage backfillStorage = (MigrationBackfillStorage) storage;
+            AppIdentifier appIdentifier = new AppIdentifier(null, null);
+
+            AuthRecipeUserInfo user = EmailPassword.signUp(main, "imported-zero@example.com", "password123");
+            String userId = user.getSupertokensUserId();
+
+            simulateLegacyState(storage, userId);
+
+            // Simulate a pre-12.4.3 bulk import with timeJoinedInMSSinceEpoch: 0.
+            storage.startTransaction(con -> {
+                Connection sqlCon = (Connection) con.getConnection();
+                try (Statement stmt = sqlCon.createStatement()) {
+                    stmt.executeUpdate("UPDATE " + Config.getConfig(storage).getUsersTable()
+                            + " SET time_joined = 0, primary_or_recipe_user_time_joined = 0"
+                            + " WHERE user_id = '" + userId + "'");
+                    stmt.executeUpdate("UPDATE " + Config.getConfig(storage).getEmailPasswordUsersTable()
+                            + " SET time_joined = 0 WHERE user_id = '" + userId + "'");
+                }
+                return null;
+            });
+
+            assertEquals(1, backfillStorage.getBackfillPendingUsersCount(appIdentifier));
+
+            int processed = backfillStorage.backfillUsersBatch(appIdentifier, 100);
+            assertEquals(1, processed);
+
+            // Previously the 0 was copied back and the user stayed pending forever.
+            assertEquals(0, backfillStorage.getBackfillPendingUsersCount(appIdentifier));
+            String appIdToUserIdTable = Config.getConfig(storage).getAppIdToUserIdTable();
+            assertEquals(1, queryLong(storage,
+                    "SELECT time_joined FROM " + appIdToUserIdTable + " WHERE user_id = '" + userId + "'"));
+            assertEquals(1, queryLong(storage,
+                    "SELECT primary_or_recipe_user_time_joined FROM " + appIdToUserIdTable
+                            + " WHERE user_id = '" + userId + "'"));
+
+            // The source tables keep the imported value.
+            assertEquals(0, queryLong(storage,
+                    "SELECT time_joined FROM " + Config.getConfig(storage).getUsersTable()
+                            + " WHERE user_id = '" + userId + "'"));
+
+            // Nothing left to process.
+            assertEquals(0, backfillStorage.backfillUsersBatch(appIdentifier, 100));
+        } finally {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
     private long queryLong(Start storage, String query) throws Exception {
         return storage.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
