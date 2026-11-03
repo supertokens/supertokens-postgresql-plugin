@@ -1,4 +1,4 @@
--- Plugin 10.2.0 (core 12.5.0): optional SAML client attribute mapping.
+-- Plugin 10.3.0 (core 12.5.0): optional SAML client attribute mapping.
 --
 -- A nullable saml_clients.attribute_mapping column holding the client's attribute mapping as JSON object
 -- text. NULL = not configured (existing clients are unchanged).
