@@ -232,7 +232,8 @@ public class BackfillTest {
      * (all_auth_recipe_users and the recipe table) can hold a real time_joined of 0. The backfill
      * used to copy that 0 back into app_id_to_user_id, where 0 is the "pending" marker, so the user
      * stayed pending forever and the MIGRATED transition could never pass. A copied 0 must be
-     * treated as missing and fall through to the constant 1.
+     * treated as missing and fall through to the constant 1. primary_or_recipe_user_time_joined is
+     * copied as-is (see the linked-group test below).
      */
     @Test
     public void backfillCompletesForUsersImportedWithTimeJoinedZero() throws Exception {
@@ -275,7 +276,8 @@ public class BackfillTest {
             String appIdToUserIdTable = Config.getConfig(storage).getAppIdToUserIdTable();
             assertEquals(1, queryLong(storage,
                     "SELECT time_joined FROM " + appIdToUserIdTable + " WHERE user_id = '" + userId + "'"));
-            assertEquals(1, queryLong(storage,
+            // primary_or_recipe_user_time_joined is not the pending marker: it is copied as-is.
+            assertEquals(0, queryLong(storage,
                     "SELECT primary_or_recipe_user_time_joined FROM " + appIdToUserIdTable
                             + " WHERE user_id = '" + userId + "'"));
 
@@ -286,6 +288,82 @@ public class BackfillTest {
 
             // Nothing left to process.
             assertEquals(0, backfillStorage.backfillUsersBatch(appIdentifier, 100));
+        } finally {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
+    /**
+     * A linked group where one member was imported (before core 12.5.0) with timeJoined 0: the
+     * group's primary_or_recipe_user_time_joined in all_auth_recipe_users is then 0 (the group
+     * MIN). Only time_joined is the pending marker, so only it may be turned from 0 into 1.
+     * primary_or_recipe_user_time_joined must be copied as-is, so every member keeps the same
+     * value (invariant I6). Otherwise user listing, which is DISTINCT on (primary id, primary
+     * time), would return the linked account twice.
+     */
+    @Test
+    public void backfillKeepsGroupPrimaryTimeJoinedForLinkedUserImportedWithTimeJoinedZero() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        try {
+            Main main = process.getProcess();
+            if (StorageLayer.getStorage(main).getType() != STORAGE_TYPE.SQL) {
+                return;
+            }
+
+            Start storage = (Start) StorageLayer.getStorage(main);
+            MigrationBackfillStorage backfillStorage = (MigrationBackfillStorage) storage;
+            AppIdentifier appIdentifier = new AppIdentifier(null, null);
+
+            AuthRecipeUserInfo primary = EmailPassword.signUp(main, "group-primary@example.com", "password123");
+            AuthRecipeUserInfo linked = EmailPassword.signUp(main, "group-linked@example.com", "password123");
+            AuthRecipe.createPrimaryUser(main, primary.getSupertokensUserId());
+            AuthRecipe.linkAccounts(main, linked.getSupertokensUserId(), primary.getSupertokensUserId());
+            String primaryId = primary.getSupertokensUserId();
+            String linkedId = linked.getSupertokensUserId();
+
+            simulateLegacyState(storage, primaryId);
+            simulateLegacyState(storage, linkedId);
+
+            // The primary was imported with timeJoined 0; the group MIN is therefore 0 as well.
+            String usersTable = Config.getConfig(storage).getUsersTable();
+            storage.startTransaction(con -> {
+                Connection sqlCon = (Connection) con.getConnection();
+                try (Statement stmt = sqlCon.createStatement()) {
+                    stmt.executeUpdate("UPDATE " + usersTable + " SET time_joined = 0"
+                            + " WHERE user_id = '" + primaryId + "'");
+                    stmt.executeUpdate("UPDATE " + usersTable + " SET primary_or_recipe_user_time_joined = 0"
+                            + " WHERE primary_or_recipe_user_id = '" + primaryId + "'");
+                    stmt.executeUpdate("UPDATE " + Config.getConfig(storage).getEmailPasswordUsersTable()
+                            + " SET time_joined = 0 WHERE user_id = '" + primaryId + "'");
+                }
+                return null;
+            });
+            long linkedTimeJoined = queryLong(storage, "SELECT time_joined FROM "
+                    + Config.getConfig(storage).getEmailPasswordUsersTable() + " WHERE user_id = '" + linkedId + "'");
+            assertTrue(linkedTimeJoined > 0);
+
+            assertEquals(2, backfillStorage.getBackfillPendingUsersCount(appIdentifier));
+            assertEquals(2, backfillStorage.backfillUsersBatch(appIdentifier, 100));
+            assertEquals(0, backfillStorage.getBackfillPendingUsersCount(appIdentifier));
+
+            String appIdToUserIdTable = Config.getConfig(storage).getAppIdToUserIdTable();
+            // time_joined is per recipe user: the imported 0 becomes 1, the other keeps its own value.
+            assertEquals(1, queryLong(storage, "SELECT time_joined FROM " + appIdToUserIdTable
+                    + " WHERE user_id = '" + primaryId + "'"));
+            assertEquals(linkedTimeJoined, queryLong(storage, "SELECT time_joined FROM " + appIdToUserIdTable
+                    + " WHERE user_id = '" + linkedId + "'"));
+
+            // primary_or_recipe_user_time_joined is the group's value (0) on both rows.
+            assertEquals(1, queryLong(storage, "SELECT COUNT(DISTINCT primary_or_recipe_user_time_joined) FROM "
+                    + appIdToUserIdTable + " WHERE primary_or_recipe_user_id = '" + primaryId + "'"));
+            assertEquals(0, queryLong(storage, "SELECT MIN(primary_or_recipe_user_time_joined) FROM "
+                    + appIdToUserIdTable + " WHERE primary_or_recipe_user_id = '" + primaryId + "'"));
+
+            // The linked account is listed once.
+            assertEquals(1, queryLong(storage, "SELECT COUNT(*) FROM (SELECT DISTINCT primary_or_recipe_user_id,"
+                    + " primary_or_recipe_user_time_joined FROM " + appIdToUserIdTable
+                    + " WHERE primary_or_recipe_user_id = '" + primaryId + "') x"));
         } finally {
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
