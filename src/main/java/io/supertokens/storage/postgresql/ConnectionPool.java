@@ -270,13 +270,13 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
     private static final ThreadLocal<Map<String, Integer>> TXN_DEPTH_BY_POOL =
             ThreadLocal.withInitial(HashMap::new);
 
-    // The guard WARNS by default so the suite stays green while the pre-existing instances are fixed; flip this to
-    // fail fast (intended to become the default once that cleanup lands).
-    private static volatile boolean throwOnNestedAcquisition = false;
+    // The guard THROWS by default, so a test that introduces a nested borrow fails at that borrow. Setting this to
+    // false is a test-only opt-out to warn mode.
+    private static volatile boolean throwOnNestedAcquisition = true;
 
-    // Test hook: when true, a nested same-pool acquisition throws instead of only warning. The flag is
-    // process-global; it is reset to false when the base storage stops logging (i.e. when the core process under
-    // test shuts down), so a test that fails before restoring it cannot leak throw-mode into later tests.
+    // Test hook: false opts out to warn mode, true restores the default. The flag is process-global; it is reset to
+    // true when the base storage stops logging (i.e. when the core process under test shuts down), so a test that
+    // fails before restoring it cannot leak warn mode into later tests.
     public static void setThrowOnNestedAcquisition(boolean value) {
         throwOnNestedAcquisition = value;
     }
@@ -307,7 +307,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
 
     // Called by Start.stopLogging on the base storage, i.e. at core process shutdown.
     static void resetNestedAcquisitionGuard() {
-        throwOnNestedAcquisition = false;
+        throwOnNestedAcquisition = true;
     }
 
     // Called by Start.startTransactionHelper AFTER it has taken its own connection, wrapping the callback. Returns
@@ -353,7 +353,7 @@ public class ConnectionPool extends ResourceDistributor.SingletonResource {
         if (throwOnNestedAcquisition) {
             throw new IllegalStateException(message);
         }
-        // Warn-mode default: surface it without failing the suite — counted, and logged to both stderr and the
+        // Warn-mode opt-out: surface it without failing the test — counted, and logged to both stderr and the
         // storage's error log so it shows up in test logs.
         nestedAcquisitionWarningCount.incrementAndGet();
         NESTED_ACQUISITION_WARNINGS_ON_THREAD.get()[0]++;
