@@ -7,6 +7,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [unreleased]
 
+## [10.3.0]
+
+- Stores the optional SAML client attribute mapping (plugin-interface 11.3 `SAMLClient.attributeMapping`) in a new
+  nullable `saml_clients.attribute_mapping` column, as JSON object text. `createOrUpdateSAMLClient` writes it (insert
+  and update) and all three SAML client reads return it. NULL means not configured. Additive and online-safe; the
+  plugin adds the column at startup.
+- The reservation-table backfill no longer leaves users imported with `timeJoinedInMSSinceEpoch: 0` pending forever: a copied `time_joined` of 0 now falls back to 1, so the `MIGRATED` transition can pass.
+- Implements `setAppsWithUserIdMappingDisabled`: for apps with `disable_user_id_mapping` on, loading users, sessions and WebAuthn users no longer reads `userid_mapping`.
+- Implements the plugin-interface 11.3 user id mapping creation locks (transaction-scoped advisory locks per app), `hasUserIdMappings_Transaction`, `createUserIdMapping_Transaction` / `createBulkUserIdMapping_Transaction`, `getTenantCoreConfig_Transaction` and `overwriteTenantConfig_Transaction`.
+
+### Migration
+
+Additive and online-safe; the plugin applies it at startup. Large deployments can run
+`migration-scripts/v10.3.0.sql` ahead of the upgrade:
+
+```sql
+ALTER TABLE saml_clients ADD COLUMN IF NOT EXISTS attribute_mapping TEXT;
+```
+
 ## [10.1.0]
 
 - WebAuthn sign-in and a primary user's email change in `LEGACY` migration mode no longer borrow a second pool connection inside their transaction.
@@ -19,7 +38,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Major release: implements plugin-interface 11.0 (a breaking interface change), so it works with core 12.4 and later only.
 - Transactions no longer read, set and reset the session isolation level around every call (three extra round trips, each an implicit transaction): every transaction runs at the pool's session default, READ COMMITTED. Following the plugin-interface contract change, `startTransaction(logic, TransactionIsolationLevel)` is removed, and passwordless `createDeviceWithCode` now runs at READ COMMITTED instead of REPEATABLE READ.
 - Implements `hasUserIdMappings(AppIdentifier)`: a single `LIMIT 1` probe on `userid_mapping` by `app_id` that tells whether the app has any user id mappings.
-- Implements `setAppsWithUserIdMappingDisabled`: for apps with `disable_user_id_mapping` on, loading users, sessions and WebAuthn users no longer reads `userid_mapping`.
 - Add transaction-aware listPrimaryUsersByEmail/ByPhoneNumber reads; the non-transaction forms now borrow one
   connection and delegate to them, so each lookup query exists once.
 - Implements `getOAuthClientById_Transaction`, which reads an OAuth client on the caller's transaction connection;

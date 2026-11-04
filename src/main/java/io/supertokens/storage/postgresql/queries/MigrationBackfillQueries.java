@@ -102,15 +102,24 @@ public class MigrationBackfillQueries {
         // The per-app recipe table still has the user's row (with the exact same time_joined), so
         // fall back to it; the final constant 1 is a liveness backstop for dangling rows with no
         // recipe row at all, so a row can never stay 0 once processed.
+        // time_joined's copied values are wrapped in NULLIF(.., 0): time_joined = 0 is the "pending"
+        // marker here, but bulk import before 12.5.0 accepted timeJoinedInMSSinceEpoch: 0, so the
+        // source tables can hold a real 0. COALESCE only skips NULL, so without NULLIF that 0 would be
+        // copied back and the user would stay pending forever, blocking the MIGRATED transition.
+        // primary_or_recipe_user_time_joined is NOT the pending marker and is copied as-is, 0
+        // included: it must stay the same for every member of a linked group (invariant I6, user
+        // listing is DISTINCT on (primary id, primary time)), including members backfilled earlier
+        // and the group's value in all_auth_recipe_users.
         String recipeUsersTable = getRecipeUsersTable(start, user.recipeId);
-        String recipeFallback = recipeUsersTable == null ? ""
-                : ", (SELECT MIN(time_joined) FROM " + recipeUsersTable + " WHERE app_id = ? AND user_id = ?)";
+        String recipeTimeJoined = "(SELECT MIN(time_joined) FROM " + recipeUsersTable + " WHERE app_id = ? AND user_id = ?)";
+        String recipeFallbackTimeJoined = recipeUsersTable == null ? "" : ", NULLIF(" + recipeTimeJoined + ", 0)";
+        String recipeFallbackPrimary = recipeUsersTable == null ? "" : ", " + recipeTimeJoined;
 
         String updateTimeJoined = "UPDATE " + getConfig(start).getAppIdToUserIdTable()
-                + " SET time_joined = COALESCE(("
+                + " SET time_joined = COALESCE(NULLIF(("
                 + "   SELECT MIN(time_joined) FROM " + getConfig(start).getUsersTable()
                 + "   WHERE app_id = ? AND user_id = ?"
-                + " )" + recipeFallback + ", 1),"
+                + " ), 0)" + recipeFallbackTimeJoined + ", 1),"
                 + " primary_or_recipe_user_time_joined = COALESCE(("
                 + "   SELECT MIN(primary_or_recipe_user_time_joined) FROM " + getConfig(start).getUsersTable()
                 + "   WHERE app_id = ? AND user_id = ?"
@@ -119,7 +128,7 @@ public class MigrationBackfillQueries {
                 // primary-user group's tenant rows.
                 + "   SELECT MIN(primary_or_recipe_user_time_joined) FROM " + getConfig(start).getUsersTable()
                 + "   WHERE app_id = ? AND primary_or_recipe_user_id = ?"
-                + " )" + recipeFallback + ", 1)"
+                + " )" + recipeFallbackPrimary + ", 1)"
                 + " WHERE app_id = ? AND user_id = ? AND time_joined = 0";
 
         boolean hasRecipeFallback = recipeUsersTable != null;

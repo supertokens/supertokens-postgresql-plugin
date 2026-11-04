@@ -5752,7 +5752,8 @@ public class Start
                     samlClient.ssoLoginURL, samlClient.redirectURIs.toString(), samlClient.defaultRedirectURI,
                     samlClient.idpEntityId, samlClient.idpSigningCertificate,
                     samlClient.allowIDPInitiatedLogin, samlClient.enableRequestSigning,
-                    samlClient.acsURLs == null ? null : samlClient.acsURLs.toString());
+                    samlClient.acsURLs == null ? null : samlClient.acsURLs.toString(),
+                    samlClient.attributeMapping == null ? null : samlClient.attributeMapping.toString());
         } catch (SQLException e) {
             if (e instanceof PSQLException) {
                 PostgreSQLConfig config = Config.getConfig(this);
