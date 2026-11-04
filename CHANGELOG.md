@@ -13,6 +13,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   nullable `saml_clients.attribute_mapping` column, as JSON object text. `createOrUpdateSAMLClient` writes it (insert
   and update) and all three SAML client reads return it. NULL means not configured. Additive and online-safe; the
   plugin adds the column at startup.
+- The reservation-table backfill no longer leaves users imported with `timeJoinedInMSSinceEpoch: 0` pending forever: a copied `time_joined` of 0 now falls back to 1, so the `MIGRATED` transition can pass.
 
 ### Migration
 
