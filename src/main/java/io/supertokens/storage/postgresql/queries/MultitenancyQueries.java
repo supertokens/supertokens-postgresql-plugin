@@ -34,7 +34,9 @@ import io.supertokens.storage.postgresql.utils.Utils;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.Map;
 
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.execute;
 import static io.supertokens.storage.postgresql.QueryExecutorTemplate.update;
@@ -259,10 +261,8 @@ public class MultitenancyQueries {
 
     public static void overwriteTenantConfig_Transaction(Start start, Connection sqlCon, TenantConfig tenantConfig)
             throws SQLException, StorageQueryException, TenantOrAppNotFoundException {
-        io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(
-                sqlCon, tenantConfig.tenantIdentifier.getConnectionUriDomain() + "~"
-                        + tenantConfig.tenantIdentifier.getAppId() + "~"
-                        + tenantConfig.tenantIdentifier.getTenantId());
+        io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(sqlCon,
+                getTenantConfigWriteLockKey(tenantConfig.tenantIdentifier));
 
         String QUERY = "DELETE FROM " + getConfig(start).getTenantConfigsTable()
                 + " WHERE connection_uri_domain = ? AND app_id = ? AND tenant_id = ?;";
@@ -278,16 +278,57 @@ public class MultitenancyQueries {
         executeCreateTenantQueries(start, sqlCon, tenantConfig);
     }
 
-    public static JsonObject getTenantCoreConfig_Transaction(Start start, Connection sqlCon,
-                                                             TenantIdentifier tenantIdentifier)
+    // The lock a write of the tenant's config takes. It is a try-lock: a second writer fails with LockFailure, which
+    // Start.startTransaction retries.
+    private static String getTenantConfigWriteLockKey(TenantIdentifier tenantIdentifier) {
+        return tenantIdentifier.getConnectionUriDomain() + "~" + tenantIdentifier.getAppId() + "~"
+                + tenantIdentifier.getTenantId();
+    }
+
+    // The locks come first, so the query that follows (a new snapshot under READ COMMITTED) reads rows no write is
+    // replacing. A row lock (FOR UPDATE) wouldn't do: a config write deletes and re-inserts the row, and a locking
+    // read that waited on the deleted row would return nothing for it. One query for any number of tenants (the keys
+    // go in as three arrays).
+    public static Map<TenantIdentifier, JsonObject> getTenantCoreConfigs_Transaction(Start start, Connection sqlCon,
+            Collection<TenantIdentifier> tenantIdentifiers, boolean lockAgainstConfigWrites)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT core_config FROM " + getConfig(start).getTenantConfigsTable()
-                + " WHERE connection_uri_domain = ? AND app_id = ? AND tenant_id = ?";
-        return execute(sqlCon, QUERY, pst -> {
-            pst.setString(1, tenantIdentifier.getConnectionUriDomain());
-            pst.setString(2, tenantIdentifier.getAppId());
-            pst.setString(3, tenantIdentifier.getTenantId());
-        }, result -> result.next() ? JsonUtils.stringToJsonObject(result.getString("core_config")) : null);
+        Map<TenantIdentifier, JsonObject> coreConfigs = new HashMap<>();
+        if (tenantIdentifiers.isEmpty()) {
+            return coreConfigs;
+        }
+        if (lockAgainstConfigWrites) {
+            for (TenantIdentifier tenantIdentifier : tenantIdentifiers) {
+                io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(sqlCon,
+                        getTenantConfigWriteLockKey(tenantIdentifier));
+            }
+        }
+        String[] connectionUriDomains = new String[tenantIdentifiers.size()];
+        String[] appIds = new String[tenantIdentifiers.size()];
+        String[] tenantIds = new String[tenantIdentifiers.size()];
+        int i = 0;
+        for (TenantIdentifier tenantIdentifier : tenantIdentifiers) {
+            connectionUriDomains[i] = tenantIdentifier.getConnectionUriDomain();
+            appIds[i] = tenantIdentifier.getAppId();
+            tenantIds[i] = tenantIdentifier.getTenantId();
+            i++;
+        }
+        String QUERY = "SELECT connection_uri_domain, app_id, tenant_id, core_config FROM "
+                + getConfig(start).getTenantConfigsTable()
+                + " WHERE (connection_uri_domain, app_id, tenant_id) IN"
+                + " (SELECT * FROM UNNEST(?::VARCHAR[], ?::VARCHAR[], ?::VARCHAR[]))";
+        execute(sqlCon, QUERY, pst -> {
+            pst.setArray(1, sqlCon.createArrayOf("VARCHAR", connectionUriDomains));
+            pst.setArray(2, sqlCon.createArrayOf("VARCHAR", appIds));
+            pst.setArray(3, sqlCon.createArrayOf("VARCHAR", tenantIds));
+        }, result -> {
+            while (result.next()) {
+                coreConfigs.put(new TenantIdentifier(result.getString("connection_uri_domain"),
+                                result.getString("app_id"), result.getString("tenant_id")),
+                        JsonUtils.stringToJsonObject(result.getString("core_config")));
+            }
+            return null;
+        });
+        return coreConfigs;
     }
 
     public static TenantConfig[] getAllTenants(Start start) throws StorageQueryException {

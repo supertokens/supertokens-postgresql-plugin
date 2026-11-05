@@ -15,7 +15,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   plugin adds the column at startup.
 - The reservation-table backfill no longer leaves users imported with `timeJoinedInMSSinceEpoch: 0` pending forever: a copied `time_joined` of 0 now falls back to 1, so the `MIGRATED` transition can pass.
 - Implements `setAppsWithUserIdMappingDisabled`: for apps with `disable_user_id_mapping` on, loading users, sessions and WebAuthn users no longer reads `userid_mapping`.
-- Implements the plugin-interface 11.3 user id mapping creation locks (transaction-scoped advisory locks per app), `hasUserIdMappings_Transaction`, `createUserIdMapping_Transaction` / `createBulkUserIdMapping_Transaction`, `getTenantCoreConfig_Transaction` and `overwriteTenantConfig_Transaction`.
+- Implements the plugin-interface 11.3 user id mapping creation locks (transaction-scoped advisory locks per app), `hasUserIdMappings_Transaction`, `createUserIdMapping_Transaction` / `createBulkUserIdMapping_Transaction`, `getTenantCoreConfigs_Transaction` (takes the tenant config write locks first when asked to) and `overwriteTenantConfig_Transaction`.
 
 ### Migration
 
