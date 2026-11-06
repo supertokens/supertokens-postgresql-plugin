@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased]
+## [Unreleased]
 
 ## [10.3.0]
 
@@ -24,6 +24,25 @@ Additive and online-safe; the plugin applies it at startup. Large deployments ca
 
 ```sql
 ALTER TABLE saml_clients ADD COLUMN IF NOT EXISTS attribute_mapping TEXT;
+```
+
+## [10.2.0]
+
+- Third-party email updates change only the given recipe user's row.
+- TOTP: `getDevices_Transaction` locks the user's device rows again.
+- TOTP: implements the app-wide, user-locking `getAllUsedCodesDescOrder_Transaction`.
+- SAML codes are read and deleted in one atomic statement, so each is redeemed at most once.
+- `LEGACY` migration mode: account-linking uniqueness checks take advisory locks on the account info they check.
+- Adds the index `webauthn_credentials_app_id_id_index` on `webauthn_credentials (app_id, id)` for the app-wide WebAuthn credential id check.
+- Supports plugin interface 11.2.
+- WebAuthn: sign-in locks the sign-in options row (`SELECT ... FOR UPDATE`), so the options are consumed by at most one concurrent sign-in.
+
+### Migration
+
+Index-only; the plugin creates the index at startup. Large deployments can build it concurrently ahead of the upgrade with `migration-scripts/v10.2.0.sql`:
+
+```sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS webauthn_credentials_app_id_id_index ON webauthn_credentials (app_id, id);
 ```
 
 ## [10.1.0]
