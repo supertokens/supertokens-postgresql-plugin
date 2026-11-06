@@ -272,7 +272,7 @@ public class TestForNoCrashDuringStartup {
         MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage_forTesting = false;
 
         // this should succeed now
-        tpSignInUpAndGetResponse(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1",
+        tpSignInUpOnceTenantIsLoaded(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1",
                 "test@example.com", process.getProcess(), SemVer.v5_0);
     }
 
@@ -320,7 +320,7 @@ public class TestForNoCrashDuringStartup {
         MultitenancyQueries.simulateErrorInAddingTenantIdInTargetStorage_forTesting = false;
 
         // this should succeed now
-        tpSignInUpAndGetResponse(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1",
+        tpSignInUpOnceTenantIsLoaded(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1",
                 "test@example.com", process.getProcess(), SemVer.v5_0);
 
         Session.createNewSession(process.getProcess(), "userid", new JsonObject(), new JsonObject());
@@ -370,7 +370,7 @@ public class TestForNoCrashDuringStartup {
         assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STARTED));
 
         // this should succeed now
-        tpSignInUpAndGetResponse(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1",
+        tpSignInUpOnceTenantIsLoaded(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1",
                 "test@example.com", process.getProcess(), SemVer.v5_0);
 
         Session.createNewSession(
@@ -460,7 +460,7 @@ public class TestForNoCrashDuringStartup {
         assertEquals(2, allTenants.length); // should have the new CUD
 
         // this should succeed now
-        tpSignInUpAndGetResponse(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1",
+        tpSignInUpOnceTenantIsLoaded(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1",
                 "test@example.com", process.getProcess(), SemVer.v5_0);
 
         try {
@@ -485,7 +485,7 @@ public class TestForNoCrashDuringStartup {
         assertEquals(2, allTenants.length); // should have the new CUD
 
         // this should succeed now
-        tpSignInUpAndGetResponse(new TenantIdentifier("localhost", null, null), "google", "googleid1",
+        tpSignInUpOnceTenantIsLoaded(new TenantIdentifier("localhost", null, null), "google", "googleid1",
                 "test@example.com", process.getProcess(), SemVer.v5_0);
         try {
             tpSignInUpAndGetResponse(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1",
@@ -569,8 +569,32 @@ public class TestForNoCrashDuringStartup {
         });
 
         // this should succeed now
-        tpSignInUpAndGetResponse(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1",
+        tpSignInUpOnceTenantIsLoaded(new TenantIdentifier("127.0.0.1", null, null), "google", "googleid1",
                 "test@example.com", process.getProcess(), SemVer.v5_0);
+    }
+
+    /**
+     * Signs in on a tenant right after a core restart. The restarted core loads (and may reload) the tenant's
+     * storage in the background after STARTED, so a request sent immediately can hit a tenant that is not loaded
+     * yet (400 "AppId or tenantId not found") or a storage pool that is being replaced (500 "has been closed").
+     * Retries until the tenant answers or the deadline passes, then rethrows the last error.
+     */
+    private static JsonObject tpSignInUpOnceTenantIsLoaded(TenantIdentifier tenantIdentifier, String thirdPartyId,
+                                                           String thirdPartyUserId, String email, Main main,
+                                                           SemVer version)
+            throws HttpResponseException, IOException, InterruptedException {
+        long deadline = System.currentTimeMillis() + 15_000;
+        while (true) {
+            try {
+                return tpSignInUpAndGetResponse(tenantIdentifier, thirdPartyId, thirdPartyUserId, email, main,
+                        version);
+            } catch (HttpResponseException e) {
+                if (System.currentTimeMillis() > deadline) {
+                    throw e;
+                }
+                Thread.sleep(250);
+            }
+        }
     }
 
     public static JsonObject tpSignInUpAndGetResponse(TenantIdentifier tenantIdentifier, String thirdPartyId,
