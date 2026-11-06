@@ -263,44 +263,29 @@ public class SAMLQueries {
         });
     }
 
-    @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
+    @AtomicAutoCommitWrite(justification = "single-use code consume: one atomic DELETE ... RETURNING that reads and deletes the row in a single statement")
     public static SAMLClaimsInfo getSAMLClaimsAndRemoveCode(Start start, TenantIdentifier tenantIdentifier, String code)
             throws StorageQueryException, SQLException {
-        String QUERY = "SELECT client_id, claims FROM " + getConfig(start).getSAMLClaimsTable()
-                + " WHERE app_id = ? AND tenant_id = ? AND code = ? AND expires_at >= ?";
+        // Delete-on-read in a single atomic statement: a code must be redeemable at most once. With a
+        // separate SELECT and DELETE, concurrent redemptions of the same code could all read the claims
+        // before any of them deleted the row. RETURNING makes the read and the delete one operation, so
+        // only the caller whose DELETE removed the row gets the claims.
+        String QUERY = "DELETE FROM " + getConfig(start).getSAMLClaimsTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND code = ? AND expires_at >= ?"
+                + " RETURNING client_id, claims";
 
-        SAMLClaimsInfo result = execute(start, QUERY, pst -> {
+        return execute(start, QUERY, pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, code);
             pst.setLong(4, System.currentTimeMillis());
         }, rs -> {
             if (rs.next()) {
-                try {
-                    JsonParser jp = new JsonParser();
-                    JsonObject claims = jp.parse(rs.getString("claims")).getAsJsonObject();
-                    return new SAMLClaimsInfo(
-                            rs.getString("client_id"),
-                            claims
-                    );
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
+                JsonObject claims = new JsonParser().parse(rs.getString("claims")).getAsJsonObject();
+                return new SAMLClaimsInfo(rs.getString("client_id"), claims);
             }
             return null;
         });
-
-        if (result != null) {
-            String DELETE_QUERY = "DELETE FROM " + getConfig(start).getSAMLClaimsTable()
-                    + " WHERE app_id = ? AND tenant_id = ? AND code = ?";
-            update(start, DELETE_QUERY, pst -> {
-                pst.setString(1, tenantIdentifier.getAppId());
-                pst.setString(2, tenantIdentifier.getTenantId());
-                pst.setString(3, code);
-            });
-        }
-
-        return result;
     }
 
     @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")

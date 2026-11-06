@@ -66,11 +66,13 @@ public class AutoCommitWriteGuardBaselineTest {
     // SAMLQueries (RelayState DELETE ... RETURNING consume, consumed-assertion insert-if-absent).
     // Follow-up: route them through a transaction and restore 17
     // (see saml-callback-atomic-writes-to-transaction-plan.md).
-    private static final int ATOMIC_BASELINE = 19;
+    // 20: the SAML code consume (getSAMLClaimsAndRemoveCode) moved from the debt tier to a single
+    // DELETE ... RETURNING, so a code is redeemable at most once.
+    private static final int ATOMIC_BASELINE = 20;
 
     // Shrink-only: legacy domain mutations still writing in auto-commit mode.
     // LOWER this when a site is converted to a transactional audited write.
-    private static final int DEBT_BASELINE = 49;
+    private static final int DEBT_BASELINE = 48;
 
     private static final Pattern ATOMIC = Pattern.compile("@AtomicAutoCommitWrite\\s*\\(");
     private static final Pattern DEBT = Pattern.compile("@UnauditedAutoCommitWrite\\s*\\(");

@@ -25,9 +25,14 @@ import io.supertokens.featureflag.FeatureFlagTestContent;
 import io.supertokens.pluginInterface.MigrationMode;
 import io.supertokens.pluginInterface.STORAGE_TYPE;
 import io.supertokens.pluginInterface.authRecipe.AuthRecipeUserInfo;
+import io.supertokens.pluginInterface.authRecipe.exceptions.AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException;
+import io.supertokens.pluginInterface.authRecipe.exceptions.EmailChangeNotAllowedException;
+import io.supertokens.pluginInterface.exceptions.StorageTransactionLogicException;
+import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storageLayer.StorageLayer;
+import io.supertokens.thirdparty.ThirdParty;
 
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -39,6 +44,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.*;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -469,6 +475,189 @@ public class LegacyModeRaceTest {
                     assertEquals("No orphaned rows for deleted recipe user", 0, orphanedRefs);
                 }
             }
+        } finally {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
+    private int countBackendsWaitingOnAdvisoryLock(Start storage) throws Exception {
+        return storage.startTransaction(con -> {
+            Connection sqlCon = (Connection) con.getConnection();
+            try (Statement stmt = sqlCon.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM pg_stat_activity"
+                         + " WHERE datname = current_database() AND wait_event_type = 'Lock'"
+                         + " AND wait_event = 'advisory'")) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        });
+    }
+
+    /**
+     * Makes {@code firstRecipeUserId} primary in a transaction that is kept open (uncommitted) while
+     * {@code second} runs on another thread. Once {@code second} has either finished or been observed waiting on
+     * the account-info lock in pg_stat_activity, the first transaction commits. Returns what {@code second}
+     * returned or threw. Asserts that {@code second} could not finish while the first transaction was open.
+     */
+    private Object runWhileMakePrimaryIsUncommitted(Start storage, String firstRecipeUserId,
+                                                    Callable<Object> second) throws Exception {
+        AppIdentifier appIdentifier = new AppIdentifier(null, null);
+        CountDownLatch firstMadePrimary = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Boolean> first = executor.submit(() -> storage.startTransaction(con -> {
+                try {
+                    boolean didBecomePrimary = storage.makePrimaryUser_Transaction(appIdentifier, con,
+                            firstRecipeUserId);
+                    firstMadePrimary.countDown();
+                    if (!releaseFirst.await(60, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("first transaction was never released");
+                    }
+                    storage.commitTransaction(con);
+                    return didBecomePrimary;
+                } catch (Exception e) {
+                    throw new StorageTransactionLogicException(e);
+                }
+            }));
+            assertTrue("first transaction did not reach its check", firstMadePrimary.await(30, TimeUnit.SECONDS));
+
+            Future<Object> secondFuture = executor.submit(() -> {
+                try {
+                    return second.call();
+                } catch (Exception e) {
+                    return e;
+                }
+            });
+
+            // Without serialization the second operation's conflict check cannot see the uncommitted first one
+            // and it finishes right away; with it, the second operation queues on the account-info lock.
+            boolean secondSeenWaiting = false;
+            long deadline = System.currentTimeMillis() + 30_000;
+            while (!secondFuture.isDone() && System.currentTimeMillis() < deadline) {
+                if (countBackendsWaitingOnAdvisoryLock(storage) > 0) {
+                    secondSeenWaiting = true;
+                    break;
+                }
+                Thread.sleep(10); // poll interval only; correctness does not depend on timing
+            }
+            boolean secondFinishedWhileFirstOpen = secondFuture.isDone();
+            Object secondResultIfFinished = secondFinishedWhileFirstOpen ? secondFuture.get() : null;
+
+            releaseFirst.countDown();
+            assertTrue(first.get(30, TimeUnit.SECONDS));
+            Object secondResult = secondFuture.get(30, TimeUnit.SECONDS);
+
+            assertFalse("second operation finished while the first transaction was uncommitted: "
+                    + secondResultIfFinished, secondFinishedWhileFirstOpen);
+            assertTrue("second operation was not seen waiting on the account-info lock", secondSeenWaiting);
+            return secondResult;
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    private void assertConflictsWith(Object result, String expectedPrimaryUserId) {
+        assertTrue("expected an account-info conflict, got: " + result,
+                result instanceof AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException);
+        assertEquals(expectedPrimaryUserId,
+                ((AccountInfoAlreadyAssociatedWithAnotherPrimaryUserIdException) result).primaryUserId);
+    }
+
+    /**
+     * Two recipe users (email-password and third-party) share an email. Making both primary concurrently in LEGACY
+     * mode must leave at most one primary user for that email: the second transaction waits for the first and
+     * then fails the conflict check.
+     */
+    @Test
+    public void testIssue27_legacyLinkingUniquenessUnderConcurrency() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        try {
+            Main main = process.getProcess();
+            if (StorageLayer.getStorage(main).getType() != STORAGE_TYPE.SQL) return;
+
+            Start storage = (Start) StorageLayer.getStorage(main);
+            Config.getConfig(storage).setMigrationModeForTesting(MigrationMode.LEGACY);
+
+            String email = "shared-make-primary@test.com";
+            AuthRecipeUserInfo r1 = EmailPassword.signUp(main, email, "password123");
+            AuthRecipeUserInfo r2 = ThirdParty.signInUp(main, "google", "g-shared-make-primary", email).user;
+
+            Object result = runWhileMakePrimaryIsUncommitted(storage, r1.getSupertokensUserId(),
+                    () -> AuthRecipe.createPrimaryUser(main, r2.getSupertokensUserId()));
+
+            assertTrue(AuthRecipe.getUserById(main, r1.getSupertokensUserId()).isPrimaryUser);
+            assertFalse("two primary users share the same email",
+                    AuthRecipe.getUserById(main, r2.getSupertokensUserId()).isPrimaryUser);
+            assertConflictsWith(result, r1.getSupertokensUserId());
+        } finally {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
+    /**
+     * Linking a recipe user into an existing primary user while another recipe user with the same email is being
+     * made primary must not leave two primary users with that email.
+     */
+    @Test
+    public void testLegacyLinkWaitsForConcurrentMakePrimaryWithSameEmail() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        try {
+            Main main = process.getProcess();
+            if (StorageLayer.getStorage(main).getType() != STORAGE_TYPE.SQL) return;
+
+            Start storage = (Start) StorageLayer.getStorage(main);
+            Config.getConfig(storage).setMigrationModeForTesting(MigrationMode.LEGACY);
+
+            String email = "shared-link@test.com";
+            AuthRecipeUserInfo primary = EmailPassword.signUp(main, "other-link@test.com", "password123");
+            AuthRecipe.createPrimaryUser(main, primary.getSupertokensUserId());
+            AuthRecipeUserInfo r1 = EmailPassword.signUp(main, email, "password123");
+            AuthRecipeUserInfo r2 = ThirdParty.signInUp(main, "google", "g-shared-link", email).user;
+
+            Object result = runWhileMakePrimaryIsUncommitted(storage, r1.getSupertokensUserId(),
+                    () -> AuthRecipe.linkAccounts(main, r2.getSupertokensUserId(), primary.getSupertokensUserId()));
+
+            assertConflictsWith(result, r1.getSupertokensUserId());
+            AuthRecipeUserInfo r2After = AuthRecipe.getUserById(main, r2.getSupertokensUserId());
+            assertFalse(r2After.isPrimaryUser);
+        } finally {
+            process.kill();
+            assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
+        }
+    }
+
+    /**
+     * Changing a primary user's email to an email that another recipe user is concurrently becoming primary with
+     * must not leave two primary users with that email.
+     */
+    @Test
+    public void testLegacyPrimaryEmailChangeWaitsForConcurrentMakePrimaryWithSameEmail() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        try {
+            Main main = process.getProcess();
+            if (StorageLayer.getStorage(main).getType() != STORAGE_TYPE.SQL) return;
+
+            Start storage = (Start) StorageLayer.getStorage(main);
+            Config.getConfig(storage).setMigrationModeForTesting(MigrationMode.LEGACY);
+
+            String email = "shared-email-change@test.com";
+            AuthRecipeUserInfo primary = EmailPassword.signUp(main, "other-email-change@test.com", "password123");
+            AuthRecipe.createPrimaryUser(main, primary.getSupertokensUserId());
+            AuthRecipeUserInfo r1 = ThirdParty.signInUp(main, "google", "g-shared-email-change", email).user;
+
+            Object result = runWhileMakePrimaryIsUncommitted(storage, r1.getSupertokensUserId(), () -> {
+                EmailPassword.updateUsersEmailOrPassword(main, primary.getSupertokensUserId(), email, null);
+                return "email updated";
+            });
+
+            assertTrue("expected the email change to be rejected, got: " + result,
+                    result instanceof EmailChangeNotAllowedException);
+            assertEquals("other-email-change@test.com",
+                    AuthRecipe.getUserById(main, primary.getSupertokensUserId()).loginMethods[0].email);
         } finally {
             process.kill();
             assertNotNull(process.checkOrWaitForEvent(ProcessState.PROCESS_STATE.STOPPED));
