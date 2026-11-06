@@ -81,6 +81,12 @@
             "coreVersion": "12.4.2",
             "sql": "v10.2.0.sql",
             "notes": "Index webauthn_credentials_app_id_id_index on webauthn_credentials (app_id, id), backing the app-wide credential id uniqueness check at registration (a lookup by id alone, any relying party), which the (app_id, rp_id, id) primary key cannot serve. Built CONCURRENTLY by the script; the core creates it at startup."
+        },
+        {
+            "pluginVersion": "10.3.0",
+            "coreVersion": "12.5.0",
+            "sql": "v10.3.0.sql",
+            "notes": "Adds a nullable saml_clients.attribute_mapping column (the SAML client's attribute mapping as JSON object text; NULL = not configured). Additive and online-safe; the plugin applies it at startup."
         }
     ]
 }

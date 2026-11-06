@@ -3196,31 +3196,37 @@ public class Start
             UserIdMappingQueries.createUserIdMapping(this, appIdentifier, superTokensUserId, externalUserId,
                     externalUserIdInfo);
         } catch (SQLException e) {
-            if (e instanceof PSQLException) {
-                PostgreSQLConfig config = Config.getConfig(this);
-                ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
-                if (isForeignKeyConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
-                        "supertokens_user_id")) {
-                    throw new UnknownSuperTokensUserIdException();
-                }
-
-                if (isPrimaryKeyError(serverErrorMessage, config.getUserIdMappingTable())) {
-                    throw new UserIdMappingAlreadyExistsException(true, true);
-                }
-
-                if (isUniqueConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
-                        "supertokens_user_id")) {
-                    throw new UserIdMappingAlreadyExistsException(true, false);
-                }
-
-                if (isUniqueConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
-                        "external_user_id")) {
-                    throw new UserIdMappingAlreadyExistsException(false, true);
-                }
-            }
-            throw new StorageQueryException(e);
+            throw toCreateUserIdMappingException(e);
         }
 
+    }
+
+    // Translates a failed user id mapping insert into the exception the interface declares for it.
+    private StorageQueryException toCreateUserIdMappingException(SQLException e)
+            throws UnknownSuperTokensUserIdException, UserIdMappingAlreadyExistsException {
+        if (e instanceof PSQLException) {
+            PostgreSQLConfig config = Config.getConfig(this);
+            ServerErrorMessage serverErrorMessage = ((PSQLException) e).getServerErrorMessage();
+            if (isForeignKeyConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
+                    "supertokens_user_id")) {
+                throw new UnknownSuperTokensUserIdException();
+            }
+
+            if (isPrimaryKeyError(serverErrorMessage, config.getUserIdMappingTable())) {
+                throw new UserIdMappingAlreadyExistsException(true, true);
+            }
+
+            if (isUniqueConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
+                    "supertokens_user_id")) {
+                throw new UserIdMappingAlreadyExistsException(true, false);
+            }
+
+            if (isUniqueConstraintError(serverErrorMessage, config.getUserIdMappingTable(),
+                    "external_user_id")) {
+                throw new UserIdMappingAlreadyExistsException(false, true);
+            }
+        }
+        return new StorageQueryException(e);
     }
 
     @Override
@@ -3316,6 +3322,38 @@ public class Start
         }
     }
 
+    // Apps with disable_user_id_mapping on, and those of them with disable_user_id_mapping_force on, as core last
+    // told this storage. The queries that read userid_mapping on their own (user hydration, session lookup) skip
+    // that read for these apps; for forced apps, refresh still resolves a session created under an external id
+    // before force. One immutable value, so a reader never sees one set updated without the other.
+    private record UserIdMappingOptOut(Set<AppIdentifier> disabled, Set<AppIdentifier> forced) {
+    }
+
+    private volatile UserIdMappingOptOut userIdMappingOptOut = new UserIdMappingOptOut(Set.of(), Set.of());
+
+    @Override
+    public void setAppsWithUserIdMappingDisabled(Set<AppIdentifier> appIdentifiers,
+                                                 Set<AppIdentifier> forcedAppIdentifiers) {
+        this.userIdMappingOptOut = new UserIdMappingOptOut(Set.copyOf(appIdentifiers),
+                Set.copyOf(forcedAppIdentifiers));
+    }
+
+    public boolean isUserIdMappingDisabled(AppIdentifier appIdentifier) {
+        return userIdMappingOptOut.disabled().contains(appIdentifier);
+    }
+
+    // The app's opt-out as one value, read from a single snapshot, for a decision that needs both sets.
+    public enum UserIdMappingReads { ALL, NONE, NONE_EXCEPT_PRE_FORCE_SESSIONS }
+
+    public UserIdMappingReads getUserIdMappingReads(AppIdentifier appIdentifier) {
+        UserIdMappingOptOut optOut = this.userIdMappingOptOut;
+        if (!optOut.disabled().contains(appIdentifier)) {
+            return UserIdMappingReads.ALL;
+        }
+        return optOut.forced().contains(appIdentifier) ? UserIdMappingReads.NONE_EXCEPT_PRE_FORCE_SESSIONS
+                : UserIdMappingReads.NONE;
+    }
+
     @Override
     public void createTenant(TenantConfig tenantConfig)
             throws DuplicateTenantException, StorageQueryException, DuplicateThirdPartyIdException,
@@ -3385,18 +3423,48 @@ public class Start
             if (e.actualException instanceof TenantOrAppNotFoundException) {
                 throw (TenantOrAppNotFoundException) e.actualException;
             }
-            if (e.actualException instanceof PSQLException) {
-                PostgreSQLConfig config = Config.getConfig(this);
-                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(),
-                        config.getTenantThirdPartyProvidersTable())) {
-                    throw new DuplicateThirdPartyIdException();
-                }
-                if (isPrimaryKeyError(((PSQLException) e.actualException).getServerErrorMessage(),
-                        config.getTenantThirdPartyProviderClientsTable())) {
-                    throw new DuplicateClientTypeException();
-                }
+            throw toOverwriteTenantConfigException(e.actualException);
+        }
+    }
+
+    @Override
+    public void overwriteTenantConfig_Transaction(TransactionConnection con, TenantConfig tenantConfig)
+            throws TenantOrAppNotFoundException, StorageQueryException, DuplicateThirdPartyIdException,
+            DuplicateClientTypeException {
+        try {
+            MultitenancyQueries.overwriteTenantConfig_Transaction(this, (Connection) con.getConnection(),
+                    tenantConfig);
+        } catch (SQLException e) {
+            throw toOverwriteTenantConfigException(e);
+        }
+    }
+
+    // Translates a failed tenant config write into the exception the interface declares for it.
+    private StorageQueryException toOverwriteTenantConfigException(Exception e)
+            throws DuplicateThirdPartyIdException, DuplicateClientTypeException {
+        if (e instanceof PSQLException) {
+            PostgreSQLConfig config = Config.getConfig(this);
+            if (isPrimaryKeyError(((PSQLException) e).getServerErrorMessage(),
+                    config.getTenantThirdPartyProvidersTable())) {
+                throw new DuplicateThirdPartyIdException();
             }
-            throw new StorageQueryException(e.actualException);
+            if (isPrimaryKeyError(((PSQLException) e).getServerErrorMessage(),
+                    config.getTenantThirdPartyProviderClientsTable())) {
+                throw new DuplicateClientTypeException();
+            }
+        }
+        return new StorageQueryException(e);
+    }
+
+    @Override
+    public Map<TenantIdentifier, JsonObject> getTenantCoreConfigs_Transaction(
+            TransactionConnection con, Collection<TenantIdentifier> tenantIdentifiers, boolean lockAgainstConfigWrites)
+            throws StorageQueryException {
+        try {
+            return MultitenancyQueries.getTenantCoreConfigs_Transaction(this, (Connection) con.getConnection(),
+                    tenantIdentifiers, lockAgainstConfigWrites);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
         }
     }
 
@@ -4886,6 +4954,66 @@ public class Start
     }
 
     @Override
+    public void lockAppForUserIdMappingCreation_Transaction(TransactionConnection con, AppIdentifier appIdentifier)
+            throws StorageQueryException {
+        try {
+            io.supertokens.storage.postgresql.queries.Utils.takeSharedAdvisoryLockBlocking(
+                    (Connection) con.getConnection(),
+                    UserIdMappingQueries.getUserIdMappingCreationLockKey(appIdentifier));
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void lockAppForDisablingUserIdMapping_Transaction(TransactionConnection con, AppIdentifier appIdentifier)
+            throws StorageQueryException {
+        try {
+            io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLockBlocking(
+                    (Connection) con.getConnection(),
+                    UserIdMappingQueries.getUserIdMappingCreationLockKey(appIdentifier));
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public boolean hasUserIdMappings_Transaction(TransactionConnection con, AppIdentifier appIdentifier)
+            throws StorageQueryException {
+        try {
+            return UserIdMappingQueries.hasUserIdMappings_Transaction(this, (Connection) con.getConnection(),
+                    appIdentifier);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void createUserIdMapping_Transaction(TransactionConnection con, AppIdentifier appIdentifier,
+                                                String superTokensUserId, String externalUserId,
+                                                @org.jetbrains.annotations.Nullable String externalUserIdInfo)
+            throws StorageQueryException, UnknownSuperTokensUserIdException, UserIdMappingAlreadyExistsException {
+        try {
+            UserIdMappingQueries.createUserIdMapping_Transaction(this, (Connection) con.getConnection(),
+                    appIdentifier, superTokensUserId, externalUserId, externalUserIdInfo);
+        } catch (SQLException e) {
+            throw toCreateUserIdMappingException(e);
+        }
+    }
+
+    @Override
+    public void createBulkUserIdMapping_Transaction(TransactionConnection con, AppIdentifier appIdentifier,
+                                                    Map<String, String> superTokensUserIdToExternalUserId)
+            throws StorageQueryException {
+        try {
+            UserIdMappingQueries.createBulkUserIdMapping_Transaction(this, (Connection) con.getConnection(),
+                    appIdentifier, superTokensUserIdToExternalUserId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public int getUsersCountWithMoreThanOneLoginMethodOrTOTPEnabled(AppIdentifier appIdentifier)
             throws StorageQueryException {
         try {
@@ -5740,7 +5868,8 @@ public class Start
                     samlClient.ssoLoginURL, samlClient.redirectURIs.toString(), samlClient.defaultRedirectURI,
                     samlClient.idpEntityId, samlClient.idpSigningCertificate,
                     samlClient.allowIDPInitiatedLogin, samlClient.enableRequestSigning,
-                    samlClient.acsURLs == null ? null : samlClient.acsURLs.toString());
+                    samlClient.acsURLs == null ? null : samlClient.acsURLs.toString(),
+                    samlClient.attributeMapping == null ? null : samlClient.attributeMapping.toString());
         } catch (SQLException e) {
             if (e instanceof PSQLException) {
                 PostgreSQLConfig config = Config.getConfig(this);

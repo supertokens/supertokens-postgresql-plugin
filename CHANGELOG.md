@@ -7,6 +7,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [10.3.0]
+
+- Stores the optional SAML client attribute mapping (plugin-interface 11.3 `SAMLClient.attributeMapping`) in a new
+  nullable `saml_clients.attribute_mapping` column, as JSON object text. `createOrUpdateSAMLClient` writes it (insert
+  and update) and all three SAML client reads return it. NULL means not configured. Additive and online-safe; the
+  plugin adds the column at startup.
+- The reservation-table backfill no longer leaves users imported with `timeJoinedInMSSinceEpoch: 0` pending forever: a copied `time_joined` of 0 now falls back to 1, so the `MIGRATED` transition can pass.
+- Implements `setAppsWithUserIdMappingDisabled`: for apps with `disable_user_id_mapping` on, loading users, sessions and WebAuthn users no longer reads `userid_mapping`.
+- Implements the plugin-interface 11.3 user id mapping creation locks (transaction-scoped advisory locks per app), `hasUserIdMappings_Transaction`, `createUserIdMapping_Transaction` / `createBulkUserIdMapping_Transaction`, `getTenantCoreConfigs_Transaction` (takes the tenant config write locks first when asked to) and `overwriteTenantConfig_Transaction`.
+
+### Migration
+
+Additive and online-safe; the plugin applies it at startup. Large deployments can run
+`migration-scripts/v10.3.0.sql` ahead of the upgrade:
+
+```sql
+ALTER TABLE saml_clients ADD COLUMN IF NOT EXISTS attribute_mapping TEXT;
+```
+
 ## [10.2.0]
 
 - Third-party email updates change only the given recipe user's row.

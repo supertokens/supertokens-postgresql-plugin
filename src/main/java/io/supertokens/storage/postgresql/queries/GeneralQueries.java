@@ -956,6 +956,9 @@ public class GeneralQueries {
                 // pinning / SP-initiated acsURL validation). Additive, online-safe; no-op once present.
                 String samlClientsTable = Config.getConfig(start).getSAMLClientsTable();
                 ddl.add("ALTER TABLE " + samlClientsTable + " ADD COLUMN IF NOT EXISTS acs_urls TEXT");
+                // Backfill: saml_clients gained a nullable attribute_mapping (JSON object text; NULL = not
+                // configured) in 10.3.0. Additive, online-safe; no-op once present.
+                ddl.add("ALTER TABLE " + samlClientsTable + " ADD COLUMN IF NOT EXISTS attribute_mapping TEXT");
 
                 if (!doesTableExists(existingTables, Config.getConfig(start).getSAMLClaimsTable())) {
                     getInstance(start).addState(CREATING_NEW_TABLE, null);

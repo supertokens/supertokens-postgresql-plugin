@@ -104,6 +104,50 @@ public class UserIdMappingQueries {
         }
     }
 
+    public static void createUserIdMapping_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier,
+                                                       String superTokensUserId, String externalUserId,
+                                                       String externalUserIdInfo)
+            throws SQLException, StorageQueryException {
+        String QUERY = "INSERT INTO " + Config.getConfig(start).getUserIdMappingTable()
+                + " (app_id, supertokens_user_id, external_user_id, external_user_id_info)" + " VALUES(?, ?, ?, ?)";
+
+        update(sqlCon, QUERY, pst -> {
+            pst.setString(1, appIdentifier.getAppId());
+            pst.setString(2, superTokensUserId);
+            pst.setString(3, externalUserId);
+            pst.setString(4, externalUserIdInfo);
+        });
+    }
+
+    public static void createBulkUserIdMapping_Transaction(Start start, Connection sqlCon,
+                                                           AppIdentifier appIdentifier,
+                                                           Map<String, String> superTokensUserIdToExternalUserId)
+            throws SQLException, StorageQueryException {
+        String QUERY = "INSERT INTO " + Config.getConfig(start).getUserIdMappingTable()
+                + " (app_id, supertokens_user_id, external_user_id)" + " VALUES(?, ?, ?)";
+
+        List<PreparedStatementValueSetter> setters = new ArrayList<>();
+        for (String superTokensUserId : superTokensUserIdToExternalUserId.keySet()) {
+            setters.add(pst -> {
+                pst.setString(1, appIdentifier.getAppId());
+                pst.setString(2, superTokensUserId);
+                pst.setString(3, superTokensUserIdToExternalUserId.get(superTokensUserId));
+            });
+        }
+        executeBatch(sqlCon, QUERY, setters);
+    }
+
+    public static boolean hasUserIdMappings_Transaction(Start start, Connection sqlCon, AppIdentifier appIdentifier)
+            throws SQLException, StorageQueryException {
+        String QUERY = "SELECT 1 FROM " + Config.getConfig(start).getUserIdMappingTable() + " WHERE app_id = ? LIMIT 1";
+        return execute(sqlCon, QUERY, pst -> pst.setString(1, appIdentifier.getAppId()), ResultSet::next);
+    }
+
+    // Key of the lock that serialises creating user id mappings against turning disable_user_id_mapping on.
+    public static String getUserIdMappingCreationLockKey(AppIdentifier appIdentifier) {
+        return "uidm~" + appIdentifier.getConnectionUriDomain() + "~" + appIdentifier.getAppId();
+    }
+
     public static UserIdMapping getuseraIdMappingWithSuperTokensUserId(Start start, AppIdentifier appIdentifier,
                                                                        String userId)
             throws SQLException, StorageQueryException {
