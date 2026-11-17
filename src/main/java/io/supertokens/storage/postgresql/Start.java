@@ -795,6 +795,31 @@ public class Start
     }
 
     @Override
+    public int deleteSession_Transaction(TransactionConnection con, TenantIdentifier tenantIdentifier,
+                                         String[] sessionHandles) throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return SessionQueries.deleteSession_Transaction(sqlCon, this, tenantIdentifier, sessionHandles);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public String[] getAllNonExpiredSessionHandlesForUser_Transaction(TransactionConnection con,
+                                                                      TenantIdentifier tenantIdentifier,
+                                                                      String userId)
+            throws StorageQueryException {
+        Connection sqlCon = (Connection) con.getConnection();
+        try {
+            return SessionQueries.getAllNonExpiredSessionHandlesForUser_Transaction(sqlCon, this, tenantIdentifier,
+                    userId);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public void deleteSessionsOfUser_Transaction(TransactionConnection con, AppIdentifier appIdentifier, String userId)
             throws StorageQueryException {
         Connection sqlCon = (Connection) con.getConnection();
