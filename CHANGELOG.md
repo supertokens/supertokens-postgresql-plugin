@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Docker image: bundled JRE updated from Temurin 21.0.12.1 to 21.0.13.1 (x64) / 21.0.13 (aarch64).
+
 ## [10.3.0]
 
 - Stores the optional SAML client attribute mapping (plugin-interface 11.3 `SAMLClient.attributeMapping`) in a new
