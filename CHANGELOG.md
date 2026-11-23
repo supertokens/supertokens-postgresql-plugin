@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Last-active rollup: folds a bounded `[start, end)` window, and only rewrites a `user_last_active` row when its timestamp moves forward.
+
 ## [10.3.0]
 
 - Stores the optional SAML client attribute mapping (plugin-interface 11.3 `SAMLClient.attributeMapping`) in a new

@@ -203,12 +203,15 @@ public class ActiveUsersQueries {
     private static final String LAST_ACTIVE_ROLLUP_LOCK_KEY = "last_active_rollup";
 
     /**
-     * Derives {@code user_last_active} from the activity log over {@code [windowStartMillis, now]}, on the
-     * caller's transaction connection. Two idempotent statements:
+     * Derives {@code user_last_active} from the activity log over {@code [windowStartMillis, windowEndMillis)},
+     * on the caller's transaction connection ({@code windowEndMillis = Long.MAX_VALUE} means "up to now").
+     * The caller bounds the window so one call fits well inside the connection's socket timeout; a backlog
+     * is folded as several slices. Two idempotent statements:
      * <ol>
      *   <li><b>Fold</b> — upsert each user's most recent activity into the projection, monotonically
-     *       ({@code GREATEST} never lowers a stored timestamp). The activity source is the semantic
-     *       activity/lifecycle event set in {@link RollupEventTypes#FOLD_SET},
+     *       (a row is only rewritten when the new timestamp is later, so a stored timestamp is never lowered
+     *       and an unchanged row is not rewritten: re-folding an overlap costs reads, not writes). The
+     *       activity source is the semantic activity/lifecycle event set in {@link RollupEventTypes#FOLD_SET},
      *       credited to the event's {@code primary_or_recipe_user_id}. A single {@code app_id_to_user_id}
      *       residency guard confines the fold to activity for a user whose auth record lives on this
      *       storage. With per-storage routing a user's activity is colocated with their auth record, so
@@ -232,7 +235,8 @@ public class ActiveUsersQueries {
      * returns {@code true}.
      */
     public static boolean rollupLastActiveFromActivityLog_Transaction(Start start, Connection con,
-                                                                   long windowStartMillis)
+                                                                   long windowStartMillis,
+                                                                   long windowEndMillis)
             throws StorageQueryException, SQLException {
         try {
             io.supertokens.storage.postgresql.queries.Utils.takeAdvisoryLock(con, LAST_ACTIVE_ROLLUP_LOCK_KEY);
@@ -260,13 +264,20 @@ public class ActiveUsersQueries {
         String FOLD_QUERY = "INSERT INTO " + userLastActiveTable + " (app_id, user_id, last_active_time)"
                 + " SELECT app_id, primary_or_recipe_user_id, MAX(created_at) FROM " + activityLogTable + " al"
                 + " WHERE event_type IN (" + RollupEventTypes.sqlInList() + ") AND created_at >= ?"
+                + " AND created_at < ?"
                 + " AND EXISTS (SELECT 1 FROM " + appIdToUserIdTable + " aiu"
                 + " WHERE aiu.app_id = al.app_id AND aiu.user_id = al.primary_or_recipe_user_id)"
                 + " GROUP BY app_id, primary_or_recipe_user_id"
                 + " ON CONFLICT (app_id, user_id) DO UPDATE"
-                + " SET last_active_time = GREATEST(" + userLastActiveTable + ".last_active_time,"
-                + " EXCLUDED.last_active_time)";
-        update(con, FOLD_QUERY, pst -> pst.setLong(1, windowStartMillis));
+                // Only rewrite a row whose timestamp actually moves forward. Without this guard every
+                // conflicting row gets a new tuple version even when the value is unchanged, which turns each
+                // overlapping re-fold into a full rewrite of the active users (WAL + autovacuum load).
+                + " SET last_active_time = EXCLUDED.last_active_time"
+                + " WHERE " + userLastActiveTable + ".last_active_time < EXCLUDED.last_active_time";
+        update(con, FOLD_QUERY, pst -> {
+            pst.setLong(1, windowStartMillis);
+            pst.setLong(2, windowEndMillis);
+        });
 
         // The ordering guard (al.created_at >= ula.last_active_time) makes the reconcile
         // order-insensitive: only delete a linked-away recipe user's projection row when the link event
@@ -275,10 +286,13 @@ public class ActiveUsersQueries {
         // instead of being wrongly scrubbed by an earlier account_linking event in the same window.
         String RECONCILE_QUERY = "DELETE FROM " + userLastActiveTable + " ula USING " + activityLogTable + " al"
                 + " WHERE al.event_type = '" + LifecycleEventType.ACCOUNT_LINKING.getValue() + "'"
-                + " AND al.created_at >= ?"
+                + " AND al.created_at >= ? AND al.created_at < ?"
                 + " AND al.app_id = ula.app_id AND al.recipe_user_id = ula.user_id"
                 + " AND al.created_at >= ula.last_active_time";
-        update(con, RECONCILE_QUERY, pst -> pst.setLong(1, windowStartMillis));
+        update(con, RECONCILE_QUERY, pst -> {
+            pst.setLong(1, windowStartMillis);
+            pst.setLong(2, windowEndMillis);
+        });
         return true;
     }
 
