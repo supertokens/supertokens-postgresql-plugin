@@ -7,9 +7,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [10.4.0]
+## [10.3.1]
 
-- Implements the plugin-interface 11.4 OAuth write twins `createOrUpdateOAuthSession_Transaction` and
+- Implements the plugin-interface 11.3.1 OAuth write twins `createOrUpdateOAuthSession_Transaction` and
   `addOAuthM2MTokenForStats_Transaction`: the same OAuth session upsert and M2M token-stats increment as the
   auto-commit forms, run on the caller's transaction connection so they commit or roll back with it. No schema
   change.
