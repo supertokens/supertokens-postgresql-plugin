@@ -7,9 +7,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [10.4.0]
+## [10.3.1]
 
-- Implements the plugin-interface 11.4 session twins `deleteSession_Transaction` and
+- Implements the plugin-interface 11.3.1 session twins `deleteSession_Transaction` and
   `getAllNonExpiredSessionHandlesForUser_Transaction`: the same session delete (by handle) and non-expired handle
   lookup as the auto-commit forms, run on the caller's transaction connection so a revoke can delete sessions in the
   same transaction as its other writes. No schema change.
