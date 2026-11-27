@@ -166,6 +166,13 @@ published. The flag rides both `PATCH /core` calls to api.supertokens.io
 (`_release-mark-passed.yml` on `testPassed`, `addReleaseTag` on
 `release: true`).
 
+A migration ships with the **first** core release paired with its plugin
+version. A later core release that reuses that already-released plugin (a
+core-only patch, e.g. core 12.4.3 on plugin 10.2.0, which shipped with core
+12.4.2) is dispatched with `release-postgresql-plugin` unticked: the job then
+derives `hasDBMigration=false` without reading the manifest, and requires no
+`### Migration` section in the core changelog.
+
 When the flag is true, the `open-backend-apis-migration-pr` job also opens a
 PR against `supertokens-backend-apis` carrying the SaaS side of the migration:
 code-generated from the script here for plain-SQL entries and for
