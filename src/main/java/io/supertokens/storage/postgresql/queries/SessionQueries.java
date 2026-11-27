@@ -24,6 +24,7 @@ import io.supertokens.pluginInterface.exceptions.StorageQueryException;
 import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.multitenancy.TenantIdentifier;
 import io.supertokens.pluginInterface.session.SessionInfo;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -344,24 +345,45 @@ public class SessionQueries {
         if (sessionHandles.length == 0) {
             return 0;
         }
+        return update(start, getDeleteSessionQuery(start, sessionHandles.length),
+                deleteSessionSetter(tenantIdentifier, sessionHandles));
+    }
+
+    // Transaction-aware twin of deleteSession: same delete run on the caller's connection, so it commits or rolls
+    // back with the caller's transaction.
+    public static int deleteSession_Transaction(Connection sqlCon, Start start, TenantIdentifier tenantIdentifier,
+                                                String[] sessionHandles)
+            throws SQLException, StorageQueryException {
+        if (sessionHandles.length == 0) {
+            return 0;
+        }
+        return update(sqlCon, getDeleteSessionQuery(start, sessionHandles.length),
+                deleteSessionSetter(tenantIdentifier, sessionHandles));
+    }
+
+    private static String getDeleteSessionQuery(Start start, int numberOfSessionHandles) {
         StringBuilder QUERY = new StringBuilder(
                 "DELETE FROM " + Config.getConfig(start).getSessionInfoTable()
                         + " WHERE app_id = ? AND tenant_id = ? AND session_handle IN (");
-        for (int i = 0; i < sessionHandles.length; i++) {
-            if (i == sessionHandles.length - 1) {
+        for (int i = 0; i < numberOfSessionHandles; i++) {
+            if (i == numberOfSessionHandles - 1) {
                 QUERY.append("?)");
             } else {
                 QUERY.append("?, ");
             }
         }
+        return QUERY.toString();
+    }
 
-        return update(start, QUERY.toString(), pst -> {
+    private static PreparedStatementValueSetter deleteSessionSetter(TenantIdentifier tenantIdentifier,
+                                                                    String[] sessionHandles) {
+        return pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             for (int i = 0; i < sessionHandles.length; i++) {
                 pst.setString(i + 3, sessionHandles[i]);
             }
-        });
+        };
     }
 
     @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
@@ -405,25 +427,47 @@ public class SessionQueries {
     public static String[] getAllNonExpiredSessionHandlesForUser(Start start, TenantIdentifier tenantIdentifier,
                                                                  String userId)
             throws SQLException, StorageQueryException {
-        String QUERY = "SELECT session_handle FROM " + getConfig(start).getSessionInfoTable()
-                + " WHERE app_id = ? AND tenant_id = ? AND user_id = ? AND expires_at >= ?";
+        return execute(start, getAllNonExpiredSessionHandlesForUserQuery(start),
+                allNonExpiredSessionHandlesForUserSetter(tenantIdentifier, userId),
+                SessionQueries::sessionHandlesFromResult);
+    }
 
-        return execute(start, QUERY, pst -> {
+    // Transaction-aware twin of getAllNonExpiredSessionHandlesForUser: same read run on the caller's connection, so
+    // it sees the caller's uncommitted writes.
+    public static String[] getAllNonExpiredSessionHandlesForUser_Transaction(Connection sqlCon, Start start,
+                                                                             TenantIdentifier tenantIdentifier,
+                                                                             String userId)
+            throws SQLException, StorageQueryException {
+        return execute(sqlCon, getAllNonExpiredSessionHandlesForUserQuery(start),
+                allNonExpiredSessionHandlesForUserSetter(tenantIdentifier, userId),
+                SessionQueries::sessionHandlesFromResult);
+    }
+
+    private static String getAllNonExpiredSessionHandlesForUserQuery(Start start) {
+        return "SELECT session_handle FROM " + getConfig(start).getSessionInfoTable()
+                + " WHERE app_id = ? AND tenant_id = ? AND user_id = ? AND expires_at >= ?";
+    }
+
+    private static PreparedStatementValueSetter allNonExpiredSessionHandlesForUserSetter(
+            TenantIdentifier tenantIdentifier, String userId) {
+        return pst -> {
             pst.setString(1, tenantIdentifier.getAppId());
             pst.setString(2, tenantIdentifier.getTenantId());
             pst.setString(3, userId);
             pst.setLong(4, currentTimeMillis());
-        }, result -> {
-            List<String> temp = new ArrayList<>();
-            while (result.next()) {
-                temp.add(result.getString("session_handle"));
-            }
-            String[] finalResult = new String[temp.size()];
-            for (int i = 0; i < temp.size(); i++) {
-                finalResult[i] = temp.get(i);
-            }
-            return finalResult;
-        });
+        };
+    }
+
+    private static String[] sessionHandlesFromResult(ResultSet result) throws SQLException {
+        List<String> temp = new ArrayList<>();
+        while (result.next()) {
+            temp.add(result.getString("session_handle"));
+        }
+        String[] finalResult = new String[temp.size()];
+        for (int i = 0; i < temp.size(); i++) {
+            finalResult[i] = temp.get(i);
+        }
+        return finalResult;
     }
 
     public static boolean doesNonExpiredSessionExistForUser(Start start, AppIdentifier appIdentifier, String userId)

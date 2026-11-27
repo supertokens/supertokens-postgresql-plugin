@@ -9,6 +9,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [10.3.1]
 
+- Implements the plugin-interface 11.3.1 OAuth write twins `createOrUpdateOAuthSession_Transaction` and
+  `addOAuthM2MTokenForStats_Transaction`: the same OAuth session upsert and M2M token-stats increment as the
+  auto-commit forms, run on the caller's transaction connection so they commit or roll back with it. No schema
+  change.
+- Implements the plugin-interface 11.3.1 session twins `deleteSession_Transaction` and
+  `getAllNonExpiredSessionHandlesForUser_Transaction`: the same session delete (by handle) and non-expired handle
+  lookup as the auto-commit forms, run on the caller's transaction connection so a revoke can delete sessions in the
+  same transaction as its other writes. No schema change.
+- Last-active rollup: folds a bounded `[start, end)` window, and only writes (or locks) a `user_last_active` row
+  when its timestamp moves forward.
 - Docker image: bundled JRE updated from Temurin 21.0.12.1 to 21.0.13.1 (x64) / 21.0.13 (aarch64).
 
 ## [10.3.0]
