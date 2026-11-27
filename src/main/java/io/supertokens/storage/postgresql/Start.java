@@ -5396,6 +5396,43 @@ public class Start
     }
 
     @Override
+    public void createOrUpdateOAuthSession_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                       String gid, String clientId, String externalRefreshToken,
+                                                       String internalRefreshToken, String sessionHandle,
+                                                       String jti, long exp)
+            throws StorageQueryException, OAuthClientNotFoundException {
+        try {
+            OAuthQueries.createOrUpdateOAuthSession(this, (Connection) con.getConnection(), appIdentifier, gid,
+                    clientId, externalRefreshToken, internalRefreshToken, sessionHandle, jti, exp);
+        } catch (SQLException e) {
+            ServerErrorMessage errorMessage = ((PSQLException) e).getServerErrorMessage();
+            PostgreSQLConfig config = Config.getConfig(this);
+
+            if (isForeignKeyConstraintError(
+                    errorMessage,
+                    config.getOAuthSessionsTable(),
+                    "client_id")) {
+                throw new OAuthClientNotFoundException();
+            }
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
+    public void addOAuthM2MTokenForStats_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
+                                                     String clientId, long iat, long exp)
+            throws StorageQueryException, OAuthClientNotFoundException {
+        // As in addOAuthM2MTokenForStats: the stats table has no client_id foreign key, so this never throws
+        // OAuthClientNotFoundException.
+        try {
+            OAuthQueries.addOAuthM2MTokenForStats(this, (Connection) con.getConnection(), appIdentifier, clientId,
+                    iat, exp);
+        } catch (SQLException e) {
+            throw new StorageQueryException(e);
+        }
+    }
+
+    @Override
     public void updateOAuthSessionInternal_Transaction(AppIdentifier appIdentifier, TransactionConnection con,
                                                        String gid, String newInternalRefreshToken,
                                                        String sessionHandle, String jti, long exp)
