@@ -21,6 +21,7 @@ import io.supertokens.pluginInterface.multitenancy.AppIdentifier;
 import io.supertokens.pluginInterface.oauth.OAuthClient;
 import io.supertokens.pluginInterface.oauth.OAuthLogoutChallenge;
 import io.supertokens.storage.postgresql.ConnectionPool;
+import io.supertokens.storage.postgresql.PreparedStatementValueSetter;
 import io.supertokens.storage.postgresql.Start;
 import io.supertokens.storage.postgresql.config.Config;
 import io.supertokens.storage.postgresql.utils.Utils;
@@ -247,12 +248,38 @@ public class OAuthQueries {
                                                   String externalRefreshToken, String internalRefreshToken, String sessionHandle,
                                                   String jti, long exp)
             throws SQLException, StorageQueryException {
+        update(start, getCreateOrUpdateOAuthSessionQuery(start),
+                createOrUpdateOAuthSessionSetter(appIdentifier, gid, clientId, externalRefreshToken,
+                        internalRefreshToken, sessionHandle, jti, exp));
+    }
+
+    // Transaction-aware twin of createOrUpdateOAuthSession: same upsert run on the caller's connection, so it
+    // commits or rolls back with the caller's transaction.
+    public static void createOrUpdateOAuthSession(Start start, Connection con, AppIdentifier appIdentifier,
+                                                  @NotNull String gid, @NotNull String clientId,
+                                                  String externalRefreshToken, String internalRefreshToken,
+                                                  String sessionHandle, String jti, long exp)
+            throws SQLException, StorageQueryException {
+        update(con, getCreateOrUpdateOAuthSessionQuery(start),
+                createOrUpdateOAuthSessionSetter(appIdentifier, gid, clientId, externalRefreshToken,
+                        internalRefreshToken, sessionHandle, jti, exp));
+    }
+
+    private static String getCreateOrUpdateOAuthSessionQuery(Start start) {
         String sessionTable = Config.getConfig(start).getOAuthSessionsTable();
-        String QUERY = "INSERT INTO " + sessionTable +
+        return "INSERT INTO " + sessionTable +
                 " (gid, client_id, app_id, external_refresh_token, internal_refresh_token, session_handle, jti, exp) VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
                 "ON CONFLICT (gid) DO UPDATE SET external_refresh_token = ?, internal_refresh_token = ?, " +
                 "session_handle = ? , jti = CONCAT("+sessionTable+".jti, ?), exp = ?";
-        update(start, QUERY, pst -> {
+    }
+
+    private static PreparedStatementValueSetter createOrUpdateOAuthSessionSetter(AppIdentifier appIdentifier,
+                                                                                 String gid, String clientId,
+                                                                                 String externalRefreshToken,
+                                                                                 String internalRefreshToken,
+                                                                                 String sessionHandle, String jti,
+                                                                                 long exp) {
+        return pst -> {
             String jtiToInsert = jti + ",";
 
             pst.setString(1, gid);
@@ -269,7 +296,7 @@ public class OAuthQueries {
             pst.setString(11, sessionHandle);
             pst.setString(12, jtiToInsert);
             pst.setLong(13, exp);
-        });
+        };
     }
 
     public static List<OAuthClient> getOAuthClients(Start start, AppIdentifier appIdentifier, List<String> clientIds)
@@ -460,20 +487,36 @@ public class OAuthQueries {
         // unchanged. High-rate note: all of an app's issuance upserts one hot row per
         // (iat_bucket, exp_bucket); if sustained multi-thousand-tokens/sec contention ever shows in
         // tests, add a small hash-shard column to the PK and SUM over shards.
-        long iatBucket = iat / 3600;
-        long expBucket = exp / 3600;
+        update(start, getAddOAuthM2MTokenForStatsQuery(start), addOAuthM2MTokenForStatsSetter(appIdentifier, iat, exp));
+    }
+
+    // Transaction-aware twin of addOAuthM2MTokenForStats: same bucket upsert run on the caller's connection, so
+    // it commits or rolls back with the caller's transaction.
+    public static void addOAuthM2MTokenForStats(Start start, Connection con, AppIdentifier appIdentifier,
+                                                String clientId, long iat, long exp)
+            throws SQLException, StorageQueryException {
+        update(con, getAddOAuthM2MTokenForStatsQuery(start), addOAuthM2MTokenForStatsSetter(appIdentifier, iat, exp));
+    }
+
+    private static String getAddOAuthM2MTokenForStatsQuery(Start start) {
         String statsTable = Config.getConfig(start).getOAuthM2MTokenStatsTable();
         // Qualify the existing-row count with the table name: an unqualified `count` in a DO UPDATE
         // SET is ambiguous between the target row and the EXCLUDED pseudo-row (both carry a `count`
         // column), which Postgres rejects.
-        String QUERY = "INSERT INTO " + statsTable +
+        return "INSERT INTO " + statsTable +
                 " (app_id, iat_bucket, exp_bucket, count) VALUES (?, ?, ?, 1)" +
                 " ON CONFLICT (app_id, iat_bucket, exp_bucket) DO UPDATE SET count = " + statsTable + ".count + 1";
-        update(start, QUERY, pst -> {
+    }
+
+    private static PreparedStatementValueSetter addOAuthM2MTokenForStatsSetter(AppIdentifier appIdentifier,
+                                                                               long iat, long exp) {
+        long iatBucket = iat / 3600;
+        long expBucket = exp / 3600;
+        return pst -> {
             pst.setString(1, appIdentifier.getAppId());
             pst.setLong(2, iatBucket);
             pst.setLong(3, expBucket);
-        });
+        };
     }
 
     @UnauditedAutoCommitWrite(justification = "legacy auto-commit domain write; convert to an audited *_Transaction write")
