@@ -19,6 +19,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   same transaction as its other writes. No schema change.
 - Last-active rollup: folds a bounded `[start, end)` window, and only writes (or locks) a `user_last_active` row
   when its timestamp moves forward.
+- Docker image: bundled JRE updated from Temurin 21.0.12.1 to 21.0.13.1 (x64) / 21.0.13 (aarch64).
 
 ## [10.3.0]
 
