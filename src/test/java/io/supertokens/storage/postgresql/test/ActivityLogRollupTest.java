@@ -568,9 +568,42 @@ public class ActivityLogRollupTest {
     }
 
     /**
-     * Re-folding an overlap whose timestamps did not move must not rewrite the rows. An unguarded
+     * The reconcile is bounded like the fold: an {@code account_linking} event exactly at a slice's end belongs
+     * to the next slice. If the reconcile ignored the end, the first slice would already delete the recipe
+     * user's row, before the slice that contains the link event.
+     */
+    @Test
+    public void boundedReconcileOnlyActsOnLinkEventsBeforeTheWindowEnd() throws Exception {
+        TestingProcessManager.TestingProcess process = startProcess();
+        Start storage = (Start) StorageLayer.getStorage(process.getProcess());
+        if (storage == null) {
+            return;
+        }
+        String log = Config.getConfig(storage).getActivityLogTable();
+
+        long base = System.currentTimeMillis();
+        String recipeUser = "slice-reconcile-R";
+        String primaryUser = "slice-reconcile-P";
+        registerUser(storage, APP_ID, recipeUser);
+        registerUser(storage, APP_ID, primaryUser);
+        insertActivityEvent(storage, log, recipeUser, base + 1000);
+        insertAccountLinkingEvent(storage, log, recipeUser, primaryUser, base + 5000);
+
+        runRollup(storage, base, base + 5000);
+        assertEquals(Long.valueOf(base + 1000), getLastActive(storage, recipeUser));
+
+        runRollup(storage, base + 5000, base + 10000);
+        assertNull(getLastActive(storage, recipeUser));
+        assertEquals(Long.valueOf(base + 5000), getLastActive(storage, primaryUser));
+
+        stopProcess(process);
+    }
+
+    /**
+     * Re-folding an overlap whose timestamps did not move must not write the rows at all. An unguarded
      * {@code ON CONFLICT DO UPDATE} creates a new tuple version for every conflicting row even when the
-     * value is unchanged; the row's {@code xmin} exposes that.
+     * value is unchanged (the row's {@code xmin} exposes that), and even a guarded one locks each conflicting
+     * row before evaluating its {@code WHERE} (the row's {@code xmax} exposes that).
      */
     @Test
     public void reFoldingAnUnchangedWindowDoesNotRewriteRows() throws Exception {
@@ -593,6 +626,7 @@ public class ActivityLogRollupTest {
 
         runRollup(storage, base);
         assertEquals(xminAfterFirstFold, getXmin(storage, ula, user));
+        assertEquals("the re-fold locked the unchanged row", "0", getSystemColumn(storage, ula, user, "xmax"));
         assertEquals(Long.valueOf(base + 1000), getLastActive(storage, user));
 
         // A later event still moves the row forward.
@@ -605,7 +639,11 @@ public class ActivityLogRollupTest {
     }
 
     private String getXmin(Start storage, String ulaTable, String userId) throws Exception {
-        String query = "SELECT xmin::text FROM " + ulaTable + " WHERE app_id = ? AND user_id = ?";
+        return getSystemColumn(storage, ulaTable, userId, "xmin");
+    }
+
+    private String getSystemColumn(Start storage, String ulaTable, String userId, String column) throws Exception {
+        String query = "SELECT " + column + "::text FROM " + ulaTable + " WHERE app_id = ? AND user_id = ?";
         return storage.startTransaction(con -> {
             Connection sqlCon = (Connection) con.getConnection();
             try (PreparedStatement pst = sqlCon.prepareStatement(query)) {

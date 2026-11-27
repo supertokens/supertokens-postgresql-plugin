@@ -17,7 +17,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `getAllNonExpiredSessionHandlesForUser_Transaction`: the same session delete (by handle) and non-expired handle
   lookup as the auto-commit forms, run on the caller's transaction connection so a revoke can delete sessions in the
   same transaction as its other writes. No schema change.
-- Last-active rollup: folds a bounded `[start, end)` window, and only rewrites a `user_last_active` row when its timestamp moves forward.
+- Last-active rollup: folds a bounded `[start, end)` window, and only writes (or locks) a `user_last_active` row
+  when its timestamp moves forward.
 
 ## [10.3.0]
 

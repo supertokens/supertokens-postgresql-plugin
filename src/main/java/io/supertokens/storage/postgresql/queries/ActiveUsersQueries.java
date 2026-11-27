@@ -209,8 +209,9 @@ public class ActiveUsersQueries {
      * is folded as several slices. Two idempotent statements:
      * <ol>
      *   <li><b>Fold</b> — upsert each user's most recent activity into the projection, monotonically
-     *       (a row is only rewritten when the new timestamp is later, so a stored timestamp is never lowered
-     *       and an unchanged row is not rewritten: re-folding an overlap costs reads, not writes). The
+     *       (a row is only written when the new timestamp is later, so a stored timestamp is never lowered
+     *       and an unchanged row is neither rewritten nor locked: re-folding an overlap costs reads, not
+     *       writes). The
      *       activity source is the semantic activity/lifecycle event set in {@link RollupEventTypes#FOLD_SET},
      *       credited to the event's {@code primary_or_recipe_user_id}. A single {@code app_id_to_user_id}
      *       residency guard confines the fold to activity for a user whose auth record lives on this
@@ -268,10 +269,18 @@ public class ActiveUsersQueries {
                 + " AND EXISTS (SELECT 1 FROM " + appIdToUserIdTable + " aiu"
                 + " WHERE aiu.app_id = al.app_id AND aiu.user_id = al.primary_or_recipe_user_id)"
                 + " GROUP BY app_id, primary_or_recipe_user_id"
+                // Leave out users whose stored timestamp would not move forward, before the upsert. Every pass
+                // re-reads core's overlap margin, so most of its users are already current. ON CONFLICT DO
+                // UPDATE locks each conflicting row before it evaluates its WHERE (xmax set, page dirtied, a
+                // lock record in the WAL), so the guard below alone would still write for each of them. This
+                // probe is the same primary-key lookup ON CONFLICT does, without the lock. The advisory lock
+                // above serializes folds, so no other fold can move a row between the probe and the upsert.
+                + " HAVING NOT EXISTS (SELECT 1 FROM " + userLastActiveTable + " cur"
+                + " WHERE cur.app_id = al.app_id AND cur.user_id = al.primary_or_recipe_user_id"
+                + " AND cur.last_active_time >= MAX(al.created_at))"
                 + " ON CONFLICT (app_id, user_id) DO UPDATE"
-                // Only rewrite a row whose timestamp actually moves forward. Without this guard every
-                // conflicting row gets a new tuple version even when the value is unchanged, which turns each
-                // overlapping re-fold into a full rewrite of the active users (WAL + autovacuum load).
+                // Backstop for a row written between the probe and the upsert by something other than a fold:
+                // never lower a stored timestamp, and don't rewrite an unchanged one.
                 + " SET last_active_time = EXCLUDED.last_active_time"
                 + " WHERE " + userLastActiveTable + ".last_active_time < EXCLUDED.last_active_time";
         update(con, FOLD_QUERY, pst -> {
